@@ -19,7 +19,7 @@ import { parseArgs } from 'node:util';
 import { renderText } from './report.ts';
 import { runKit } from './runner.ts';
 
-const usage = `usage: docedit-tck [--discovery <url>] [--authority-service <url>] [--test-mode] [--origin <url>] [--profile <ids>] [--scenario <prefixes>]
+const usage = `usage: docedit-tck [--discovery <url>] [--authority-service <url>] [--test-mode] [--origin <url>] [--receiver-host <host>] [--receiver-port <n>] [--receiver-url <url>] [--profile <ids>] [--scenario <prefixes>]
                    [--json <file>] [--text <file>] [--timeout <ms>] [--scenario-timeout <ms>]
                    [--fuzz-ms <ms>] [--seed <n>] [--runs <n>] [--credential-env <name>] [--credential-file <file>] [--quiet]
 One of --discovery and --authority-service is required. The authority service's bearer token comes from DEP_TCK_AUTHORITY_TOKEN.
@@ -38,6 +38,9 @@ try {
       'authority-service': { type: 'string' },
       'test-mode': { type: 'boolean', default: false },
       origin: { type: 'string' },
+      'receiver-host': { type: 'string' },
+      'receiver-port': { type: 'string' },
+      'receiver-url': { type: 'string' },
       profile: { type: 'string' },
       scenario: { type: 'string' },
       json: { type: 'string' },
@@ -98,6 +101,17 @@ const report = await runKit({
   credential: credential ?? '',
   testMode: args['test-mode'] === true,
   ...(args.origin ? { origin: args.origin } : {}),
+  ...(args['receiver-host'] || args['receiver-port'] || args['receiver-url']
+    ? {
+        receiver: {
+          ...(args['receiver-host'] ? { host: args['receiver-host'] } : {}),
+          ...(num(args['receiver-port'], 'receiver-port') !== undefined
+            ? { port: num(args['receiver-port'], 'receiver-port')! }
+            : {}),
+          ...(args['receiver-url'] ? { url: args['receiver-url'] } : {}),
+        },
+      }
+    : {}),
   ...(args['authority-service']
     ? {
         authorityService: {

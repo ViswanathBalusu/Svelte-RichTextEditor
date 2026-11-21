@@ -32,6 +32,10 @@ export const RULE_INVARIANTS: InvariantCheck = {
       invariant: 'I14',
       doc: 'The `set` effects and formulas of the rules form a cycle.',
     },
+    rule_invalid: {
+      invariant: 'I14',
+      doc: 'The rules do not compile for a reason other than an unknown key or a cycle (12 §5.2): a bad shape, a type mismatch, conflicting or duplicate rules, an unknown effect.',
+    },
     pattern_unsupported: {
       invariant: 'I11',
       doc: 'A validation.pattern or matches pattern outside the regular-expression subset (FRW-018).',
@@ -58,6 +62,10 @@ export const RULE_INVARIANTS: InvariantCheck = {
           path: p.path,
           message: p.keys ? `${p.message} (${p.keys.join(', ')})` : p.message,
         });
+      // Every other problem is refused at save as well (owner decision 185, ADR 0340); the count of
+      // rules is I15, which the model checks.
+      else if (p.code !== 'too_many_rules')
+        report({ code: 'rule_invalid', path: p.path, message: `${p.code}: ${p.message}` });
     }
   },
 };

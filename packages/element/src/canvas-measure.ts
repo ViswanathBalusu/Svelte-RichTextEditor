@@ -1,5 +1,7 @@
 /**
- * The element's default text measurer: canvas `measureText` (FE-079, criterion 1). It satisfies the
+ * The element's canvas text measurer: canvas `measureText` (FE-079, criterion 1). Spike S5 makes the
+ * font files the default measurement (`chooseMeasurementProvider`, ./kernel-fallback.ts), so this is the
+ * fallback for Chromium, Edge and WebKit when the kernel cannot start. It satisfies the
  * layout engine's injected `TextMeasurer` by shape (`id`, `advance`, `lineMetrics`), so the
  * universal layout package does not import it and needs no new dependency here. It runs only where
  * a canvas exists: a page's main thread, or a worker with `OffscreenCanvas`.

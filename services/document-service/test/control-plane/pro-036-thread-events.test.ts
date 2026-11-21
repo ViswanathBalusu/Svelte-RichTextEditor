@@ -16,7 +16,7 @@ import {
   type Storage,
 } from './support.ts';
 
-const comment = { text: 'Is this still right?' };
+const comment = { body: [{ type: 'text', text: 'Is this still right?' }] };
 const BODY_BLOCK = 'pEnd000000000001';
 const LEGAL_BLOCK = 'pLegal0000000001';
 
@@ -178,7 +178,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
         const reply = await h.call('POST', `/v1/threads/${tid}/comments`, {
           token: owner,
-          body: { text: 'A reply' },
+          body: { body: [{ type: 'text', text: 'A reply' }] },
         });
         expect(reply.status, reply.text).toBe(201);
         const cid = reply.json.id as string;
@@ -190,7 +190,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
         const edit = await h.call('PATCH', `/v1/comments/${cid}`, {
           token: owner,
-          body: { text: 'An edited reply' },
+          body: { body: [{ type: 'text', text: 'An edited reply' }] },
           headers: { 'If-Match': reply.headers.get('etag')! },
         });
         expect(edit.status, edit.text).toBe(200);

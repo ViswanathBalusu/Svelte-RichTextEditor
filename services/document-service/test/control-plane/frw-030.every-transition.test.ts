@@ -373,7 +373,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             expect(done.expired).toContain(doc);
           }
           expect((await h.parts.workflows!.read(h.tenant, doc))!.state).toBe(end);
-          expect(await added(ref, from)).toEqual(['control']);
+          // A decline is the transition's control commit and then the anchor of its evidence, the
+          // salted hash of the reason (FRW-033 criterion 1; FRW-041).
+          expect(await added(ref, from)).toEqual(
+            end === 'declined' ? ['control', 'evidence'] : ['control'],
+          );
           const last = (await log(ref)).at(-1)!;
           expect(last.steps).toEqual([]);
           void p1;

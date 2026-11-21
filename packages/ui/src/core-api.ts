@@ -661,6 +661,37 @@ export interface GrantsService {
   save(grants: readonly RegionGrant[], etag: string): Promise<GrantsSnapshot>;
 }
 
+/** A region lease this session holds (05 §6.2 `Lease`; 07 §10). */
+export interface HeldLease {
+  readonly region: string;
+  /** The holder: the host's user identifier. */
+  readonly holder: string;
+  /** When the lease ends unless it is extended (RFC 3339). */
+  readonly expiresAt: string;
+}
+
+/**
+ * Check-out of a region through the backend's leases port (PRM-043): the user holds a region
+ * alone for a short time. The lease is kept alive until it is released (the port sends the
+ * heartbeats, 07 §10). Absent when the backend does not announce `leases` (05 §8.3), and then the
+ * shell offers no check-out.
+ */
+export interface LeasesService {
+  /**
+   * The leases this session took and has not released, as a view. A lease that lapsed or that
+   * someone broke stays here until the next `acquire` or `release` of its region; the shell compares
+   * its holder with the region list (`RegionEditors.leasedTo`) before it says the user holds it.
+   */
+  readonly held: ReadView<readonly HeldLease[]>;
+  /**
+   * `POST /documents/{id}/regions/{rid}/lease`. Rejects with an error whose `code` is `forbidden`
+   * (no `edit` in the region, or an approved region) or `conflict` (another user holds it).
+   */
+  acquire(region: string): Promise<HeldLease>;
+  /** `DELETE /documents/{id}/regions/{rid}/lease`: the holder gives the region back. */
+  release(region: string): Promise<void>;
+}
+
 /** A field of the document as fill mode shows it (FRW-076, FRW-077, FRW-078). */
 export interface FillField {
   readonly id: string;
@@ -764,6 +795,15 @@ export interface CoreApi {
   readonly refusal?: ReadView<RefusalNotice | null>;
   /** The last picture inserted without alternative text; the shell asks for it (FE-132 criterion 5). */
   readonly altRequest?: ReadView<{ readonly n: number; readonly asset: string } | null>;
+  /**
+   * The last symbol inserted in a font that has no glyph for it (FE-136 criterion 4; 09 §3.2); the
+   * shell flags it. `family` is null for the default face.
+   */
+  readonly glyphNotice?: ReadView<{
+    readonly n: number;
+    readonly char: string;
+    readonly family: string | null;
+  } | null>;
   /** The last deletion the core trimmed to the editable parts (FE-037 criterion 2); the shell announces it. */
   readonly trimmed?: ReadView<TrimNotice | null>;
   /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3); the shell reports it. */
@@ -807,6 +847,12 @@ export interface CoreApi {
    * Inserted by Ada (UX-035 criterion 4); null removes them.
    */
   setSuggestionLabel?(label: ((kind: 'ins' | 'del' | 'fmt', user: string) => string) | null): void;
+  /**
+   * Gives the body the words of the card that names a suggestion's author and the time of the commit
+   * that introduced it (FE-046 criterion 2): the author's identifier and the time (ISO 8601 UTC, or
+   * null when it is not known) in, one line out. Null removes the card.
+   */
+  setSuggestionCard?(format: ((user: string, time: string | null) => string) | null): void;
   /**
    * The suggestions of the document in order, with what the user may do with each (UX-036,
    * UX-037). Read again when `revision` moves. Absent: the review tools are not offered.
@@ -902,6 +948,11 @@ export interface CoreApi {
   extensionApi?(options: ExtensionApiOptions): ExtensionDocumentApi;
   /** Region grants (PRM-035), when the backend announces `regions`. */
   readonly grants?: GrantsService;
+  /**
+   * Check-out of regions (PRM-043), when the backend announces `leases`. Absent: the permissions
+   * pane shows no check-out control.
+   */
+  readonly leases?: LeasesService;
   /** Fill mode for this participant (FRW-076), or null outside fill mode. */
   readonly fill?: ReadView<FillSummary | null>;
   /** Moves focus to a field and scrolls it into view (FRW-078); false when it is gone. */
@@ -939,6 +990,8 @@ export interface CoreApi {
   readonly rules?: RulesService;
   /** The send dialog's checks and the send action (FRW-028). Absent: no "send for completion" command. */
   readonly workflowSend?: WorkflowSendService;
+  /** Adopting a signature and signing a field (FRW-045, FRW-046). Absent: signature fields cannot be signed here. */
+  readonly signing?: SigningService;
   /** Submits the participant's access code (FRW-039). Absent: the bar shows no code input. */
   readonly accessCode?: AccessCodeService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
@@ -1226,6 +1279,12 @@ export interface WorkflowSendService {
    * for the lock banner: who may still act (FRW-029 criterion 6). Empty until the resource is read.
    */
   readonly participants: ReadView<readonly WorkflowParticipantView[]>;
+  /**
+   * The sequence number of the commit the document was sent at (12 §6.1 `sentSeq`); null before the
+   * send or while the resource has not been read. The copy a stopped workflow offers starts from it
+   * (FRW-033 criterion 5). Absent: no copy is offered.
+   */
+  readonly sentSeq?: ReadView<number | null>;
   /** Reads the workflow resource again (the participants and the state). */
   refresh(): Promise<void>;
   /** Moves to the form field with this key; false when there is none. */
@@ -1235,6 +1294,58 @@ export interface WorkflowSendService {
   /** Asks the server to send; the state follows the answer. */
   send(): Promise<WorkflowSendOutcome>;
   /** Stops following the workflow; called when the editor is destroyed. */
+  dispose?(): void;
+}
+
+/** How a signature or initials image was made (12 §3.3; FRW-045). */
+export type SignatureMode = 'typed' | 'drawn' | 'uploaded';
+export type SignatureKind = 'signature' | 'initials';
+
+/** The value a signature field takes: the image asset and how it was made. */
+export interface SignatureAdoption {
+  readonly asset: string;
+  readonly mode: SignatureMode;
+}
+
+export type AdoptOutcome =
+  | { readonly ok: true; readonly adoption: SignatureAdoption }
+  // `rejected`: the asset worker refused the image (`asset.failed`); `failed`: anything else.
+  | { readonly ok: false; readonly reason: 'rejected' | 'failed' };
+
+export type SignOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'consent' | 'forbidden' | 'not_active' | 'failed' };
+
+/** A signature or initials field the participant activated (FRW-046 criterion 1). */
+export interface SignRequest {
+  /** Counts the requests, so that the same field activated twice is two requests. */
+  readonly n: number;
+  readonly id: string;
+  readonly key: string;
+  readonly kind: SignatureKind;
+  /** The field's label, the document's text. */
+  readonly label: string;
+  /** The name of the role the field belongs to, the document's text; null when it has none. */
+  readonly role: string | null;
+}
+
+/** The signing ceremony's adoption and sign steps over the backend (FRW-045, FRW-046). */
+export interface SigningService {
+  /** The field the participant activated, until the step is closed. */
+  readonly request: ReadView<SignRequest | null>;
+  /** The adoption made earlier for this kind and kept for the rest of the visit; null when none. */
+  adopted(kind: SignatureKind): SignatureAdoption | null;
+  /** Uploads the image through the asset worker and resolves once it is `ready`, or says why not. */
+  adopt(
+    kind: SignatureKind,
+    mode: SignatureMode,
+    image: Blob,
+    filename: string,
+  ): Promise<AdoptOutcome>;
+  /** Asks the server to sign the field with the adoption (`POST /documents/{id}/fields/{fid}/sign`). */
+  sign(fieldId: string, adoption: SignatureAdoption): Promise<SignOutcome>;
+  /** Closes the step without signing. */
+  dismiss(): void;
   dispose?(): void;
 }
 

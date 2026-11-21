@@ -55,7 +55,9 @@ export interface Notice {
 export class StubDataPlane implements DataPlane {
   readonly notices: Notice[] = [];
   deps: DataPlaneDeps | null = null;
-  readonly features = ['presence', 'regions', 'suggest-enforced'];
+  // `leases` is on by default (owner decision 190; PRM-043), and the lease routes answer only while
+  // it is announced; a test that switches it off passes `config.features` (prm-043-leases-switch).
+  readonly features = ['presence', 'regions', 'suggest-enforced', 'leases'];
   handleUpgrade(_req: IncomingMessage, socket: Duplex): void {
     this.notices.push({ kind: 'upgrade' });
     socket.end('HTTP/1.1 418 Stub\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
@@ -186,6 +188,8 @@ export async function startHarness(
     realDataPlane?: boolean;
     /** Overrides of the composed webhook dispatcher (`config.webhooks` set); its dispatcher is the sink. */
     webhooks?: StartOptions['webhooks'];
+    /** The seal step of finalisation (FRW-053): the signing client and the retry of a run. */
+    finalSealing?: StartOptions['finalSealing'];
   } = {},
 ): Promise<Harness> {
   let offset = 0;
@@ -224,6 +228,7 @@ export async function startHarness(
       // With `config.webhooks` the composed dispatcher is the sink, and the two are exclusive.
       ...(config.webhooks ? {} : { events }),
       ...(opts.webhooks ? { webhooks: opts.webhooks } : {}),
+      ...(opts.finalSealing ? { finalSealing: opts.finalSealing } : {}),
       now,
       signing: signingKey(undefined, 'service-test'),
       ...(opts.realDataPlane

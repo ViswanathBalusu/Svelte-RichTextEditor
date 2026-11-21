@@ -18,6 +18,8 @@ export {
   type TransactionInfo,
 } from './core.ts';
 export { REMOTE } from './meta.ts';
+export { ATOM_CHAR } from './page-input.ts';
+export type { BlockPoint, BlockSelection, PageViewHandle, PageViewHooks } from './page-input.ts';
 export {
   VersionDocument,
   openVersion,
@@ -61,6 +63,7 @@ export type {
   FieldFillOutcome,
   FieldsApi,
   EquationRequest,
+  SignFieldRequest,
   EquationTarget,
   FieldArgs,
   FindResult,
@@ -99,6 +102,7 @@ export type {
   UploadOutcome,
 } from './image-paste.ts';
 export type { AltRequest } from './alt-text.ts';
+export type { GlyphCoverage, GlyphNotice, GlyphRange, MissingGlyph } from './glyph-check.ts';
 export type { ClipboardInput } from './clipboard.ts';
 export { ReadValue, ViewHub, type ReadView, type Schedule } from './read-value.ts';
 export { editingSchema, definitionFor, headingLevel, type FootnoteModel } from './schema.ts';

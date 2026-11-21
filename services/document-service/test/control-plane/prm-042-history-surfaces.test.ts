@@ -84,7 +84,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       await append(h, doc, ['a', 'b', 'c']);
       const made = await h.call('POST', `/v1/documents/${doc}/threads`, {
         token: h.userToken({ [doc]: 'editor' }, { sub: 'ed-1' }),
-        body: { target: { block: BLOCK }, comment: { text: 'A question' } },
+        body: {
+          target: { block: BLOCK },
+          comment: { body: [{ type: 'text', text: 'A question' }] },
+        },
       });
       expect(made.status, made.text).toBe(201);
       return doc;

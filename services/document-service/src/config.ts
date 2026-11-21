@@ -158,6 +158,27 @@ export interface ServiceConfig {
    * spec gives none (ADR 0146): `DOCEDIT_WEBHOOKS=true` needs all four of them.
    */
   webhooks: WebhookSettings | null;
+  /**
+   * The signing service that seals the final PDF (12 §8.2 step 3; FRW-052, FRW-053). Null: no
+   * workflow is sealed here and a completed workflow stays `completed`. `DOCEDIT_SEAL_URL` turns it
+   * on and then needs the other five settings, which have no default because the spec gives none.
+   */
+  sealing: SealingSettings | null;
+}
+
+/** The settings of the live seal step (server.ts composes it; docs/adr/0412). */
+export interface SealingSettings {
+  /** Base URL of the signing service. */
+  url: string;
+  /** The document service's credential for it (a secret: environment only). */
+  credential: string;
+  /** How long to wait for one answer, ms. */
+  timeoutMs: number;
+  /** Attempts of one run (at least 1); the waits are `delaysMs`, the last one repeating. */
+  attempts: number;
+  delaysMs: number[];
+  /** How long the stored sealed bytes are retained, days from the seal. */
+  retentionDays: number;
 }
 
 /** The settings of the webhook dispatcher and its egress proxy (server.ts composes them). */
@@ -178,6 +199,12 @@ export interface WebhookSettings {
    * retried. The spec gives no figure for either, so there is no default (ADR 0216, proposed).
    */
   retry?: { baseMs: number; factor: number };
+  /**
+   * Test mode only (DOCEDIT_TEST_WEBHOOK_ALLOW, ADR 0316 proposal 2, accepted with owner decisions 196
+   * to 220): IP literals that the egress proxy reaches although they are loopback or private, so the
+   * conformance kit's receiver can be a target (PRO-121). Refused outside test mode.
+   */
+  testAllow?: readonly string[];
 }
 
 export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
@@ -237,6 +264,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   scheduler: true,
   searchIndex: false,
   webhooks: null,
+  sealing: null,
 };
 
 /** A setting the spec gives no figure for: required, with no default (ADR 0146). */
@@ -275,13 +303,46 @@ function retrySettings(env: NodeJS.ProcessEnv): WebhookSettings['retry'] {
 function webhookSettings(env: NodeJS.ProcessEnv): WebhookSettings | null {
   if (!flag(env, 'DOCEDIT_WEBHOOKS', false)) return null;
   const retry = retrySettings(env);
+  const testAllow = list(env['DOCEDIT_TEST_WEBHOOK_ALLOW'], []);
   return {
     ...(retry ? { retry } : {}),
+    ...(testAllow.length > 0 ? { testAllow } : {}),
     rejectedWindowMs: required(env, 'DOCEDIT_WEBHOOK_REJECTED_WINDOW_MS', 1),
     rejectedMax: required(env, 'DOCEDIT_WEBHOOK_REJECTED_MAX', 1),
     timeoutMs: required(env, 'DOCEDIT_WEBHOOK_TIMEOUT_MS', 1),
     maxRedirects: required(env, 'DOCEDIT_WEBHOOK_MAX_REDIRECTS', 0),
     source: env['DOCEDIT_WEBHOOK_SOURCE'] || null,
+  };
+}
+
+/** The seal settings from DOCEDIT_SEAL_* variables, or null when DOCEDIT_SEAL_URL is not set. */
+function sealingSettings(env: NodeJS.ProcessEnv): SealingSettings | null {
+  const url = env['DOCEDIT_SEAL_URL'];
+  if (url === undefined || url === '') return null;
+  const need = (name: string): string => {
+    const v = env[name];
+    if (v === undefined || v === '')
+      throw new Error(`DOCEDIT_SEAL_URL needs ${name}; it has no default`);
+    return v;
+  };
+  const delays = need('DOCEDIT_SEAL_DELAYS_MS')
+    .split(',')
+    .map((s) => Number(s.trim()));
+  if (delays.some((n) => !Number.isSafeInteger(n) || n < 0))
+    throw new Error('DOCEDIT_SEAL_DELAYS_MS is a comma-separated list of non-negative integers');
+  const num = (name: string, min: number): number => {
+    const n = Number(need(name));
+    if (!Number.isSafeInteger(n) || n < min)
+      throw new Error(`${name} must be an integer of at least ${min}`);
+    return n;
+  };
+  return {
+    url: url.replace(/\/+$/, ''),
+    credential: need('DOCEDIT_SEAL_CREDENTIAL'),
+    timeoutMs: num('DOCEDIT_SEAL_TIMEOUT_MS', 1),
+    attempts: num('DOCEDIT_SEAL_ATTEMPTS', 1),
+    delaysMs: delays,
+    retentionDays: num('DOCEDIT_SEAL_RETENTION_DAYS', 1),
   };
 }
 
@@ -316,6 +377,8 @@ function flag(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean 
 export function checkConfig(c: ServiceConfig): void {
   if (c.testMode && c.environment === 'production')
     throw new Error('test mode is refused in production (set DOCEDIT_ENVIRONMENT to test)');
+  if (c.webhooks?.testAllow && !c.testMode)
+    throw new Error('DOCEDIT_TEST_WEBHOOK_ALLOW is for test mode only (DOCEDIT_TEST_MODE)');
   if (c.s3 && c.azure)
     throw new Error('choose one object store: DOCEDIT_S3_* or DOCEDIT_AZURE_ACCOUNT, not both');
   if (c.assetOrigin && !c.assetUrlKey)
@@ -425,6 +488,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     scheduler: flag(env, 'DOCEDIT_SCHEDULER', DEFAULTS.scheduler),
     searchIndex: flag(env, 'DOCEDIT_SEARCH_INDEX', DEFAULTS.searchIndex),
     webhooks: webhookSettings(env),
+    sealing: sealingSettings(env),
   };
   checkConfig(config);
   return config;

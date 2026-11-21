@@ -36,6 +36,18 @@ import {
   commentDecorations,
 } from '../comment-decorations.ts';
 import { pageGuideDecorations } from '../page-guide-decorations.ts';
+import {
+  blockText,
+  findBlock,
+  pressKey,
+  replaceTransaction,
+  selectionOf,
+  selectTransaction,
+  stepFrom,
+  textBlocks,
+  type PageViewHandle,
+  type PageViewHooks,
+} from '../page-input.ts';
 import { proofingDecorations } from '../proofing-decorations.ts';
 import { ReadValue, sameJson } from '../read-value.ts';
 import { FIND_CURRENT_CLASS, findDecorations } from '../search-highlight.ts';
@@ -53,6 +65,7 @@ import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
 import { sectionWarningPlugin } from './section-warning-view.ts';
+import { SuggestionCard } from './suggestion-card.ts';
 import { tocPlugin, tocView } from './toc-view.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
@@ -201,6 +214,7 @@ export class EditorCore extends DocumentCore {
   /** The comparison drawn in a version view (HIS-013); null in the live editor. */
   #comparison: readonly ComparisonSpec[] | null = null;
   #view: EditorView | null = null;
+  #card: SuggestionCard | null = null;
   /** The live form field controls and mirrors of the body view (FRW-004, FRW-006). */
   readonly #fieldViews = new FormFieldViews();
   #sub: SubEditor | null = null;
@@ -456,6 +470,10 @@ export class EditorCore extends DocumentCore {
               fillable: (id) => this.fieldFillable(id),
               rules: (id) => this.fieldRuleState(id),
               focused: (id) => this.selectField(id),
+              signable: (id) => this.fieldSignable(id),
+              signRequest: (id) => {
+                this.requestSign(id);
+              },
             },
             this.#fieldViews,
           ),
@@ -572,6 +590,7 @@ export class EditorCore extends DocumentCore {
                 state.doc,
                 this.threadRanges.get(),
                 this.selectedThread.get(),
+                this.threadBlocks.get(),
               ).find(),
             )
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
@@ -588,11 +607,19 @@ export class EditorCore extends DocumentCore {
       },
     );
     this.#view = view;
+    // FE-046 criterion 2: the card that names a suggestion's author and time, on hover and at the caret.
+    const card = new SuggestionCard(view, {
+      format: () => this.suggestionCardFormat,
+      time: (id) => this.suggestionTime(id),
+    });
+    this.#card = card;
+    const uncard = this.suggestionCardChanged.subscribe(() => card.refresh());
     const ended = () => this.compositionEnded();
     target.addEventListener('compositionend', ended);
     // A change of the find state redraws the highlights at once (the view is not told by a transaction).
     // A change of a thread's range redraws its decoration at once (FE-048).
     const unthread = this.threadRanges.subscribe(() => this.#view?.setProps({}));
+    const unblocks = this.threadBlocks.subscribe(() => this.#view?.setProps({}));
     // A thread chosen in the comments pane is marked and brought into view (UX-030 criterion 2).
     const unselect = this.selectedThread.subscribe(() => {
       const v = this.#view;
@@ -660,10 +687,14 @@ export class EditorCore extends DocumentCore {
       remove();
       unfind();
       unthread();
+      unblocks();
       unselect();
       unreveal();
       unproof();
       unmarkup();
+      uncard();
+      card.destroy();
+      if (this.#card === card) this.#card = null;
       undirection();
       uncarets();
       win?.removeEventListener('resize', redraw);
@@ -677,6 +708,7 @@ export class EditorCore extends DocumentCore {
   #update(state: EditorState, transactions: readonly Transaction[]): void {
     const before = this.#view?.state.doc;
     this.#view?.updateState(state);
+    this.#card?.update();
     // Mirrors follow their target fields, and a control follows its entry (FRW-004, FRW-006).
     // A change of nothing but field values draws only the fields whose state moved (FRW-023 c. 6).
     if (before !== state.doc) this.#fieldViews.refresh(state.doc, onlyFieldValues(transactions));
@@ -694,6 +726,83 @@ export class EditorCore extends DocumentCore {
       for (const t of transactions) mapping.appendMapping(t.mapping);
       if (!sub.sync(state, mapping)) this.closePanel();
     }
+  }
+
+  /**
+   * Attaches the page view to this core (02 §9.6; FE-098). The page view has no ProseMirror view of
+   * its own: it reads the document and the selection as block identifiers and offsets, and every
+   * change goes through `dispatchTransaction`, so the guards, suggestion mode, the sync queue and the
+   * history treat it as an edit made in the web view. The body view may stay mounted behind it, so
+   * switching views keeps one core. `hooks.update` is told of every new state (local, remote or a
+   * replaced document); `hooks.focus` is called when something asks the core to take focus.
+   * Returns the page view's handle; `detach` removes the hooks.
+   */
+  attachPageView(hooks: PageViewHooks): PageViewHandle {
+    let composingBlock: string | null = null;
+    const remove = this.addView({
+      update: (state, transactions) =>
+        hooks.update(
+          transactions.some((t) => t.docChanged) || transactions.length === 0,
+          transactions.length === 0,
+        ),
+      composing: () => {
+        if (composingBlock === null) return null;
+        const block = findBlock(this.editorState.doc, composingBlock);
+        return block === null ? null : block.pos;
+      },
+      focus: () => hooks.focus(),
+      // A change of the mode or the access moves what may be edited, with no new state (FE-029).
+      lockChanged: () => hooks.update(false, false),
+      accessChanged: () => hooks.update(false, false),
+    });
+    return {
+      content: () => this.getContent(),
+      selection: () => selectionOf(this.editorState),
+      select: (anchor, head = anchor) => {
+        const tr = selectTransaction(this.editorState, anchor, head);
+        if (tr === null) return false;
+        this.dispatch(tr);
+        return true;
+      },
+      text: (blockId) => {
+        const block = findBlock(this.editorState.doc, blockId);
+        return block === null ? null : blockText(block.node);
+      },
+      blocks: () => textBlocks(this.editorState.doc),
+      replace: (blockId, from, to, text, caret) => {
+        if (this.readOnly) return false;
+        const before = this.editorState.doc;
+        const tr = replaceTransaction(this.editorState, blockId, from, to, text, caret);
+        if (tr === null) return false;
+        this.dispatch(tr);
+        return this.editorState.doc !== before;
+      },
+      key: (key) => {
+        if (this.readOnly) return false;
+        return pressKey(this.editorState, key, (tr) => this.dispatch(tr));
+      },
+      step: (point, direction) => stepFrom(this.editorState.doc, point, direction),
+      takeDirty: () => this.takeLayoutDirty(),
+      // The clipboard goes through the core as the web view's does: a refused copy writes nothing (FE-055).
+      copy: (event) => writeClipboard(event, this.copySelection()),
+      cut: (event) => writeClipboard(event, this.cutSelection().payload),
+      paste: (event) => {
+        if (this.readOnly || !this.#paste(event.clipboardData)) return false;
+        event.preventDefault();
+        return true;
+      },
+      run: (command) => this.run(command),
+      composing: (blockId) => {
+        const ended = composingBlock !== null && blockId === null;
+        composingBlock = blockId;
+        if (ended) this.compositionEnded();
+      },
+      readOnly: () => this.readOnly,
+      detach: () => {
+        composingBlock = null;
+        remove();
+      },
+    };
   }
 
   /** The block being composed: the body paragraph, or the open sub-editor's whole node (S1). */

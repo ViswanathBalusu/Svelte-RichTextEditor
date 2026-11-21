@@ -42,6 +42,17 @@ describe('a control commit that anchors evidence (FRW-041)', () => {
     expect(room.head).toBe(1);
   });
 
+  it('anchors the evidence of a decline with the origin decline (FRW-033 criterion 1)', () => {
+    const room = roomWith(baseDoc(), basePermissions(), () => NOW);
+    const id = commitId();
+    const written = storeAll(
+      room,
+      room.anchor('control', { id, evidence: { origin: 'decline', evidenceHash: HASH } }),
+    );
+    expect(written).toHaveLength(1);
+    expect(written[0]!.evidence).toEqual({ origin: 'decline', evidenceHash: HASH });
+  });
+
   it('applies a repeat of the same identifier once, stored or waiting', () => {
     const room = roomWith(baseDoc(), basePermissions(), () => NOW);
     const id = commitId();

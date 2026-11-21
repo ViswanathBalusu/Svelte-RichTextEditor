@@ -7,6 +7,7 @@ import { uuid7 } from '@docedit/model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DepClient, insertText } from '../data-plane/client.ts';
 import { posInside, posOf, schema } from '../../../../packages/authority/test/fixtures.ts';
+import { recomputeCommitment } from '../../src/workflow/evidence-ledger.ts';
 import { recordFirstView } from '../../src/workflow/progress.ts';
 import type { TransitionDeps } from '../../src/workflow/transitions.ts';
 import {
@@ -130,8 +131,12 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       });
     const state = async (ref: { tenant: string; doc: string }) =>
       (await h.parts.workflows!.read(ref.tenant, ref.doc))!;
+    // The control commits of transitions; an anchor of evidence (FRW-041) is counted apart.
     const controls = async (ref: { tenant: string; doc: string }) =>
-      (await h.parts.logs.read(ref)).filter((c) => c.kind === 'control').length;
+      (await h.parts.logs.read(ref)).filter((c) => c.kind === 'control' && c.evidence === undefined)
+        .length;
+    const anchors = async (ref: { tenant: string; doc: string }) =>
+      (await h.parts.logs.read(ref)).filter((c) => c.evidence !== undefined);
     const setValue = (pos: number, value: string) => ({
       stepType: 'attr',
       pos,
@@ -311,6 +316,33 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(events).toHaveLength(1);
         expect(events[0]!.data['participant']).toBe('p1');
         expect(JSON.stringify(events[0])).not.toContain('clause');
+
+        // The reason is evidence of the participant (criterion 1): stored apart from the log, with its
+        // salted hash in one control commit that follows the decline, and nowhere else.
+        const anchored = await anchors(ref);
+        expect(anchored).toHaveLength(1);
+        expect(anchored[0]!.seq).toBeGreaterThan(
+          (await h.parts.logs.read(ref)).find(
+            (c) => c.kind === 'control' && c.evidence === undefined,
+          )!.seq,
+        );
+        expect(Object.keys(anchored[0]!.evidence!).sort()).toEqual(['evidenceHash', 'origin']);
+        expect(anchored[0]!.evidence!.origin).toBe('decline');
+        expect(JSON.stringify(await h.parts.logs.read(ref))).not.toContain('clause');
+        const rows = (await h.parts.evidence!.list(h.tenant, doc)).filter(
+          (r) => r.item === 'declined',
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.participant).toBe('p1');
+        expect(rows[0]!.evidence.items['declined']).toMatchObject({
+          reason: 'I do not agree to clause 4',
+        });
+        // A verifier recomputes the hash from the stored row and finds it in the chain.
+        expect(await recomputeCommitment(rows[0]!)).toBe(anchored[0]!.evidence!.evidenceHash);
+        // A repeat of the decline changes nothing more.
+        const again = await post(path, token, { reason: 'I do not agree to clause 4' });
+        expect(again.status).toBe(409);
+        expect(await anchors(ref)).toHaveLength(1);
         const audits = await reasonOf(doc, 'workflow.transition');
         expect(audits.at(-1)).toMatchObject({
           from: 'in_progress',
@@ -342,6 +374,40 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           .of('dep.workflow.participant_declined.v1')
           .filter((e) => e.subject === doc);
         expect(events.map((e) => e.data['participant'])).toEqual(['p2']);
+        // The host's decline is evidence too, with no network identity of the participant.
+        const rows = (await h.parts.evidence!.list(h.tenant, ref.doc)).filter(
+          (x) => x.item === 'declined',
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.participant).toBe('p2');
+        expect(rows[0]!.evidence.ipAddress ?? null).toBeNull();
+        expect(rows[0]!.evidence.userAgent ?? null).toBeNull();
+        expect(await anchors(ref)).toHaveLength(1);
+      },
+    );
+
+    it.skipIf(skip)(
+      'refuses a reason that the evidence row cannot hold, and keeps a long one that it can (criterion 1)',
+      async () => {
+        const { doc, ref } = await workflow('in_progress');
+        const path = `/v1/documents/${doc}/workflow/participants/p1/decline`;
+        const token = participantToken(doc, 'p1');
+        // 1000 characters of 4 bytes each are 4000 bytes: too long, and nothing changes.
+        const tooLong = await post(path, token, { reason: '\u{1F600}'.repeat(1000) });
+        expect(tooLong.status, tooLong.text).toBe(400);
+        expect(tooLong.json.violations).toEqual([
+          { path: '/reason', rule: 'at most 3000 bytes of text' },
+        ]);
+        expect((await state(ref)).state).toBe('in_progress');
+        expect(await anchors(ref)).toHaveLength(0);
+        // 2000 plain characters are accepted and stored whole.
+        const long = 'x'.repeat(2000);
+        const ok = await post(path, token, { reason: long });
+        expect(ok.status, ok.text).toBe(200);
+        const rows = (await h.parts.evidence!.list(h.tenant, doc)).filter(
+          (r) => r.item === 'declined',
+        );
+        expect(rows[0]!.evidence.items['declined']).toMatchObject({ reason: long });
       },
     );
 

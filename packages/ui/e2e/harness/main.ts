@@ -65,6 +65,11 @@ import {
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
 import { sendService, type SendHarnessLog, type SendHarnessMode } from './frw-028-send-port.ts';
 import { catchUpPort, type CatchUpHarnessMode } from './his-028-catch-up-port.ts';
+import {
+  signingService,
+  type SigningHarnessLog,
+  type SigningHarnessMode,
+} from './frw-045-signing-port.ts';
 
 const violations: string[] = [];
 document.addEventListener('securitypolicyviolation', (e) => {
@@ -75,6 +80,9 @@ document.addEventListener('securitypolicyviolation', (e) => {
 /** What the shell asked of the send service (FRW-028). */
 const sendLog: SendHarnessLog = { fields: [], suggestions: [], refreshes: 0, sends: 0 };
 let sendHandle: ReturnType<typeof sendService> | null = null;
+/** What the adoption and signing step asked of its service (FRW-045, FRW-046). */
+const signingLog: SigningHarnessLog = { adopts: [], signs: [], dismissed: 0 };
+let signingHandle: ReturnType<typeof signingService> | null = null;
 const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
@@ -121,6 +129,10 @@ export interface MountOptions {
   history?: HistoryHarnessMode;
   /** The send dialog's service of FRW-028: see harness/frw-028-send-port.ts for the modes; absent: none. */
   send?: SendHarnessMode;
+  /** The adoption and signing step's service of FRW-045 and FRW-046: see harness/frw-045-signing-port.ts; absent: none. */
+  signing?: SigningHarnessMode;
+  /** The field properties service of FRW-073: one field, `tenant.name`, that this person may change. */
+  fieldProperties?: boolean;
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
   catchUp?: CatchUpHarnessMode;
   share?: boolean;
@@ -153,6 +165,8 @@ export interface MountOptions {
   exportTargets?: ExportTarget[] | null;
   projected?: boolean;
   grants?: RegionGrant[] | null;
+  /** The core has a leases service (PRM-043); `holder` is the user this session takes leases as. */
+  leases?: { holder: string } | null;
   fill?: FillSummary | null;
   /** The core takes an access code (FRW-039): the outcomes it answers with, in order; the last repeats. */
   accessCode?: AccessCodeOutcome[];
@@ -593,6 +607,7 @@ function mountShell(options: MountOptions = {}): void {
     ...(options.exportTargets !== undefined ? { exportTargets: options.exportTargets } : {}),
     ...(options.projected ? { projected: true } : {}),
     ...(options.grants !== undefined ? { grants: options.grants } : {}),
+    ...(options.leases ? { leases: options.leases } : {}),
     ...(options.fill !== undefined ? { fill: options.fill } : {}),
     ...(options.carets ? { carets: options.carets } : {}),
     ...(options.direction ? { direction: options.direction } : {}),
@@ -622,6 +637,45 @@ function mountShell(options: MountOptions = {}): void {
     sendHandle = sendService(options.send, sendLog);
     // The roles and the rules panes are stand-ins here; they need only be offered for the links.
     Object.assign(core, { workflowSend: sendHandle, roles: {}, rules: {} });
+  }
+  if (options.fieldProperties) {
+    // One field of the tenant; the pane reads the workflow's state from `workflowSend` (FRW-073).
+    const draft = {
+      key: 'tenant.name',
+      kind: 'text',
+      label: 'Name',
+      assignee: 'role_tenant',
+      required: true,
+      readOnly: false,
+      default: null,
+      placeholder: null,
+      options: [],
+      format: null,
+      validation: null,
+      width: null,
+    };
+    const still = <T>(value: T) => ({ get: () => value, subscribe: () => () => {} });
+    Object.assign(core, {
+      roles: {
+        list: still([
+          { id: 'role_tenant', name: 'Tenant', color: '#0d47a1', order: 0, fields: [] },
+        ]),
+      },
+      fieldProperties: {
+        fields: still([{ id: 'fName00000000001', key: 'tenant.name', label: 'Name' }]),
+        selected: still<string | null>('fName00000000001'),
+        read: () => draft,
+        canChange: () => true,
+        apply: () => ({ ok: true }),
+      },
+    });
+  }
+  if (options.signing) {
+    signingLog.adopts.length = 0;
+    signingLog.signs.length = 0;
+    signingLog.dismissed = 0;
+    signingHandle = signingService(options.signing, signingLog);
+    Object.assign(core, { signing: signingHandle });
   }
   if (options.accessCode) {
     accessCodeLog.length = 0;
@@ -1043,7 +1097,20 @@ const harness = {
   setSendFailures: (next: Parameters<ReturnType<typeof sendService>['setFailures']>[0]) =>
     sendHandle?.setFailures(next),
   setSendState: (next: string | null) => sendHandle?.setState(next),
+  /** What the adoption and signing step asked of its service (FRW-045), and a field the participant activates (FRW-046). */
+  signingLog: () => JSON.parse(JSON.stringify(signingLog)) as SigningHarnessLog,
+  activateSignature: (field: {
+    id: string;
+    key: string;
+    kind: 'signature' | 'initials';
+    label: string;
+    role: string | null;
+  }) => signingHandle?.activate(field),
   grantSaves: () => need().core.grants?.saves ?? [],
+  /** What the check-out control asked the leases service to do (PRM-043). */
+  leaseCalls: () => [...(need().core.leases?.calls ?? [])],
+  /** Makes the next check-out fail as a service would refuse it (PRM-043). */
+  refuseNextLease: (code: 'conflict' | 'forbidden') => void (need().core.leases!.refuseNext = code),
   /** The comment threads port (UX-028, UX-031): what was asked for, and what the core reports. */
   principalQueries: () => [...principalQueries],
   threadRequests: () =>

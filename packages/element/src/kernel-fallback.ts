@@ -19,12 +19,41 @@ export function fallbackFor(userAgent: string): PageViewFallback {
   return /\bFirefox\//.test(userAgent) ? 'web-view' : 'canvas-measurement';
 }
 
+/**
+ * Who measures text for the page view (FE-079 criterion 6). Spike S5's recommendation (docs/spikes/
+ * 2026-11-06-s5-text-measurement.md, "Recommendation" 1 and 4), accepted with ADR 0016 and the
+ * owner's decisions 26 and 27:
+ *  - `font-files`: advances computed from the manifest's font files by the layout kernel (the Rust
+ *    WebAssembly module). This is the default.
+ *  - `canvas`: canvas `measureText` (`./canvas-measure.ts`), only when the kernel cannot start, and
+ *    only in Chromium, Edge and WebKit.
+ *  - `none`: no measurer; the page view is not offered and the element stays in the web view
+ *    (Firefox without the kernel).
+ */
+export type MeasurementProvider = 'font-files' | 'canvas' | 'none';
+
+/** The provider the page view measures with while the kernel is able to start. */
+export const DEFAULT_MEASUREMENT_PROVIDER: MeasurementProvider = 'font-files';
+
+/**
+ * The provider to use. `kernel` is whether the layout kernel started (or has not failed yet);
+ * `userAgent` decides the fallback when it did not.
+ */
+export function chooseMeasurementProvider(
+  kernel: 'available' | 'unavailable',
+  userAgent: string,
+): MeasurementProvider {
+  if (kernel === 'available') return DEFAULT_MEASUREMENT_PROVIDER;
+  return fallbackFor(userAgent) === 'canvas-measurement' ? 'canvas' : 'none';
+}
+
 /** The words of the notice. Replaceable strings are UX's (13 §8); these are the working English ones. */
 export const PAGE_VIEW_NOTICE = {
   unavailable: 'The page view is not available.',
   blocked:
     "This page's security policy does not allow WebAssembly, which the page view needs in this browser. The site's administrator can allow it with 'wasm-unsafe-eval' in script-src.",
   other: "The page view's WebAssembly file could not be loaded.",
+  measurement: 'This browser cannot measure text accurately enough for the page view yet.',
   trapped: "The page view's text kernel stopped unexpectedly.",
   choose: 'You can keep editing in the web view, or read the typeset result in the read view.',
   web: 'Web view',
@@ -34,6 +63,7 @@ export const PAGE_VIEW_NOTICE = {
 /** The sentence that says why the page view is not available, from the failure's code. */
 export function noticeReason(detail: Pick<DiagnosticDetail, 'code'>): string {
   if (detail.code === 'blocked_by_policy') return PAGE_VIEW_NOTICE.blocked;
+  if (detail.code === 'measurement_unavailable') return PAGE_VIEW_NOTICE.measurement;
   return detail.code === 'kernel_trap' ? PAGE_VIEW_NOTICE.trapped : PAGE_VIEW_NOTICE.other;
 }
 

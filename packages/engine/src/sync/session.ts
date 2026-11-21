@@ -122,6 +122,8 @@ export interface SessionOptions {
    * across a closed tab.
    */
   journal?: JournalPort;
+  /** The signed-in user, written with each journal entry and queue (decision 47). */
+  user?: string;
 }
 
 /** 04 §3.1 and §8 defaults, used when `welcome` did not announce a value. */
@@ -229,6 +231,7 @@ export class SyncSession {
   #serviceOk = true;
   /** The journal (FE-008); writes run one after another, in the order they were requested. */
   readonly #journal: JournalPort | null;
+  readonly #user: string | undefined;
   #journalChain: Promise<void> = Promise.resolve();
   #journalTimer: unknown = null;
   #journalMs: number;
@@ -247,6 +250,7 @@ export class SyncSession {
     this.#host = host;
     this.#opts = opts;
     this.#journal = opts.journal ?? null;
+    this.#user = opts.user;
     this.#journalMs = (opts.retry ?? DEFAULT_RETRY).minMs;
     this.#given = channel;
     this.docId = channel.docId;
@@ -806,7 +810,11 @@ export class SyncSession {
   /** The confirmed document the queue is made on, written with it (FE-009). */
   #queueAt(): QueueAt {
     const s = this.#host.sync;
-    return { seq: s.seq, incarnation: s.incarnation };
+    return {
+      seq: s.seq,
+      incarnation: s.incarnation,
+      ...(this.#user === undefined ? {} : { user: this.#user }),
+    };
   }
 
   /**
@@ -886,6 +894,8 @@ export class SyncSession {
       ...(commit.origin ? { origin: commit.origin } : {}),
       // The incarnation `base` belongs to, so that the next visit resumes in the same log (FE-009).
       ...(this.#host.sync.incarnation === '' ? {} : { incarnation: this.#host.sync.incarnation }),
+      // Whose work it is: another user who opens the document later does not send it (decision 47).
+      ...(this.#user === undefined ? {} : { user: this.#user }),
     };
     const queue = stepsToJson(this.#host.sync.queue) as StepJson[];
     this.#queueKey = JSON.stringify(queue);

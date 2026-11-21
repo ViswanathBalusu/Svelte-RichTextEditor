@@ -65,8 +65,24 @@ const DOC = 'doc-1';
 const UUID = '0190f3a2-7b4c-7d1e-8a2b-3c4d5e6f7a8b';
 const VERSION = { seq: 3, kind: 'named', name: 'v1' };
 const DIFF = { fromSeq: 1, toSeq: 2, changes: [] };
-const THREAD = { id: UUID, state: 'open' };
-const COMMENT = { id: 'c-1' };
+/* The thread and comment shapes of ADR 0417 (gap G71). */
+const COMMENT = {
+  id: UUID,
+  author: 'user:u-1',
+  createdAt: '2026-11-13T09:00:00.000Z',
+  editedAt: null,
+  etag: '"c:0"',
+  body: [{ type: 'text', text: 'hi' }],
+};
+const THREAD = {
+  id: UUID,
+  state: 'open',
+  assignee: null,
+  createdBy: 'user:u-1',
+  createdAt: '2026-11-13T09:00:00.000Z',
+  etag: '"t:open:"',
+  comments: [COMMENT],
+};
 const LEASE = { id: 'l-1', holder: 'u-1', expiresAt: '2026-11-13T10:00:00.000Z' };
 const IMPORT_JOB = { id: UUID };
 /* Request bodies in these tests are arbitrary: the wire, not the body type, is under test. */
@@ -94,6 +110,24 @@ describe('history port over REST (PRO-097 criterion 1)', () => {
       expect(s.headers['if-match']).toBeUndefined();
       expect(s.headers['idempotency-key']).toBeUndefined();
     }
+  });
+
+  it('reads the commit that introduced a suggestion with GET (FE-046 criterion 2; HIS-042)', async () => {
+    const { ports, sent } = recordingRest(() => ({
+      body: {
+        suggestion: 'sgOne00000000001',
+        time: '2026-11-18T10:30:00Z',
+        user: 'u-suggester',
+        origin: 'client',
+        seq: 7,
+      },
+    }));
+    const answer = await ports.history.suggestionIntroduction(DOC, 'sgOne00000000001');
+    expect(answer).toMatchObject({ time: '2026-11-18T10:30:00Z', user: 'u-suggester' });
+    expect(sent.map((s) => [s.method, s.url])).toEqual([
+      ['GET', `https://dep.test/api/documents/${DOC}/suggestions/sgOne00000000001/introduction`],
+    ]);
+    expect(sent[0]?.headers['if-match']).toBeUndefined();
   });
 
   it('sends the bearer token only in the Authorization header, never in the URL', async () => {

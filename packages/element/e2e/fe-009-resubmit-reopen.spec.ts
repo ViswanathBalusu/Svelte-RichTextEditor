@@ -56,9 +56,10 @@ async function openDocument(
   docId: string,
   hold: boolean,
   create = true,
+  sub = 'ada',
 ): Promise<void> {
   await page.evaluate(
-    async ({ docId, hold, create }) => {
+    async ({ docId, hold, create, sub }) => {
       const e = (window as unknown as { __embed: Embed }).__embed;
       type Port = {
         connect(): Promise<void>;
@@ -82,7 +83,7 @@ async function openDocument(
           },
         );
       }
-      const backend = e.service.backend({ sub: 'ada', name: 'Ada' }, { [docId]: 'editor' }) as Port;
+      const backend = e.service.backend({ sub, name: sub }, { [docId]: 'editor' }) as Port;
       if (hold) {
         const open = backend.sync.open.bind(backend.sync);
         backend.sync.open = async (id, opts) => {
@@ -111,7 +112,7 @@ async function openDocument(
       document.getElementById('mount')!.append(el);
       await ready;
     },
-    { docId, hold, create },
+    { docId, hold, create, sub },
   );
   await expect(page.locator('doc-editor[data-test="fe009"] .de-editing-surface')).toBeVisible();
 }
@@ -277,4 +278,44 @@ test('FE-009 criterion 4: after a killed tab, a log of another incarnation sets 
     .toEqual([TYPED]);
   await expect.poll(async () => (await readJournal(again, docId)).commits.length).toBe(0);
   expect(occurrences(await storedText(again, docId), TYPED)).toBe(0);
+});
+
+test('FE-009 with decision 47: work of another signed-in user is discarded with a warning, not sent', async ({
+  page,
+}) => {
+  const docId = uuid7();
+  await openEmbed(page);
+  await openDocument(page, docId, true);
+  await typeAtEnd(page);
+  await expect.poll(async () => journalled(await readJournal(page, docId))).toBe(TYPED);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __fe009Sends: number }).__fe009Sends))
+    .toBeGreaterThan(0);
+  await page.evaluate(() => {
+    const el = document.querySelector('doc-editor[data-test="fe009"]') as HTMLElement & {
+      destroy(): void;
+    };
+    el.destroy();
+    el.remove();
+  });
+  expect((await readJournal(page, docId)).commits.length).toBeGreaterThan(0);
+
+  // Bob opens the document next, in the same browser profile.
+  await openDocument(page, docId, false, false, 'bob');
+  await expect(page.locator('doc-editor[data-test="fe009"] .de-notice')).toContainText(
+    'belonged to another person and was discarded',
+  );
+  await expect.poll(async () => (await readJournal(page, docId)).commits.length).toBe(0);
+  // Nothing of Ada's was sent, shown to Bob or kept as recovered edits.
+  expect(occurrences(await storedText(page, docId), TYPED)).toBe(0);
+  await expect(page.locator('doc-editor[data-test="fe009"] .de-editing-surface')).not.toContainText(
+    TYPED.trim(),
+  );
+  expect(
+    await page.evaluate(() => {
+      const e = (window as unknown as { __embed: Hooks }).__embed;
+      const el = document.querySelector('doc-editor[data-test="fe009"]')!;
+      return e.internals(el).editor.core.recovered.get().count;
+    }),
+  ).toBe(0);
 });

@@ -19,6 +19,17 @@ export interface TestLink {
 }
 
 const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = [
+  // Shipped when HIS-010 closed (2026-11-18).
+  [
+    'version-history',
+    [
+      { path: 'packages/ui/e2e/his-009-history-pane.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/his-010-version-view.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/his-013-compare.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/his-006-name-version.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/his-010-version-view.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when CDM-019 and FE-130 closed (2026-11-18).
   [
     'lists',
@@ -26,6 +37,16 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/test/list-commands.test.ts', kind: 'unit' },
       { path: 'packages/engine/test/list-view.test.ts', kind: 'unit' },
       { path: 'packages/export-latex/src/fe-130-list-labels.compile.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when FE-134 closed (2026-11-18).
+  [
+    'captions-and-cross-references',
+    [
+      { path: 'packages/element/e2e/fe-134-cross-reference.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/fe-134-table-equation-captions.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-134-referenced-target.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/fe-134-numbers.compile.test.ts', kind: 'unit' },
     ],
   ],
   // Shipped when UX-011 closed (2026-11-17).
@@ -71,6 +92,64 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/test/list-view.test.ts', kind: 'unit' },
       { path: 'packages/element/e2e/list-semantics.spec.ts', kind: 'playwright' },
       { path: 'packages/export-latex/src/fe-130-list-labels.compile.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when FE-134 closed (2026-11-18): the captions and references through the core, the
+  // computed texts in three browsers, the cross-reference dialog in the real element.
+  [
+    'captions-and-cross-references',
+    [
+      { path: 'packages/engine/test/captions-refs.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-134-table-equation-captions.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-134-core-target-delete.test.ts', kind: 'unit' },
+      { path: 'packages/engine/src/view/fe-134-computed-field.universal.test.ts', kind: 'unit' },
+      { path: 'packages/element/e2e/fe-134-cross-reference.spec.ts', kind: 'playwright' },
+    ],
+  ],
+  // Shipped when FE-136 closed (2026-11-18): the insertion commands through the core, the table of
+  // contents in three browsers, the equation command in the real element, the glyph flag in the
+  // real element with a real font file, and the page numbers in the PDF.
+  [
+    'symbols',
+    [
+      { path: 'packages/engine/test/fields-toc.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-136-glyph-check.test.ts', kind: 'unit' },
+      { path: 'packages/element/test/fe-136-glyph-coverage.test.ts', kind: 'unit' },
+      { path: 'packages/element/e2e/fe-136-glyph-notice.spec.ts', kind: 'playwright' },
+    ],
+  ],
+  [
+    'equations',
+    [
+      { path: 'packages/engine/test/fe-136-insert-equation.test.ts', kind: 'unit' },
+      { path: 'packages/element/e2e/fe-136-insert-equation.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-070-math-editor.spec.ts', kind: 'playwright' },
+      { path: 'packages/export-latex/src/exp-052-equations.test.ts', kind: 'unit' },
+    ],
+  ],
+  [
+    'page-numbers',
+    [
+      { path: 'packages/engine/test/layout-commands.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-036-page-numbers.compile.test.ts', kind: 'unit' },
+    ],
+  ],
+  [
+    'table-of-contents',
+    [
+      { path: 'packages/engine/test/toc-entries.test.ts', kind: 'unit' },
+      { path: 'packages/engine/src/view/fe-136-toc.universal.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-023-toc.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when FE-138 closed (2026-11-18): the status bar and the keyboard in three browsers, the
+  // reflow under browser zoom, and the PDF panel's pages drawn again at each zoom.
+  [
+    'zoom',
+    [
+      { path: 'packages/ui/e2e/fe-138-zoom.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/v-fe-129-141-browser-zoom.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-138-pdf-zoom.spec.ts', kind: 'playwright' },
     ],
   ],
   // Shipped when FE-137 closed (2026-11-18). The panel is run in the three browsers by the element's

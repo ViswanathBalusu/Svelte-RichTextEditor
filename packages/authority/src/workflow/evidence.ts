@@ -45,7 +45,7 @@ export async function verifyEvidence(
 
 /** The part of a control commit that carries evidence: the origin and the salted hash, nothing else. */
 export interface EvidenceCommitPayload {
-  readonly origin: 'sign' | 'rules';
+  readonly origin: 'sign' | 'rules' | 'decline';
   readonly evidenceHash: string;
 }
 

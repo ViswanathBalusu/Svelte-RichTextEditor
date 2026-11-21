@@ -7,7 +7,7 @@
  * so the signature of one step stays valid under the updates of the next (12 §8.2 step 5).
  */
 import { createHash } from 'node:crypto';
-import { buildCms, timestampInfo, type TimestampSource } from './cms.ts';
+import { buildCms, timestampInfo, type TimestampInfo, type TimestampSource } from './cms.ts';
 import type { KeyService } from './keyservice.ts';
 import {
   appendUpdate,
@@ -373,6 +373,81 @@ export async function addDocumentTimestamp(
   const token = await opts.timestamps.stamp(sha256(r.signed));
   return putContents(r.pdf, f, token, room);
 }
+/** The contents (DER) and the `/ByteRange` start of every signature and time-stamp of a file. */
+function signaturesIn(pdf: Uint8Array): Uint8Array[] {
+  const text = Buffer.from(pdf).toString('latin1');
+  const out: Uint8Array[] = [];
+  for (const m of text.matchAll(/\/ByteRange \[(\d+) (\d+) (\d+) (\d+)\]/g))
+    out.push(signatureContents(pdf, Number(m[2])));
+  return out;
+}
+
+export interface ExtendOptions {
+  readonly timestamps: TimestampSource;
+  /**
+   * Fresh validation data, collected now (the certificates of the time-stamp authority are given),
+   * to append as a new DSS update. Absent: no DSS update, only the time-stamp.
+   */
+  readonly validationData?: (timestampCertificates: readonly Uint8Array[]) => ValidationData;
+  readonly time?: Date;
+  readonly contentsBytes?: number;
+}
+
+export interface ExtendResult {
+  readonly pdf: Uint8Array;
+  readonly steps: { name: string; length: number }[];
+  /** `genTime` of the document time-stamp that was appended. */
+  readonly timestampTime: Date;
+  /** The certificates the new token carries (DER): the authority's, first. */
+  readonly tokenCertificates: readonly Uint8Array[];
+}
+
+/**
+ * Extends a sealed PDF for long-term validation (12 §8.2 step 5; FRW-056): appends, as incremental
+ * updates only, fresh validation data (a new DSS naming every signature the file holds) when
+ * `validationData` is given, and then a further document time-stamp over the whole file as it
+ * stands. The bytes that came in are the first bytes of the bytes that come out, so the original
+ * signature still validates. A file with no signature is refused.
+ */
+export async function extendPdf(input: Uint8Array, opts: ExtendOptions): Promise<ExtendResult> {
+  const room = opts.contentsBytes ?? DEFAULT_ROOM;
+  const time = opts.time ?? new Date();
+  const steps: ExtendResult['steps'] = [{ name: 'input', length: input.length }];
+  if (!/\/ByteRange \[/.test(Buffer.from(input).toString('latin1')))
+    throw new PdfError('the file holds no signature to extend');
+  let pdf = input;
+  if (opts.validationData) {
+    // The authority's certificates are those of the newest token; a fresh token comes next, so the
+    // data is collected for the token of the file as it stands.
+    const known = lastTimestamp(input);
+    pdf = appendDss(
+      new PdfDocument(pdf),
+      opts.validationData(known?.certificates ?? []),
+      signaturesIn(pdf),
+      time,
+    );
+    steps.push({ name: 'validation data (DSS)', length: pdf.length });
+  }
+  pdf = await addDocumentTimestamp(pdf, { timestamps: opts.timestamps, time, contentsBytes: room });
+  steps.push({ name: 'document time-stamp', length: pdf.length });
+  const token = lastTimestamp(pdf);
+  if (token === null) throw new PdfError('the appended time-stamp cannot be read back');
+  return { pdf, steps, timestampTime: token.genTime, tokenCertificates: token.certificates };
+}
+
+/** The newest document time-stamp of a file, read back, or null when it has none. */
+function lastTimestamp(pdf: Uint8Array): TimestampInfo | null {
+  const text = Buffer.from(pdf).toString('latin1');
+  let last: TimestampInfo | null = null;
+  for (const m of text.matchAll(/\/Type \/DocTimeStamp/g)) {
+    const range = /\/ByteRange \[(\d+) (\d+) (\d+) (\d+)\]/.exec(
+      text.slice(m.index, m.index + 400),
+    );
+    if (range) last = timestampInfo(signatureContents(pdf, Number(range[2])));
+  }
+  return last;
+}
+
 /** The signature time-stamp token inside a CMS (DER), as an unsigned attribute. */
 function extractSignatureTimestamp(cms: Uint8Array): Uint8Array {
   // Found by its attribute identifier, 1.2.840.113549.1.9.16.2.14, then the SET and the token.

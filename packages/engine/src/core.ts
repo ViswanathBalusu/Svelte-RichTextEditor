@@ -82,6 +82,7 @@ import type {
   AssistantInsertOutcome,
   FieldFillOutcome,
   EquationRequest,
+  SignFieldRequest,
   EquationTarget,
   FindResult,
   FindState,
@@ -161,6 +162,15 @@ import {
   insertTableCaption,
 } from './captions-refs.ts';
 import { type ReferenceTarget, referenceTargets } from './reference-targets.ts';
+import type { SuggestionCardFormat } from './view/suggestion-card.ts';
+import {
+  type GlyphCoverage,
+  type GlyphNotice,
+  type MissingGlyph,
+  familyAtCaret,
+  lacksGlyph,
+  missingGlyphs,
+} from './glyph-check.ts';
 import { referenceGuardPlugin, referencePositions } from './referenced-targets.ts';
 import {
   EQUATION_NODES,
@@ -231,6 +241,15 @@ import {
 } from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
+import { mapRanges, rangeScopes } from '@docedit/authority';
+import {
+  ConfirmedLog,
+  type CommentAnchorReport,
+  type NoticeLike,
+  ThreadSync,
+  type ThreadPlacement,
+  type ThreadReport,
+} from './thread-sync.ts';
 import type { ThreadSelection } from './comment-decorations.ts';
 import { listSuggestions, type SuggestionItem } from './suggestion-list.ts';
 import {
@@ -291,7 +310,7 @@ import { type AltRequest, setAltText } from './alt-text.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
 import { setParagraphFormat } from './paragraph-format.ts';
-import { PresenceClient } from './presence.ts';
+import { DEFAULT_MAPPING_HISTORY, PresenceClient, toConfirmed } from './presence.ts';
 import { type SearchMatch, findMatches } from './search.ts';
 import { skippedPreservedAtoms } from './preserved-find.ts';
 import {
@@ -326,6 +345,7 @@ import {
   type Discarded,
   type Effect,
   type SyncState,
+  type Confirmed,
   type Transition,
   initialState,
   insertedText,
@@ -337,6 +357,13 @@ import {
 import type { RestorePlan } from './sync/restore.ts';
 import type { SelectionShim } from './view-support.ts';
 import { CDM1 } from '@docedit/model/definition';
+
+/** The blocks a thread may be about as a whole (UX-028 criterion 2), and what the pane calls them. */
+const THREAD_BLOCKS: ReadonlyMap<string, string> = new Map([
+  ['figure', 'figure'],
+  ['table', 'table'],
+  ['equation_block', 'equation'],
+]);
 
 /** The engine this build implements and the CDM it reads (03 §11.1; FE-030 criterion 8). */
 export const ENGINE = 'pm-steps/1';
@@ -839,6 +866,13 @@ export class DocumentCore implements DocumentApi {
   /** The last picture that was inserted without alternative text, for the shell to ask for it (FE-132). */
   readonly altRequest: ReadValue<AltRequest | null>;
   #altRequests = 0;
+  /**
+   * The last symbol inserted in a font that has no glyph for it, for the shell to flag before the
+   * export stops on it (FE-136 criterion 4; 09 §3.2).
+   */
+  readonly glyphNotice: ReadValue<GlyphNotice | null>;
+  #glyphNotices = 0;
+  #glyphCoverage: GlyphCoverage | null = null;
   readonly mode: ReadValue<ModeState>;
   /** Suggestion mode at the caret, and why (FE-041 criterion 5). */
   readonly suggestion: ReadValue<SuggestionModeInfo>;
@@ -856,11 +890,18 @@ export class DocumentCore implements DocumentApi {
   readonly problem: ReadValue<CoreProblem | null>;
   /** The last request to open the math editor on an equation (FE-070); the shell opens it. */
   readonly equationRequest: ReadValue<EquationRequest | null>;
+  /**
+   * The last signature or initials field the person activated (FRW-046 criterion 1); the shell opens
+   * the adoption and signing step on it. Cleared when the step is closed.
+   */
+  readonly signRequest: ReadValue<SignFieldRequest | null>;
   readonly findState: ReadValue<FindState>;
   /** The proofing state and findings (UX-041); `available` is false without a proofing port. */
   readonly proofing: ReadValue<ProofingInfo>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The threads that are on a block (a figure, a table or an equation), by the block's identifier (FE-048). */
+  readonly threadBlocks: ReadValue<readonly { readonly id: string; readonly block: string }[]>;
   /** The thread the comments pane chose; the body marks it and scrolls to it (UX-030). */
   readonly selectedThread: ReadValue<ThreadSelection | null>;
   /** The suggestion last revealed by next, previous or the review pane; the body scrolls to it (UX-036). */
@@ -873,11 +914,20 @@ export class DocumentCore implements DocumentApi {
   #suggestionLabel: SuggestionLabel | null = null;
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
+  /** The confirmed commits since the client's first `seq`: a range reported earlier is mapped through them (FE-048). */
+  #threadLog = new ConfirmedLog(0, DEFAULT_MAPPING_HISTORY);
+  /** Reports at a `seq` the client has not reached; placed when the confirmed document gets there. */
+  readonly #threadHeld = new Map<string, ThreadReport>();
+  /** The block each block thread is on (FE-048 criterion 1). */
+  readonly #blockThreads = new Map<string, string>();
+  #threadSync: ThreadSync | null = null;
+  readonly #threadListeners = new Set<(notice: NoticeLike) => void>();
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
   /** The formatting the painter took (UX-009). */
   #painted: FormatSnapshot | null = null;
   #problems = 0;
   #equationRequests = 0;
+  #signRequests = 0;
   /** The find (FE-059): the query, its matches in the body and the current one (0-based). */
   #find: {
     query: string;
@@ -958,6 +1008,9 @@ export class DocumentCore implements DocumentApi {
   /** The assets port of the configuration, and the one `attach` gave, which wins (FE-053). */
   readonly #configAssets: AssetsPort | null;
   #attachedAssets: AssetsPort | null = null;
+  #attachedHistory: NonNullable<AttachOptions['history']> | null = null;
+  #suggestionCard: SuggestionCardFormat | null = null;
+  readonly #suggestionTimes = new Map<string, Promise<string | null>>();
   /** The user suggestion marks name (FE-042): the configuration's, then the one `attach` gave. */
   #user: string | null;
   /** `settings.trackChanges` of the last definitions read, by the definitions node (FE-041). */
@@ -1000,6 +1053,8 @@ export class DocumentCore implements DocumentApi {
     this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.altRequest = new ReadValue<AltRequest | null>(null, sameJson, hub);
+    this.glyphNotice = new ReadValue<GlyphNotice | null>(null, sameJson, hub);
+    this.suggestionCardChanged = new ReadValue<number>(0, Object.is, hub);
     this.#requested = config.mode ?? 'edit';
     this.#accessValue = config.access ?? null;
     this.#effective = effectiveMode(this.#requested, this.#accessValue);
@@ -1029,12 +1084,18 @@ export class DocumentCore implements DocumentApi {
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
     this.proofing = new ReadValue<ProofingInfo>(NO_PROOFING, sameJson, hub);
     this.equationRequest = new ReadValue<EquationRequest | null>(null, sameJson, hub);
+    this.signRequest = new ReadValue<SignFieldRequest | null>(null, sameJson, hub);
     this.findState = new ReadValue<FindState>(
       { query: '', count: 0, current: null },
       sameJson,
       hub,
     );
     this.threadRanges = new ReadValue<readonly (ThreadRange & { readonly id: string })[]>(
+      [],
+      sameJson,
+      hub,
+    );
+    this.threadBlocks = new ReadValue<readonly { readonly id: string; readonly block: string }[]>(
       [],
       sameJson,
       hub,
@@ -1101,6 +1162,16 @@ export class DocumentCore implements DocumentApi {
         },
         'Mod-y': () => {
           this.run('redo');
+          return true;
+        },
+        // FE-048 criterion 7: a thread is reached from the keyboard. The keys are a proposal (the
+        // spec names none): Alt+F8 and Shift+Alt+F8 move to the next and previous thread.
+        'Alt-F8': () => {
+          this.stepThread('next');
+          return true;
+        },
+        'Shift-Alt-F8': () => {
+          this.stepThread('previous');
           return true;
         },
       }),
@@ -1729,11 +1800,36 @@ export class DocumentCore implements DocumentApi {
   }
 
   /**
-   * Moves the selection to a reference that blocked the last refused deletion, the next one at each
-   * call and the first again after the last (FE-133 criterion 5). References the reader may not
-   * view are skipped. False, and nothing changes, when no deletion was refused for this reason or
-   * no reference is left to show.
+   * Tells the person that unsent work an earlier visit left behind belonged to someone else and
+   * was discarded (decision 47 of `docs/owner-decisions-2026-11-15.md`). The notice names nothing.
    */
+  noticeForeignWork(): void {
+    this.#refused({ reason: 'other-user', scopes: [] });
+  }
+
+  /**
+   * Gives the editor the character coverage of the fonts, as the host read it from the font files
+   * (FE-136 criterion 4). A family the function does not know is never flagged. Null removes it.
+   */
+  setGlyphCoverage(coverage: GlyphCoverage | null): void {
+    this.#glyphCoverage = coverage;
+  }
+
+  /** Every character of the body that its font lacks, in document order (09 §3.2). */
+  missingGlyphs(): MissingGlyph[] {
+    return this.#glyphCoverage === null ? [] : missingGlyphs(this.#state.doc, this.#glyphCoverage);
+  }
+
+  /** Publishes a notice when the symbol just inserted has no glyph in the font it is set in. */
+  #flagSymbol(before: EditorState, symbol: string): void {
+    const coverage = this.#glyphCoverage;
+    if (coverage === null) return;
+    const family = familyAtCaret(before.doc, before.selection.from, before.storedMarks);
+    if (lacksGlyph(coverage, family, symbol)) {
+      this.glyphNotice.set({ n: ++this.#glyphNotices, char: symbol, family });
+    }
+  }
+
   /**
    * What a cross-reference may point at, in this reader's document (FE-134 criterion 2): headings,
    * numbered paragraphs, captions, labelled equations and bookmarks, each with the text a reference
@@ -1743,6 +1839,12 @@ export class DocumentCore implements DocumentApi {
     return referenceTargets(this.#state.doc);
   }
 
+  /**
+   * Moves the selection to a reference that blocked the last refused deletion, the next one at each
+   * call and the first again after the last (FE-133 criterion 5). References the reader may not
+   * view are skipped. False, and nothing changes, when no deletion was refused for this reason or
+   * no reference is left to show.
+   */
   showReferences(): boolean {
     if (this.#referencedTargets.length === 0) return false;
     const doc = this.#state.doc;
@@ -1923,6 +2025,78 @@ export class DocumentCore implements DocumentApi {
     return (
       checkChange(this.#state.doc, tr.doc, tr.steps, tr.docs, this.#accessValue, false) === null
     );
+  }
+
+  /** The `form_field` with this id, or null. */
+  #formFieldById(id: string): PMNode | null {
+    let found: PMNode | null = null;
+    this.#state.doc.descendants((node) => {
+      if (found !== null) return false;
+      if (node.type.name === 'form_field' && node.attrs['id'] === id) found = node;
+      return found === null && node.type.name !== 'form_field';
+    });
+    return found;
+  }
+
+  /**
+   * Whether the person may sign the signature or initials field `id` now (FRW-046 criterion 2, as
+   * far as the client can tell; the server decides): the field is of that kind and not read-only,
+   * its role is one the participant holds, the participant is active and no rule hides or disables
+   * the field.
+   */
+  fieldSignable(id: string): boolean {
+    if (this.#effective === 'view') return false;
+    const node = this.#formFieldById(id);
+    if (node === null) return false;
+    const kind = node.attrs['kind'];
+    if (kind !== 'signature' && kind !== 'initials') return false;
+    if (node.attrs['readOnly'] === true) return false;
+    const role = node.attrs['assignee'];
+    const fill = this.#accessValue?.fill;
+    if (typeof role !== 'string' || !fill || !fill.active || !fill.roles.includes(role))
+      return false;
+    const rule = this.#fieldRules.of(id);
+    return rule === null || (rule.visible && rule.enabled);
+  }
+
+  /**
+   * Asks the shell to open the adoption and signing step on the field `id`, as activating it does
+   * (FRW-046 criterion 1). False when the field is not one this person may sign.
+   */
+  requestSign(id: string): boolean {
+    if (!this.fieldSignable(id)) return false;
+    const node = this.#formFieldById(id)!;
+    const label = node.attrs['label'];
+    const key = node.attrs['key'];
+    const role = node.attrs['assignee'];
+    this.signRequest.set({
+      n: ++this.#signRequests,
+      id,
+      key: typeof key === 'string' ? key : '',
+      kind: node.attrs['kind'] as 'signature' | 'initials',
+      label: typeof label === 'string' && label !== '' ? label : typeof key === 'string' ? key : id,
+      role: typeof role === 'string' ? this.#roleName(role) : null,
+    });
+    return true;
+  }
+
+  /** Closes the request for the adoption and signing step. */
+  clearSignRequest(): void {
+    this.signRequest.set(null);
+  }
+
+  /** The name of the role `id`, as the document defines it; the identifier when it has none. */
+  #roleName(id: string): string {
+    let name = id;
+    this.#state.doc.firstChild?.forEach((def) => {
+      if (
+        def.type.name === 'role_def' &&
+        def.attrs['id'] === id &&
+        typeof def.attrs['name'] === 'string'
+      )
+        name = def.attrs['name'];
+    });
+    return name;
   }
 
   /**
@@ -2325,10 +2499,12 @@ export class DocumentCore implements DocumentApi {
         return args.toc === undefined
           ? null
           : insertToc(state, this.#newId(), args.toc, { writable }, dispatch);
-      case 'insertSymbol':
-        return args.symbol === undefined
-          ? null
-          : insertSymbol(state, args.symbol, { writable }, dispatch);
+      case 'insertSymbol': {
+        if (args.symbol === undefined) return null;
+        const result = insertSymbol(state, args.symbol, { writable }, dispatch);
+        if (result.ok && dispatch) this.#flagSymbol(state, args.symbol);
+        return result;
+      }
       case 'insertCaption': {
         const caption = args.caption;
         if (caption === undefined) {
@@ -2815,6 +2991,45 @@ one or original. It is a
   }
 
   /**
+   * Sets the shell's words for the card of a suggestion, which names its author and the time (FE-046
+   * criterion 2), or clears them. The body view reads it when the card shows and when it is set.
+   */
+  setSuggestionCard(format: SuggestionCardFormat | null): void {
+    this.#suggestionCard = format;
+    this.suggestionCardChanged.set(this.suggestionCardChanged.get() + 1);
+  }
+
+  /** The shell's words for the card of a suggestion, or null. */
+  get suggestionCardFormat(): SuggestionCardFormat | null {
+    return this.#suggestionCard;
+  }
+
+  /** Counts the changes of the card's words, so that a card on show is drawn again. */
+  readonly suggestionCardChanged: ReadValue<number>;
+
+  /**
+   * The server time of the commit that introduced the suggestion `id`, as the history port gives
+   * it (decision 109 of `docs/owner-decisions-2026-11-15.md`), or null when there is no port, the
+   * commit is below the reader's gate or the answer fails. A time does not change, so it is kept.
+   */
+  suggestionTime(id: string): Promise<string | null> {
+    const known = this.#suggestionTimes.get(id);
+    if (known !== undefined) return known;
+    const port = this.#attachedHistory;
+    if (port === null || this.#docId === '') return Promise.resolve(null);
+    const asked = port
+      .suggestionIntroduction(this.#docId, id)
+      .then((answer) => (typeof answer.time === 'string' ? answer.time : null))
+      .catch(() => null);
+    // A failed or empty answer is asked again the next time; only a time is kept.
+    void asked.then((time) => {
+      if (time === null) this.#suggestionTimes.delete(id);
+    });
+    this.#suggestionTimes.set(id, asked);
+    return asked;
+  }
+
+  /**
    * The continuous section breaks whose page setup changes a margin (FE-135 criterion 6). The core
    * only computes them; the view decides how to show them, and the criterion stays open until it does.
    */
@@ -3114,14 +3329,241 @@ one or original. It is a
     this.#publishThreadRanges();
   }
 
+  /**
+   * The service's place for a thread, at a `seq` (FE-048 criteria 1 and 4; 05 §5.6): a listed thread
+   * or a `thread.*` notice. The client replaces its copy and maps the range forward from `seq`,
+   * through the confirmed commits since and then through its unconfirmed steps, with the authority's
+   * own `mapRanges`. Answers `held` when `seq` is ahead of the confirmed document (the report is
+   * placed when the document gets there) and `stale` when `seq` is older than the commits the
+   * client keeps (the threads are listed again).
+   */
+  reportThread(threadId: string, report: ThreadReport): 'placed' | 'held' | 'stale' {
+    if (report.block !== undefined) {
+      this.#comments.remove(threadId);
+      this.#threadHeld.delete(threadId);
+      this.#blockThreads.set(threadId, report.block);
+      for (const api of this.#extApis) api.commentNoted(threadId);
+      this.#publishThreadRanges();
+      return 'placed';
+    }
+    if (!report.range) return 'stale';
+    if (report.seq > this.#sync.seq) {
+      this.#threadHeld.set(threadId, report);
+      return 'held';
+    }
+    const at = this.#threadLog.mapFrom(report.range, report.seq);
+    if (at === null) {
+      this.#threadHeld.delete(threadId);
+      return 'stale';
+    }
+    const local = unconfirmed(this.#sync).map((step) => step.getMap());
+    const [mapped] = local.length > 0 ? mapRanges([at], local) : [at];
+    this.#threadHeld.delete(threadId);
+    this.#blockThreads.delete(threadId);
+    this.#comments.set(threadId, { from: mapped!.from, to: mapped!.to }, this.#sync.seq);
+    for (const api of this.#extApis) api.commentNoted(threadId);
+    this.#publishThreadRanges();
+    return 'placed';
+  }
+
+  /**
+   * Starts a thread on a range or a block (05 §6.2). It is a control-plane request to the thread
+   * resource: no step is made, no commit is sent and the document does not change (FE-048 criterion
+   * 6). The thread is placed from the answer, or from its `thread.created` notice. Rejects when the
+   * backend has no comment port.
+   */
+  createThread(
+    target: { range: { from: number; to: number; baseSeq: number } } | { block: string },
+    comment: unknown,
+  ): Promise<string> {
+    const threads = this.#threadSync;
+    if (!threads) return Promise.reject(new Error('the backend has no comment port'));
+    return threads.create(target, comment);
+  }
+
+  /** Resolves or reopens a thread (05 §6.2): a request to the thread, never a commit (FE-048 criterion 6). */
+  setThreadState(threadId: string, state: 'open' | 'resolved'): Promise<void> {
+    const threads = this.#threadSync;
+    if (!threads) return Promise.reject(new Error('the backend has no comment port'));
+    return threads.setState(threadId, state);
+  }
+
+  /** The confirmed document moved: keep the maps, place the reports that are now reachable (FE-048). */
+  #threadsConfirmed(changes: readonly Confirmed[]): void {
+    let replaced = false;
+    for (const c of changes) {
+      this.#threadLog.record(c);
+      if (c.steps === null) replaced = true;
+    }
+    for (const [id, report] of [...this.#threadHeld])
+      if (report.seq <= this.#sync.seq) this.reportThread(id, report);
+    // After a reset or a reload the copies cannot be mapped: the service's listing replaces them.
+    if (replaced) void this.#threadSync?.load();
+  }
+
+  /**
+   * Moves the caret to the start of the next or previous thread in document order, wrapping at the
+   * ends, and chooses that thread (FE-048 criterion 7). A thread on a block selects the block. No
+   * step, no commit. Answers the thread's identifier, or null when no thread is drawn.
+   */
+  stepThread(direction: 'next' | 'previous'): string | null {
+    const stops: { id: string; pos: number; block: string | null }[] = [];
+    for (const id of this.#comments.ids()) {
+      const range = this.#comments.get(id)!;
+      if (!range.detached && range.to > range.from)
+        stops.push({ id, pos: range.from, block: null });
+    }
+    if (this.#blockThreads.size > 0) {
+      const wanted = new Map<string, string>();
+      for (const [id, block] of this.#blockThreads) wanted.set(block, id);
+      this.#state.doc.descendants((node, pos) => {
+        const block = node.attrs['id'] as string | undefined;
+        const id = block === undefined ? undefined : wanted.get(block);
+        if (id !== undefined && block !== undefined) stops.push({ id, pos, block });
+        return true;
+      });
+    }
+    if (stops.length === 0) return null;
+    stops.sort((a, b) => a.pos - b.pos);
+    const at = this.#state.selection.from;
+    let index: number;
+    if (direction === 'next') {
+      index = stops.findIndex((s) => s.pos > at);
+      if (index < 0) index = 0;
+    } else {
+      index = -1;
+      for (let k = stops.length - 1; k >= 0; k--)
+        if (stops[k]!.pos < at) {
+          index = k;
+          break;
+        }
+      if (index < 0) index = stops.length - 1;
+    }
+    const stop = stops[index]!;
+    const selection =
+      stop.block !== null && NodeSelection.isSelectable(this.#state.doc.nodeAt(stop.pos)!)
+        ? NodeSelection.create(this.#state.doc, stop.pos)
+        : TextSelection.near(this.#state.doc.resolve(stop.pos + (stop.block !== null ? 1 : 0)));
+    this.dispatch(this.#state.tr.setSelection(selection).scrollIntoView());
+    this.selectThread({ id: stop.id, block: stop.block });
+    return stop.id;
+  }
+
   /** Removes a thread's range (the thread was deleted) (FE-048). */
   removeThreadRange(threadId: string): void {
+    this.#threadHeld.delete(threadId);
+    this.#blockThreads.delete(threadId);
     this.#comments.remove(threadId);
     for (const api of this.#extApis) api.commentNoted(threadId);
     this.#publishThreadRanges();
   }
 
+  /**
+   * What a new comment thread would be created on (UX-028; 05 §6.2 `target`; 07 §12): the text
+   * range of the selection, in the positions of the confirmed document at `baseSeq`, or the figure,
+   * table or equation selected as a block; and the capabilities of every scope that it covers.
+   * Null when the selection is empty or holds nothing a thread can be about. It reads only.
+   */
+  commentAnchor(): CommentAnchorReport | null {
+    const state = this.#state;
+    const sel = state.selection;
+    const doc = state.doc;
+    if ('node' in sel && sel.node) {
+      const node = sel.node as PMNode;
+      const id = node.attrs['id'] as string | undefined;
+      if (id === undefined || !THREAD_BLOCKS.has(node.type.name)) return null;
+      return {
+        selection: { kind: 'block', id },
+        scopes: [this.#capsOfScope(this.#scopeIn(doc, sel.from))],
+      };
+    }
+    if (sel.empty) return null;
+    const { anchor, head } = toConfirmed(this.#sync, sel.anchor, sel.head);
+    const from = Math.min(anchor, head);
+    const to = Math.max(anchor, head);
+    if (to <= from) return null;
+    // The scopes are those of the selection in the document the user sees.
+    const scopes = rangeScopes(doc, sel.from, sel.to).filter((x) => x !== 'doc');
+    return {
+      selection: { kind: 'range', from, to, baseSeq: this.#sync.seq },
+      scopes: (scopes.length > 0 ? scopes : ['body']).map((x) => this.#capsOfScope(x)),
+    };
+  }
+
+  /** The capabilities in a scope, as the shell shows them: view, comment, suggest and edit. */
+  #capsOfScope(scope: string): readonly Capability[] {
+    const access = this.#accessValue;
+    if (!access) return this.#readOnly ? ['view', 'comment'] : FULL_CAPS;
+    const caps = capsOf(access, depScope(scope)).filter((c): c is Capability =>
+      (FULL_CAPS as readonly string[]).includes(c),
+    );
+    return this.#readOnly ? caps.filter((c) => c === 'view' || c === 'comment') : caps;
+  }
+
+  /**
+   * Where a thread is in the document the reader sees now (UX-029, UX-030): its place in document
+   * order, whether its text was deleted, the commented words or the kind of block, and the
+   * capabilities in the scopes it covers. Null for a thread this client holds no place for.
+   */
+  threadPlacement(id: string): ThreadPlacement | null {
+    const doc = this.#state.doc;
+    const range = this.#comments.get(id);
+    if (range) {
+      const size = doc.content.size;
+      const from = Math.min(Math.max(0, range.from), size);
+      const to = Math.min(Math.max(0, range.to), size);
+      const detached = range.detached || to <= from;
+      const scopes = detached
+        ? [this.#scopeIn(doc, from)]
+        : rangeScopes(doc, from, to).filter((x) => x !== 'doc');
+      return {
+        position: from,
+        detached,
+        excerpt: detached ? null : doc.textBetween(from, to, ' '),
+        blockKind: null,
+        caps: this.#sharedCaps(scopes.length > 0 ? scopes : ['body']),
+      };
+    }
+    const block = this.#blockThreads.get(id);
+    if (block === undefined) return null;
+    let found: { pos: number; kind: string } | null = null;
+    doc.descendants((node, pos) => {
+      if (found) return false;
+      if (node.attrs['id'] === block) found = { pos, kind: node.type.name };
+      return found === null;
+    });
+    if (found === null)
+      return { position: 0, detached: true, excerpt: null, blockKind: null, caps: ['view'] };
+    const at: { pos: number; kind: string } = found;
+    return {
+      position: at.pos,
+      detached: false,
+      excerpt: null,
+      blockKind: THREAD_BLOCKS.get(at.kind) ?? at.kind,
+      caps: this.#sharedCaps([this.#scopeIn(doc, at.pos)]),
+    };
+  }
+
+  /** What the user may do in every one of the scopes: the capabilities they all have. */
+  #sharedCaps(scopes: readonly string[]): readonly Capability[] {
+    const each = scopes.map((x) => this.#capsOfScope(x));
+    return FULL_CAPS.filter((c) => each.every((caps) => caps.includes(c)));
+  }
+
+  /**
+   * Calls `listener` for every `thread.*` and `comment.*` notice of the channel, after the core
+   * has placed the range it carries (FE-048; UX-029, UX-030). The notice names the thread; a
+   * client reads it again. Returns the function that stops the calls.
+   */
+  onThreadNotice(listener: (notice: NoticeLike) => void): () => void {
+    this.#threadListeners.add(listener);
+    return () => {
+      this.#threadListeners.delete(listener);
+    };
+  }
+
   #publishThreadRanges(): void {
+    this.threadBlocks.set([...this.#blockThreads].map(([id, block]) => ({ id, block })));
     this.threadRanges.set(this.#comments.ids().map((id) => ({ id, ...this.#comments.get(id)! })));
   }
 
@@ -4319,12 +4761,14 @@ one or original. It is a
       ...(opts.clock ? { clock: opts.clock } : {}),
       ...(opts.retry ? { retry: opts.retry } : {}),
       ...(opts.journal ? { journal: opts.journal } : {}),
+      ...(opts.user !== undefined ? { user: opts.user } : {}),
     };
     this.#journalFailed = false;
     this.#serviceUnavailable = false;
     this.connection.set('online');
     if (opts.features) this.setFeatures(opts.features);
     if (opts.assets) this.#attachedAssets = opts.assets;
+    if (opts.history) this.#attachedHistory = opts.history;
     const detachProofing = opts.proofing ? this.attachProofing(opts.proofing) : null;
     if (opts.user !== undefined) this.#user = opts.user;
     // Work the journal kept from an earlier visit goes back on the document before the session
@@ -4364,15 +4808,51 @@ one or original. It is a
         },
       );
     }
+    // FE-048: the service's threads are listed at the confirmed seq, and its `thread.*` notices place
+    // each range; the maps of later commits carry a range forward from the seq it was reported at.
+    let detachThreads: (() => void) | null = null;
+    if (opts.threads && (!opts.features || opts.features.includes('comments'))) {
+      this.#threadLog = new ConfirmedLog(opts.seq, DEFAULT_MAPPING_HISTORY);
+      const threads = new ThreadSync(opts.threads, channel.docId, {
+        report: (id, report) => {
+          if (this.reportThread(id, report) === 'stale') void threads.load();
+        },
+        remove: (id) => this.removeThreadRange(id),
+        seq: () => this.#sync.seq,
+        failed: (message) => {
+          this.#problems++;
+          this.problem.set({
+            n: this.#problems,
+            code: 'threads_unavailable',
+            message,
+            fatal: false,
+          });
+        },
+      });
+      this.#threadSync = threads;
+      const unlisten = channel.onEvent((n: NoticeLike) => {
+        threads.onNotice(n);
+        if (n.type.startsWith('thread.') || n.type.startsWith('comment.'))
+          for (const listener of [...this.#threadListeners]) listener(n);
+      });
+      detachThreads = () => {
+        unlisten();
+        threads.end();
+        if (this.#threadSync === threads) this.#threadSync = null;
+      };
+      void threads.load();
+    }
     this.#publish();
     return () => {
       session.end();
+      detachThreads?.();
       detachProofing?.();
       this.#presenceClient?.end();
       this.#presenceClient = null;
       if (this.#session === session) {
         this.#session = null;
         this.#attachedAssets = null;
+        this.#attachedHistory = null;
         this.connection.set('detached');
         this.presence.set([]);
         this.peerSelections.set([]);
@@ -4506,11 +4986,14 @@ one or original. It is a
 
   /** Tells presence how the confirmed document moved, so that peers' positions are mapped (SYN-036). */
   #presenceConfirmed(t: Transition, seqBefore: number): void {
-    const presence = this.#presenceClient;
-    if (!presence) return;
-    if (t.confirmed) presence.confirmed(t.confirmed);
-    else if (t.state.seq !== seqBefore)
-      presence.confirmed([{ from: seqBefore, to: t.state.seq, steps: null }]);
+    const changes: readonly Confirmed[] | null = t.confirmed
+      ? t.confirmed
+      : t.state.seq !== seqBefore
+        ? [{ from: seqBefore, to: t.state.seq, steps: null }]
+        : null;
+    if (changes === null) return;
+    this.#threadsConfirmed(changes);
+    this.#presenceClient?.confirmed(changes);
   }
 
   /**
@@ -4685,7 +5168,9 @@ one or original. It is a
         };
         this.#publishSync();
         // The confirmed document is replaced as a whole here: peers' positions cannot be mapped (SYN-036).
-        this.#presenceClient?.confirmed([{ from: seqBefore, to: this.#sync.seq, steps: null }]);
+        const replaced = [{ from: seqBefore, to: this.#sync.seq, steps: null }];
+        this.#threadsConfirmed(replaced);
+        this.#presenceClient?.confirmed(replaced);
       },
       setCompositionProbe: (probe) => {
         this.#probe = probe;
@@ -4702,6 +5187,8 @@ one or original. It is a
     this.#proofing = null;
     this.#session?.end();
     this.#session = null;
+    this.#threadSync?.end();
+    this.#threadSync = null;
     if (this.#flushTimer !== null) clearTimeout(this.#flushTimer);
     this.#flushTimer = null;
     this.#words.stop();

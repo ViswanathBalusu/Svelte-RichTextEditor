@@ -127,10 +127,7 @@ export class MemoryHoldStore implements HoldStore {
   ): Promise<HoldRow | null> {
     const i = this.#rows.findIndex(
       (r) =>
-        r.tenant === tenant &&
-        r.document === document &&
-        r.id === id &&
-        r.releasedAt === undefined,
+        r.tenant === tenant && r.document === document && r.id === id && r.releasedAt === undefined,
     );
     if (i < 0) return null;
     const row = this.#rows[i]!;

@@ -27,7 +27,15 @@ interface DiffBody {
 }
 interface AttributionBody {
   seq: number;
-  spans: Array<{ blockId: string; from: number; to: number; user: string; seq: number }>;
+  spans: Array<{
+    blockId: string;
+    from: number;
+    to: number;
+    user: string;
+    seq: number;
+    /** Content written below the reader's gate: an unknown person (owner decision 37). */
+    unknown?: boolean;
+  }>;
 }
 
 /**
@@ -432,7 +440,7 @@ export const HISTORY: ProfileDef = {
             await get(ctx, token, `${base}/attribution`, { atSeq: s.s3 }),
             200,
             `${who}: the attribution at the head`,
-          ).json as AttributionBody & { spans: Array<{ unknown?: boolean }> };
+          ).json as AttributionBody;
           const named = head.spans.filter((x) => !x.unknown);
           for (const x of named)
             check(x.seq >= gate, `${who}: a named span is at or above the gate`, `>= ${gate}`, x);
@@ -650,7 +658,10 @@ export const HISTORY: ProfileDef = {
         const { token: commenter } = await ctx.token('commenter', { [doc]: 'commenter' });
         // A comment on the intro, which the restore of the open region does not touch.
         const thread = await ctx.service.as(commenter, 'POST', `/documents/${doc}/threads`, {
-          body: { target: { block: IDS.intro }, comment: { body: 'kit' } },
+          body: {
+            target: { block: IDS.intro },
+            comment: { body: [{ type: 'text', text: 'kit' }] },
+          },
         });
         expectStatus(thread, 201, 'a thread on the intro');
         const tid = (thread.json as { id: string }).id;

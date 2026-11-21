@@ -114,7 +114,10 @@ function serviceRoutes(doc: string): Array<[string, string, unknown]> {
 /** A thread on a one-character range of the intro block, as a commenter would start it (05 §6.2). */
 function threadRequest(seq: number, doc: unknown) {
   const from = posIn(doc, IDS.intro);
-  return { target: { range: { from, to: from + 1, baseSeq: seq } }, comment: { body: 'authz' } };
+  return {
+    target: { range: { from, to: from + 1, baseSeq: seq } },
+    comment: { body: [{ type: 'text', text: 'authz' }] },
+  };
 }
 
 export const AUTHZ: ProfileDef = {

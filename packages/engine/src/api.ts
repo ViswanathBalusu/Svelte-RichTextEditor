@@ -548,7 +548,9 @@ export type RefusalReason =
   // A pasted picture that was not added after its upload (FE-053 criterion 3): the upload failed or
   // the asset service did not accept the file, or its size cannot be used. No content is named.
   | 'upload-failed'
-  | 'invalid-size';
+  | 'invalid-size'
+  // Unsent work of an earlier visit belonged to another signed-in user and was discarded (decision 47).
+  | 'other-user';
 
 /** The last local change the region guard refused (FE-036): `n` counts refusals. */
 export interface RefusalNotice {
@@ -645,6 +647,19 @@ export interface EquationTarget {
 /** A request to open the math editor on an equation (FE-070): `n` counts requests. */
 export interface EquationRequest extends EquationTarget {
   n: number;
+}
+
+/** A signature or initials field the person activated, for the shell's signing step (FRW-046). */
+export interface SignFieldRequest {
+  /** Counts the requests, so that the same field activated twice is two requests. */
+  n: number;
+  id: string;
+  key: string;
+  kind: 'signature' | 'initials';
+  /** The field's label, the document's text. */
+  label: string;
+  /** The name of the field's role, the document's text; null when the field has none. */
+  role: string | null;
 }
 
 /**
@@ -760,8 +775,21 @@ export interface AttachOptions {
   restore?: RestorePlan;
   /** The assets port: a pasted picture is uploaded through it (FE-053; 10 §3.1). */
   assets?: AssetsPort;
+  /**
+   * `backend.threads` (05 §6.2; feature `comments`): the core lists the threads at the confirmed
+   * `seq` and takes the `thread.*` notices of the channel, so that each range is drawn and kept
+   * aligned (FE-048).
+   */
+  threads?: ThreadsPortLike;
   /** The proofing port (13 §6.1; UX-041): the core checks spelling and grammar through it. */
   proofing?: ProofingPort;
+  /**
+   * The history port's read of the commit that introduced a suggestion (HIS-042; FE-046 criterion
+   * 2): the card of a suggestion shows the server time of that commit.
+   */
+  history?: {
+    suggestionIntroduction(docId: string, suggestionId: string): Promise<{ time: string }>;
+  };
 }
 
 /** The find state: `n of m` is `current` (1-based, null before a navigation) of `count` (FE-059). */
@@ -864,6 +892,13 @@ import type { AssetsPort, ImagePasteResult } from './image-paste.ts';
 import type { ResolveAction, SuggestionReport, SuggestionTarget } from './suggestion-resolve.ts';
 import type { MarkupView, SuggestionLabel, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
+import type {
+  CommentAnchorReport,
+  NoticeLike,
+  ThreadPlacement,
+  ThreadReport,
+  ThreadsPortLike,
+} from './thread-sync.ts';
 import type { ThreadSelection } from './comment-decorations.ts';
 import type { SuggestionItem } from './suggestion-list.ts';
 import type { SectionWarning } from './breaks-sections.ts';
@@ -1102,6 +1137,8 @@ export interface DocumentApi {
   setSuggestionLabel(label: SuggestionLabel | null): void;
   /** The client's copy of every thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadView<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The threads that are on a block, by the block's identifier (FE-048 criterion 1). */
+  readonly threadBlocks: ReadView<readonly { readonly id: string; readonly block: string }[]>;
   /** The thread the comments pane chose; the body marks it and scrolls to it (UX-030). */
   readonly selectedThread: ReadView<ThreadSelection | null>;
   /** The thread whose highlight the reader chose in the body; `n` counts the choices (UX-030). */
@@ -1110,10 +1147,31 @@ export interface DocumentApi {
   selectThread(selection: ThreadSelection | null): void;
   /** Records that the reader chose a thread's highlight in the body (UX-030). */
   pickThread(id: string): void;
+  /** What a new thread would be about, from the selection (UX-028). Reads only. */
+  commentAnchor(): CommentAnchorReport | null;
+  /** Where a thread is in the document the reader sees, or null when no place is held (UX-030). */
+  threadPlacement(id: string): ThreadPlacement | null;
+  /** Calls the listener for each `thread.*` and `comment.*` notice; returns the stop function (UX-029). */
+  onThreadNotice(listener: (notice: NoticeLike) => void): () => void;
   /** Sets a thread's range as the service reports it at `seq` (FE-048). */
   setThreadRange(threadId: string, range: { from: number; to: number }, seq: number): void;
   /** Removes a thread's range (the thread was deleted) (FE-048). */
   removeThreadRange(threadId: string): void;
+  /**
+   * The service's place for a thread at a `seq`: the client replaces its copy and maps the range
+   * forward from that `seq` (FE-048 criterion 4). `held`: `seq` is ahead of the confirmed document;
+   * `stale`: it is older than the commits the client keeps.
+   */
+  reportThread(threadId: string, report: ThreadReport): 'placed' | 'held' | 'stale';
+  /** Starts a thread through the comment port: a request, never a commit (FE-048 criterion 6). Resolves the thread's id. */
+  createThread(
+    target: { range: { from: number; to: number; baseSeq: number } } | { block: string },
+    comment: unknown,
+  ): Promise<string>;
+  /** Resolves or reopens a thread through the comment port: a request, never a commit (FE-048 criterion 6). */
+  setThreadState(threadId: string, state: 'open' | 'resolved'): Promise<void>;
+  /** Moves the caret to the next or previous thread and chooses it; no commit (FE-048 criterion 7). */
+  stepThread(direction: 'next' | 'previous'): string | null;
   /** Preserved atoms whose fallback text holds the current query, which the find skipped (FE-139). */
   skippedPreservedFind(): number;
   /** Resolves once every journal write requested so far is durable (FE-011). */

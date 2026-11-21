@@ -166,12 +166,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       const thread = async (doc: string, token: string) => {
         const th = await h.call('POST', `/v1/documents/${doc}/threads`, {
           token,
-          body: { target: { block: 'pIntro0000000001' }, comment: { body: 'private thread' } },
+          body: {
+            target: { block: 'pIntro0000000001' },
+            comment: { body: [{ type: 'text', text: 'private thread' }] },
+          },
         });
         expect(th.status, th.text.slice(0, 200)).toBeLessThan(300);
         const reply = await h.call('POST', `/v1/threads/${th.json?.id}/comments`, {
           token,
-          body: { body: 'private reply' },
+          body: { body: [{ type: 'text', text: 'private reply' }] },
         });
         expect(reply.status, reply.text.slice(0, 200)).toBeLessThan(300);
         return { tid: th.json?.id as string, cid: reply.json?.id as string };
@@ -270,8 +273,20 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           ['GET', `/v1/threads/${tidB}`, '/v1/threads/', tidB],
           ['PATCH', `/v1/threads/${tidB}`, '/v1/threads/', tidB, { state: 'resolved' }],
           ['DELETE', `/v1/threads/${tidB}`, '/v1/threads/', tidB],
-          ['POST', `/v1/threads/${tidB}/comments`, '/v1/threads/', tidB, { body: 'hello' }],
-          ['PATCH', `/v1/comments/${cidB}`, '/v1/comments/', cidB, { body: 'changed' }],
+          [
+            'POST',
+            `/v1/threads/${tidB}/comments`,
+            '/v1/threads/',
+            tidB,
+            { body: [{ type: 'text', text: 'hello' }] },
+          ],
+          [
+            'PATCH',
+            `/v1/comments/${cidB}`,
+            '/v1/comments/',
+            cidB,
+            { body: [{ type: 'text', text: 'changed' }] },
+          ],
           ['DELETE', `/v1/comments/${cidB}`, '/v1/comments/', cidB],
         ];
         for (const [method, path, prefix, id, body] of probes) {
@@ -292,7 +307,13 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // The same for tenant A's credential and a thread, comment and import of tenant B.
         for (const [method, path, id, prefix, body] of [
           ['GET', `/v1/threads/${tidBB}`, tidBB, '/v1/threads/', undefined],
-          ['PATCH', `/v1/comments/${cidBB}`, cidBB, '/v1/comments/', { body: 'changed' }],
+          [
+            'PATCH',
+            `/v1/comments/${cidBB}`,
+            cidBB,
+            '/v1/comments/',
+            { body: [{ type: 'text', text: 'changed' }] },
+          ],
           ['GET', `/v1/imports/${impBB}`, impBB, '/v1/imports/', undefined],
         ] as const) {
           const refused = await h.call(method, path, {
@@ -315,8 +336,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           ['GET', `/v1/threads/${tidB}`],
           ['PATCH', `/v1/threads/${tidB}`, { state: 'resolved' }],
           ['DELETE', `/v1/threads/${tidB}`],
-          ['POST', `/v1/threads/${tidB}/comments`, { body: 'injected' }],
-          ['PATCH', `/v1/comments/${cidB}`, { body: 'injected' }],
+          ['POST', `/v1/threads/${tidB}/comments`, { body: [{ type: 'text', text: 'injected' }] }],
+          ['PATCH', `/v1/comments/${cidB}`, { body: [{ type: 'text', text: 'injected' }] }],
           ['DELETE', `/v1/comments/${cidB}`],
           ['GET', `/v1/imports/${impB}`],
         ];
@@ -351,8 +372,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           ['GET', `/v1/threads/${tidBB}`],
           ['PATCH', `/v1/threads/${tidBB}`, { state: 'resolved' }],
           ['DELETE', `/v1/threads/${tidBB}`],
-          ['POST', `/v1/threads/${tidBB}/comments`, { body: 'injected' }],
-          ['PATCH', `/v1/comments/${cidBB}`, { body: 'injected' }],
+          ['POST', `/v1/threads/${tidBB}/comments`, { body: [{ type: 'text', text: 'injected' }] }],
+          ['PATCH', `/v1/comments/${cidBB}`, { body: [{ type: 'text', text: 'injected' }] }],
           ['DELETE', `/v1/comments/${cidBB}`],
           ['GET', `/v1/imports/${impBB}`],
           ['GET', `/v1/webhooks/${hookBB}`],

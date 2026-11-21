@@ -303,9 +303,13 @@ describe('attribution across the gate shows an unknown person (owner decision 37
   it('shows every author when nothing is below the gate, and the times are withheld in the join', () => {
     expect(read(0, 3).spans.some((s) => s.unknown)).toBe(false);
     const b = log();
-    const timed = withRunTimes(read(3, 3), b.log.map((c) => ({ seq: c.seq, time: c.time })), {
-      createdAt: 500,
-    });
+    const timed = withRunTimes(
+      read(3, 3),
+      b.log.map((c) => ({ seq: c.seq, time: c.time })),
+      {
+        createdAt: 500,
+      },
+    );
     if (!timed.ok) throw new Error('refused');
     for (const run of timed.runs) {
       if (run.unknown) expect(run).not.toHaveProperty('time');

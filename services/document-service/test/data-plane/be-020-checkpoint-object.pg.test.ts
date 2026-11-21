@@ -8,16 +8,20 @@
  * The tenant is a UUID (the column type), so the lane name is not in it; the test deletes only the
  * objects under that tenant's prefix and drops its own database.
  *
- * Not covered here: the attribution map and comment-range side object (they exist only with HIS-014,
- * which is not built), and the thinning check of criterion 5.
+ * The side object (06 §4.2, `{seq}.side.json.zst`) is checked too: it holds the attribution map (HIS-014)
+ * and the comment ranges the room held (SYN-032), both at the checkpoint's seq. The thinning check of
+ * criterion 5 is in `recovery.test.ts`.
  */
 import { randomUUID } from 'node:crypto';
 import { zstdDecompressSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { ThreadAnchor } from '@docedit/authority';
 import { canonicalize } from '@docedit/model';
+import { cdmSchema } from '@docedit/model/prosemirror';
 import { baseDoc, posInside } from '../../../../packages/authority/test/fixtures.ts';
 import { PgCheckpointIndex } from '../../src/data-plane/pg/checkpoint-index.ts';
 import { contentHash } from '../../src/data-plane/recovery.ts';
+import { decodeSide, encodeSide } from '../../src/storage/codec.ts';
 import type { CheckpointRow } from '../../src/storage/types.ts';
 import { ObjectCheckpointStore, decodeCheckpoint } from '../../src/objects/checkpoints.ts';
 import { S3ObjectStore } from '../../src/objects/s3.ts';
@@ -62,7 +66,8 @@ describe.skipIf(unavailable !== null)(
     let db: TestDatabase;
     let plane: Plane | undefined;
     const tenants: string[] = [];
-    const objects = new ObjectCheckpointStore(new S3ObjectStore(s3Settings));
+    const objectStore = new S3ObjectStore(s3Settings);
+    const objects = new ObjectCheckpointStore(objectStore);
 
     beforeAll(async () => {
       db = await createTestDatabase();
@@ -93,6 +98,17 @@ describe.skipIf(unavailable !== null)(
       const ref = plane.ref(doc);
       // The room opens from the object store's content at 0, as in production (D67).
       await objects.put(ref, 0, (await plane.checkpoints.get(ref, 0))!);
+      // One comment range, saved with the checkpoint at seq 0 as a side object (SYN-032): the room
+      // holds it, maps it through the commits, and saves it again with the next checkpoint.
+      const at = intro();
+      const anchor: ThreadAnchor = {
+        id: 'tComment00000001',
+        author: 'alice',
+        target: { range: { from: at, to: at + 5 } },
+        seq: 0,
+        detached: false,
+      };
+      await objects.putSide(ref, 0, encodeSide({ seq: 0, threads: [anchor] }));
 
       const alice = await plane.client('alice', { [doc]: 'owner' });
       const opened = await alice.open(1, doc);
@@ -127,6 +143,30 @@ describe.skipIf(unavailable !== null)(
       for (let k = 0; k < row.seq; k++) {
         expect(JSON.stringify(envelope), `commit ${k + 1} in the checkpoint`).toContain(WORDS[k]!);
       }
+
+      // The side object: its own key, written beside the checkpoint, at the same seq.
+      const sideKey = objectKeys.checkpointSide(tenant, doc, row.seq);
+      expect(await objectStore.exists(sideKey), 'the side object under its key').toBe(true);
+      const sideBytes = await objects.getSide(ref, row.seq);
+      expect(sideBytes, 'the side object is read back').not.toBeNull();
+      const side = decodeSide(sideBytes!);
+      expect(side.seq).toBe(row.seq);
+
+      // It holds the comment range, mapped through the commits to the checkpoint's seq.
+      const moved = WORDS.slice(0, row.seq).reduce((n, w) => n + w.length, 0);
+      expect(side.threads).toEqual([
+        { ...anchor, target: { range: { from: at + moved, to: at + moved + 5 } }, seq: row.seq },
+      ]);
+
+      // It holds the attribution map: the runs cover the whole document once, and each commit up to
+      // the checkpoint has its author and seq.
+      const map = side.attribution;
+      expect(map, 'the attribution map').toBeDefined();
+      const size = cdmSchema().nodeFromJSON(envelope.doc).content.size;
+      expect(map!.runs.filter((_, i) => i % 2 === 0).reduce((a, b) => a + b, 0)).toBe(size);
+      const authors = map!.authors.filter((a) => a[0] === 'alice').map((a) => a[1]);
+      for (let seq = 1; seq <= row.seq; seq++)
+        expect(authors, `a run of commit ${seq}`).toContain(seq);
     });
   },
 );

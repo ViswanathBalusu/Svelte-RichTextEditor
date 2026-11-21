@@ -1,0 +1,24 @@
+# Build context of the signing service image (with Podman directly: podman build --ignorefile
+# services/signing-service/Containerfile.dockerignore): everything is left out except what the
+# Containerfile copies. Nothing under test/ or keyservice/ goes in, so no test key, certificate or
+# helper can reach the image.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!services/signing-service/package.json
+!services/signing-service/src/**
+!packages/authority/package.json
+!packages/authority/src/**
+!packages/authority/fixtures/**
+!packages/model/package.json
+!packages/model/src/**
+!packages/model/fixtures/**
+!packages/rules/package.json
+!packages/rules/src/**
+!packages/corpus/package.json
+!packages/corpus/src/**
+!spec/**
+**/node_modules
+**/*.test.ts

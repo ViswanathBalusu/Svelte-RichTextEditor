@@ -9,9 +9,10 @@
 // whose rule set has problems (the authority refuses those commits in the invariants, I14).
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { validateDoc } from '@docedit/model/validate';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RULE_BUDGET, ruleGate } from '../src/room/rules.ts';
-import { BASE_JSON, schema } from './fixtures.ts';
+import { DEFAULT_RULE_BUDGET, RULE_INVARIANTS, ruleGate } from '../src/room/rules.ts';
+import { BASE_JSON, REQUIRES, schema } from './fixtures.ts';
 
 const FIXTURES = resolve(import.meta.dirname, '../../../spec/rules/rules-1.fixtures.json');
 
@@ -153,5 +154,59 @@ describe('the rules fixtures through the authority rule gate (FRW-020 criterion 
     }
     expect(mismatches, `${checks} checks`).toEqual([]);
     expect(checks).toBeGreaterThanOrEqual(70);
+  });
+});
+
+describe('the negative rules fixtures on the commit path (owner decision 185; ADR 0340)', () => {
+  /** The violation code the commit path gives to a problem code of the rules package. */
+  const codeOf = (problem: string) =>
+    problem === 'unknown_field'
+      ? 'rule_unknown_key'
+      : problem === 'cycle'
+        ? 'rule_cycle'
+        : problem === 'pattern_unsupported'
+          ? 'pattern_unsupported'
+          : problem === 'too_many_rules'
+            ? 'too_many_rules'
+            : 'rule_invalid';
+
+  it('refuses every rule problem at save, with the problems the case lists', () => {
+    const unrefused: string[] = [];
+    const missing: string[] = [];
+    for (const c of negative) {
+      const { doc } = documentOf(c);
+      const verdict = validateDoc(doc, REQUIRES, {
+        retiredRegionIds: new Set<string>(),
+        invariants: [RULE_INVARIANTS],
+      });
+      if (verdict.valid) {
+        unrefused.push(c.id);
+        continue;
+      }
+      const codes = new Set(verdict.violations.map((v) => v.code));
+      for (const p of c.expect.problems as Array<{ code: string }>)
+        // A missing or mistyped member (ad_shape) is refused by the model's own checks of the
+        // attributes before the rules are read.
+        if (p.code !== 'bad_shape' && !codes.has(codeOf(p.code)) && !codes.has('rule_invalid'))
+          missing.push(`${c.id}: ${p.code}`);
+    }
+    // A member that is not an attribute of rule_def (12 §3.5) is dropped when the document is read,
+    // so a document cannot hold it: the one case about such a member is not reachable on commit.
+    expect(unrefused).toEqual(['rules.extra-member']);
+    expect(missing).toEqual([]);
+  });
+
+  it('accepts every judged case, so a valid rule set is never refused', () => {
+    const refused: string[] = [];
+    for (const c of [...judged, ...withInstant]) {
+      const { doc } = documentOf(c);
+      const verdict = validateDoc(doc, REQUIRES, {
+        retiredRegionIds: new Set<string>(),
+        invariants: [RULE_INVARIANTS],
+      });
+      if (!verdict.valid)
+        refused.push(`${c.id}: ${verdict.violations.map((v) => v.code).join(',')}`);
+    }
+    expect(refused).toEqual([]);
   });
 });

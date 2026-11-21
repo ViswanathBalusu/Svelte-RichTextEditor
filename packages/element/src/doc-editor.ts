@@ -26,7 +26,7 @@ import type {
   ResolveUsers,
   SearchPrincipals,
 } from '@docedit/protocol';
-import type { ExportService } from '@docedit/ui';
+import type { ExportService, LeasesService } from '@docedit/ui';
 import type {
   CdmFragment,
   CommandArgs,
@@ -40,7 +40,10 @@ import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './conf
 import type { HostExtension } from './extensions.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
+import { leasesFor } from './lease-shell.ts';
+import type { SigningSource } from './signing.ts';
 import type { WorkflowSendSource } from './workflow-send.ts';
+import type { ThreadsSource } from './threads.ts';
 import type { CompleteFillingOutcome } from './fill-actions.ts';
 import type { PrintOutcome } from './print.ts';
 import {
@@ -67,11 +70,17 @@ import { equationDrawer } from './equation-drawer.ts';
 import { Session } from './session.ts';
 import { failureView, mountFailure, type FailureInfo, type FailureSurface } from './failure.ts';
 import type { MountedReadView } from './read-view-element.ts';
+import type { MountedPageView } from './page-view/page-view.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
 import { selectView, VIEW_STRINGS, type ViewName } from './view-select.ts';
 import { frameScheduler } from './status.ts';
-import { fallbackFor, noticeReason, showPageViewNotice } from './kernel-fallback.ts';
-import { ElementKernel } from './layout-kernel-request.ts';
+import {
+  chooseMeasurementProvider,
+  fallbackFor,
+  noticeReason,
+  showPageViewNotice,
+} from './kernel-fallback.ts';
+import type { ElementKernel } from './layout-kernel-request.ts';
 import { EMBEDDING_VERSION, RELEASE } from './version.ts';
 
 /** `getToken` (05 §8.1): returns a token for the document, held in memory only. */
@@ -202,6 +211,12 @@ export class DocEditorElement extends Base {
   #kernel: ElementKernel | null = null;
   /** The block the editor moves to as soon as the web view is shown (FE-072 criterion 4). */
   #pendingBlock: string | null = null;
+  /** The editable page view of `view="print"`, over the same core as the web view (FE-101). */
+  #pageView: MountedPageView | null = null;
+  /** True while the page view's chunk loads and mounts, so that one start is made for one request. */
+  #pageViewPending = false;
+  /** True after the page view failed for this document: it is not offered again until `view` is set (FE-101). */
+  #pageViewBroken = false;
   #grace: ReturnType<typeof setTimeout> | null = null;
   /** flush, getContent, exec and queryCommand over the current session (src/host-api.ts). */
   readonly #methods: HostApi = elementMethods(() => this.#session);
@@ -423,6 +438,7 @@ export class DocEditorElement extends Base {
         // A change of `view` is reflected by the reconcile a new document takes (FE-065). Between web and
         // print the session is kept; the read view has no core, so a change to or from it is a new mount.
         this.#viewOverride = null;
+        this.#pageViewBroken = false;
         this.#pendingBlock = null;
         this.#scheduleLoad();
         this.#prepareKernel(value);
@@ -443,6 +459,17 @@ export class DocEditorElement extends Base {
     this.#kernelNotice = null;
     if (view !== 'print') return;
     if (typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches) return;
+    void this.#startKernel();
+  }
+
+  /**
+   * The kernel's request code loads here, with the page view, not with the first interactive editor
+   * (FND-008; owner decision 32).
+   */
+  async #startKernel(): Promise<void> {
+    const { ElementKernel } = await import('./layout-kernel-request.ts');
+    // The view may have changed while the code loaded.
+    if (this.getAttribute('view') !== 'print') return;
     // One kernel for each element: it owns the layout worker (WASM-004) and keeps its lifecycle.
     this.#kernel ??= new ElementKernel((detail) => {
       this.#emit('de-diagnostic', detail);
@@ -458,7 +485,8 @@ export class DocEditorElement extends Base {
    * offers the web view and the read view. Editing, saving and the read view are not affected.
    */
   #degradeKernel(failure: DocEditorEventMap['de-diagnostic']): void {
-    const fallback = fallbackFor(navigator.userAgent);
+    const provider = chooseMeasurementProvider('unavailable', navigator.userAgent);
+    const fallback = provider === 'canvas' ? 'canvas-measurement' : 'web-view';
     this.#emit('de-diagnostic', { ...failure, kind: 'degraded', ms: null, fallback });
     if (fallback !== 'web-view' || this.getAttribute('view') !== 'print') return;
     this.#kernelNotice?.remove();
@@ -548,11 +576,15 @@ export class DocEditorElement extends Base {
       // Back from the read view: the same core is shown again (FE-065 criterion 3).
       this.#setEditorHidden(false);
       if (this.#mounted !== null) this.#showWebLabel();
+      this.#syncPageView();
       this.#revealPendingBlock();
       return;
     }
     this.#reload = false;
     this.#clearFailure();
+    // The page view belongs to the editor that is going; the next editor gets its own (FE-101).
+    this.#pageView?.destroy();
+    this.#pageView = null;
     void current?.close();
     // The faces the kernel holds belong to the document that is closed (a tenant's own fonts go
     // with its documents; WASM-005). The next document names the faces it needs.
@@ -632,7 +664,10 @@ export class DocEditorElement extends Base {
   #viewChoice(): ViewName {
     if (this.#viewOverride !== null) return this.#viewOverride;
     const touch = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches;
-    return selectView(this.getAttribute('view'), { touch, pageViewAvailable: false }).view;
+    return selectView(this.getAttribute('view'), {
+      touch,
+      pageViewAvailable: this.#pageViewOffered(),
+    }).view;
   }
 
   /**
@@ -731,15 +766,120 @@ export class DocEditorElement extends Base {
     this.#mounted?.core.setPageGuides(pageGuideBlockIds(this.#layout, this.#config.pageGuides));
   }
 
-  /** The web view's label, drawn above its editing surface (FE-065 criterion 1). */
+  /**
+   * The label of the view in use, drawn above its editing surface (FE-065 criterion 1): the web
+   * layout, or the page layout while the page view is asked for.
+   */
   #showWebLabel(): void {
-    if (this.#webLabel !== null) return;
-    const label = document.createElement('p');
-    label.className = 'de-view-label';
-    label.dataset['view'] = 'web';
-    label.textContent = VIEW_STRINGS.web;
-    this.#root.prepend(label);
-    this.#webLabel = label;
+    const view = this.#viewChoice() === 'print' ? 'print' : 'web';
+    let label = this.#webLabel;
+    if (label === null) {
+      label = document.createElement('p');
+      label.className = 'de-view-label';
+      this.#root.prepend(label);
+      this.#webLabel = label;
+    }
+    label.dataset['view'] = view;
+    label.textContent = VIEW_STRINGS[view];
+  }
+
+  // --- The page view (FE-101) ----------------------------------------------------------------
+
+  /** Whether the page view is offered here: the browser can measure text for it, and it has not failed (FE-101). */
+  #pageViewOffered(): boolean {
+    return !this.#pageViewBroken && fallbackFor(navigator.userAgent) === 'canvas-measurement';
+  }
+
+  /**
+   * Shows the view `view` asks for on the mounted editor (FE-101). The web view's body stays mounted
+   * behind the page view, so the core, the selection and the unconfirmed work are the same in both.
+   * The page view's chunk is loaded now and not before: a session in the web view never fetches it.
+   */
+  #syncPageView(): void {
+    const mounted = this.#mounted;
+    if (mounted === null || this.#readViewOf !== null) return;
+    if (this.#viewChoice() !== 'print') {
+      this.#closePageView();
+      this.#noticeUnoffered();
+      return;
+    }
+    if (this.#pageView !== null || this.#pageViewPending) return;
+    this.#pageViewPending = true;
+    const generation = this.#generation;
+    void (async () => {
+      try {
+        const chunk = await import('./page-view/index.ts');
+        const current = this.#mounted;
+        if (
+          current !== mounted ||
+          generation !== this.#generation ||
+          this.#viewChoice() !== 'print' ||
+          this.#pageView !== null
+        )
+          return;
+        const frame = this.#root.querySelector<HTMLElement>('.de-body-frame');
+        const body = frame?.querySelector<HTMLElement>('.de-body-host');
+        if (!frame || !body) throw new Error('the editing surface is not in the shadow root');
+        const view = chunk.mountPageView({
+          host: mounted.core,
+          parent: frame,
+          label: mounted.core.labels.body,
+          shortcut: (event) => mounted.pageShortcut(event),
+          onError: (error) => this.#pageViewFailed(error),
+        });
+        this.#pageView = view;
+        body.style.setProperty('display', 'none', 'important');
+        frame.closest<HTMLElement>('.de-page')?.setAttribute('data-view', 'print');
+        this.#showWebLabel();
+      } catch (error) {
+        this.#pageViewFailed(error);
+      } finally {
+        this.#pageViewPending = false;
+      }
+    })();
+  }
+
+  /** Removes the page view, if one is shown, and shows the web view's surface again (FE-101 criterion 2). */
+  #closePageView(): void {
+    const view = this.#pageView;
+    if (view === null) return;
+    this.#pageView = null;
+    const hadFocus = view.root.contains(this.#root.activeElement);
+    view.destroy();
+    const frame = this.#root.querySelector<HTMLElement>('.de-body-frame');
+    frame?.querySelector<HTMLElement>('.de-body-host')?.style.removeProperty('display');
+    frame?.closest<HTMLElement>('.de-page')?.removeAttribute('data-view');
+    this.#showWebLabel();
+    if (hadFocus) this.#mounted?.core.focus();
+  }
+
+  /**
+   * The layout or the painter failed for good (FE-101 criterion 3): the web view is shown with the
+   * document and the unconfirmed work as they are, and the host hears a non-fatal `de-error`.
+   */
+  #pageViewFailed(error: unknown): void {
+    this.#pageViewBroken = true;
+    this.#viewOverride = 'web';
+    this.#closePageView();
+    this.#showWebLabel();
+    this.#emit('de-error', {
+      code: 'internal',
+      message: `the page view stopped and the web view is shown: ${error instanceof Error ? error.message : String(error)}`,
+      fatal: false,
+    });
+  }
+
+  /** `view="print"` in a browser that cannot measure for the page view: the web view says so, once (FE-065 criterion 4). */
+  #noticeUnoffered(): void {
+    if (this.getAttribute('view') !== 'print' || this.#viewOverride !== null) return;
+    if (this.#pageViewOffered() || this.#pageViewBroken || this.#kernelNotice !== null) return;
+    const touch = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches;
+    if (touch) return;
+    this.#kernelNotice = showPageViewNotice(
+      this.#root,
+      noticeReason({ code: 'measurement_unavailable' }),
+      (view) => this.setAttribute('view', view),
+    );
   }
 
   /**
@@ -807,8 +947,13 @@ export class DocEditorElement extends Base {
       ...this.#assetImage(docId),
       // The export dialog's jobs go through the backend's exports port, when it has one (UX-101).
       ...this.#exportService(docId),
+      // The permissions pane offers check-out through the leases port, when the backend has one (PRM-043).
+      ...this.#leasesService(docId),
       // The send dialog goes through the backend's workflow port, when it has one (FRW-028).
       ...this.#workflowSource(docId),
+      ...this.#signingSource(docId),
+      // The comment threads go through the backend's comments port, when it has one (UX-028).
+      ...this.#threadsSource(docId),
       // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
       drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
       mathFontsUrl: this.#config.katexFontsUrl,
@@ -860,7 +1005,10 @@ export class DocEditorElement extends Base {
     this.#mounted = mounted;
     // A shell that mounts while the read view is shown stays hidden until the view returns.
     if (this.#readViewOf !== null) this.#setEditorHidden(true);
-    else this.#showWebLabel();
+    else {
+      this.#showWebLabel();
+      this.#syncPageView();
+    }
     this.#applyPageGuides();
     this.#revealPendingBlock();
     return mounted;
@@ -1056,9 +1204,45 @@ export class DocEditorElement extends Base {
   }
 
   /**
+   * The adoption and signing step's source (FRW-045, FRW-046), when the session's backend has the
+   * assets port and the fields port and announced both features; otherwise nothing, and a signature
+   * field is not offered for signing.
+   */
+  #signingSource(docId: string): { signing?: () => SigningSource | null } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.assets || !backend.fields) return {};
+    if (!hasPort(backend, 'assets') || !hasPort(backend, 'fields')) return {};
+    return {
+      signing: () => {
+        const live = this.#session === session ? session?.backend : undefined;
+        return live?.assets && live.fields && session
+          ? { assets: live.assets, fields: live.fields, docId: session.docId }
+          : null;
+      },
+    };
+  }
+
+  /**
    * The send dialog's source (FRW-028), when the session's backend has the workflow port and
    * announced the feature; otherwise nothing, and the shell offers no "send for completion" command.
    */
+  #threadsSource(docId: string): { threads?: ThreadsSource } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.comments || !hasPort(backend, 'comments')) return {};
+    return {
+      threads: {
+        port: backend.comments,
+        docId,
+        self: () => {
+          const user = backend.auth.session?.user.id;
+          return user === undefined ? null : `user:${user}`;
+        },
+      },
+    };
+  }
+
   #workflowSource(docId: string): { workflow?: () => WorkflowSendSource | null } {
     const session = this.#session;
     const backend = session?.docId === docId ? session.backend : undefined;
@@ -1069,6 +1253,16 @@ export class DocEditorElement extends Base {
           ? { port: session.backend.workflow, docId: session.docId }
           : null,
     };
+  }
+
+  /**
+   * The shell's check-out service (PRM-043), when the session's backend has the leases port and
+   * announced the feature; otherwise nothing, and the permissions pane offers no check-out.
+   */
+  #leasesService(docId: string): { leases?: LeasesService } {
+    const session = this.#session;
+    const service = leasesFor(session?.docId === docId ? session.backend : undefined, docId);
+    return service ? { leases: service } : {};
   }
 
   /**
@@ -1108,6 +1302,9 @@ export class DocEditorElement extends Base {
     this.#closeReadView();
     this.#hideWebLabel();
     this.#clearFailure();
+    this.#pageView?.destroy();
+    this.#pageView = null;
+    this.#pageViewBroken = false;
     // The worker and its memory are released (WASM-004).
     this.#kernel?.destroy();
     this.#kernel = null;

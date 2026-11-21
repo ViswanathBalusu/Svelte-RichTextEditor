@@ -21,6 +21,7 @@ import type {
   Limits,
   PresencePort,
   AssistantPort,
+  CommentsPort,
   ProofingPort,
   Resume,
   SyncChannel,
@@ -34,9 +35,14 @@ import type {
   StatusDetail,
   SyncState,
 } from './events.ts';
-import type { AssetsPort as PictureAssetsPort, JournalPort } from '@docedit/engine';
+import type { AssetsPort as PictureAssetsPort, GlyphCoverage, JournalPort } from '@docedit/engine';
 // A value import from the headless entry only: the view code stays in its own chunk.
-import { type RestorePlan, readRestorePlan, restoreBase } from '@docedit/engine/headless';
+import {
+  type RestorePlan,
+  discardForeignWork,
+  readRestorePlan,
+  restoreBase,
+} from '@docedit/engine/headless';
 import { pictureAssets } from './assets.ts';
 import { type IdbJournal, openIdbJournal } from './journal-idb.ts';
 import { AUTH_CODES, codeOf, messageOf, retryAfterMsOf } from './errors.ts';
@@ -75,6 +81,10 @@ export interface AttachAt {
   presence?: PresencePort;
   /** This session (`welcome.session`), never listed as a peer. */
   session?: string;
+  /** The history port's read of the commit that introduced a suggestion (FE-046 criterion 2). */
+  history?: {
+    suggestionIntroduction(docId: string, suggestionId: string): Promise<{ time: string }>;
+  };
   /** The user (`welcome.user.id`), whom suggestion marks name (03 §5; FE-042). */
   user?: string;
   /** The features both sides support, for the shell (05 §8.3). */
@@ -85,6 +95,8 @@ export interface AttachAt {
   proofing?: ProofingPort;
   /** The backend's assistant port, when it has one (13 §6.2; UX-045). It has no feature name (G91). */
   assistant?: AssistantPort;
+  /** The backend's comment port (05 §6.2; feature `comments`): the core lists the threads and draws each range (FE-048). */
+  threads?: CommentsPort;
 }
 
 /** What the session needs from the mounted editor (the editing core and the shell). */
@@ -101,6 +113,10 @@ export interface EditorHandle {
   suspend?(): void;
   /** Ends a suspension: the shell observes again and the core reopens the channel with a resume. */
   resume?(): void;
+  /** Warns that unsent work of another user was discarded (decision 47); absent in stand-in editors. */
+  noticeForeignWork?(): void;
+  /** Hands the core the character coverage of the fonts (FE-136 criterion 4); absent in stand-in editors. */
+  setGlyphCoverage?(coverage: GlyphCoverage | null): void;
   readonly saveState: ReadView<SyncState>;
   /** The confirmed `seq` (04 §7). */
   readonly confirmedSeq: ReadView<number> | null;
@@ -131,6 +147,10 @@ export interface EditorHandle {
   readonly fill?: FillWatch;
   /** `de-workflow-complete` (FRW-071): the workflow was reported `completed`; absent in stand-in editors. */
   readonly workflowComplete?: { subscribe(listener: () => void): () => void };
+  /** `de-sign-request` (FRW-071): the participant started to sign a field; absent in stand-in editors. */
+  readonly signRequested?: {
+    subscribe(listener: (field: { fieldId: string; key: string }) => void): () => void;
+  };
 }
 
 export interface SessionHost {
@@ -307,6 +327,15 @@ export class Session {
         return;
       }
       this.#idbJournal = journal;
+      // Unsent work of an earlier visit is sent again only for the same signed-in user; work of
+      // anyone else is discarded and the person is told (decision 47 of
+      // `docs/owner-decisions-2026-11-15.md`).
+      const signedIn = backend.auth.session?.user.id;
+      let foreignWork = false;
+      if (journal && signedIn !== undefined) {
+        const gone = await discardForeignWork(journal, this.docId, signedIn);
+        foreignWork = gone.commits > 0 || gone.queue;
+      }
       const plan = journal ? await readRestorePlan(journal, this.docId) : null;
       // The content the journal's work was made on: the document at the commit's `base`, pinned, so
       // that the work is sent again under its own identifier and rebased by the usual catch-up
@@ -338,6 +367,19 @@ export class Session {
       const editor = await this.#options.host.mount(content, fontAlias);
       if (this.closed) return editor.destroy();
       this.#editor = editor;
+      if (foreignWork) editor.noticeForeignWork?.();
+      // FE-136 criterion 4: the coverage of the fonts, so that a symbol the font lacks is flagged. It
+      // is read alongside the load; a manifest or a file that cannot be read leaves it unknown.
+      if (fonts && editor.setGlyphCoverage) {
+        // The coverage code loads after the editor is up, not with it (FND-008; owner decision 32).
+        const doc = content.doc;
+        void import('./font-coverage.ts')
+          .then((m) => m.loadGlyphCoverage(fonts, m.usedFamilies(doc)))
+          .then((coverage) => {
+            if (!this.closed) editor.setGlyphCoverage?.(coverage);
+          })
+          .catch(() => {});
+      }
 
       this.#phase = 'opening';
       const incarnation = resumeAt?.incarnation ?? content.incarnation;
@@ -367,7 +409,10 @@ export class Session {
       if (backend.assets && backend.features.has('assets'))
         at.assets = pictureAssets(backend.assets, this.docId);
       if (backend.proofing) at.proofing = backend.proofing;
+      // FE-046 criterion 2: the time of a suggestion is the server time of the commit that introduced it.
+      if (backend.history && backend.features.has('history')) at.history = backend.history;
       if (backend.assistant) at.assistant = backend.assistant;
+      if (backend.comments && backend.features.has('comments')) at.threads = backend.comments;
       at.features = [...backend.features];
       this.#channel = channel;
       this.#detach = editor.attach(channel, at);
@@ -470,6 +515,11 @@ export class Session {
         editor.workflowComplete.subscribe(() =>
           this.#emit('de-workflow-complete', { state: 'completed' }),
         ),
+      );
+    // `de-sign-request` (12 §10; FRW-071): the participant activated a signature or initials field.
+    if (editor.signRequested)
+      this.#unsubscribe.push(
+        editor.signRequested.subscribe((field) => this.#emit('de-sign-request', field)),
       );
     const confirmed = editor.confirmedSeq;
     if (confirmed) {

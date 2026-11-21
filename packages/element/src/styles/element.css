@@ -338,6 +338,16 @@ img.ProseMirror-separator {
   text-decoration-thickness: 2px;
 }
 
+/* A thread on a block (FE-048 criterion 1): a dashed outline, so the block is marked without colour. */
+.de-comment-block {
+  outline: 2px dashed currentcolor;
+  outline-offset: 2px;
+}
+
+.de-comment-block.de-comment-selected {
+  outline-style: solid;
+}
+
 .de-comment-selected {
   outline: 2px solid var(--de-focus, #0969da);
   outline-offset: 1px;
@@ -539,6 +549,9 @@ table.de-suggest-gone {
   .de-comment-range {
     text-decoration: underline dotted;
   }
+  .de-comment-block {
+    outline: 2px dashed CanvasText;
+  }
 }
 
 /*
@@ -588,4 +601,78 @@ table.de-suggest-gone {
   background: var(--de-field-background, #eaeef2);
   font-family: var(--de-font-ui, system-ui, sans-serif);
   font-size: 0.875em;
+}
+
+/* The card that names a suggestion's author and the time it was made (FE-046 criterion 2). It is
+   text in a bordered box, never colour alone, and sits beside the editing surface. */
+.de-suggestion-card {
+  position: absolute;
+  z-index: 3;
+  max-inline-size: min(24rem, 90%);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--de-border, currentColor);
+  border-radius: 0.25rem;
+  background: var(--de-field-background, Canvas);
+  color: var(--de-text, CanvasText);
+  font-family: var(--de-font-ui, system-ui, sans-serif);
+  font-size: 0.875em;
+  line-height: 1.3;
+  pointer-events: auto;
+}
+.de-suggestion-card[hidden] {
+  display: none;
+}
+
+/* The page view (FE-101): painted pages on a desk, and the input bridge. The shell's .de-page is the
+   sheet of the web view; in the page view the sheet is the desk and each painted page is its own
+   sheet, so the shell's padding, border and flex rules are reset for the pages inside it. */
+.de-page[data-view='print'] {
+  flex: 1 1 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.de-page-view {
+  position: relative;
+}
+.de-page-scroller {
+  /* The host sets the height it wants; the default is three quarters of the viewport. */
+  height: var(--de-page-view-height, 75vh);
+  overflow: auto;
+  background: var(--de-desk, #d8dce1);
+  overscroll-behavior: contain;
+}
+.de-page-view .de-window .de-page {
+  flex: none;
+  padding: 0;
+  border: 0;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  cursor: text;
+}
+.de-page-view .de-line {
+  tab-size: 36pt;
+}
+/* The bridge is a real text field, kept at the caret and invisible: input methods and assistive
+   technology find it, and the painted pages are what the eye sees (ADR 0380). */
+.de-page-bridge {
+  position: absolute;
+  z-index: 2;
+  inline-size: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  opacity: 0;
+  white-space: pre;
+  font: 11pt serif;
+  line-height: 1;
+  caret-color: transparent;
+}
+.de-page-view:focus-within .de-page-scroller {
+  outline: 2px solid var(--de-focus, #0969da);
+  outline-offset: -2px;
 }
