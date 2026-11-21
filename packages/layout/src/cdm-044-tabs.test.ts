@@ -60,10 +60,21 @@ function segmentText(seg: Segment | undefined): { text: string; width: number } 
   return { text: 'w'.repeat(width), width };
 }
 
+/**
+ * Cases the breaker does not place where the fixture says, kept as expected failures (`it.fails`) so
+ * that a fix shows here (CDM-005; the review record is ADR 0361).
+ *
+ * `hanging-indent-off-the-default-stops` (added to the fixture on 2026-11-20): the breaker has no
+ * hanging-indent stop of its own (`nextStop` in `lines.ts` knows the paragraph's stops and the
+ * default stops only), so a tab before a left indent of 500 twips goes to the default stop at 720.
+ * The other hanging-indent cases pass because their left indent lies on a default stop.
+ */
+const KNOWN_GAPS: ReadonlySet<string> = new Set(['hanging-indent-off-the-default-stops']);
+
 describe('tab stops, layout side of tabs.json (CDM-044)', () => {
-  it.each(file.cases.map((c) => [c.id, c] as const))(
-    'case %s ends where the fixture says',
-    (_id, c) => {
+  for (const c of file.cases) {
+    const run = KNOWN_GAPS.has(c.id) ? it.fails : it;
+    run(`case ${c.id} ends where the fixture says`, () => {
       const indentLeft = c.indentLeft ?? 0;
       const indentFirst = c.indentFirstLine ?? 0;
       const startTwips = indentLeft + indentFirst;
@@ -90,6 +101,11 @@ describe('tab stops, layout side of tabs.json (CDM-044)', () => {
       const endTwips = (line.x + line.width) / TWIP;
       const expectedStart = c.expected.start ?? c.expected.position;
       expect(endTwips).toBeCloseTo(expectedStart + seg.width, 6);
-    },
-  );
+    });
+  }
+
+  it('pins only cases that the fixture still has', () => {
+    const ids = new Set(file.cases.map((c) => c.id));
+    for (const id of KNOWN_GAPS) expect(ids.has(id), id).toBe(true);
+  });
 });

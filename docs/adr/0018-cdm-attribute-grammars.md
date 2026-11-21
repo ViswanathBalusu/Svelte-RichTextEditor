@@ -59,7 +59,7 @@ With row spans, positions covered from above have no cell. Each row's column spa
 | Empty `content`, `marks`, `attrs` | Omitted, as the example of 03 §12 omits `content` on an empty paragraph |
 | `requires` | Sorted by UTF-16 code units, without duplicates |
 | Defaults inside object attributes | Not stripped. The object is compared with the attribute's default as a whole |
-| Mark order | Position in the schema's mark list, then the RFC 8785 text of the canonical attributes. The `suggest` array of a block is not sorted by the canonical form (it is an attribute); the editor keeps it in the order `ins`, `del`, `fmt`, then the order added. The mark list order is part of the published schema and of its hash (CDM-008) |
+| Mark order | Position in the schema's mark list, then the RFC 8785 text of the canonical attributes, compared by UTF-16 code units as RFC 8785 orders member names (what both implementations do; written out on 2026-11-20). The `suggest` array of a block is not sorted by the canonical form (it is an attribute); the editor keeps it in the order `ins`, `del`, `fmt`, then the order added. The mark list order is part of the published schema and of its hash (CDM-008) |
 | Subtrees | The canonical form of a node alone, without the envelope, under the same rules. Approvals (07 §11) hash a region this way |
 | Versioning | The rules carry `CANONICAL_FORM_VERSION = 1`. Commits and checkpoints record it next to every hash they store, so that hashes stay checkable after the rules change |
 | Bytes | The UTF-8 encoding of the RFC 8785 text, hashed with SHA-256 |

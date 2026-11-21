@@ -41,6 +41,12 @@ export const FIELD_CODES = {
 export const FIELD_INVARIANTS: InvariantCheck = {
   name: 'fields',
   codes: FIELD_CODES,
+  // The attributes of fields, roles, rules and `field` mirrors, and the attached assets of a
+  // signature. A commit that changes none of them is validated without this check (CDM-013).
+  reads: {
+    nodes: ['form_field', 'role_def', 'rule_def', 'field'],
+    context: ['attachedAssets'],
+  },
   check(view, report) {
     const fields = view.ofType('form_field');
     const roles = new Set(

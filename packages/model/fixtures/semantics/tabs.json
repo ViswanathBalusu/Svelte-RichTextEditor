@@ -138,6 +138,15 @@
       "expected": { "position": 720, "align": "left", "leader": "none", "source": "hanging" }
     },
     {
+      "id": "hanging-indent-off-the-default-stops",
+      "description": "The hanging-indent stop is a stop of its own: a left indent of 500 lies on no multiple of defaultTabStop, and a tab before it goes there, not to 720.",
+      "tabs": [],
+      "indentLeft": 500,
+      "indentFirstLine": -300,
+      "x": 300,
+      "expected": { "position": 500, "align": "left", "leader": "none", "source": "hanging" }
+    },
+    {
       "id": "hanging-indent-does-not-clear-default-stops",
       "description": "The hanging-indent stop does not clear the default stops before it.",
       "tabs": [],

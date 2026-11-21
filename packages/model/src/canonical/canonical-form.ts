@@ -185,6 +185,21 @@ export function canonicalEnvelopeLenient(
   };
 }
 
+/**
+ * RFC 8785 text of the canonical form of one node without its content: the type, the attributes
+ * that are not defaults, the marks and, for text, the text. It follows the rules above without the
+ * integer rule, as `canonicalEnvelopeLenient` does. The incremental validator adds the lengths of
+ * these texts up to bound the canonical size of a document (I7) from the nodes a commit changed,
+ * without writing the document (CDM-013; validate/incremental.ts).
+ */
+export function canonicalShellText(node: JsonNode, def: CdmDefinition = CDM1): string {
+  const shell: JsonNode = { type: node.type };
+  if (node.attrs) shell.attrs = node.attrs;
+  if (node.marks) shell.marks = node.marks;
+  if (node.text !== undefined) shell.text = node.text;
+  return canonicalize(canonicalNodeIx(shell, { ix: indexDefinition(def), strict: false }, ''));
+}
+
 /** RFC 8785 text of the canonical form of an envelope (03 §2). */
 export function canonicalText(env: JsonEnvelope, def: CdmDefinition = CDM1): string {
   return canonicalize(canonicalEnvelope(env, def));
