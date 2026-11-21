@@ -20,6 +20,7 @@ import { cpSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { InlineConfig, Plugin } from 'vite';
+import { stripDefinitionDocs } from './strip-docs.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const elementDir = resolve(here, '..');
@@ -150,6 +151,16 @@ export const LIBRARY_MINIFY = {
   codegen: { removeWhitespace: true },
 } as const;
 
+/**
+ * Small modules that the first interactive editor and code loaded on demand both import. The
+ * bundler gives each such module a chunk of its own, 20 chunks of 0.1 to 2.9 kB of gzip, and each
+ * chunk costs its own header, its import lines and a compression that starts from nothing. They are
+ * all loaded with the first document, so they are one chunk (FND-008). A module that is not named
+ * here keeps the chunk the bundler gives it; the size gate catches a module that moves.
+ */
+export const SHARED_MODULES =
+  /\/packages\/(?:ui\/src\/(?:shell\/(?:comment-rules|fields|fill)|icons\/icons)|engine\/src\/(?:rule-read|read-value|meta|parts|sync\/restore)|model\/src\/(?:definition\/index|canonical\/(?:jcs|hash)|cascade\/(?:table-format|styles|resolve)|numbering\/(?:format|labels)|conventions\/(?:platform|time))|protocol\/src\/ports\/(?:errors|features)|element\/src\/(?:export|errors|font-manifest|font-registration|font-family-lookup|font-loader|shortcuts|strings))\.ts$/;
+
 export function libraryConfig(): InlineConfig {
   const config = base(libDir);
   return {
@@ -158,7 +169,7 @@ export function libraryConfig(): InlineConfig {
     // names it, wherever the host serves the component from (WASM-002).
     base: './',
     worker: layoutWorker(),
-    plugins: [kernelFiles(), ...componentSvelte('tree')],
+    plugins: [kernelFiles(), stripDefinitionDocs(), ...componentSvelte('tree')],
     build: {
       ...config.build,
       lib: {
@@ -171,6 +182,7 @@ export function libraryConfig(): InlineConfig {
           chunkFileNames: libraryChunkName,
           assetFileNames: 'assets/[name]-[hash][extname]',
           minify: LIBRARY_MINIFY,
+          codeSplitting: { groups: [{ name: 'shared', test: SHARED_MODULES }] },
         },
       },
     },
@@ -245,7 +257,7 @@ export function demoConfig(fragments: 'tree' | 'html', withDemo: boolean): Inlin
   return {
     ...config,
     worker: layoutWorker(),
-    plugins: [kernelFiles(), ...componentSvelte(fragments)],
+    plugins: [kernelFiles(), stripDefinitionDocs(), ...componentSvelte(fragments)],
     build: {
       ...config.build,
       rollupOptions: {
