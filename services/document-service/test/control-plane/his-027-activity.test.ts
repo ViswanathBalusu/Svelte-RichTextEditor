@@ -156,12 +156,18 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(mention.status, mention.text).toBe(201);
         const plain = await h.call('POST', `/v1/documents/${doc}/threads`, {
           token: as('bob'),
-          body: { target: { block }, comment: { body: 'A remark without a mention' } },
+          body: {
+            target: { block },
+            comment: { body: [{ type: 'text', text: 'A remark without a mention' }] },
+          },
         });
         expect(plain.status, plain.text).toBe(201);
         const mine = await h.call('POST', `/v1/documents/${doc}/threads`, {
           token: as('alice'),
-          body: { target: { block }, comment: { body: 'My own comment' } },
+          body: {
+            target: { block },
+            comment: { body: [{ type: 'text', text: 'My own comment' }] },
+          },
         });
         expect(mine.status, mine.text).toBe(201);
         // A task: a thread assigned to alice.

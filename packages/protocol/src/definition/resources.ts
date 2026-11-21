@@ -16,6 +16,7 @@ import {
   count,
   enm,
   int,
+  lit,
   map,
   nodeId,
   nullable,
@@ -97,6 +98,8 @@ const named = (name: string, shape: Shape, owner = PRO): NamedShape => ({ name, 
 const DOCUMENT_STATES = ['active', 'locked', 'archived'];
 const REGION_STATES = ['draft', 'in_review', 'approved'];
 const PRINCIPAL_PATTERN = '^(user:.+|group:.+|everyone|role:.+)$';
+/** A mention names a user or a group, with no whitespace (the pattern of `mentions.ts`). */
+const MENTION_PATTERN = '^(user|group):\\S+$';
 
 export const REST_SHAPES: readonly NamedShape[] = [
   named(
@@ -521,7 +524,40 @@ export const REST_SHAPES: readonly NamedShape[] = [
       ['G70'],
     ),
   ),
-  named('CommentInput', placeholder('A comment body; it may contain mentions (13 §5).', ['G71'])),
+  named(
+    'CommentBodyPart',
+    anyOf(
+      [
+        obj({
+          type: req(lit('text')),
+          text: req(text({ minLength: 1 }), 'Typed text, shown as text and never as markup.'),
+        }),
+        obj({
+          type: req(lit('mention')),
+          principal: req(
+            str({ pattern: MENTION_PATTERN }),
+            'The mentioned user or group, `user:<id>` or `group:<id>`. The node holds the identifier only; a name comes from the host (13 §5).',
+          ),
+        }),
+      ],
+      {
+        doc: 'One piece of a comment body: text, or a mention (13 §5; ADR 0417).',
+        spec: '13 §5',
+      },
+    ),
+  ),
+  named(
+    'CommentInput',
+    obj(
+      {
+        body: req(arr(ref('CommentBodyPart'), { minItems: 1 }), 'The comment, in order.'),
+      },
+      {
+        doc: 'The body of a new or edited comment (13 §5; ADR 0417). The service raises `dep.comment.mentioned` for each mention of a new comment.',
+        spec: '05 §6.2; 13 §5',
+      },
+    ),
+  ),
   named(
     'RangeTarget',
     obj(
@@ -543,12 +579,11 @@ export const REST_SHAPES: readonly NamedShape[] = [
     obj(
       {
         target: req(anyOf([ref('RangeTarget'), ref('BlockTarget')])),
-        comment: req(ref('CommentInput'), 'The first comment. Placeholder name.'),
+        comment: req(ref('CommentInput'), 'The first comment (ADR 0417).'),
       },
       {
         doc: 'The room maps the range to the head and checks `comment` there (05 §6.2).',
         spec: '05 §6.2',
-        gaps: ['G71'],
       },
     ),
   ),
@@ -558,20 +593,61 @@ export const REST_SHAPES: readonly NamedShape[] = [
       {
         id: req(uuid7()),
         state: req(enm(['open', 'resolved'])),
-        assignee: opt(nullable(text())),
-        target: opt(anyOf([ref('RangeTarget'), ref('BlockTarget')])),
+        assignee: opt(
+          nullable(text()),
+          'The person the thread is assigned to as a task, `user:<id>`; null when nobody (07 §12).',
+        ),
+        target: opt(
+          anyOf([ref('RangeTarget'), ref('BlockTarget')]),
+          'A range is where the text is at `baseSeq`; an empty range (`from` equals `to`) is a thread whose text was deleted (ADR 0015).',
+        ),
+        createdBy: req(text(), 'The author of the thread and of its first comment, `user:<id>`.'),
+        createdAt: req(timestamp()),
+        etag: req(
+          text(),
+          'The entity tag of this version, as `GET /threads/{tid}` sends it in `ETag`: a list item has no header of its own.',
+        ),
+        comments: req(
+          arr(ref('Comment')),
+          'The comments in the order they were made, without deleted ones.',
+        ),
       },
-      { spec: '05 §6.2; 07 §6', gaps: ['G71'], decisions: ['D26'] },
+      {
+        doc: 'A comment thread with its comments (ADR 0417). The entity tag of `GET /threads/{tid}` is the `If-Match` of a change of state or assignee.',
+        spec: '05 §6.2; 07 §6',
+      },
     ),
   ),
   named(
     'UpdateThreadRequest',
     obj(
-      { state: opt(enm(['open', 'resolved'])), assignee: opt(nullable(text())) },
-      { spec: '05 §6.2', gaps: ['G71'] },
+      {
+        state: opt(enm(['open', 'resolved'])),
+        assignee: opt(nullable(text()), 'A principal, `user:<id>`, or null to clear.'),
+      },
+      { spec: '05 §6.2' },
     ),
   ),
-  named('Comment', placeholder('A comment.', ['G71', 'G59'], { id: req(text({ minLength: 1 })) })),
+  named(
+    'Comment',
+    obj(
+      {
+        id: req(uuid7()),
+        author: req(text(), 'The author, `user:<id>`.'),
+        createdAt: req(timestamp()),
+        editedAt: req(nullable(timestamp()), 'Null while the comment was never edited.'),
+        etag: req(
+          text(),
+          'The entity tag of this version, the `If-Match` of an edit or delete; a comment inside a thread has no header of its own.',
+        ),
+        body: req(arr(ref('CommentBodyPart'), { minItems: 1 })),
+      },
+      {
+        doc: 'A comment of a thread (ADR 0417). Its entity tag is the `If-Match` of an edit.',
+        spec: '05 §6.2; 13 §5',
+      },
+    ),
+  ),
   named(
     'CreateAssetRequest',
     obj(
@@ -1607,7 +1683,6 @@ export const OPERATIONS: readonly OperationDef[] = [
     feature: 'comments',
     query: { seq: opt(seq()) },
     success: list(ref('Thread')),
-    gaps: ['G71'],
     owner: PRO,
   }),
   op({

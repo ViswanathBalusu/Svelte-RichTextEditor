@@ -164,10 +164,13 @@ function bodyFor(operationId: string): unknown {
     forkDocument: { atSeq: 0 },
     setReadMarker: { seq: 0 },
     tombstoneCommit: { reason: 'sweep' },
-    createThread: { target: { block: 'pIntro0000000001' }, comment: { body: 'from the sweep' } },
+    createThread: {
+      target: { block: 'pIntro0000000001' },
+      comment: { body: [{ type: 'text', text: 'from the sweep' }] },
+    },
     updateThread: { state: 'resolved' },
-    createComment: { body: 'from the sweep' },
-    updateComment: { body: 'from the sweep' },
+    createComment: { body: [{ type: 'text', text: 'from the sweep' }] },
+    updateComment: { body: [{ type: 'text', text: 'from the sweep' }] },
     createAsset: { filename: 'plan.png', mime: 'image/png', size: 68 },
     resolveAssets: { assets: ['0190a000-0000-7000-8000-000000000001'] },
     createExport: { target: 'pdf' },
@@ -310,14 +313,17 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       const thread = await asB(
         'POST',
         `/v1/documents/${ids['doc']}/threads`,
-        { target: { block: 'pIntro0000000001' }, comment: { body: CANARY_THREAD } },
+        {
+          target: { block: 'pIntro0000000001' },
+          comment: { body: [{ type: 'text', text: CANARY_THREAD }] },
+        },
         ownerB,
       );
       ids['tid'] = made('thread', thread, thread.json?.id);
       const reply = await asB(
         'POST',
         `/v1/threads/${ids['tid']}/comments`,
-        { body: CANARY_THREAD },
+        { body: [{ type: 'text', text: CANARY_THREAD }] },
         ownerB,
       );
       ids['cid'] = made('comment', reply, reply.json?.id);

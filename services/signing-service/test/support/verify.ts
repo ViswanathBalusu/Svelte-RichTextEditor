@@ -114,6 +114,65 @@ export function cmsParts(cms: Uint8Array): {
   };
 }
 
+/**
+ * A detached CMS over `content` (FRW-054 criterion 3: the signed chain head), checked by the
+ * OpenSSL command line as the signatures of a PDF are: the signature and its chain to the test
+ * root, the message digest over `content`, and the signature time-stamp token over the signature
+ * value.
+ */
+export function verifyDetached(
+  cms: Uint8Array,
+  content: Uint8Array,
+  pki: TestPki,
+): { main: Check; timestamp: Check | null } {
+  const dir = mkdtempSync(join(tmpdir(), 'docedit-frw054-verify-'));
+  try {
+    writeFileSync(join(dir, 'inter.der'), pki.intermediate);
+    run(dir, ['x509', '-inform', 'DER', '-in', 'inter.der', '-out', 'inter.pem']);
+    writeFileSync(join(dir, 'content.bin'), content);
+    writeFileSync(join(dir, 'cms.der'), cms);
+    const main = run(dir, [
+      'cms',
+      '-verify',
+      '-inform',
+      'DER',
+      '-in',
+      'cms.der',
+      '-content',
+      'content.bin',
+      '-binary',
+      '-CAfile',
+      pki.rootPem,
+      '-purpose',
+      'any',
+      '-out',
+      'out.bin',
+    ]);
+    const parts = cmsParts(cms);
+    let timestamp: Check | null = null;
+    if (parts.token) {
+      writeFileSync(join(dir, 'sigvalue.bin'), parts.signatureValue);
+      writeFileSync(join(dir, 'token.der'), parts.token);
+      timestamp = run(dir, [
+        'ts',
+        '-verify',
+        '-data',
+        'sigvalue.bin',
+        '-in',
+        'token.der',
+        '-token_in',
+        '-CAfile',
+        pki.rootPem,
+        '-untrusted',
+        'inter.pem',
+      ]);
+    }
+    return { main, timestamp };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export function verifyWithOpenssl(pdf: Uint8Array, pki: TestPki): SignatureReport[] {
   const dir = mkdtempSync(join(tmpdir(), 'docedit-spk021-verify-'));
   try {

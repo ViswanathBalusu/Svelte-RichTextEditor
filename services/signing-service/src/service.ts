@@ -23,11 +23,31 @@
  * memory, so a restart forgets it), and the delivery of an alert, which is the caller's.
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { checkSealRequest, selectSealingKey, type SealingConfig } from '@docedit/authority';
+import {
+  checkSealRequest,
+  planAppearances,
+  selectSealingKey,
+  validateLayout,
+  type AppearanceDiagnostic,
+  type SealingConfig,
+} from '@docedit/authority';
 import type { AuditEntry, AuditEvent, AuditSink } from './audit.ts';
-import type { TimestampSource } from './cms.ts';
+import {
+  buildCms,
+  certificateOf,
+  cmsSignatureToken,
+  timestampInfo,
+  type TimestampSource,
+} from './cms.ts';
 import type { KeyService } from './keyservice.ts';
-import { sealPdf, type PadesProfile, type ValidationData } from './pades.ts';
+import {
+  extendPdf,
+  sealPdf,
+  type AppearanceItem,
+  type PadesProfile,
+  type ValidationData,
+} from './pades.ts';
+import { PdfDocument } from './pdf.ts';
 import { FixedWindowLimiter, type RateLimit } from './rate-limit.ts';
 
 /** The key services of the deployment, by key identifier. */
@@ -78,6 +98,28 @@ export interface SealCommand {
   readonly pdf: Uint8Array;
   /** The workflow's `finalisation.seal`: `pades-b-lt` or `pades-b-lta`. Absent means B-LT. */
   readonly seal?: string | undefined;
+  /** Visible appearances at the signature and initials fields (FRW-057). Absent: none are drawn. */
+  readonly appearances?: AppearanceRequest | undefined;
+}
+
+/**
+ * What to draw at the fields (FRW-057). The layout is the `fields` member of `layout.json`: field
+ * identifier to page and rectangle, in twentieths of a point from the top-left corner of the page.
+ */
+export interface AppearanceRequest {
+  readonly layout: Readonly<Record<string, unknown>>;
+  readonly targets: readonly {
+    readonly id: string;
+    readonly key: string;
+    readonly kind: string;
+    readonly lines: readonly string[];
+  }[];
+}
+
+/** What was drawn, and what was not and why (FRW-057 criterion 6). */
+export interface AppearanceReport {
+  readonly drawn: readonly string[];
+  readonly diagnostics: readonly AppearanceDiagnostic[];
 }
 
 export type SealFailureCode =
@@ -108,6 +150,8 @@ export type SealOutcome =
       readonly sealedAt: Date;
       readonly keyId: string;
       readonly keyOwner: 'operator' | 'tenant';
+      /** Present when appearances were asked for. */
+      readonly appearances?: AppearanceReport;
     }
   | {
       readonly ok: false;
@@ -135,6 +179,81 @@ export function profileOf(seal: string | undefined): PadesProfile | null {
   return null;
 }
 
+/**
+ * The appearances to draw in `pdf` (FRW-057): the layout's `fields` are checked (`validateLayout`),
+ * converted from twips from the top-left to points from the lower-left of each page's box, and
+ * planned against the page sizes (`planAppearances`), so that a rectangle outside its page is not
+ * used. Never throws: a PDF whose pages cannot be read gives a diagnostic for every target, and the
+ * seal goes on without appearances.
+ */
+export function planFieldAppearances(
+  pdf: Uint8Array,
+  req: AppearanceRequest,
+): { items: AppearanceItem[]; report: AppearanceReport } {
+  const wanted = req.targets.map((t) => ({ id: t.id, key: t.key, kind: t.kind }));
+  let pages: ReturnType<PdfDocument['pageList']>;
+  try {
+    pages = new PdfDocument(pdf).pageList();
+  } catch {
+    const plan = planAppearances(null, wanted, []);
+    return { items: [], report: { drawn: [], diagnostics: plan.diagnostics } };
+  }
+  const checked = validateLayout({ fields: req.layout });
+  const converted: Record<string, { page: number; rect: [number, number, number, number] }> = {};
+  const origin = new Map<number, [number, number]>();
+  if (checked.ok)
+    for (const [id, e] of checked.fields) {
+      const box = pages[e.page - 1]?.mediaBox ?? null;
+      if (box === null) {
+        // No such page: leave the entry as it is so that the plan reports the page.
+        converted[id] = { page: e.page, rect: [e.rect[0], e.rect[1], e.rect[2], e.rect[3]] };
+        continue;
+      }
+      const height = box[3] - box[1];
+      origin.set(e.page, [box[0], box[1]]);
+      converted[id] = {
+        page: e.page,
+        rect: [e.rect[0] / 20, height - e.rect[3] / 20, e.rect[2] / 20, height - e.rect[1] / 20],
+      };
+    }
+  const bounds = pages.map((p, i) => ({
+    page: i + 1,
+    width: p.mediaBox === null ? 0 : p.mediaBox[2] - p.mediaBox[0],
+    height: p.mediaBox === null ? 0 : p.mediaBox[3] - p.mediaBox[1],
+  }));
+  const plan = planAppearances(
+    checked.ok ? { fields: converted } : { fields: req.layout },
+    wanted,
+    bounds,
+  );
+  // A layout the file's own validator accepted may still hold an entry the plan drops: report it.
+  const lines = new Map(req.targets.map((t) => [t.id, t.lines]));
+  const items = plan.appearances.map((a): AppearanceItem => {
+    const [ox, oy] = origin.get(a.page) ?? [0, 0];
+    return {
+      page: a.page,
+      rect: [a.rect[0] + ox, a.rect[1] + oy, a.rect[2] + ox, a.rect[3] + oy],
+      lines: lines.get(a.id) ?? [],
+      label: `Signature field ${a.key}`,
+    };
+  });
+  // The entries `validateLayout` dropped are reported too: the plan saw only the ones it kept.
+  const dropped: AppearanceDiagnostic[] = checked.ok
+    ? checked.problems.map((p) => ({
+        id: p.id,
+        key: '',
+        code: 'entry_invalid' as const,
+        reason: `layout entry not used: ${p.reason}`,
+      }))
+    : [];
+  return {
+    items,
+    report: {
+      drawn: plan.appearances.map((a) => a.id),
+      diagnostics: [...dropped, ...plan.diagnostics],
+    },
+  };
+}
 /** Marks a failure of the key service, so that it is not mistaken for a failure of the file. */
 class KeyServiceFailure extends Error {}
 /** Marks a failure of the time-stamp authority. */
@@ -147,6 +266,8 @@ export class SigningService {
   readonly #credentials: readonly { hash: Buffer; caller: string }[];
   /** `documentId` and `seq` to the one hash that may be sealed for them. */
   readonly #bound = new Map<string, string>();
+  /** Results served, by document and idempotency key (in memory: a restart forgets them). */
+  readonly #extended = new Map<string, ExtendOutcome>();
 
   constructor(cfg: SigningServiceConfig) {
     this.#cfg = cfg;
@@ -180,6 +301,8 @@ export class SigningService {
         keyId: f.keyId ?? null,
         sealedSha256: f.sealedSha256 ?? null,
         code: f.code ?? null,
+        // Only an anchor entry has the member, so the entries of a seal are as they were.
+        ...(f.chainHead !== undefined ? { chainHead: f.chainHead } : {}),
       });
       return true;
     } catch {
@@ -262,7 +385,9 @@ export class SigningService {
       const chain = await this.#cfg.certificates.chainFor(key.keyId).catch((e: unknown) => {
         throw new KeyServiceFailure(String(e));
       });
+      const drawing = cmd.appearances ? planFieldAppearances(cmd.pdf, cmd.appearances) : null;
       const result = await sealPdf(cmd.pdf, {
+        ...(drawing && drawing.items.length > 0 ? { appearances: drawing.items } : {}),
         keyService: {
           keyLabel: keyService.keyLabel,
           publicKey: () => keyService.publicKey(),
@@ -308,6 +433,7 @@ export class SigningService {
         sealedAt,
         keyId: key.keyId,
         keyOwner: key.owner,
+        ...(drawing ? { appearances: drawing.report } : {}),
       };
     } catch (e) {
       if (e instanceof TimestampFailure) return fail('tsa_unreachable');
@@ -316,4 +442,279 @@ export class SigningService {
       return fail('seal_failed');
     }
   }
+
+  /**
+   * Signs and time-stamps the chain head of a workflow at completion (FRW-054 criterion 3; 08 §12).
+   * The same rules as `seal`: the caller's credential, the rate limit, the audit entry before any
+   * key is used, the key of the tenant, no answer without a time-stamp token. The signed record is
+   * the canonical text `anchorRecordText` gives; the signature is a detached CAdES-B-T over its
+   * SHA-256, with an RFC 3161 token over the signature value. One document and `seq` is bound to
+   * one chain head for as long as the process lives (the same bytes again anchor again).
+   */
+  async anchor(secret: string | null, cmd: AnchorCommand): Promise<AnchorOutcome> {
+    const caller = this.#authenticate(secret);
+    const ids = {
+      caller,
+      tenant: cmd.tenant,
+      documentId: cmd.documentId,
+      seq: cmd.seq,
+      chainHead: cmd.chainHead,
+    };
+    const refuse = async (code: SealFailureCode): Promise<AnchorOutcome> => {
+      await this.#audit('anchor.refused', { ...ids, code });
+      return { ok: false, code, retryable: RETRYABLE.has(code) };
+    };
+    if (caller === null) return refuse('unauthenticated');
+    if (!this.#limiter.take(caller)) return refuse('rate_limited');
+    if (caller !== this.#cfg.allowedCaller) return refuse('wrong_caller');
+    if (
+      cmd.tenant.length === 0 ||
+      cmd.documentId.length === 0 ||
+      cmd.workflow.length === 0 ||
+      !Number.isSafeInteger(cmd.seq) ||
+      cmd.seq < 0 ||
+      !HEX64.test(cmd.chainHead)
+    )
+      return refuse('bad_request');
+    const bindKey = `anchor\u0000${cmd.documentId}\u0000${cmd.seq}`;
+    const bound = this.#bound.get(bindKey);
+    if (bound !== undefined && bound !== cmd.chainHead) return refuse('binding_conflict');
+
+    let key;
+    try {
+      key = selectSealingKey(this.#cfg.sealing, cmd.tenant);
+    } catch {
+      return refuse('no_key');
+    }
+    const keyService = this.#cfg.keys.get(key.keyId);
+    if (keyService === undefined) return refuse('no_key');
+    if (!(await this.#audit('anchor.requested', { ...ids, keyId: key.keyId })))
+      return { ok: false, code: 'audit_unavailable', retryable: true };
+
+    const fail = async (code: SealFailureCode): Promise<AnchorOutcome> => {
+      await this.#audit('anchor.failed', { ...ids, keyId: key.keyId, code });
+      return { ok: false, code, retryable: RETRYABLE.has(code) };
+    };
+    const anchoredAt = this.#now();
+    try {
+      const chain = await this.#cfg.certificates.chainFor(key.keyId).catch((e: unknown) => {
+        throw new KeyServiceFailure(String(e));
+      });
+      const record = anchorRecordText(cmd);
+      const recordSha256 = sha256Hex(new TextEncoder().encode(record));
+      const cms = await buildCms({
+        keyService: {
+          keyLabel: keyService.keyLabel,
+          publicKey: () => keyService.publicKey(),
+          signDigest: (a, d) =>
+            keyService.signDigest(a, d).catch((e: unknown) => {
+              throw new KeyServiceFailure(String(e));
+            }),
+        },
+        chain,
+        contentDigest: Buffer.from(recordSha256, 'hex'),
+        timestamps: {
+          stamp: (d) =>
+            this.#cfg.timestamps.stamp(d).catch((e: unknown) => {
+              throw new TimestampFailure(String(e));
+            }),
+        },
+      });
+      const timestampTime = signatureTimestampTime(cms);
+      this.#bound.set(bindKey, cmd.chainHead);
+      if (
+        !(await this.#audit('anchor.anchored', {
+          ...ids,
+          keyId: key.keyId,
+          sealedSha256: recordSha256,
+        }))
+      )
+        return { ok: false, code: 'audit_unavailable', retryable: true };
+      return {
+        ok: true,
+        record,
+        recordSha256,
+        cms,
+        timestampTime,
+        anchoredAt,
+        keyId: key.keyId,
+        keyOwner: key.owner,
+      };
+    } catch (e) {
+      if (e instanceof TimestampFailure) return fail('tsa_unreachable');
+      if (e instanceof KeyServiceFailure) return fail('signing_unavailable');
+      return fail('seal_failed');
+    }
+  }
+  /**
+   * Extends a sealed PDF for long-term validation and renews its time-stamp (12 §8.2 step 5;
+   * FRW-056): fresh validation data when asked, and a further document time-stamp, both as
+   * incremental updates. The same rules as `seal`: the caller's credential, the rate limit, the
+   * audit entry before the work, the hash of the bytes, no answer without a token. A request with an
+   * `idempotencyKey` already served returns the result it had and adds nothing.
+   */
+  async extend(secret: string | null, cmd: ExtendCommand): Promise<ExtendOutcome> {
+    const caller = this.#authenticate(secret);
+    const ids = {
+      caller,
+      tenant: cmd.tenant,
+      documentId: cmd.documentId,
+      seq: cmd.seq,
+      pdfSha256: cmd.pdfSha256,
+    };
+    const refuse = async (code: SealFailureCode): Promise<ExtendOutcome> => {
+      await this.#audit('extend.refused', { ...ids, code });
+      return { ok: false, code, retryable: RETRYABLE.has(code) };
+    };
+    if (caller === null) return refuse('unauthenticated');
+    if (!this.#limiter.take(caller)) return refuse('rate_limited');
+    if (caller !== this.#cfg.allowedCaller) return refuse('wrong_caller');
+    if (
+      cmd.tenant.length === 0 ||
+      cmd.documentId.length === 0 ||
+      cmd.idempotencyKey.length === 0 ||
+      !Number.isSafeInteger(cmd.seq) ||
+      cmd.seq < 0 ||
+      !HEX64.test(cmd.pdfSha256) ||
+      cmd.pdf.length === 0
+    )
+      return refuse('bad_request');
+    if (sha256Hex(cmd.pdf) !== cmd.pdfSha256) return refuse('hash_mismatch');
+    const served = this.#extended.get(`${cmd.documentId}\u0000${cmd.idempotencyKey}`);
+    if (served !== undefined) return served;
+    let key;
+    try {
+      key = selectSealingKey(this.#cfg.sealing, cmd.tenant);
+    } catch {
+      return refuse('no_key');
+    }
+    if (!(await this.#audit('extend.requested', { ...ids, keyId: key.keyId })))
+      return { ok: false, code: 'audit_unavailable', retryable: true };
+    const fail = async (code: SealFailureCode): Promise<ExtendOutcome> => {
+      await this.#audit('extend.failed', { ...ids, keyId: key.keyId, code });
+      return { ok: false, code, retryable: RETRYABLE.has(code) };
+    };
+    const extendedAt = this.#now();
+    try {
+      const result = await extendPdf(cmd.pdf, {
+        timestamps: {
+          stamp: (d) =>
+            this.#cfg.timestamps.stamp(d).catch((e: unknown) => {
+              throw new TimestampFailure(String(e));
+            }),
+        },
+        ...(cmd.validation
+          ? { validationData: (certs) => this.#cfg.validationData(key.keyId, certs) }
+          : {}),
+        time: extendedAt,
+        ...(this.#cfg.contentsBytes !== undefined
+          ? { contentsBytes: this.#cfg.contentsBytes }
+          : {}),
+      });
+      const sealedSha256 = sha256Hex(result.pdf);
+      const expiry = certificateOf(result.tokenCertificates[0] ?? new Uint8Array()).notAfter.value;
+      const outcome: ExtendOutcome = {
+        ok: true,
+        pdf: result.pdf,
+        sealedSha256,
+        timestampTime: result.timestampTime,
+        extendedAt,
+        expiresAtMs: expiry.getTime(),
+        validationAdded: cmd.validation,
+      };
+      this.#extended.set(`${cmd.documentId}\u0000${cmd.idempotencyKey}`, outcome);
+      if (!(await this.#audit('extend.extended', { ...ids, keyId: key.keyId, sealedSha256 })))
+        return { ok: false, code: 'audit_unavailable', retryable: true };
+      return outcome;
+    } catch (e) {
+      if (e instanceof TimestampFailure) return fail('tsa_unreachable');
+      return fail('seal_failed');
+    }
+  }
+}
+
+/** What the document service sends to extend a sealed PDF. */
+export interface ExtendCommand {
+  readonly tenant: string;
+  readonly documentId: string;
+  readonly seq: number;
+  /** The newest sealed bytes the document service holds. */
+  readonly pdf: Uint8Array;
+  readonly pdfSha256: string;
+  /** One request, one result: a repeat with the same key returns the first result. */
+  readonly idempotencyKey: string;
+  /** Add fresh validation data (a new DSS) before the time-stamp. */
+  readonly validation: boolean;
+}
+
+export type ExtendOutcome =
+  | {
+      readonly ok: true;
+      /** The input, then the update. */
+      readonly pdf: Uint8Array;
+      readonly sealedSha256: string;
+      /** `genTime` of the appended document time-stamp. */
+      readonly timestampTime: Date;
+      readonly extendedAt: Date;
+      /** The end of the new time-stamp's validity: the authority certificate's `notAfter`, in ms. */
+      readonly expiresAtMs: number;
+      readonly validationAdded: boolean;
+    }
+  | { readonly ok: false; readonly code: SealFailureCode; readonly retryable: boolean };
+
+/** What the document service sends to have a chain head anchored. */
+export interface AnchorCommand {
+  readonly tenant: string;
+  readonly documentId: string;
+  readonly workflow: string;
+  /** The `seq` of the head: the workflow's `completedSeq`. */
+  readonly seq: number;
+  /** Lower-case hexadecimal SHA-256 chain head at `seq`. */
+  readonly chainHead: string;
+}
+
+export type AnchorOutcome =
+  | {
+      readonly ok: true;
+      /** The signed record, as canonical text. */
+      readonly record: string;
+      readonly recordSha256: string;
+      /** A detached CAdES-B-T over `recordSha256` (DER). */
+      readonly cms: Uint8Array;
+      /** The time of the signature's time-stamp token (`genTime`). */
+      readonly timestampTime: Date;
+      readonly anchoredAt: Date;
+      readonly keyId: string;
+      readonly keyOwner: 'operator' | 'tenant';
+    }
+  | {
+      readonly ok: false;
+      readonly code: SealFailureCode;
+      readonly retryable: boolean;
+    };
+
+/** The format name of the signed record. */
+export const ANCHOR_FORMAT = 'docedit-chain-head-anchor/1';
+
+/**
+ * The record that is signed, as text: a JSON object with its members in alphabetical order and no
+ * white space, so that a verifier rebuilds the same bytes from the members. It holds identifiers
+ * and the head; no document content.
+ */
+export function anchorRecordText(c: AnchorCommand): string {
+  return JSON.stringify({
+    chainHead: c.chainHead,
+    document: c.documentId,
+    format: ANCHOR_FORMAT,
+    seq: c.seq,
+    tenant: c.tenant,
+    workflow: c.workflow,
+  });
+}
+
+/** `genTime` of the signature time-stamp token inside a CMS the service made. */
+function signatureTimestampTime(cms: Uint8Array): Date {
+  const token = cmsSignatureToken(cms);
+  if (token === null) throw new Error('the signature has no time-stamp token');
+  return timestampInfo(token).genTime;
 }

@@ -7,8 +7,9 @@
  *   4. the PDF's text is the document's text in order (the text typed in step 1 included, so the
  *      bundle was written from the CDM at that `seq`), and the regions leave no trace;
  *   5. the worker that did it is the stack's, and LuaLaTeX ran in the sandbox image;
- *   6. the PDF opens in the editor's PDF panel: expected to fail until the element negotiates
- *      `exports` and a pane shows the PDF (see the test).
+ *   6. a PDF export requested from the editor's export dialog creates a job at the current `seq`,
+ *      the stack's worker compiles it, and the PDF opens in the editor's PDF panel: the shell's
+ *      PDF preview pane, with the viewer in a sandboxed frame of the host's second origin.
  *
  * The files of the bundle (`main.tex`, `styles.tex`, `docedit.cls`) are not visible from outside
  * the worker: the demo stack announces the `pdf` target only, and a PDF job keeps no copy of its
@@ -21,7 +22,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { dataDir, setting, stackSettings } from '../scripts/lib/stack.ts';
+import { dataDir, endpoints, setting, stackSettings } from '../scripts/lib/stack.ts';
 import {
   editor,
   eventsOf,
@@ -29,6 +30,7 @@ import {
   PEOPLE,
   recordEvents,
   regionParagraph,
+  runCommand,
   serviceUrl,
   signIn,
   typeAtEnd,
@@ -204,29 +206,73 @@ test('5. the worker is the one the stack started, and LuaLaTeX ran in the sandbo
   expect(started).toContain(`image ${image}`);
 });
 
-test('6. the PDF opens in the PDF panel of the editor', async () => {
-  test.setTimeout(300_000);
-  // The element's way to an export: the shell's export command (UX-101) or `requestExport`
-  // (PRO-086). Both need the `exports` feature, which the element's DEP client does not ask for
-  // (packages/element/src/backend-source.ts), and the shell's `pdf` pane has no content yet
-  // (packages/ui/src/shell/panes.ts; the viewer itself is FE-071).
-  const command = editor(page).locator('[data-command-id="document.export"]');
-  const canRequest = await page.evaluate(async () => {
-    const el = document.querySelector('doc-editor') as unknown as {
-      requestExport(o: { target: string }): Promise<{ jobId: string }>;
-    };
-    try {
-      await el.requestExport({ target: 'pdf' });
-      return true;
-    } catch {
-      return false;
-    }
+test('6. a PDF export requested in the editor opens in its PDF panel', async () => {
+  test.setTimeout(420_000);
+  // The author's way to an export: the shell's export command (UX-101), whose dialog creates the
+  // job through the element's exports port (PRO-086). The jobs the element started are named by
+  // its `de-export-*` events.
+  const before = (await eventsOf(page)).filter((e) => e.name.startsWith('de-export-')).length;
+  await runCommand(page, 'document.export');
+  const dialog = editor(page).locator('dialog[data-dialog="export"]');
+  await expect(dialog).toBeVisible();
+  // The demo stack announces the PDF only; the dialog asks for the quick preview by default.
+  await expect(dialog.getByRole('radio', { name: 'PDF', exact: true })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  await expect(dialog.locator('[data-status="export"]')).toHaveText('Finished', {
+    timeout: 300_000,
   });
-  test.fail(
-    (await command.count()) === 0 && !canRequest,
-    'Expected to fail: the element does not negotiate `exports`, so it offers no export command and requestExport is refused; and no pane shows the PDF. Remove this mark when the pane exists.',
-  );
-  const frame = editor(page).locator('iframe.de-pdf-frame');
+
+  // The job is one of the document service: read over REST with the author's token, it is a PDF
+  // job at the document's current seq, completed by the stack's worker.
+  const raised = (await eventsOf(page))
+    .filter((e) => e.name.startsWith('de-export-'))
+    .slice(before);
+  const completed = raised.find((e) => e.name === 'de-export-completed');
+  expect(completed, 'de-export-completed raised by the element').toBeTruthy();
+  const jobId = (completed!.detail as { jobId: string }).jobId;
+  const token = (await hostToken(context, PEOPLE.olivia, docId)).token;
+  const job = (await (
+    await fetch(`${serviceUrl()}/v1/exports/${jobId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  ).json()) as Job & { target?: string };
+  expect(job.state).toBe('completed');
+  expect(job.target).toBe('pdf');
+  expect(job.seq).toBe(seq);
+  expect(job.id).not.toBe(pdfJob?.id);
+  const lines = readFileSync(join(dataDir(), 'logs', 'export-worker.log'), 'utf8').split('\n');
+  const worked = lines.find((l) => l.includes(jobId) && l.includes('export.completed'));
+  expect(worked, `export.completed for job ${jobId} in the worker's log`).toBeTruthy();
+  expect(worked).toMatch(/sandbox \d+ ms \(passes [\d+]+ ms\)/);
+
+  // The PDF opens in the PDF panel: the pane of the shell, with the viewer in a sandboxed frame
+  // of the host's second origin (FE-071), which fetches the signed URL itself.
+  await dialog.getByRole('button', { name: 'Show in the PDF preview' }).click();
+  await expect(dialog).toBeHidden();
+  const pane = editor(page).locator('[data-pane="pdf"]');
+  await expect(pane).toBeVisible();
+  const frame = pane.locator('iframe.de-pdf-frame');
   await expect(frame).toBeVisible({ timeout: 60_000 });
-  await expect(frame).toHaveAttribute('sandbox', /allow-scripts/);
+  await expect(frame).toHaveAttribute('sandbox', 'allow-scripts allow-same-origin');
+  expect(new URL((await frame.getAttribute('src'))!).origin).toBe(
+    endpoints(stackSettings()).viewerOrigin,
+  );
+  // The viewer drew the file: its page count is the job's, and the first page is on a canvas.
+  await expect(pane.locator('[data-pdf="pages"]')).toHaveText(
+    job.result!.pages === 1 ? '1 page' : `${job.result!.pages} pages`,
+    { timeout: 60_000 },
+  );
+  await expect(pane.locator('[data-pdf="view-failed"]')).toHaveCount(0);
+  const inner = page
+    .frames()
+    .find((f) => f.url().startsWith(endpoints(stackSettings()).viewerOrigin));
+  expect(inner, 'the viewer frame').toBeTruthy();
+  await expect
+    .poll(() =>
+      inner!.evaluate(() => document.querySelector('canvas.page')?.getAttribute('aria-label')),
+    )
+    .toBe(`Page 1 of ${job.result!.pages}`);
+  // The page did not fetch the PDF itself and holds no token for the frame: the frame's address
+  // is the viewer's page only.
+  expect(await frame.getAttribute('src')).not.toContain('token');
 });

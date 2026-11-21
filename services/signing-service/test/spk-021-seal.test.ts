@@ -14,7 +14,13 @@ import { classicPdf } from './support/classic-pdf.ts';
 import { makePki, opensslAvailable, type TestPki } from './support/pki.ts';
 import { startTestTsa, type TestTsa } from './support/tsa.ts';
 import { cmsParts, findSignatures, verifyWithOpenssl } from './support/verify.ts';
-import { flipByte, InProcessKeyService, sealOptions, startsWith } from './support/world.ts';
+import {
+  flipByte,
+  flipHexDigit,
+  InProcessKeyService,
+  sealOptions,
+  startsWith,
+} from './support/world.ts';
 
 describe.skipIf(!opensslAvailable())(
   'SPK-021: sealing a PDF with a classic cross-reference table',
@@ -140,7 +146,7 @@ describe.skipIf(!opensslAvailable())(
         );
         expect(inside).toBeGreaterThan(0);
         const at = (s.byteRange[1] as number) + 1 + 2 * (inside + 20);
-        const bad = verifyWithOpenssl(flipByte(sealed, at), pki);
+        const bad = verifyWithOpenssl(flipHexDigit(sealed, at), pki);
         expect(bad[0]!.main.ok).toBe(false);
       }, 120_000);
 
@@ -151,7 +157,7 @@ describe.skipIf(!opensslAvailable())(
         );
         expect(inside).toBeGreaterThan(0);
         const at = (s.byteRange[1] as number) + 1 + 2 * (inside + 20);
-        const bad = verifyWithOpenssl(flipByte(sealed, at), pki);
+        const bad = verifyWithOpenssl(flipHexDigit(sealed, at), pki);
         expect(bad[0]!.main.ok).toBe(true);
         expect(bad[1]!.main.ok).toBe(false);
       }, 120_000);

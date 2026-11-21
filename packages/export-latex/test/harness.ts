@@ -71,9 +71,16 @@ export async function imageFonts(): Promise<FontManifest> {
       IMAGE,
       '/opt/docedit/fonts/fonts.json',
     ],
-    { timeoutMs: 60_000, maxStdoutBytes: 1024 * 1024 },
+    // 180 s: on a loaded Podman machine a `podman run` took 80 to 100 s (sandbox-ready.ts in the
+    // export worker; lane V-EXP-017-032, 2026-11-13). With 60 s this call failed in a full run
+    // while other jobs used the same Podman machine, and compile tests failed with an empty
+    // reason; the same tests passed afterwards (7 files, 143 s).
+    { timeoutMs: 180_000, maxStdoutBytes: 1024 * 1024 },
   );
-  if (r.code !== 0) throw new Error(`cannot read the font manifest of ${IMAGE}: ${r.stderr}`);
+  if (r.code !== 0)
+    throw new Error(
+      `cannot read the font manifest of ${IMAGE}: ${r.timedOut ? 'timed out' : r.stderr}`,
+    );
   const m = JSON.parse(new TextDecoder().decode(r.stdout)) as FontManifest;
   const cover = (face: { file: string; sha256: string; coverage?: unknown }): void => {
     const path = join(localFonts, face.file);

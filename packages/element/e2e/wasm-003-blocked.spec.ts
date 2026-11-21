@@ -14,8 +14,8 @@
  *   read view all work. The PDF is shown in Chromium and WebKit; a local filter on this machine
  *   refuses PDF responses in Firefox and Edge (spike S2 section 2; fe-072-read-view.spec.ts).
  *
- * Criterion 1 (the page view measures with canvas) is not tested: the page view is FE-101's and is
- * not built; only the choice and its report exist.
+ * Criterion 1 (the page view measures with canvas when the kernel is refused): the page view of FE-101
+ * is shown in Chromium, Edge and WebKit and edits, with no kernel.
  *
  * Run with `DOCEDIT_DEMO_PORT=4796 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/wasm-003-blocked.spec.ts`.
  */
@@ -97,18 +97,69 @@ test.describe('the kernel is refused by the policy (WASM-003 criteria 2 and 3)',
       directive: "script-src 'wasm-unsafe-eval'",
       fallback: browserName === 'firefox' ? 'web-view' : 'canvas-measurement',
     });
-    // The editor itself is unharmed.
-    await expect(page.locator(surface('view'))).toBeVisible();
+    // The editor itself is unharmed: the page view where canvas measures (criterion 1), else the web view.
+    await expect(
+      page
+        .locator(
+          browserName === 'firefox'
+            ? surface('view')
+            : 'doc-editor[data-test="view"] .de-page-view .de-line',
+        )
+        .first(),
+    ).toBeVisible();
   });
 
-  test('control: with the directive the kernel loads and nothing degrades', async ({ page }) => {
+  test('the page view measures with canvas when the kernel is refused (criterion 1)', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(
+      browserName === 'firefox',
+      'Firefox stays in the web view (S5); the message test covers it',
+    );
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.addInitScript(() => {
+      const original = window.matchMedia.bind(window);
+      window.matchMedia = (query: string) =>
+        original(query.includes('any-pointer: coarse') ? 'not all' : query);
+    });
+    await open(page, BLOCKED);
+    await mountEditor(page, { name: 'view', attributes: { view: 'print' } });
+    await expect
+      .poll(async () => (await diagnostics(page)).map((d) => d.kind))
+      .toContain('degraded');
+    const view = page.locator('doc-editor[data-test="view"]');
+    await expect(view.locator('.de-page-view .de-line').first()).toBeVisible();
+    await expect(view.locator('.de-view-notice')).toHaveCount(0);
+    // It is a page view that edits: text typed in it reaches the document, with no kernel.
+    await view.locator('.de-page-view .de-line').first().click();
+    await page.keyboard.type('canvas-ok');
+    await expect(view.locator('.de-page-view')).toContainText('canvas-ok');
+    expect(errors).toEqual([]);
+  });
+
+  test('control: with the directive the kernel loads and nothing degrades', async ({
+    page,
+    browserName,
+  }) => {
     await open(page, ALLOWED);
     await mountEditor(page, { name: 'view', attributes: { view: 'print' } });
     await expect.poll(async () => (await diagnostics(page)).length).toBeGreaterThanOrEqual(1);
     expect((await diagnostics(page)).map((d) => d.kind)).toEqual(['loaded']);
-    await expect(
-      page.locator('doc-editor[data-test="view"]').locator('.de-view-notice'),
-    ).toHaveCount(0);
+    const notice = page.locator('doc-editor[data-test="view"]').locator('.de-view-notice');
+    if (browserName !== 'firefox') {
+      await expect(notice).toHaveCount(0);
+      return;
+    }
+    // Firefox: the kernel loaded, and the policy is not what the notice is about. The page view of
+    // FE-101 measures with canvas and does not read the kernel yet (ADR 0417 of lane w1, item 4), so
+    // it is not offered in Firefox and the element says so. When the page view measures through the
+    // kernel this notice goes, and this branch with it.
+    await expect(notice).toHaveCount(1);
+    const text = (await notice.textContent()) ?? '';
+    expect(text).toContain('cannot measure text accurately enough');
+    expect(text).not.toContain('WebAssembly');
   });
 
   test('where the page view is not available a plain message says why and offers two views', async ({

@@ -22,7 +22,7 @@ const LEGAL_BLOCK = 'pLegal0000000001'; // in the region `rLegal0000000001`, hid
 const LEGAL = 'rLegal0000000001';
 
 const threads = (doc: string) => `/v1/documents/${doc}/threads`;
-const comment = { text: 'Is this still right?' };
+const comment = { body: [{ type: 'text', text: 'Is this still right?' }] };
 
 for (const storage of ['memory', 'postgres'] as Storage[]) {
   describe(`thread changes and comments over HTTP (${storage})`, async () => {
@@ -149,7 +149,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const before = h.events.of('dep.comment.created.v1').length;
         const made = await h.call('POST', url, { token: as(doc, 'editor', 'ed-4'), body: comment });
         expect(made.status, made.text).toBe(201);
-        expect(made.json).toMatchObject({ body: comment });
+        expect(made.json).toMatchObject({
+          body: comment.body,
+          author: expect.stringMatching(/^user:/),
+          editedAt: null,
+        });
         expect(made.headers.get('etag')).toMatch(/^"[0-9a-f-]+:0"$/);
         expect(h.events.of('dep.comment.created.v1').length).toBe(before + 1);
         expect(
@@ -177,13 +181,17 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
         // Missing If-Match is 428; another editor is refused even with the right tag.
         expect(
-          (await h.call('PATCH', url, { token: as(doc, 'editor', 'ed-5'), body: { text: 'x' } }))
-            .status,
+          (
+            await h.call('PATCH', url, {
+              token: as(doc, 'editor', 'ed-5'),
+              body: { body: [{ type: 'text', text: 'x' }] },
+            })
+          ).status,
         ).toBe(428);
         const other = await h.call('PATCH', url, {
           token: as(doc, 'editor', 'ed-6'),
           headers: { 'If-Match': made.headers.get('etag') as string },
-          body: { text: 'changed by someone else' },
+          body: { body: [{ type: 'text', text: 'changed by someone else' }] },
         });
         expect(other.status).toBe(403);
 
@@ -191,15 +199,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const edited = await h.call('PATCH', url, {
           token: as(doc, 'editor', 'ed-5'),
           headers: { 'If-Match': made.headers.get('etag') as string },
-          body: { text: 'Revised' },
+          body: { body: [{ type: 'text', text: 'Revised' }] },
         });
         expect(edited.status, edited.text).toBe(200);
-        expect(edited.json.body).toEqual({ text: 'Revised' });
+        expect(edited.json.body).toEqual([{ type: 'text', text: 'Revised' }]);
         expect(edited.headers.get('etag')).not.toBe(made.headers.get('etag'));
         const stale = await h.call('PATCH', url, {
           token: as(doc, 'editor', 'ed-5'),
           headers: { 'If-Match': made.headers.get('etag') as string },
-          body: { text: 'again' },
+          body: { body: [{ type: 'text', text: 'again' }] },
         });
         expect(stale.status).toBe(412);
 
@@ -213,7 +221,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             await h.call('PATCH', url, {
               token: as(doc, 'editor', 'ed-5'),
               headers: { 'If-Match': edited.headers.get('etag') as string },
-              body: { text: 'gone' },
+              body: { body: [{ type: 'text', text: 'gone' }] },
             })
           ).status,
         ).toBe(404);

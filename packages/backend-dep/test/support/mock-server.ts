@@ -83,6 +83,15 @@ export class MockDepServer implements MemoryServer {
     this.origin = opts.origin ?? 'https://dep.test';
   }
 
+  /**
+   * The features this server announces: the service's, without `comments`. The service has the
+   * comments port in process (ADR 0417), but this REST emulation has no thread routes, so it does not
+   * offer the feature and a kit run against it skips the `comments` profile.
+   */
+  private features(): string[] {
+    return this.service.features.filter((f) => f !== 'comments');
+  }
+
   get endpoint(): string {
     return this.origin;
   }
@@ -94,7 +103,7 @@ export class MockDepServer implements MemoryServer {
       rest: `${this.origin}/v1`,
       engines: ['pm-steps/1'],
       cdm: { min: 1, max: 1 },
-      features: [...this.service.features],
+      features: this.features(),
       mode: 'authority',
       jwks_uri: `${this.origin}/.well-known/jwks.json`,
     };
@@ -119,7 +128,7 @@ export class MockDepServer implements MemoryServer {
 
   /** The features `welcome` announces: the service's, as the test's `welcome` option changes them. */
   announcedFeatures(): readonly string[] {
-    const d = this.welcomePayload({ features: [...this.service.features] });
+    const d = this.welcomePayload({ features: this.features() });
     return (d['features'] as string[] | undefined) ?? [];
   }
 
@@ -319,7 +328,7 @@ export class WireSession {
         version: '1.0',
         session: s.session,
         user: s.user,
-        features: s.features,
+        features: s.features.filter((x) => x !== 'comments'),
         limits: s.limits,
         tokenExp: s.tokenExp,
       }),
