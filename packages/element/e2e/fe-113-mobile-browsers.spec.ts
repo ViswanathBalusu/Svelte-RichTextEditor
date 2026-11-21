@@ -88,4 +88,75 @@ test.describe('FE-113 criterion 3: a mobile browser reads, scrolls, shows commen
       expect(await surface.innerText()).toBe(before);
     });
   });
+
+  test('comments: a thread by another user is listed, opened and answered by touch', async ({
+    browser,
+  }, testInfo) => {
+    const engine = engineOf(testInfo.project.name);
+    test.skip(
+      engine === null,
+      'this file runs in Chromium (Android profile) and WebKit (iPhone profile)',
+    );
+    await withMobile(browser, engine!, async (page) => {
+      await mountEditor(page, { name: 'one', sub: 'ada' });
+      const editor = page.locator('doc-editor[data-test="one"]');
+      // Another user starts a thread on the first block, through the backend's comments port.
+      await page.evaluate(async () => {
+        const e = (window as unknown as { __embed: Record<string, unknown> })
+          .__embed as unknown as {
+          backend(
+            sub: string,
+            role: string,
+          ): {
+            connect(): Promise<void>;
+            comments: {
+              createThread(doc: string, body: unknown): Promise<unknown>;
+            };
+            sync: { loadContent(doc: string): Promise<{ doc: { content: unknown[] } }> };
+          };
+          docId: string;
+        };
+        const bob = e.backend('bob', 'editor');
+        await bob.connect();
+        const content = await bob.sync.loadContent(e.docId);
+        const body = (
+          content.doc.content as Array<{
+            type: string;
+            content?: Array<{ attrs?: { id?: string } }>;
+          }>
+        ).find((n) => n.type === 'body')!;
+        const block = body.content![0]!.attrs!.id!;
+        await bob.comments.createThread(e.docId, {
+          target: { block },
+          comment: { body: [{ type: 'text', text: 'Is this section final?' }] },
+        });
+      });
+      // The pane lists it without a reload; the page does not scroll sideways with the pane open.
+      await page.evaluate(() =>
+        (
+          document.querySelector('doc-editor[data-test="one"]') as unknown as {
+            exec(command: string): unknown;
+          }
+        ).exec('view.comments'),
+      );
+      const row = editor.locator('.de-comment-row');
+      await expect(row).toHaveCount(1);
+      await expect(row.getByRole('group').first()).toHaveAttribute(
+        'aria-label',
+        /bob, Open, 0 replies/,
+      );
+      await row.locator('[data-thread-open]').tap();
+      const view = editor.locator('[data-thread-view]');
+      await expect(view).toContainText('Is this section final?');
+      // The reader answers with the on-screen keyboard's text, and the reply is in the thread.
+      await view.locator('[data-reply-field]').fill('Yes, it is final.');
+      await view.locator('[data-reply-post]').tap();
+      await expect(view).toContainText('Yes, it is final.');
+      const widths = await page.evaluate(() => ({
+        viewport: window.innerWidth,
+        page: document.documentElement.scrollWidth,
+      }));
+      expect(widths.page).toBeLessThanOrEqual(widths.viewport);
+    });
+  });
 });

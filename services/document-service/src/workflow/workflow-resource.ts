@@ -98,6 +98,11 @@ export interface WorkflowResourceStore {
    * whose deadline and reminders the scheduled sweep looks at (FRW-034). Reads only.
    */
   listRunning(tenant: string): Promise<readonly WorkflowResourceView[]>;
+  /**
+   * The workflows of a tenant that are `completed`, ordered by document: the ones whose final PDF
+   * the scheduled seal step looks for (FRW-053). Reads only. A store without it is not swept.
+   */
+  listCompleted?(tenant: string): Promise<readonly WorkflowResourceView[]>;
 }
 
 export const etagOfRevision = (rev: number): string => `"${rev}"`;
@@ -134,6 +139,13 @@ export class MemoryWorkflowResourceStore implements WorkflowResourceStore {
     for (const [key, row] of this.#rows)
       if (key.startsWith(`${tenant}/`) && (row.state === 'sent' || row.state === 'in_progress'))
         out.push(structuredClone(row));
+    return Promise.resolve(out.sort((a, b) => (a.doc < b.doc ? -1 : a.doc > b.doc ? 1 : 0)));
+  }
+
+  listCompleted(tenant: string): Promise<readonly WorkflowResourceView[]> {
+    const out: WorkflowResourceView[] = [];
+    for (const [key, row] of this.#rows)
+      if (key.startsWith(`${tenant}/`) && row.state === 'completed') out.push(structuredClone(row));
     return Promise.resolve(out.sort((a, b) => (a.doc < b.doc ? -1 : a.doc > b.doc ? 1 : 0)));
   }
 

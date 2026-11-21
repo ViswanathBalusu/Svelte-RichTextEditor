@@ -106,6 +106,8 @@ import {
 } from './control-plane/document-purge.ts';
 import { PgPurgeStore } from './control-plane/document-purge-pg.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
+import { MemorySessionRecordStore, SessionRecords } from './control-plane/session-records.ts';
+import { PgSessionRecordStore } from './control-plane/session-records-pg.ts';
 import {
   MemoryWorkflowResourceStore,
   type WorkflowResourceStore,
@@ -122,6 +124,10 @@ import { MemoryAccessCodeStore, type AccessCodeStore } from './workflow/access-c
 import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
 import type { ConsentTextStore } from './workflow/consent-service.ts';
 import { sweepTenant } from './workflow/schedule-sweep.ts';
+import { FinalSealer } from './workflow/final-seal.ts';
+import { appearanceRequestFor } from './workflow/appearances.ts';
+import { MemoryAnchorStore, type AnchorStore } from './workflow/anchor-store.ts';
+import { HttpSigningClient, type SigningClient } from './workflow/signing-client.ts';
 import { recordParticipantOpened } from './workflow/participant-view.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import type { SearchService } from './control-plane/search-routes.ts';
@@ -141,7 +147,7 @@ import {
   type IdempotencyStore,
 } from './control-plane/idempotency.ts';
 import { PgJobQueue } from './control-plane/jobs/pg.ts';
-import { MemoryJobQueue, type JobQueue } from './control-plane/jobs/queue.ts';
+import { MemoryJobQueue, type JobQueue, type JobRecord } from './control-plane/jobs/queue.ts';
 import { JobRunner, type JobHandler, type JobHooks } from './control-plane/jobs/runner.ts';
 import {
   DRIVERS,
@@ -175,6 +181,7 @@ import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-ho
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
 import { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
 import { restrictedViews, type Views } from './control-plane/visibility.ts';
+import { serialisedInPool } from './control-plane/workers/checkpoint-store.ts';
 import { WorkerPool } from './control-plane/workers/pool.ts';
 import {
   Autoscaler,
@@ -206,7 +213,14 @@ import type { KeyService } from './storage/key-service.ts';
 import { S3ObjectStore } from './objects/s3.ts';
 import { AzureBlobObjectStore } from './objects/azure.ts';
 import { MemoryObjectStore, type ObjectStore } from './objects/store.ts';
-import type { CreateDataPlane, DataPlane, ErrorContext, ParticipantOpened, Span } from './seams.ts';
+import type {
+  CreateDataPlane,
+  DataPlane,
+  ErrorContext,
+  ParticipantOpened,
+  SessionOpened,
+  Span,
+} from './seams.ts';
 import { createPool, inTenant, isUuid, sqlState, type Pool } from './storage/db.ts';
 import { PgDocumentStore } from './storage/document-store.ts';
 import { PgGrantStore } from './storage/grant-store.ts';
@@ -318,6 +332,8 @@ export interface ServiceParts {
   evidence?: EvidenceLedger;
   /** The sealed final PDFs (FRW-054): `GET /documents/{id}/workflow/final` reads them. Absent: the route is not offered. */
   sealedPdfs?: SealedPdfStore;
+  /** The signed, time-stamped chain heads at completion, written once (FRW-054 criterion 3). */
+  anchors?: AnchorStore;
   /** The registered access codes of workflow participants and their attempt counters (FRW-039). */
   accessCodes?: AccessCodeStore;
   /** The consent texts of the tenants (FRW-044). Absent: the consent route is not offered. */
@@ -332,6 +348,11 @@ export interface ServiceParts {
   leases?: NodeLeaseStore;
   /** The read markers of `/read-marker` (HIS-027). Absent: the route is not offered. */
   readMarkers?: ReadMarkerStore;
+  /**
+   * The session records (HIS-003; 08 §2): the user agent family and the client version of each
+   * session, stored before its channel opens. Absent: no session is recorded.
+   */
+  sessionRecords?: SessionRecords;
   /** The comment threads of `/threads` (PRO-059, PRO-060). Absent: the routes are not offered. */
   threads?: ThreadStore;
   /** The named versions of `/versions` (HIS-006; PRO-054). Absent: the routes are not offered. */
@@ -403,6 +424,18 @@ export interface StartOptions {
    * no default, because the spec gives no measured numbers.
    */
   exportScaling?: { policy: ScalePolicy; tickMs: number };
+  /**
+   * The seal step of finalisation (FRW-052 criterion 5, FRW-053): the signing service's client, the
+   * retry of a run, how long the sealed bytes are retained, and the wait between attempts. Default:
+   * built from `config.sealing` (`DOCEDIT_SEAL_*`); with neither, nothing is sealed and a completed
+   * workflow stays `completed`. It needs `parts.workflows` and `parts.sealedPdfs`.
+   */
+  finalSealing?: {
+    signing: SigningClient;
+    retry: { attempts: number; delaysMs: readonly number[] };
+    retainMs: number;
+    sleep?: (ms: number) => Promise<void>;
+  };
   /** Read-your-writes sessions kept at most, with `parts.replica` (BE-064 criterion 3; a setting). */
   readSessions?: number;
   /**
@@ -445,6 +478,8 @@ export interface Service {
   runner: JobRunner | null;
   /** Every runner of the process: maintenance, assets, exports. */
   runners: JobRunner[];
+  /** The seal step of finalisation (FRW-053), or null when this node does not seal. */
+  sealer: FinalSealer | null;
   scheduler: Scheduler | null;
   metrics: Metrics;
   meter: TenantMeter;
@@ -634,6 +669,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     leases: new PgNodeLeases(pool),
     homeRegions: new PgHomeRegions(pool),
     readMarkers: new PgReadMarkerStore(pool),
+    sessionRecords: new SessionRecords(new PgSessionRecordStore(pool)),
     threads: new PgThreadStore(pool),
     versions: new PgVersionStore(pool),
   };
@@ -666,6 +702,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     reminders: new MemoryReminderStore(),
     evidence: new MemoryEvidenceLedger(now),
     sealedPdfs: new MemorySealedPdfStore(),
+    anchors: new MemoryAnchorStore(),
     accessCodes: new MemoryAccessCodeStore(),
     quotaAdmin: quotaAdminOver(
       // The pipeline has authenticated the tenant before a quota route runs, so every tenant that
@@ -678,6 +715,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     leases: new MemoryNodeLeases(),
     homeRegions: new MemoryHomeRegions(),
     readMarkers: new MemoryReadMarkerStore(),
+    sessionRecords: new SessionRecords(new MemorySessionRecordStore()),
     threads: new MemoryThreadStore(),
     versions: new MemoryVersionStore((ref) => store.head(ref).then((h) => h.seq)),
   };
@@ -1011,6 +1049,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
             ).then(() => undefined),
         }
       : {}),
+    // HIS-003: the user agent family and the client version of each session (08 §2; decision 24).
+    ...(parts.sessionRecords
+      ? { sessionOpened: (open: SessionOpened) => parts.sessionRecords!.opened(open) }
+      : {}),
     now,
     checkpoints,
     settings: {
@@ -1131,11 +1173,100 @@ export async function startService(opts: StartOptions): Promise<Service> {
     exportHandlers[PREVIEW_KIND] = exportHandlers[EXPORT_KIND]!;
   // The monthly compile-minute budget (EXP-009): every settled export and preview counts.
   const compileBudget = new CompileBudget(quotaSource ?? null);
+  // The seal step (FRW-052 criterion 5, FRW-053): when the final export of a completed workflow has
+  // finished, its PDF goes to the signing service, is stored write-once and the workflow becomes
+  // `finalised`. A run that stops is reported to the operator through the log and a counter.
+  const sealSetup =
+    opts.finalSealing ??
+    (config.sealing
+      ? {
+          signing: new HttpSigningClient({
+            url: config.sealing.url,
+            credential: config.sealing.credential,
+            timeoutMs: config.sealing.timeoutMs,
+          }),
+          retry: { attempts: config.sealing.attempts, delaysMs: config.sealing.delaysMs },
+          retainMs: config.sealing.retentionDays * 24 * 60 * 60 * 1000,
+        }
+      : null);
+  let sealer: FinalSealer | null = null;
+  if (sealSetup) {
+    if (!parts.workflows || !parts.sealedPdfs || !parts.anchors)
+      throw new Error(
+        'sealing needs the workflow store and the write-once stores (parts.workflows, parts.sealedPdfs, parts.anchors)',
+      );
+    sealer = new FinalSealer({
+      workflows: parts.workflows,
+      grants: parts.grants,
+      logs: parts.logs,
+      notifier: roomNotifier,
+      ...(parts.audit ? { audit: parts.audit } : {}),
+      now,
+      controlWaitMs: 500,
+      sealed: parts.sealedPdfs,
+      anchors: parts.anchors,
+      signing: sealSetup.signing,
+      retry: sealSetup.retry,
+      sleep: sealSetup.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
+      retainMs: sealSetup.retainMs,
+      objects: parts.objects,
+      queue: parts.queue,
+      events,
+      // The visible appearances at the signature and initials fields (FRW-057).
+      ...(parts.evidence
+        ? {
+            appearances: (ref, workflow, job) =>
+              appearanceRequestFor(
+                { objects: parts.objects, content, evidence: parts.evidence! },
+                ref,
+                workflow,
+                job,
+              ),
+          }
+        : {}),
+      // The operator's alert (FRW-052 criterion 5): an error line and a counter to alert on. The
+      // audit entry `workflow.finalisation_failed` is written by the step itself.
+      alert: (a) => {
+        logger.error({
+          event: a.kind,
+          tenant: a.tenant,
+          doc: a.doc,
+          code: a.code,
+          message: 'finalisation stopped before the seal was stored; the workflow stays completed',
+        });
+        metrics.inc(
+          'docedit_finalisation_stopped_total',
+          'Runs of the seal step that stopped; the workflow stays completed (FRW-052, FRW-053)',
+          { reason: a.reason, code: a.code, retryable: String(a.retryable) },
+        );
+      },
+    });
+  }
+  const sealing = sealer;
+  const runSeal = (ref: { tenant: string; doc: string }): Promise<unknown> =>
+    sealing === null
+      ? Promise.resolve(null)
+      : sealing.sealCompletedWorkflow(ref).catch((e: unknown) => {
+          logger.error({
+            event: 'workflow.seal.error',
+            tenant: ref.tenant,
+            doc: ref.doc,
+            ...errorFields(e),
+          });
+          return null;
+        });
   const hooks = exportHooks({
     notify,
     events,
     restPath: REST_PATH,
     now,
+    ...(sealing
+      ? {
+          finalExportCompleted: (job: JobRecord) => {
+            if (job.doc) void runSeal({ tenant: job.tenant, doc: job.doc });
+          },
+        }
+      : {}),
     ...(parts.versions ? { versions: parts.versions } : {}),
     ...(parts.audit ? { audit: parts.audit } : {}),
     versionFailed: (job) =>
@@ -1362,6 +1493,24 @@ export async function startService(opts: StartOptions): Promise<Service> {
           } satisfies ScheduledTask,
         ]
       : []),
+    // The seal step of completed workflows (FRW-053): finds a final export that has finished and
+    // seals it, so that a run that stopped, or a process that restarted, is taken up again.
+    ...(sealing && parts.workflows?.listCompleted
+      ? [
+          {
+            name: 'workflow.seal',
+            everyMs: 60 * 1000,
+            forTenant: async (tenant: string) => {
+              let sealed = 0;
+              for (const w of await parts.workflows!.listCompleted!(tenant)) {
+                const out = await runSeal({ tenant, doc: w.doc });
+                if ((out as { status?: string } | null)?.status === 'sealed') sealed += 1;
+              }
+              return sealed;
+            },
+          } satisfies ScheduledTask,
+        ]
+      : []),
     {
       name: 'idempotency.purge',
       everyMs: 60 * 60 * 1000,
@@ -1529,7 +1678,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
     documents: parts.documents,
     grants: parts.grants,
     logs,
-    checkpoints,
+    // The content at seq 0 of a new document is serialised in the pool (BE-001 criterion 3).
+    checkpoints: serialisedInPool(checkpoints, pool),
     assets,
     users: parts.users,
     ...(parts.audit ? { audit: parts.audit } : {}),
@@ -1601,6 +1751,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.consentTexts ? { consentTexts: parts.consentTexts } : {}),
     ...(parts.evidence ? { evidence: parts.evidence } : {}),
     ...(parts.sealedPdfs ? { sealedPdfs: parts.sealedPdfs } : {}),
+    ...(sealing ? { sealing: true } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),
     compileBudget,
@@ -1704,6 +1855,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     autoscaler,
     reads,
     pinnedCache,
+    sealer,
     ready,
     close: () =>
       (closed ??= (async () => {

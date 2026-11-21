@@ -16,7 +16,7 @@ import {
 
 const LEGAL_BLOCK = 'pLegal0000000001'; // in the region `rLegal0000000001`, hidden from non-owners
 const LEGAL = 'rLegal0000000001';
-const comment = { text: 'Is this clause still right?' };
+const comment = { body: [{ type: 'text', text: 'Is this clause still right?' }] };
 const MISSING = '019a0000-0000-7000-8000-000000000000';
 
 for (const storage of ['memory', 'postgres'] as Storage[]) {
@@ -99,7 +99,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           const patched = await h.call('PATCH', url, {
             token: x.editor(),
             ...headers,
-            body: { text: 'changed' },
+            body: { body: [{ type: 'text', text: 'changed' }] },
           });
           expect(patched.status, `PATCH, If-Match ${tag ?? 'absent'}: ${patched.text}`).toBe(404);
           const deleted = await h.call('DELETE', url, { token: x.editor(), ...headers });
@@ -108,7 +108,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // A comment that does not exist answers the same.
         const missingPatch = await h.call('PATCH', `/v1/comments/${MISSING}`, {
           token: x.editor(),
-          body: { text: 'changed' },
+          body: { body: [{ type: 'text', text: 'changed' }] },
         });
         expect(missingPatch.status).toBe(404);
         const missingDelete = await h.call('DELETE', `/v1/comments/${MISSING}`, {
@@ -120,7 +120,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const edited = await h.call('PATCH', url, {
           token: x.owner(),
           headers: { 'If-Match': x.commentTag },
-          body: { text: 'Revised by the owner' },
+          body: { body: [{ type: 'text', text: 'Revised by the owner' }] },
         });
         expect(edited.status, edited.text).toBe(200);
       },

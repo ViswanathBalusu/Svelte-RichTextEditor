@@ -170,6 +170,25 @@ describe('SEC-059 a finding fails the run and is saved as a regression case', ()
     expect(savedRegressions(o.regressionsDir, 'made-to-stall')).toHaveLength(1);
   });
 
+  it('an input that is slow once and fast again was a busy machine: no failure, nothing saved', async () => {
+    const o = options({ limitMs: 20, runs: 30 });
+    const seen = new Set<number>();
+    const spin = (ms: number) => {
+      const end = performance.now() + ms;
+      while (performance.now() < end) {
+        /* spin */
+      }
+    };
+    // The first time an input is seen it takes 60 ms; the second time it is instant.
+    const busy = target('made-to-be-slowed', (v) => {
+      if (seen.has(v)) return;
+      seen.add(v);
+      if (v >= 5_000) spin(60);
+    });
+    await runTarget(busy, o);
+    expect(savedRegressions(o.regressionsDir, 'made-to-be-slowed')).toHaveLength(0);
+  });
+
   it('an input that grows the heap past the limit fails the run and is saved', async () => {
     const o = options({ heapLimitBytes: 8 * 1024 * 1024, runs: 30 });
     const kept: number[][] = [];

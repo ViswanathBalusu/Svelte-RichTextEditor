@@ -189,13 +189,29 @@ async function examine<I>(
     rmSync(inflight, { force: true });
     return { kind: kindOf(e), detail: e instanceof Error ? e.message : String(e) };
   }
-  const elapsed = performance.now() - start;
+  let elapsed = performance.now() - start;
   const grown = process.memoryUsage().heapUsed - heap;
   rmSync(inflight, { force: true });
+  if (elapsed > o.limitMs) {
+    // The limit is wall-clock time, and a full run shares the machine with dozens of processes: an
+    // input that took 1,151 ms there took well under the limit alone. An input that is slow in
+    // itself is slow again, so it runs once more and fails only if it is over the limit twice.
+    // (A hang that never returns is caught by the in-flight file, not by this.)
+    writeFileSync(inflight, encodeInput(input));
+    const again = performance.now();
+    try {
+      await target.oracle(input);
+    } catch {
+      // The first run did not throw; a second that does is not a time problem. Report the time.
+    }
+    const second = performance.now() - again;
+    rmSync(inflight, { force: true });
+    elapsed = Math.min(elapsed, second);
+  }
   if (elapsed > o.limitMs)
     return {
       kind: 'hang',
-      detail: `${elapsed.toFixed(0)} ms on one input (limit ${o.limitMs} ms)`,
+      detail: `${elapsed.toFixed(0)} ms on one input (limit ${o.limitMs} ms, over it on both runs)`,
     };
   if (grown > o.heapLimitBytes)
     return {

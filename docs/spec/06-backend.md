@@ -159,6 +159,10 @@ create table idempotency_keys (
 
 create table outbox (id uuid primary key, doc_id uuid not null, commit_id uuid not null, request jsonb not null, state text not null, created_at timestamptz not null);
 create table read_markers (doc_id uuid not null, user_id text not null, seq bigint not null, updated_at timestamptz not null, primary key (doc_id, user_id));
+create table doc_sessions (                      -- per session: the user agent family and the client version (08 §2; owner decision 24)
+  doc_id uuid not null, session_id text not null, user_id text not null,
+  ua_family text not null, ua_major int, client_version text,   -- the header reduced to a family and a major version; no other column
+  primary key (doc_id, session_id));                             -- written once, before the channel opens; removed with the document
 create table audit_events (id uuid not null, tenant_id uuid not null, doc_id uuid, actor text not null, kind text not null, data jsonb not null, at timestamptz not null) partition by range (at);
 ```
 

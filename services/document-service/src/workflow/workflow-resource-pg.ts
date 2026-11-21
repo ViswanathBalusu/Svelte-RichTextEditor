@@ -194,6 +194,25 @@ export class PgWorkflowResourceStore implements WorkflowResourceStore {
     );
   }
 
+  /** The tenant's workflows that are `completed`, for the scheduled seal step (FRW-053). */
+  listCompleted(tenant: string): Promise<readonly WorkflowResourceView[]> {
+    return inTenant(
+      this.#pool,
+      tenant,
+      async (c) => {
+        const r = await c.query<Row>(
+          `SELECT ${COLUMNS}
+             FROM ${WORKFLOW_RESOURCE_TABLE}
+            WHERE tenant_id = $1 AND state = 'completed'
+            ORDER BY doc_id`,
+          [tenant],
+        );
+        return r.rows.map(viewOf);
+      },
+      { readOnly: true },
+    );
+  }
+
   /** The resource of a document with its ETag, or null when the document has no workflow. */
   read(tenant: string, doc: string): Promise<WorkflowResourceView | null> {
     return inTenant(

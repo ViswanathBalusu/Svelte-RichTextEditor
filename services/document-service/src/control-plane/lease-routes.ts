@@ -166,5 +166,24 @@ export function leaseRoutes(k: Kit): Record<string, Handler> {
     return { status: 204, headers: { 'Cache-Control': 'no-store' } };
   };
 
-  return { acquireLease: acquire, heartbeatLease: heartbeat, releaseLease: release };
+  /**
+   * The routes exist only while the server announces `leases` (05 §2, §6.2; PRM-043 criterion 6).
+   * With the feature off they answer `not_found`, as for a route the server does not offer; the
+   * code is the default of lane w5 (docs/adr/0418-w5-leases-default-and-gate.md, proposed), because
+   * 05 names none. The check reads the announced list on each call, so it cannot drift from
+   * discovery. Nothing else in the service reads the feature.
+   */
+  const gated =
+    (handler: Handler): Handler =>
+    async (ctx) => {
+      if (!d.features.includes('leases'))
+        throw new ApiError('not_found', 'this server does not announce the leases feature');
+      return handler(ctx);
+    };
+
+  return {
+    acquireLease: gated(acquire),
+    heartbeatLease: gated(heartbeat),
+    releaseLease: gated(release),
+  };
 }

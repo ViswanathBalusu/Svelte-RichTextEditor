@@ -10,7 +10,12 @@
  *   §3.2), when the font manifest gives coverage.
  * - `image_without_alt`: a picture without alternative text (09 §13).
  *
- * A row taller than a page is not detected yet: it needs the typeset height (EXP-039, open).
+ * A row taller than a page is not detected yet. Its height is to come from the editor's own page
+ * layout, with no first compile pass (owner decision 114); EXP-039 has to give that measure to the
+ * converter as well as to the editor, because both must get the same result from this function.
+ *
+ * The editor calls it through `@docedit/export-latex/preflight`, which brings in this file, the
+ * coverage reader and `@docedit/model` only (`packages/element/src/export-preflight.ts`).
  */
 import {
   resolveParagraph,

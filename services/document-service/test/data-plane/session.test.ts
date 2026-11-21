@@ -77,6 +77,7 @@ describe('hello and welcome (PRO-021, PRO-022, BE-029)', () => {
       'regions',
       'suggest-enforced',
       'read-restrictions',
+      'leases',
       'rules',
       'fields',
       'extensions',

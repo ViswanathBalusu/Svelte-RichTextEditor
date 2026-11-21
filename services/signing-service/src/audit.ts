@@ -8,7 +8,21 @@
  * `append` must not return before the entry is written. The service refuses to seal when it throws,
  * so that no seal exists without a record of the request.
  */
-export type AuditEvent = 'seal.requested' | 'seal.sealed' | 'seal.refused' | 'seal.failed';
+export type AuditEvent =
+  | 'seal.requested'
+  | 'seal.sealed'
+  | 'seal.refused'
+  | 'seal.failed'
+  // The signed, time-stamped chain head (FRW-054 criterion 3): the same four steps.
+  | 'anchor.requested'
+  | 'anchor.anchored'
+  | 'anchor.refused'
+  | 'anchor.failed'
+  // Long-term validation and time-stamp renewal of a sealed PDF (FRW-056).
+  | 'extend.requested'
+  | 'extend.extended'
+  | 'extend.refused'
+  | 'extend.failed';
 
 export interface AuditEntry {
   /** ISO 8601, from the service's clock. */
@@ -27,6 +41,8 @@ export interface AuditEntry {
   readonly sealedSha256: string | null;
   /** The refusal or failure code, for `seal.refused` and `seal.failed`. */
   readonly code: string | null;
+  /** The chain head of an anchor request (`anchor.*`); absent for a seal. */
+  readonly chainHead?: string | null;
 }
 
 export interface AuditSink {

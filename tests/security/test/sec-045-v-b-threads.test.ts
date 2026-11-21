@@ -45,13 +45,16 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       // A thread of tenant B with a reply, so that A has real thread and comment identifiers to try.
       const thread = await h.call('POST', `/v1/documents/${docB}/threads`, {
         token: bOwnerToken,
-        body: { target: { block: 'pIntro0000000001' }, comment: { body: CANARY_B_THREAD } },
+        body: {
+          target: { block: 'pIntro0000000001' },
+          comment: { body: [{ type: 'text', text: CANARY_B_THREAD }] },
+        },
       });
       tidB = thread.status === 201 ? ((thread.json.id as string) ?? null) : null;
       if (tidB) {
         const reply = await h.call('POST', `/v1/threads/${tidB}/comments`, {
           token: bOwnerToken,
-          body: { body: CANARY_B_REPLY },
+          body: { body: [{ type: 'text', text: CANARY_B_REPLY }] },
         });
         cidB = reply.status === 201 ? ((reply.json.id as string) ?? null) : null;
       }
@@ -66,7 +69,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // The control: A's own owner token creates and reads a thread on A's document.
         const own = await h.call('POST', `/v1/documents/${docA}/threads`, {
           token: aOwnerToken,
-          body: { target: { block: 'pIntro0000000001' }, comment: { body: 'A own thread.' } },
+          body: {
+            target: { block: 'pIntro0000000001' },
+            comment: { body: [{ type: 'text', text: 'A own thread.' }] },
+          },
         });
         expect(own.status, own.text).toBe(201);
         expect(tidB, "tenant B's thread was created").not.toBeNull();
@@ -75,8 +81,16 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const cases: Array<{ method: string; path: string; body?: unknown }> = [
           { method: 'GET', path: `/v1/threads/${tidB}` },
           { method: 'PATCH', path: `/v1/threads/${tidB}`, body: { state: 'resolved' } },
-          { method: 'POST', path: `/v1/threads/${tidB}/comments`, body: { body: 'from A' } },
-          { method: 'PATCH', path: `/v1/comments/${cidB}`, body: { body: 'from A' } },
+          {
+            method: 'POST',
+            path: `/v1/threads/${tidB}/comments`,
+            body: { body: [{ type: 'text', text: 'from A' }] },
+          },
+          {
+            method: 'PATCH',
+            path: `/v1/comments/${cidB}`,
+            body: { body: [{ type: 'text', text: 'from A' }] },
+          },
           { method: 'DELETE', path: `/v1/comments/${cidB}` },
           { method: 'DELETE', path: `/v1/threads/${tidB}` },
           { method: 'GET', path: `/v1/documents/${docB}/exports` },

@@ -21,6 +21,8 @@ import type {
   FillSummary,
   GrantsService,
   GrantsSnapshot,
+  HeldLease,
+  LeasesService,
   OutlineItem,
   PanelInfo,
   PeerCaret,
@@ -141,6 +143,8 @@ export interface FakeCoreOptions {
   projected?: boolean;
   /** Region grants; null: no grants port. */
   grants?: readonly RegionGrant[] | null;
+  /** Check-out of regions (PRM-043); the holder this session takes leases as. Absent: no leases port. */
+  leases?: { holder: string } | null;
   fill?: FillSummary | null;
   carets?: readonly PeerCaret[];
   /** The document's base direction (`settings.dir`); absent: no `direction` view (UX-065). */
@@ -512,6 +516,40 @@ export class FakeGrants implements GrantsService {
   }
 }
 
+/**
+ * The leases service (PRM-043): what was asked for is recorded; `refuseNext` makes the next
+ * acquire fail with the code a service would answer. The region list is the test's, and shows a
+ * lease when the test says so.
+ */
+export class FakeLeases implements LeasesService {
+  readonly #held = new Value<readonly HeldLease[]>([]);
+  readonly held = this.#held;
+  readonly calls: string[] = [];
+  refuseNext: 'conflict' | 'forbidden' | null = null;
+  readonly holder: string;
+
+  constructor(holder = 'me') {
+    this.holder = holder;
+  }
+
+  async acquire(region: string): Promise<HeldLease> {
+    this.calls.push(`acquire ${region}`);
+    if (this.refuseNext) {
+      const code = this.refuseNext;
+      this.refuseNext = null;
+      throw Object.assign(new Error(code), { code });
+    }
+    const lease: HeldLease = { region, holder: this.holder, expiresAt: '2026-11-18T10:05:00.000Z' };
+    this.#held.set([...this.#held.get().filter((l) => l.region !== region), lease]);
+    return lease;
+  }
+
+  async release(region: string): Promise<void> {
+    this.calls.push(`release ${region}`);
+    this.#held.set(this.#held.get().filter((l) => l.region !== region));
+  }
+}
+
 export const EDIT: AccessSummary = {
   scope: 'body',
   caps: ['view', 'comment', 'suggest', 'edit'],
@@ -562,6 +600,7 @@ export class FakeCore implements CoreApi {
   readonly fill?: Value<FillSummary | null>;
   readonly exports?: FakeExports;
   readonly grants?: FakeGrants;
+  readonly leases?: FakeLeases;
   readonly threads?: FakeThreads;
   regionLabels: Readonly<Record<string, RegionLabel>> | null = null;
   copiedFormat: string[] | null = null;
@@ -690,6 +729,7 @@ export class FakeCore implements CoreApi {
       });
     if (options.grants !== null && options.grants !== undefined)
       Object.assign(this, { grants: new FakeGrants(options.grants) });
+    if (options.leases) Object.assign(this, { leases: new FakeLeases(options.leases.holder) });
     if (options.fill === undefined) Object.assign(this, { fill: undefined });
   }
 
@@ -1068,6 +1108,11 @@ export class FakeCore implements CoreApi {
   addFindingToDictionary(id: string): Promise<boolean> {
     this.proofingCalls.push(`add-word:${id}`);
     return Promise.resolve(true);
+  }
+
+  /** The finding with this identifier, as the core looks one up for a context click (UX-008). */
+  proofingFinding(id: string): ProofingFindingView | null {
+    return this.proofingFindings.find((f) => f.id === id) ?? null;
   }
 
   refuse(reason: string, scopes: readonly string[] = [], count?: number): void {

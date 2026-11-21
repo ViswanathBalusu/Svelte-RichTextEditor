@@ -14,7 +14,7 @@
  * It needs the kernel build (`pnpm --filter @docedit/layout-kernel build:wasm`).
  */
 import { type Page, expect, test } from '@playwright/test';
-import { openLib } from './embed-helpers.ts';
+import { editorShown, openLib } from './embed-helpers.ts';
 
 interface Diagnostic {
   feature: string;
@@ -160,7 +160,8 @@ test.describe('the layout kernel on demand (WASM-002)', () => {
     const [failed, degraded] = await diagnostics(page);
     expect(failed).toMatchObject({ kind: 'load-failed', code: 'fetch_failed', ms: null });
     expect(degraded).toMatchObject({ kind: 'degraded', code: 'fetch_failed' });
-    // The editor itself is unaffected.
-    await expect(page.locator('doc-editor[data-test="kernel"] .de-editing-surface')).toBeVisible();
+    // The editor itself is unaffected: it shows the page view where canvas measures for it, and the
+    // web view elsewhere (FE-101; WASM-003).
+    await editorShown(page, 'kernel');
   });
 });

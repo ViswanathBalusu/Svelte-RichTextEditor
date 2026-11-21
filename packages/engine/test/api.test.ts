@@ -131,7 +131,10 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'fieldSignable'
       | 'requestSign'
       | 'signRequest'
-      | 'clearSignRequest';
+      | 'clearSignRequest'
+      // PRM-026: the regions the user cannot edit, and the shell's words for their lock indicators.
+      | 'regionLocks'
+      | 'setRegionLabels';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed
@@ -144,6 +147,8 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'setPageGuides'
       // UX-008: where the shell opens a menu asked for from the keyboard.
       | 'caretRect'
+      // UX-008: the shell has the browser's selection read before it builds a context menu.
+      | 'syncSelection'
       // SYN-036: the peers' carets as rectangles, which the shell draws (UX-027).
       | 'carets'
       // FRW-078: the summary's link moves focus to a field's control.

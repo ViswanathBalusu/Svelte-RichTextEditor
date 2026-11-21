@@ -10,6 +10,7 @@ import {
   type Access,
   type AuthPort,
   type Backend,
+  type CommentsPort,
   type Content,
   type DocRole,
   type ErrorCode,
@@ -79,6 +80,7 @@ export class MockBackend implements Backend {
   readonly permissions: PermissionsPort;
   readonly presence?: PresencePort;
   readonly fields?: FieldsPort;
+  readonly comments?: CommentsPort;
 
   private readonly host: BackendHost;
   private readonly tokenSource: () => Promise<MockToken>;
@@ -161,6 +163,7 @@ export class MockBackend implements Backend {
           throw new PortError('unsupported_feature', 'the mock backend does not offer `sign`');
         },
       };
+    if (host.features.includes('comments')) this.comments = this.commentsPort();
     if (host.presence)
       this.presence = {
         update: (docId, update) => {
@@ -169,6 +172,82 @@ export class MockBackend implements Backend {
         },
         onPeers: (docId, cb) => this.portDelivery.subscribe<PresencePeers>(`presence:${docId}`, cb),
       };
+  }
+
+  /**
+   * The comments port (05 §6.2; ADR 0417): the document's threads, under the rules of its room. A
+   * call that names only a thread or a comment finds its document among those the token covers.
+   */
+  private commentsPort(): CommentsPort {
+    const run = <T>(f: () => T): Promise<T> => {
+      try {
+        return Promise.resolve(f());
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    };
+    const connection = (docId: string): Connection => {
+      const role = this.role(docId);
+      return {
+        sub: this.token!.sub,
+        session: this.current!.session,
+        role,
+        groups: this.token!.grp,
+        participantRoles: this.token!.fill?.roles ?? [],
+        participantActive: this.token!.fill?.active ?? false,
+      };
+    };
+    const ofThread = (id: string): MockDocument => {
+      if (this.current && this.token)
+        for (const docId of Object.keys(this.token.docs)) {
+          const d = this.host.document(docId);
+          if (d?.threads.hasThread(id)) return d;
+        }
+      throw new PortError('not_found', 'no such thread');
+    };
+    const ofComment = (id: string): MockDocument => {
+      if (this.current && this.token)
+        for (const docId of Object.keys(this.token.docs)) {
+          const d = this.host.document(docId);
+          if (d?.threads.hasComment(id)) return d;
+        }
+      throw new PortError('not_found', 'no such comment');
+    };
+    return {
+      threads: (docId, query) => run(() => this.doc(docId).threads.list(connection(docId), query)),
+      createThread: (docId, body) =>
+        run(() => this.doc(docId).threads.create(connection(docId), body)),
+      thread: (id) =>
+        run(() => {
+          const d = ofThread(id);
+          return d.threads.get(connection(d.id), id);
+        }),
+      updateThread: (id, patch, opts) =>
+        run(() => {
+          const d = ofThread(id);
+          return d.threads.update(connection(d.id), id, patch, opts.ifMatch);
+        }),
+      deleteThread: (id, opts) =>
+        run(() => {
+          const d = ofThread(id);
+          d.threads.remove(connection(d.id), id, opts?.ifMatch);
+        }),
+      reply: (id, body) =>
+        run(() => {
+          const d = ofThread(id);
+          return d.threads.reply(connection(d.id), id, body);
+        }),
+      updateComment: (id, body, opts) =>
+        run(() => {
+          const d = ofComment(id);
+          return d.threads.editComment(connection(d.id), id, body, opts.ifMatch);
+        }),
+      deleteComment: (id, opts) =>
+        run(() => {
+          const d = ofComment(id);
+          d.threads.removeComment(connection(d.id), id, opts?.ifMatch);
+        }),
+    };
   }
 
   // --- Backend -----------------------------------------------------------------------------

@@ -9,7 +9,7 @@ The owner asked whether parts of the product should be written in Rust and compi
 - In phases 0 to 2 every budget is dominated by the DOM, the network, PostgreSQL or the TeX compile. A typical commit costs well under a millisecond of CPU (04 §12). WebAssembly speeds up none of those.
 - The authority's permission check relies on ProseMirror sharing unchanged subtrees between versions (07 §5.1), and the step semantics are pinned to one library release (04 §4). A Rust authority would be a second implementation of exactly what the conformance kit exists to pin.
 - The page view (phase 3, gated) needs text measurement. Canvas measurement differs between browsers and gives no control over ligatures, nor over kerning in Safari (02 §9.3). Measuring from the font files, which spike S5 evaluates, needs a HarfBuzz-compatible shaper, and that exists only as C++ or Rust compiled to WebAssembly.
-- WebAssembly has costs specific to an embedded component: `'wasm-unsafe-eval'` in the host's content security policy, lazy chunks to respect the 300 KB budget, no threads unless the host page is cross-origin isolated, a second copy of font data in memory, and a second language for what may be a very small team (roadmap §8, risk 13).
+- WebAssembly has costs specific to an embedded component: `'wasm-unsafe-eval'` in the host's content security policy, lazy chunks to respect the 320 KB budget (owner decision 32; it was 300 KB), no threads unless the host page is cross-origin isolated, a second copy of font data in memory, and a second language for what may be a very small team (roadmap §8, risk 13).
 
 ## Decision
 

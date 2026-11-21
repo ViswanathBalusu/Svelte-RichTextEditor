@@ -13,9 +13,10 @@
  */
 
 import { packParagraph, unpackLines, type BrokenLine, type ParagraphInput } from './paragraph.ts';
+import { segmenterOver, type KernelSegmenter } from './segmentation.ts';
 
 /** The version of the kernel's call interface that this package expects of the crate. */
-export const KERNEL_ABI_VERSION = 6;
+export const KERNEL_ABI_VERSION = 7;
 
 /** The files that `build:wasm` writes to `dist/`, by role. */
 export const KERNEL_FILES = {
@@ -92,6 +93,9 @@ export interface KernelGlue {
   hyphenate_word(tag: string, word: Uint16Array): Uint32Array;
   bidi_levels(text: Uint16Array, direction: number): Uint8Array;
   bidi_visual_runs(text: Uint16Array, direction: number, from: number, to: number): Uint32Array;
+  line_break_opportunities(text: Uint16Array): Uint32Array;
+  grapheme_cluster_boundaries(text: Uint16Array): Uint32Array;
+  segment_unicode_versions(): Uint32Array;
 }
 
 /** The codes of a run that was not shaped (crates/layout-kernel/src/shaping.rs). */
@@ -281,6 +285,8 @@ export interface LayoutKernel {
   readonly shaper: KernelShaper;
   readonly hyphenation: KernelHyphenation;
   readonly bidi: KernelBidi;
+  /** Line-break opportunities (UAX #14) and grapheme cluster boundaries (UAX #29), WASM-007. */
+  readonly segmenter: KernelSegmenter;
   /**
    * The size of the module's linear memory in bytes (faces included), or `null` when the start did
    * not hand it over.
@@ -468,6 +474,7 @@ export function finishKernel(glue: Omit<KernelGlue, 'initSync'>, output?: unknow
         return runs;
       },
     },
+    segmenter: segmenterOver(glue),
     memoryBytes: () => memoryOf(output)?.buffer.byteLength ?? null,
   };
 }
@@ -475,3 +482,4 @@ export function finishKernel(glue: Omit<KernelGlue, 'initSync'>, output?: unknow
 export * from './batch.ts';
 export * from './paragraph.ts';
 export * from './hyphenation.ts';
+export * from './segmentation.ts';

@@ -18,7 +18,7 @@
 
 - The entry (`doc-editor.js`) holds the element, its loading sequence and its events: it imports no editor code, so importing it on a server evaluates nothing of the editor and reads no browser global (only `'HTMLElement' in globalThis` and `'customElements' in globalThis`).
 - The editor chunk (engine, shell, Svelte, styles) loads with the first document; the DEP client (`@docedit/backend-dep`) loads only for `endpoint`; panes, the PDF viewer's controller and its frame load when opened.
-- "The initial chunk" of FE-002 is measured as the first interactive editor: the entry, the editor chunk and their static imports, and with the DEP client for an endpoint. Compressed size is gzip at level 9, counted against 300,000 bytes; Brotli is reported too (`scripts/bundle-report.ts`, `dist/lib/bundle-report.json`).
+- "The initial chunk" of FE-002 is measured as the first interactive editor: the entry, the editor chunk and their static imports, and with the DEP client for an endpoint. Compressed size is gzip at level 9, counted against 320,000 bytes (owner decision 32, 2026-11-17; it was 300,000); Brotli is reported too (`scripts/bundle-report.ts`, `dist/lib/bundle-report.json`).
 
 ### 3. The stylesheet (FE-002, FE-014)
 

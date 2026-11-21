@@ -117,6 +117,9 @@ export const PROTOCOL_FEATURES: readonly string[] = [
   'regions',
   'suggest-enforced',
   'read-restrictions',
+  // Region leases (07 §10; PRM-043): on by default, as owner decision 190 says of the reference
+  // service. The lease routes of the control plane answer `not_found` when it is switched off.
+  'leases',
   // The room refuses a fill the rules hide or disable and a commit with rules that do not compile
   // (12 §5; FRW-019, FRW-020).
   'rules',

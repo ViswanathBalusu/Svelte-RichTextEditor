@@ -16,6 +16,7 @@
  * It draws nothing and imports no DOM.
  */
 import { mapRanges } from '@docedit/authority';
+import type { Capability } from '@docedit/protocol';
 import type { StepMap } from 'prosemirror-transform';
 import { DEFAULT_MAPPING_HISTORY } from './mapping-history.ts';
 import type { Confirmed } from './sync/state.ts';
@@ -25,6 +26,36 @@ export interface ThreadReport {
   readonly seq: number;
   readonly range?: { readonly from: number; readonly to: number };
   readonly block?: string;
+}
+
+/**
+ * What a new thread would be about (UX-028): a text range in the confirmed document at `baseSeq`, or
+ * one block, with the capabilities of each scope the selection covers (07 §12).
+ */
+export interface CommentAnchorReport {
+  readonly selection:
+    | {
+        readonly kind: 'range';
+        readonly from: number;
+        readonly to: number;
+        readonly baseSeq: number;
+      }
+    | { readonly kind: 'block'; readonly id: string };
+  readonly scopes: ReadonlyArray<ReadonlyArray<Capability>>;
+}
+
+/** Where a thread is in the document the reader sees (UX-029, UX-030). */
+export interface ThreadPlacement {
+  /** Document order: the start of the range, or the position of the block. */
+  readonly position: number;
+  /** The commented text was deleted, or the block is gone. */
+  readonly detached: boolean;
+  /** The commented words, for a range that still has text. */
+  readonly excerpt: string | null;
+  /** `figure`, `table` or `equation`, for a thread on a block. */
+  readonly blockKind: string | null;
+  /** What the user may do in every scope the thread covers. */
+  readonly caps: ReadonlyArray<Capability>;
 }
 
 /** The step maps of the confirmed commits since the oldest one the client keeps. */

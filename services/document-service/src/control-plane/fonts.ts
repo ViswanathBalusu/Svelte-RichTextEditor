@@ -44,6 +44,26 @@ export const FONT_LICENCES: readonly string[] = [
 interface SourceFace {
   file: string;
   sha256: string;
+  /** The code points the face covers, when the converter's manifest records them (EXP-026). */
+  coverage?: unknown;
+}
+
+/**
+ * The coverage of a face as the converter's manifest gives it: sorted inclusive ranges of code
+ * points. Anything else is left out, never repaired.
+ */
+function coverageOf(value: unknown): Array<[number, number]> | null {
+  if (!Array.isArray(value)) return null;
+  const out: Array<[number, number]> = [];
+  for (const r of value) {
+    if (!Array.isArray(r) || r.length !== 2) return null;
+    const [lo, hi] = r as [unknown, unknown];
+    if (!Number.isSafeInteger(lo) || !Number.isSafeInteger(hi)) return null;
+    if ((lo as number) < 0 || (hi as number) > 0x10ffff || (lo as number) > (hi as number))
+      return null;
+    out.push([lo as number, hi as number]);
+  }
+  return out;
 }
 
 interface SourceManifest {
@@ -72,6 +92,12 @@ export interface ManifestFace {
   sha256: string;
   bytes: number;
   format: 'truetype' | 'opentype';
+  /**
+   * The code points the face covers, as sorted inclusive ranges, when the font set's manifest
+   * records them. The editor's export preflight reads them, so that it checks characters against
+   * the same coverage as the converter does (EXP-003; 09 §1). Absent: the set records none.
+   */
+  coverage?: Array<[number, number]>;
 }
 
 export interface ManifestFamily {
@@ -178,6 +204,8 @@ export async function loadFontCatalogue(
       bytes: bytes.length,
       format: opentype ? 'opentype' : 'truetype',
     };
+    const coverage = coverageOf(f.coverage);
+    if (coverage) out.coverage = coverage;
     return out;
   }
 

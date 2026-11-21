@@ -47,6 +47,8 @@ const ROUTED = [
   'accessCodes',
   'quotaAdmin',
   'readMarkers',
+  // HIS-003: a session's record goes to the shard of its tenant, where its document is.
+  'sessionRecords',
   'homeRegions',
   'threads',
   'versions',
