@@ -49,6 +49,8 @@ const ROUTED = [
   'readMarkers',
   // HIS-003: a session's record goes to the shard of its tenant, where its document is.
   'sessionRecords',
+  // HIS-036: a tenant's anchor records and covered heads are on the shard of its documents.
+  'headAnchorStore',
   'homeRegions',
   'threads',
   'versions',

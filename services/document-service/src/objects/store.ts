@@ -112,7 +112,25 @@ export const objectKeys = {
     if (!SAFE_SEGMENT.test(workflow)) throw new RangeError('a workflow identifier is one segment');
     return `${objectKeys.prefix(tenant)}anchors/${doc}/${workflow}.json`;
   },
+  /**
+   * The signed, time-stamped record of an hourly batch of a tenant's chain heads (HIS-036; ADR
+   * 0409), named by the time the heads were read (`to`, RFC 3339 in UTC with milliseconds).
+   */
+  headAnchor(tenant: string, to: string): string {
+    return `${objectKeys.prefix(tenant)}anchors/heads/${anchorTime(to)}.json`;
+  },
+  /** The leaf list stored next to that record, from which an inclusion path is given later. */
+  headAnchorLeaves(tenant: string, to: string): string {
+    return `${objectKeys.prefix(tenant)}anchors/heads/${anchorTime(to)}.leaves.json`;
+  },
 };
+
+/** A record's `to` as one safe key segment: `2026-11-21T01:00:00.000Z` is `20261121T010000.000Z`. */
+function anchorTime(to: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(to))
+    throw new RangeError('an anchor time is RFC 3339 in UTC with milliseconds');
+  return to.replaceAll('-', '').replaceAll(':', '');
+}
 
 function seqText(seq: number): string {
   if (!Number.isSafeInteger(seq) || seq < 0) throw new RangeError('a sequence number');

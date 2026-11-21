@@ -12,6 +12,11 @@ export const PURGE_TABLES: readonly string[] = [
   // The outbox names the head row (`outbox_doc_id_fkey`), so it goes before it (BE-054 found it).
   'outbox',
   'commit_tombstones',
+  // The index of the cold segments (HIS-029); the objects go with the document's prefix.
+  'commit_cold_segments',
+  // The head the document's newest anchor record covers (HIS-036). The records themselves stay:
+  // they are the tenant's, and name no document.
+  'anchored_heads',
   'commit_scopes',
   'doc_commit_payloads',
   'doc_snapshots',

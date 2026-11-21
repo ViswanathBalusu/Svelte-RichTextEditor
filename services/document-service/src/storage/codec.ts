@@ -128,7 +128,15 @@ export function encodeCommit(doc: string, c: LogCommit): EncodedCommit {
 }
 
 export function decodePayload(stored: Uint8Array): CommitPayload {
-  const value = JSON.parse(zstdDecompressSync(stored).toString('utf8')) as CommitPayload;
+  return payloadFromJson(JSON.parse(zstdDecompressSync(stored).toString('utf8')));
+}
+
+/**
+ * A payload from its parsed canonical JSON: what a payload row holds once decompressed, and what a
+ * cold segment holds for each commit (HIS-029). Only the members of `CommitPayload` are taken.
+ */
+export function payloadFromJson(json: unknown): CommitPayload {
+  const value = json as CommitPayload;
   const out: CommitPayload = { steps: value.steps, retired: value.retired, claimed: value.claimed };
   if (value.snapshot) out.snapshot = value.snapshot;
   if (value.evidence) out.evidence = value.evidence;

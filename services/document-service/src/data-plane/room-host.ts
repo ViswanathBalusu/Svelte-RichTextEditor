@@ -2001,11 +2001,21 @@ export class RoomHost {
       const found = await d.checkpointer.loadForOpen(ref, head.seq, d.settings.openInWorkerBytes);
       if (!found) throw new Refusal('unavailable', 'the document has no content to start from');
       const cp = { seq: found.seq };
+      // The revision in force at the checkpoint is read from the metadata of the commit at its
+      // `seq`, so that opening needs no payload below the log it replays: that payload may have
+      // moved to a cold segment or been thinned (HIS-029 criterion 5; HIS-032). A store that gives
+      // no revision with its metadata is read as before.
+      const revisionAtCheckpoint = async (): Promise<number | undefined> => {
+        if (cp.seq === 0) return undefined;
+        const meta = d.logs.readMeta ? (await d.logs.readMeta(ref, cp.seq, cp.seq))[0] : undefined;
+        if (meta?.revision !== undefined) return meta.revision;
+        return (await d.logs.read(ref, cp.seq, cp.seq))[0]?.revision;
+      };
       const [log, perms, history, atBase] = await Promise.all([
         d.logs.read(ref, cp.seq + 1),
         d.grants.current(ref),
         cp.seq === 0 ? d.grants.history(ref) : Promise.resolve([]),
-        cp.seq > 0 ? d.logs.read(ref, cp.seq, cp.seq) : Promise.resolve([]),
+        revisionAtCheckpoint(),
       ]);
       if (log.length !== head.seq - cp.seq)
         throw new Error(
@@ -2070,7 +2080,7 @@ export class RoomHost {
       // the older revision.
       const initialRevision =
         cp.seq > 0
-          ? (atBase[0]?.revision ?? perms.revision)
+          ? (atBase ?? perms.revision)
           : head.seq === 0
             ? perms.revision
             : (history[0]?.revision ?? perms.revision);

@@ -125,6 +125,12 @@ export interface CommitMetaRow {
   time: number;
   origin: string;
   scopes: string[];
+  /**
+   * The access revision the commit was checked against. A room reads it for the commit at its
+   * checkpoint, so that opening needs no payload there (HIS-029: that payload may have moved or been
+   * thinned). Optional: a store that does not give it leaves the caller to read the commit.
+   */
+  revision?: number;
 }
 
 /** One commit that changed a scope, as `scopeHistory` returns it (the shape of history's CommitMeta). */

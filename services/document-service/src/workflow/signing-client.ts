@@ -10,6 +10,7 @@
  * The wire is described in services/signing-service/src/http.ts. The two services share no code.
  */
 import { createHash } from 'node:crypto';
+import { headAnchorRecordText } from '@docedit/history';
 
 export interface SigningJob {
   readonly tenant: string;
@@ -141,6 +142,27 @@ export interface SigningClient {
   extend(job: ExtendJob): Promise<ExtendAttempt>;
 }
 
+/**
+ * The hourly batch of a tenant's chain heads to be signed and time-stamped (HIS-036; ADR 0409): the
+ * members of the record, as `headAnchorRecordText` of `@docedit/history` takes them.
+ */
+export interface BatchAnchorJob {
+  readonly tenant: string;
+  /** The `to` of the tenant's previous record, or null for its first. */
+  readonly from: string | null;
+  readonly to: string;
+  /** The root of the Merkle tree over the heads, lower-case hexadecimal. */
+  readonly root: string;
+  readonly leaves: number;
+  /** The SHA-256 of the previous record's text, or null for the first. */
+  readonly previous: string | null;
+}
+
+/** What the anchoring of heads needs of the signing service. `HttpSigningClient` is one. */
+export interface BatchAnchorClient {
+  anchorBatch(job: BatchAnchorJob): Promise<AnchorAttempt>;
+}
+
 const sha256Hex = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex');
 
 export interface HttpSigningClientOptions {
@@ -184,7 +206,7 @@ function reportOf(v: unknown): AppearanceReport | null {
   return { drawn: o.drawn as string[], diagnostics };
 }
 
-export class HttpSigningClient implements SigningClient {
+export class HttpSigningClient implements SigningClient, BatchAnchorClient {
   readonly #o: HttpSigningClientOptions;
   constructor(options: HttpSigningClientOptions) {
     this.#o = options;
@@ -340,6 +362,86 @@ export class HttpSigningClient implements SigningClient {
       signed['workflow'] !== job.workflow
     )
       return failed('record_differs');
+    const recordSha256 = sha256Hex(new TextEncoder().encode(wire.record));
+    if (recordSha256 !== wire.recordSha256) return failed('hash_differs');
+    const when = new Date(wire.timestampTime);
+    if (Number.isNaN(when.getTime())) return failed('bad_answer');
+    const cms = new Uint8Array(Buffer.from(wire.cms, 'base64'));
+    if (cms.length === 0) return failed('bad_answer');
+    return {
+      ok: true,
+      record: wire.record,
+      recordSha256,
+      cms,
+      timestampTime: when,
+      keyId: wire.keyId,
+    };
+  }
+
+  /**
+   * Has the hourly batch of a tenant's chain heads signed and time-stamped (HIS-036; ADR 0409). The
+   * service is sent the root of the tree, never a head. The record that comes back must be exactly
+   * the text this side builds from what it asked for, and its hash is computed here.
+   */
+  async anchorBatch(job: BatchAnchorJob): Promise<AnchorAttempt> {
+    const unavailable = (code: string): AnchorAttempt => ({
+      ok: false,
+      reason: 'signing_unavailable',
+      code,
+      retryable: true,
+    });
+    const failed = (code: string): AnchorAttempt => ({
+      ok: false,
+      reason: 'seal_failed',
+      code,
+      retryable: false,
+    });
+    const expected = headAnchorRecordText(job);
+    if (!expected.ok) return failed('bad_request');
+    let res: Response;
+    try {
+      res = await (this.#o.fetch ?? fetch)(`${this.#o.url}/v1/anchor-batch`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${this.#o.credential}`,
+        },
+        body: JSON.stringify({
+          tenant: job.tenant,
+          from: job.from,
+          to: job.to,
+          root: job.root,
+          leaves: job.leaves,
+          previous: job.previous,
+        }),
+        signal: AbortSignal.timeout(this.#o.timeoutMs),
+      });
+    } catch {
+      return unavailable('unreachable');
+    }
+    let wire: AnchorWire;
+    try {
+      wire = (await res.json()) as AnchorWire;
+    } catch {
+      return res.status >= 500 ? unavailable('bad_answer') : failed('bad_answer');
+    }
+    if (!res.ok || wire.ok !== true) {
+      const code = typeof wire.code === 'string' ? wire.code : `http_${res.status}`;
+      if (code === 'tsa_unreachable')
+        return { ok: false, reason: 'tsa_unreachable', code, retryable: true };
+      if (wire.retryable === true) return unavailable(code);
+      return failed(code);
+    }
+    if (
+      typeof wire.record !== 'string' ||
+      typeof wire.recordSha256 !== 'string' ||
+      typeof wire.cms !== 'string' ||
+      typeof wire.timestampTime !== 'string' ||
+      typeof wire.keyId !== 'string'
+    )
+      return failed('bad_answer');
+    // The record must say what was asked, and no more: one record has one text.
+    if (wire.record !== expected.text) return failed('record_differs');
     const recordSha256 = sha256Hex(new TextEncoder().encode(wire.record));
     if (recordSha256 !== wire.recordSha256) return failed('hash_differs');
     const when = new Date(wire.timestampTime);

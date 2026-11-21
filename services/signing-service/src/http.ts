@@ -15,6 +15,12 @@
  * signs and time-stamps a chain head: 200 with `{"ok": true, "record", "recordSha256", "cms": base64,
  * "timestampTime", "anchoredAt", "keyId", "keyOwner"}`; the failures are those of `/v1/seal`.
  *
+ *     POST /v1/anchor-batch     (HIS-036; ADR 0409)
+ *     {"tenant", "from": string | null, "to", "root", "leaves", "previous": string | null}
+ *
+ * signs and time-stamps the hourly batch of a tenant's chain heads, named by the root of their
+ * Merkle tree; the answer and the failures are those of `/v1/anchor`.
+ *
  *     POST /v1/extend     (FRW-056)
  *     {"tenant", "documentId", "seq", "pdf": base64, "pdfSha256", "idempotencyKey", "validation": boolean}
  *
@@ -30,6 +36,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type {
   AnchorCommand,
   AppearanceRequest,
+  BatchAnchorCommand,
   ExtendCommand,
   SealCommand,
   SealFailureCode,
@@ -197,6 +204,62 @@ async function anchorRoute(
   });
 }
 
+function parseBatchAnchor(raw: unknown): BatchAnchorCommand | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o['tenant'] !== 'string' ||
+    (o['from'] !== null && typeof o['from'] !== 'string') ||
+    typeof o['to'] !== 'string' ||
+    typeof o['root'] !== 'string' ||
+    typeof o['leaves'] !== 'number' ||
+    (o['previous'] !== null && typeof o['previous'] !== 'string')
+  )
+    return null;
+  return {
+    tenant: o['tenant'],
+    from: o['from'],
+    to: o['to'],
+    root: o['root'],
+    leaves: o['leaves'],
+    previous: o['previous'],
+  };
+}
+
+/** `POST /v1/anchor-batch`: signs and time-stamps a batch of chain heads (HIS-036). */
+async function batchAnchorRoute(
+  service: SigningService,
+  req: IncomingMessage,
+  res: ServerResponse,
+  maxBodyBytes: number,
+): Promise<void> {
+  const body = await readBody(req, maxBodyBytes);
+  if (body === null) return send(res, 413, { ok: false, code: 'too_large', retryable: false });
+  let cmd: BatchAnchorCommand | null;
+  try {
+    cmd = parseBatchAnchor(JSON.parse(body.toString('utf8')));
+  } catch {
+    cmd = null;
+  }
+  // A body that is not a request is refused as `bad_request` after the credential is checked.
+  const out = await service.anchorBatch(
+    bearer(req),
+    cmd ?? { tenant: '', from: null, to: '', root: '', leaves: 0, previous: null },
+  );
+  if (!out.ok)
+    return send(res, STATUS[out.code], { ok: false, code: out.code, retryable: out.retryable });
+  return send(res, 200, {
+    ok: true,
+    record: out.record,
+    recordSha256: out.recordSha256,
+    cms: Buffer.from(out.cms).toString('base64'),
+    timestampTime: out.timestampTime.toISOString(),
+    anchoredAt: out.anchoredAt.toISOString(),
+    keyId: out.keyId,
+    keyOwner: out.keyOwner,
+  });
+}
+
 function parseExtend(raw: unknown): ExtendCommand | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const o = raw as Record<string, unknown>;
@@ -268,6 +331,8 @@ export function createSigningServer(service: SigningService, opts: HttpOptions):
       if (req.method === 'GET' && path === '/healthz') return send(res, 200, { ok: true });
       if (req.method === 'POST' && path === '/v1/anchor')
         return anchorRoute(service, req, res, opts.maxBodyBytes);
+      if (req.method === 'POST' && path === '/v1/anchor-batch')
+        return batchAnchorRoute(service, req, res, opts.maxBodyBytes);
       if (req.method === 'POST' && path === '/v1/extend')
         return extendRoute(service, req, res, opts.maxBodyBytes);
       if (req.method !== 'POST' || path !== '/v1/seal')

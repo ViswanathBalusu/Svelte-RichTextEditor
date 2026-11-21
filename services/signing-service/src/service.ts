@@ -303,6 +303,8 @@ export class SigningService {
         code: f.code ?? null,
         // Only an anchor entry has the member, so the entries of a seal are as they were.
         ...(f.chainHead !== undefined ? { chainHead: f.chainHead } : {}),
+        // Only the entry of a batch of heads has this one (HIS-036).
+        ...(f.batchRoot !== undefined ? { batchRoot: f.batchRoot } : {}),
       });
       return true;
     } catch {
@@ -547,6 +549,97 @@ export class SigningService {
     }
   }
   /**
+   * Signs and time-stamps the hourly batch of a tenant's chain heads (HIS-036; 08 §12; ADR 0409):
+   * one record that names the root of a Merkle tree over the heads. The same rules as `anchor`: the
+   * caller's credential, the rate limit, the audit entry before any key is used, the key of the
+   * tenant, no answer without a time-stamp token. The signed record is the canonical text
+   * `batchAnchorRecordText` gives; the signature is a detached CAdES-B-T over its SHA-256, with an
+   * RFC 3161 token over the signature value. One tenant and `to` is bound to one root for as long
+   * as the process lives. The service sees a root and a count, never a head or a document.
+   */
+  async anchorBatch(secret: string | null, cmd: BatchAnchorCommand): Promise<AnchorOutcome> {
+    const caller = this.#authenticate(secret);
+    const ids = { caller, tenant: cmd.tenant, batchRoot: cmd.root };
+    const refuse = async (code: SealFailureCode): Promise<AnchorOutcome> => {
+      await this.#audit('anchor.refused', { ...ids, code });
+      return { ok: false, code, retryable: RETRYABLE.has(code) };
+    };
+    if (caller === null) return refuse('unauthenticated');
+    if (!this.#limiter.take(caller)) return refuse('rate_limited');
+    if (caller !== this.#cfg.allowedCaller) return refuse('wrong_caller');
+    const record = batchAnchorRecordText(cmd);
+    if (record === null) return refuse('bad_request');
+    const bindKey = `anchor-batch\u0000${cmd.tenant}\u0000${cmd.to}`;
+    const bound = this.#bound.get(bindKey);
+    if (bound !== undefined && bound !== record) return refuse('binding_conflict');
+
+    let key;
+    try {
+      key = selectSealingKey(this.#cfg.sealing, cmd.tenant);
+    } catch {
+      return refuse('no_key');
+    }
+    const keyService = this.#cfg.keys.get(key.keyId);
+    if (keyService === undefined) return refuse('no_key');
+    if (!(await this.#audit('anchor.requested', { ...ids, keyId: key.keyId })))
+      return { ok: false, code: 'audit_unavailable', retryable: true };
+
+    const fail = async (code: SealFailureCode): Promise<AnchorOutcome> => {
+      await this.#audit('anchor.failed', { ...ids, keyId: key.keyId, code });
+      return { ok: false, code, retryable: RETRYABLE.has(code) };
+    };
+    const anchoredAt = this.#now();
+    try {
+      const chain = await this.#cfg.certificates.chainFor(key.keyId).catch((e: unknown) => {
+        throw new KeyServiceFailure(String(e));
+      });
+      const recordSha256 = sha256Hex(new TextEncoder().encode(record));
+      const cms = await buildCms({
+        keyService: {
+          keyLabel: keyService.keyLabel,
+          publicKey: () => keyService.publicKey(),
+          signDigest: (a, d) =>
+            keyService.signDigest(a, d).catch((e: unknown) => {
+              throw new KeyServiceFailure(String(e));
+            }),
+        },
+        chain,
+        contentDigest: Buffer.from(recordSha256, 'hex'),
+        timestamps: {
+          stamp: (d) =>
+            this.#cfg.timestamps.stamp(d).catch((e: unknown) => {
+              throw new TimestampFailure(String(e));
+            }),
+        },
+      });
+      const timestampTime = signatureTimestampTime(cms);
+      this.#bound.set(bindKey, record);
+      if (
+        !(await this.#audit('anchor.anchored', {
+          ...ids,
+          keyId: key.keyId,
+          sealedSha256: recordSha256,
+        }))
+      )
+        return { ok: false, code: 'audit_unavailable', retryable: true };
+      return {
+        ok: true,
+        record,
+        recordSha256,
+        cms,
+        timestampTime,
+        anchoredAt,
+        keyId: key.keyId,
+        keyOwner: key.owner,
+      };
+    } catch (e) {
+      if (e instanceof TimestampFailure) return fail('tsa_unreachable');
+      if (e instanceof KeyServiceFailure) return fail('signing_unavailable');
+      return fail('seal_failed');
+    }
+  }
+
+  /**
    * Extends a sealed PDF for long-term validation and renews its time-stamp (12 §8.2 step 5;
    * FRW-056): fresh validation data when asked, and a further document time-stamp, both as
    * incremental updates. The same rules as `seal`: the caller's credential, the rate limit, the
@@ -709,6 +802,62 @@ export function anchorRecordText(c: AnchorCommand): string {
     seq: c.seq,
     tenant: c.tenant,
     workflow: c.workflow,
+  });
+}
+
+/**
+ * What the document service sends to have a batch of chain heads anchored (HIS-036; ADR 0409): the
+ * root of the tree over the heads, not the heads.
+ */
+export interface BatchAnchorCommand {
+  readonly tenant: string;
+  /** The `to` of the tenant's previous record, or null for its first. RFC 3339, UTC, milliseconds. */
+  readonly from: string | null;
+  /** The time the heads were read. RFC 3339, UTC, milliseconds. */
+  readonly to: string;
+  /** The Merkle root, lower-case hexadecimal SHA-256. */
+  readonly root: string;
+  /** The number of leaves. */
+  readonly leaves: number;
+  /** The SHA-256 of the tenant's previous record text, or null for its first. */
+  readonly previous: string | null;
+}
+
+/** The format name of the signed record of a batch. */
+export const BATCH_ANCHOR_FORMAT = 'docedit-anchor/1';
+
+const BATCH_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * The record of a batch that is signed, as text: a JSON object with its members in alphabetical
+ * order and no white space, the same text `headAnchorRecordText` of `@docedit/history` gives, so
+ * that the caller and a verifier rebuild the same bytes. Null when a member is not of its shape.
+ * It holds a tenant, two times, a count and two hashes; no head, no document, no content.
+ */
+export function batchAnchorRecordText(c: BatchAnchorCommand): string | null {
+  if (
+    typeof c.tenant !== 'string' ||
+    c.tenant.length === 0 ||
+    typeof c.to !== 'string' ||
+    !BATCH_TIME.test(c.to) ||
+    (c.from !== null && (typeof c.from !== 'string' || !BATCH_TIME.test(c.from))) ||
+    (c.from !== null && c.from >= c.to) ||
+    typeof c.root !== 'string' ||
+    !HEX64.test(c.root) ||
+    !Number.isSafeInteger(c.leaves) ||
+    c.leaves < 1 ||
+    (c.previous !== null && (typeof c.previous !== 'string' || !HEX64.test(c.previous))) ||
+    (c.from === null) !== (c.previous === null)
+  )
+    return null;
+  return JSON.stringify({
+    format: BATCH_ANCHOR_FORMAT,
+    from: c.from,
+    leaves: c.leaves,
+    previous: c.previous,
+    root: c.root,
+    tenant: c.tenant,
+    to: c.to,
   });
 }
 

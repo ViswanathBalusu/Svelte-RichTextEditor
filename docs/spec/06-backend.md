@@ -97,6 +97,13 @@ create table doc_commit_payloads (               -- steps or control data; moves
   primary key (doc_id, seq)
 ) partition by hash (doc_id);
 
+create table commit_cold_segments (              -- which segment object holds the payloads of which run (08 §11)
+  doc_id uuid not null, from_seq bigint not null, to_seq bigint not null, object_key text not null,
+  state text not null,                           -- pending (not read: being written or removed) | moved
+  payloads int not null,                         -- payloads the object holds; falls when one is thinned or tombstoned
+  created_at timestamptz not null, moved_at timestamptz,
+  primary key (doc_id, from_seq));
+
 create table commit_scopes (                     -- per-region and per-field history
   doc_id uuid not null, scope text not null, seq bigint not null,
   primary key (doc_id, scope, seq));
@@ -163,6 +170,16 @@ create table doc_sessions (                      -- per session: the user agent 
   doc_id uuid not null, session_id text not null, user_id text not null,
   ua_family text not null, ua_major int, client_version text,   -- the header reduced to a family and a major version; no other column
   primary key (doc_id, session_id));                             -- written once, before the channel opens; removed with the document
+create table head_anchors (                      -- one signed, time-stamped record per tenant and hour with a change (08 §12; owner decision 56)
+  tenant_id uuid not null, to_ts timestamptz not null, from_ts timestamptz,
+  root bytea not null, leaves int not null, record text not null, record_sha256 bytea not null, previous bytea,
+  cms bytea not null, timestamp_time timestamptz not null, key_id text not null,   -- the signature with its RFC 3161 token
+  object_key text not null, leaves_key text not null, state text not null,          -- signed | stored (in write-once storage)
+  created_at timestamptz not null, stored_at timestamptz,
+  primary key (tenant_id, to_ts));
+create table anchored_heads (                    -- the head of each document that its newest record covers
+  doc_id uuid primary key, incarnation uuid not null, seq bigint not null, chain_head bytea not null,
+  anchor_to timestamptz not null);
 create table audit_events (id uuid not null, tenant_id uuid not null, doc_id uuid, actor text not null, kind text not null, data jsonb not null, at timestamptz not null) partition by range (at);
 ```
 
@@ -170,7 +187,7 @@ Tables for tenants and their keys and origins, webhooks and deliveries, workflow
 
 Notes:
 - The head row is separate from the wide `documents` row so that the hot write path touches one narrow row.
-- Commit metadata and payload are separate tables. Metadata stays for listing, filtering and the hash chain; payloads move to cold segments (08, section 11).
+- Commit metadata and payload are separate tables. Metadata stays for listing, filtering and the hash chain; payloads move to cold segments (08, section 11). `commit_cold_segments` is the index of the segments; the job that writes it and deletes the moved payload rows runs under the purge role, not the service role (ADR 0418, proposed).
 - Position maps are not stored. They are derived from the steps, which needs no document.
 - Per-scope history uses the `commit_scopes` side table, not an index on the log.
 - The job queue is a table in stage 1. Workers claim jobs with `FOR UPDATE SKIP LOCKED`.
@@ -185,6 +202,8 @@ tenants/{tenant}/quarantine/{asset}                                  uploads bef
 tenants/{tenant}/assets/{sha256}
 tenants/{tenant}/exports/{job}/…
 tenants/{tenant}/final/{doc}/{workflow}.pdf                          sealed, write-once
+tenants/{tenant}/anchors/heads/{to}.json                             signed, time-stamped batch of chain heads, write-once (08 §12)
+tenants/{tenant}/anchors/heads/{to}.leaves.json                      its leaf list: document, incarnation, seq, chain head; write-once
 ```
 
 Buckets use versioning, per-tenant encryption keys and replication to a second location. Database recovery and bucket versioning are not mutually consistent by themselves; the recovery procedure reconciles them from the log, which is the source of truth.

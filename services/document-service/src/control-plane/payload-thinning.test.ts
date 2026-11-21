@@ -131,6 +131,180 @@ describe('payload thinning (HIS-032)', () => {
     expect(store.removed).toEqual([{ doc: 'short', seqs: [2, 3] }]); // seq 1 is exactly one day old: inside the period
   });
 
+  describe('payloads that have moved to cold segments (HIS-029)', () => {
+    /** A remover that records what it is asked to take out, and holds what the segments hold. */
+    function remover(held: Record<string, number[]>) {
+      const asked: Array<{ doc: string; seqs: number[] }> = [];
+      return {
+        asked,
+        remove: async (_tenant: string, doc: string, seqs: readonly number[]) => {
+          asked.push({ doc, seqs: [...seqs] });
+          const there = held[doc] ?? [];
+          const removed = seqs.filter((s) => there.includes(s));
+          held[doc] = there.filter((s) => !seqs.includes(s));
+          return { removed, objects: removed.length ? [`segments of ${doc}`] : [] };
+        },
+      };
+    }
+
+    function setupCold(facts: Record<string, ThinningFacts>, held: Record<string, number[]>) {
+      const store = new FakeStore(facts);
+      const audit = new MemoryAudit();
+      const retention = new RetentionService({
+        store: new MemoryRetentionStore(),
+        audit,
+        documentExists: async () => true,
+        now: () => NOW,
+      });
+      const cold = remover(held);
+      const thinning = new PayloadThinning({ store, retention, audit, now: () => NOW, cold });
+      return { store, audit, retention, thinning, cold };
+    }
+
+    it('removes them from their segment by the same plan as the payloads in the table', async () => {
+      // Seq 1 to 4 are in one segment, 5 and 6 in the table; a named version at 3, checkpoints at 2
+      // and 6.
+      const { store, audit, retention, thinning, cold } = setupCold(
+        {
+          d1: {
+            commits: [old(5), old(6)],
+            checkpoints: [2, 6],
+            versions: [{ seq: 3, kind: 'named' }],
+            cold: [
+              {
+                fromSeq: 1,
+                toSeq: 4,
+                payloads: 4,
+                tombstoned: 0,
+                commits: [old(1), old(2), old(3), old(4)],
+              },
+            ],
+          },
+        },
+        { d1: [1, 2, 3, 4] },
+      );
+      await retention.setTenant(T, 'admin', { mode: 'thin_payloads', afterDays: 30 }, 0);
+      const r = await thinning.run(T);
+      // 3 is kept for the named version; 1, 2 and 4 leave the segment, 5 and 6 the table.
+      expect(cold.asked).toEqual([{ doc: 'd1', seqs: [1, 2, 4] }]);
+      expect(store.removed).toEqual([{ doc: 'd1', seqs: [5, 6] }]);
+      expect(r.thinned).toEqual([{ doc: 'd1', removed: 5 }]);
+      const events = await audit.query(T, { kind: 'history.thinned', limit: 5 });
+      expect(events[0]).toMatchObject({
+        data: { removed: 5, fromSegments: 3, keptForVersions: 1, afterDays: 30 },
+      });
+    });
+
+    it('does not open a segment that holds no more than the plan keeps', async () => {
+      // The segment of 1 to 4 was thinned by an earlier run: it holds the one payload the named
+      // version needs. The segment of 5 to 8 lost one payload to a tombstone and was never thinned.
+      const { retention, thinning, cold } = setupCold(
+        {
+          d1: {
+            commits: [],
+            checkpoints: [2, 8],
+            versions: [{ seq: 3, kind: 'named' }],
+            cold: [
+              {
+                fromSeq: 1,
+                toSeq: 4,
+                payloads: 1,
+                tombstoned: 0,
+                commits: [old(1), old(2), old(3), old(4)],
+              },
+              {
+                fromSeq: 5,
+                toSeq: 8,
+                payloads: 3,
+                tombstoned: 1,
+                commits: [old(5), old(6), old(8)],
+              },
+            ],
+          },
+        },
+        { d1: [3, 5, 6, 8] },
+      );
+      await retention.setTenant(T, 'admin', { mode: 'thin_payloads', afterDays: 30 }, 0);
+      const r = await thinning.run(T);
+      expect(cold.asked).toEqual([{ doc: 'd1', seqs: [5, 6, 8] }]);
+      expect(r.thinned).toEqual([{ doc: 'd1', removed: 3 }]);
+      // A second run with what the segments hold now asks for nothing.
+      cold.asked.length = 0;
+      const again = setupCold(
+        {
+          d1: {
+            commits: [],
+            checkpoints: [2, 8],
+            versions: [{ seq: 3, kind: 'named' }],
+            cold: [
+              {
+                fromSeq: 1,
+                toSeq: 4,
+                payloads: 1,
+                tombstoned: 0,
+                commits: [old(1), old(2), old(3), old(4)],
+              },
+            ],
+          },
+        },
+        { d1: [3] },
+      );
+      await again.retention.setTenant(T, 'admin', { mode: 'thin_payloads', afterDays: 30 }, 0);
+      expect((await again.thinning.run(T)).thinned).toEqual([]);
+      expect(again.cold.asked).toEqual([]);
+      expect(await again.audit.query(T, { kind: 'history.thinned', limit: 5 })).toEqual([]);
+    });
+
+    it('keeps the payloads of a segment that are inside the period, and those above the newest checkpoint', async () => {
+      // The store lists only the commits older than the cut: seq 1 and 2 of a segment of 1 to 4.
+      const { retention, thinning, cold } = setupCold(
+        {
+          d1: {
+            commits: [],
+            checkpoints: [4],
+            versions: [],
+            cold: [{ fromSeq: 1, toSeq: 4, payloads: 4, tombstoned: 0, commits: [old(1), old(2)] }],
+          },
+          d2: {
+            commits: [],
+            checkpoints: [1],
+            versions: [],
+            cold: [{ fromSeq: 1, toSeq: 2, payloads: 2, tombstoned: 0, commits: [old(1), old(2)] }],
+          },
+        },
+        { d1: [1, 2, 3, 4], d2: [1, 2] },
+      );
+      await retention.setTenant(T, 'admin', { mode: 'thin_payloads', afterDays: 30 }, 0);
+      await thinning.run(T);
+      expect(cold.asked).toEqual([
+        { doc: 'd1', seqs: [1, 2] },
+        { doc: 'd2', seqs: [1] },
+      ]);
+    });
+
+    it('leaves the segments alone under a legal hold, and when no remover is given', async () => {
+      const facts: Record<string, ThinningFacts> = {
+        d1: {
+          commits: [],
+          checkpoints: [2],
+          versions: [],
+          cold: [{ fromSeq: 1, toSeq: 2, payloads: 2, tombstoned: 0, commits: [old(1), old(2)] }],
+        },
+      };
+      const held = setupCold(facts, { d1: [1, 2] });
+      await held.retention.setTenant(T, 'admin', { mode: 'thin_payloads', afterDays: 30 }, 0);
+      expect((await held.thinning.run(T, new Set(['d1']))).skipped).toEqual([
+        { doc: 'd1', reason: 'legal-hold' },
+      ]);
+      expect(held.cold.asked).toEqual([]);
+      // Without a remover the payloads that have moved stay where they are.
+      const plain = setup(facts);
+      await plain.retention.setTenant(T, 'admin', { mode: 'thin_payloads', afterDays: 30 }, 0);
+      expect((await plain.thinning.run(T)).thinned).toEqual([]);
+      expect(plain.store.removed).toEqual([]);
+    });
+  });
+
   it('is a daily task that deletes data, so the scheduler hands it the held documents', async () => {
     const { retention, thinning, store } = setup({
       d1: { commits: [old(1)], checkpoints: [1], versions: [] },

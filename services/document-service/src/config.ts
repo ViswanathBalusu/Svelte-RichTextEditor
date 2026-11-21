@@ -100,8 +100,9 @@ export interface ServiceConfig {
   replicaDatabaseUrl: string | null;
   /**
    * A login that is a member of `docedit_purge` (migration 0073), for the scheduled purge of deleted
-   * documents (HIS-039; PRO-047 criterion 4). Null: no purge task runs. The service role cannot delete
-   * the log, so the purge connects as a role of its own.
+   * documents (HIS-039; PRO-047 criterion 4) and the move of old commit payloads to cold segments
+   * (HIS-029). Null: neither task runs. The service role cannot delete the log, so these tasks
+   * connect as a role of their own.
    */
   purgeDatabaseUrl: string | null;
   /**
@@ -123,6 +124,17 @@ export interface ServiceConfig {
   uploadSeconds: number;
   /** Days between the soft delete of a document and its purge (HIS-039; owner decision 30). */
   purgeAfterDays: number;
+  /**
+   * Days after which a commit payload moves from PostgreSQL to a cold segment in object storage
+   * (HIS-029; 08 §11 and 06 §10: 30). The move runs only with `purgeDatabaseUrl`.
+   */
+  coldAfterDays: number;
+  /**
+   * Days an anchor record of chain heads is retained in write-once storage (HIS-036; ADR 0409).
+   * Null: no head is anchored. There is no default, because the spec gives no retention; the
+   * anchoring also needs the signing service of `sealing` and a write-once store.
+   */
+  anchorRetentionDays: number | null;
   /** Run the asset worker in this process with its Podman sandbox. */
   assetWorker: boolean;
   /** 06 §10: at most one preview compile per document in this window. */
@@ -253,6 +265,8 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   assetUrlKey: null,
   uploadSeconds: 900,
   purgeAfterDays: 30,
+  coldAfterDays: 30,
+  anchorRetentionDays: null,
   assetWorker: false,
   previewWindowMs: 10_000,
   exportCacheMaxAgeMs: 7 * 24 * 60 * 60 * 1000,
@@ -385,6 +399,10 @@ export function checkConfig(c: ServiceConfig): void {
     throw new Error('DOCEDIT_ASSET_ORIGIN needs DOCEDIT_ASSET_URL_KEY');
   if (c.purgeDatabaseUrl && !c.databaseUrl)
     throw new Error('DOCEDIT_PURGE_DATABASE_URL needs DOCEDIT_DATABASE_URL');
+  if (c.anchorRetentionDays !== null && c.anchorRetentionDays < 1)
+    throw new Error('DOCEDIT_ANCHOR_RETENTION_DAYS is a whole number of days, 1 or more');
+  if (c.anchorRetentionDays !== null && !c.sealing)
+    throw new Error('DOCEDIT_ANCHOR_RETENTION_DAYS needs the signing service (DOCEDIT_SEAL_URL)');
   if (c.replicaDatabaseUrl && !c.databaseUrl)
     throw new Error('DOCEDIT_REPLICA_DATABASE_URL needs DOCEDIT_DATABASE_URL');
   if (c.replicaDatabaseUrl && c.readSessions === null)
@@ -474,6 +492,10 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     assetUrlKey: env['DOCEDIT_ASSET_URL_KEY'] || null,
     uploadSeconds: int(env, 'DOCEDIT_UPLOAD_SECONDS', DEFAULTS.uploadSeconds),
     purgeAfterDays: int(env, 'DOCEDIT_PURGE_AFTER_DAYS', DEFAULTS.purgeAfterDays),
+    coldAfterDays: int(env, 'DOCEDIT_COLD_AFTER_DAYS', DEFAULTS.coldAfterDays),
+    anchorRetentionDays: env['DOCEDIT_ANCHOR_RETENTION_DAYS']
+      ? int(env, 'DOCEDIT_ANCHOR_RETENTION_DAYS', 0)
+      : null,
     assetWorker: flag(env, 'DOCEDIT_ASSET_WORKER', DEFAULTS.assetWorker),
     previewWindowMs: int(env, 'DOCEDIT_PREVIEW_WINDOW_MS', DEFAULTS.previewWindowMs),
     exportCacheMaxAgeMs: int(env, 'DOCEDIT_EXPORT_CACHE_MS', DEFAULTS.exportCacheMaxAgeMs),
