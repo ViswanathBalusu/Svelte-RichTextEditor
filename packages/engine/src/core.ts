@@ -19,7 +19,6 @@ import {
   type FieldReport,
   type StepJson,
   definitionUse,
-  sendChecklist,
   stepsToJson,
   type SendProblem,
 } from '@docedit/authority';
@@ -130,23 +129,11 @@ import {
 import { type CitationItemInput, insertCitation } from './citation-insert.ts';
 import { addLink, followInternalLink, insertBookmark } from './links-bookmarks.ts';
 import { type PageSetupChanges, setPageSetup } from './page-setup-commands.ts';
-import { deleteSource } from './source-delete.ts';
-import {
-  type RoleEdit,
-  type RoleEditOutcome,
-  type RoleInfo,
-  editRole,
-  listRoles,
-  nextRoleId,
-} from './role-edit.ts';
-import {
-  type SourceEdit,
-  type SourceEditOutcome,
-  type SourceInfo,
-  addSource,
-  listSources,
-  updateSource,
-} from './source-edit.ts';
+import type { RoleEdit, RoleEditOutcome, RoleInfo } from './role-edit.ts';
+import { listRoles, nextRoleId } from './role-read.ts';
+import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
+import { listSources } from './source-read.ts';
+import { authoringPart, rulesPart } from './parts.ts';
 import {
   type SectionWarning,
   insertBreak,
@@ -199,16 +186,8 @@ import {
 } from './picture-placeholder.ts';
 import { FieldRules, ruleWords, type FieldRuleState } from './field-rules.ts';
 import type { RuleParts } from '@docedit/rules';
-import {
-  editRule,
-  listRuleDefs,
-  listRuleItems,
-  ruleFromParts,
-  type RuleDefInfo,
-  type RuleEdit,
-  type RuleEditOutcome,
-  type RuleItemInfo,
-} from './rule-edit.ts';
+import type { RuleDefInfo, RuleEdit, RuleEditOutcome, RuleItemInfo } from './rule-edit.ts';
+import { listRuleDefs } from './rule-read.ts';
 import {
   type EnterResult,
   type FieldChange,
@@ -217,14 +196,8 @@ import {
   type FieldStatus,
   findFormField,
 } from './field-entries.ts';
-import {
-  type FieldEditOutcome,
-  type FieldPatch,
-  type FieldProperties,
-  editField,
-  fieldProperties,
-  listFormFields,
-} from './field-edit.ts';
+import type { FieldEditOutcome, FieldPatch, FieldProperties } from './field-edit.ts';
+import { fieldProperties, listFormFields } from './field-read.ts';
 import { type Refusal, canWrite, capsOf, checkChange, depScope, guardPlugin } from './guard.ts';
 import {
   type RegionLockDefaults,
@@ -1037,6 +1010,17 @@ export class DocumentCore implements DocumentApi {
   readonly #fieldRules = new FieldRules({
     state: () => this.#state,
     roles: () => this.#accessValue?.fill?.roles ?? [],
+    // The rules part arrived after the views drew the fields: they read the states again.
+    loaded: () => this.revision.set(this.revision.get() + 1),
+    loadFailed: (error) => {
+      this.#problems++;
+      this.problem.set({
+        n: this.#problems,
+        code: 'part_unavailable',
+        message: `the rules of this document could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
+        fatal: false,
+      });
+    },
   });
   /** The last list `fillFields()` made under rules, with the entries and rule states it was made from. */
   #fillList: {
@@ -3245,6 +3229,7 @@ one or original. It is a
     const state = this.#state;
     const writable = (pos: number): boolean => this.canEdit(this.#scopeIn(state.doc, pos));
     const dispatch = check ? undefined : this.dispatch;
+    const { addSource, deleteSource, updateSource } = authoringPart.get();
     let outcome: SourceEditOutcome;
     if (edit.op === 'add') outcome = addSource(state, edit.id, edit.values, { writable }, dispatch);
     else if (edit.op === 'update')
@@ -3405,7 +3390,7 @@ one or original. It is a
         reason: findFormField(this.#state.doc, id) ? 'read-only' : 'not-found',
       };
     const state = this.#state;
-    const outcome = editField(
+    const outcome = authoringPart.get().editField(
       state,
       id,
       patch,
@@ -3428,7 +3413,7 @@ one or original. It is a
 
   /** The rules as the builder lists them: sentence parts, or the JSON text of another shape (FRW-024). */
   ruleItems(): RuleItemInfo[] {
-    return listRuleItems(this.#state.doc);
+    return rulesPart.get().listRuleItems(this.#state.doc);
   }
 
   /**
@@ -3439,7 +3424,7 @@ one or original. It is a
     input: { readonly id: string; readonly parts: RuleParts; readonly replace?: string },
     check = false,
   ): RuleEditOutcome {
-    const rule = ruleFromParts(this.#state.doc, input);
+    const rule = rulesPart.get().ruleFromParts(this.#state.doc, input);
     return this.editRule(
       { op: 'save', rule, ...(input.replace !== undefined ? { replace: input.replace } : {}) },
       check,
@@ -3467,7 +3452,7 @@ one or original. It is a
   editRule(edit: RuleEdit, check = false): RuleEditOutcome {
     if (this.#locked()) return { ok: false, reason: 'read-only' };
     const state = this.#state;
-    const outcome = editRule(
+    const outcome = rulesPart.get().editRule(
       state,
       edit,
       {
@@ -3496,7 +3481,7 @@ one or original. It is a
   editRole(edit: RoleEdit, check = false): RoleEditOutcome {
     if (this.#locked()) return { ok: false, reason: 'read-only' };
     const state = this.#state;
-    const outcome = editRole(
+    const outcome = authoringPart.get().editRole(
       state,
       edit,
       {
@@ -4861,7 +4846,7 @@ one or original. It is a
    * means every check passed. It changes nothing.
    */
   sendChecklist(participants: readonly { readonly roles: readonly string[] }[]): SendProblem[] {
-    return sendChecklist(
+    return rulesPart.get().sendChecklist(
       this.getContent(),
       participants.map((p, i) => ({
         id: `p${i}`,

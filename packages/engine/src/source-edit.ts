@@ -10,38 +10,19 @@
  * - The definitions are the scope `defs`, which needs `structure` (07 §4). The caller passes the
  *   region guard's answer as `writable`; where it is false the command returns `read-only`.
  * - `listSources` gives each source with the places that cite it, so the sources pane can show
- *   where a source is cited before a deletion is refused (source-delete.ts).
+ *   where a source is cited before a deletion is refused (source-delete.ts). It is in
+ *   `source-read.ts` and re-exported here. This module loads with the sources pane (`./parts.ts`;
+ *   FND-008).
  */
 import { CDM1, type JsonValue } from '@docedit/model/definition';
 import { checkGrammar } from '@docedit/model/validate';
 import type { Node } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
-import { citationsCiting } from './source-delete.ts';
+import { SOURCE_FIELDS, type SourceField } from './source-read.ts';
 
-/** The attributes of a source an author may set; `id` is fixed when the source is made. */
-export const SOURCE_FIELDS = [
-  'kind',
-  'title',
-  'authors',
-  'editors',
-  'issued',
-  'accessed',
-  'containerTitle',
-  'publisher',
-  'publisherPlace',
-  'edition',
-  'volume',
-  'issue',
-  'pages',
-  'number',
-  'doi',
-  'url',
-  'isbn',
-  'issn',
-  'language',
-  'note',
-] as const;
-export type SourceField = (typeof SOURCE_FIELDS)[number];
+export { SOURCE_FIELDS, listSources } from './source-read.ts';
+export type { SourceCitedAt, SourceField, SourceInfo } from './source-read.ts';
+
 export type SourceValues = Partial<Record<SourceField, JsonValue>>;
 
 export interface SourceProblem {
@@ -69,18 +50,6 @@ export type SourceEditOutcome =
 export interface SourceEditOptions {
   /** Whether the region guard lets the user change the definitions at a position (07 §4). */
   readonly writable: (pos: number) => boolean;
-}
-
-/** One place that cites a source: the position of the citation and the text of its block. */
-export interface SourceCitedAt {
-  readonly pos: number;
-  readonly excerpt: string;
-}
-
-export interface SourceInfo {
-  readonly id: string;
-  readonly values: Readonly<Record<SourceField, JsonValue>>;
-  readonly citedAt: readonly SourceCitedAt[];
 }
 
 const SOURCE_DEF = CDM1.nodes.find((n) => n.name === 'source_def');
@@ -185,29 +154,4 @@ export function updateSource(
     dispatch(tr);
   }
   return { ok: true };
-}
-
-/** The text of the block that holds position `pos`, shortened; citations show as nothing. */
-function excerptAt(doc: Node, pos: number): string {
-  const $pos = doc.resolve(pos);
-  const text = $pos.parent.textContent.replace(/\s+/g, ' ').trim();
-  return text.length > 120 ? `${text.slice(0, 119)}…` : text;
-}
-
-/** The sources of the document in the order of its definitions, each with where it is cited. */
-export function listSources(doc: Node): SourceInfo[] {
-  const out: SourceInfo[] = [];
-  doc.firstChild?.forEach((child) => {
-    if (child.type.name !== 'source_def') return;
-    const id = child.attrs['id'];
-    if (typeof id !== 'string') return;
-    const values = {} as Record<SourceField, JsonValue>;
-    for (const field of SOURCE_FIELDS) values[field] = child.attrs[field] as JsonValue;
-    out.push({
-      id,
-      values,
-      citedAt: citationsCiting(doc, id).map((pos) => ({ pos, excerpt: excerptAt(doc, pos) })),
-    });
-  });
-  return out;
 }

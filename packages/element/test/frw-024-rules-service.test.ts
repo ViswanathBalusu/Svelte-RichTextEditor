@@ -4,13 +4,16 @@
  * rules through its public members only. The list is sentence parts; a save is a commit of the
  * definitions; a refusal carries the keys; a user without `structure` is read-only.
  */
-import { DocumentCore } from '@docedit/engine/headless';
+import { DocumentCore, loadParts } from '@docedit/engine/headless';
 import type { EditorCore } from '@docedit/engine';
 import type { RulePartsView } from '@docedit/ui';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { rulesService } from '../src/rules.ts';
 import { ruleDocument } from '../../engine/test/frw-023-fixture.ts';
 import { participantAccess } from '../../engine/test/frw-fields-fixture.ts';
+
+// The rules language loads on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['rules']));
 
 const schedule = (run: () => void): void => queueMicrotask(run);
 const open = (): { core: DocumentCore; service: ReturnType<typeof rulesService> } => {

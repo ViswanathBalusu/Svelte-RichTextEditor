@@ -15,9 +15,13 @@
 // editor reads no clock, so the case that gives an instant is evaluated without one and is left out.
 import { RULES_VERSION, type FixtureCase, type StateExpect } from '@docedit/rules';
 import { FIXTURES } from '@docedit/rules/fixtures';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { FieldRules, type FieldRuleState } from './field-rules.ts';
 import { editingSchema } from './schema.ts';
+import { loadParts } from './parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 type RulesCase = Extract<FixtureCase, { kind: 'rules' }>;
 type J = Record<string, unknown>;

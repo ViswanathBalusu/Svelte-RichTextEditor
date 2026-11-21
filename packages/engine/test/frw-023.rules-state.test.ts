@@ -5,11 +5,15 @@
  * ("n of m") and the order of the next field follow. The controls on the page are in
  * `src/view/frw-023-rules-controls.universal.test.ts` (Chromium, Firefox, WebKit).
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { DocumentCore } from '../src/headless.ts';
 import { participantAccess } from './frw-fields-fixture.ts';
 import { RULE_FIELD_IDS as ID, ruleDocument } from './frw-023-fixture.ts';
 import { microtask } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 function participant() {
   return new DocumentCore({

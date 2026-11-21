@@ -6,11 +6,15 @@
  * `src/view/frw-023-rules-scale.universal.test.ts`.
  */
 import { EditorState } from 'prosemirror-state';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { FieldRules } from '../src/field-rules.ts';
 import { editingSchema } from '../src/schema.ts';
 import { RULE_FIELD_IDS, ruleDocument } from './frw-023-fixture.ts';
 import { scaleDocument, scaleId, SCALE_FIELDS, SCALE_RULES } from './frw-023-scale-fixture.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 /** A document held as editor state, with a way to change one field's value or its text. */
 function held(envelope: unknown, roles: string[] = ['role_tenant']) {

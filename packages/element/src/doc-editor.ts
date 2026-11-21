@@ -38,6 +38,7 @@ import type {
   EditMode,
   InsertResult,
 } from '@docedit/engine/headless';
+import { loadParts, partsFor } from '@docedit/engine/headless';
 import { endpointBackend } from './backend-source.ts';
 import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './config.ts';
 import type { HostExtension } from './extensions.ts';
@@ -990,6 +991,10 @@ export class DocEditorElement extends Base {
     this.#editorModule = module;
     const settings = new module.SettingsStore(settingsFrom(this.#attributes()));
     this.#settings = settings;
+    const workflow = this.#workflowSource(docId);
+    // A document with rules, or a host with a workflow, needs the rules language before anything is
+    // drawn. A document without either never loads it (FND-008; engine parts.ts).
+    await loadParts(partsFor({ doc: content.doc, workflow: workflow.workflow !== undefined }));
     const mounted = mountEditor({
       root: this.#root,
       content,
@@ -1005,7 +1010,7 @@ export class DocEditorElement extends Base {
       // The permissions pane offers check-out through the leases port, when the backend has one (PRM-043).
       ...this.#leasesService(docId),
       // The send dialog goes through the backend's workflow port, when it has one (FRW-028).
-      ...this.#workflowSource(docId),
+      ...workflow,
       ...this.#signingSource(docId),
       // The comment threads go through the backend's comments port, when it has one (UX-028).
       ...this.#threadsSource(docId),

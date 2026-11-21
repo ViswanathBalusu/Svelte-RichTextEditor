@@ -323,7 +323,8 @@
     if (!component) {
       announce('pane.loading', { pane: tr.text(descriptor.label) });
       try {
-        component = await descriptor.load();
+        // What the pane needs from the core that is not in the first load comes with the pane.
+        [component] = await Promise.all([descriptor.load(), descriptor.prepare?.(core)]);
       } catch {
         paneFailed = true;
         return false;

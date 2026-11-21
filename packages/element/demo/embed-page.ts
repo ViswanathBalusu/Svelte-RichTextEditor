@@ -219,73 +219,11 @@ function rtlRegionDocument(): CdmEnvelope {
 }
 const rtlRegionsDocId = service.createDocument(rtlRegionDocument());
 
-/** The identifiers of the form document (FRW): two roles, and fields of a tenant and a landlord. */
-const FIELD_IDS = {
-  tenant: 'role_tenant',
-  landlord: 'role_landlord',
-  paragraph: 'pFields000000001',
-  amount: 'fAmount000000001',
-  name: 'fName00000000001',
-  email: 'fEmail0000000001',
-  landlordName: 'fLandlord0000001',
-} as const;
+import { FIELD_IDS, fieldsDocument, rulesDocument } from './fields-document.ts';
 
-/**
- * The spike document with the feature `fields`, two roles and a paragraph of form fields: three of
- * the tenant (one required, one with a range) and one of the landlord.
- */
-function fieldsDocument(): CdmEnvelope {
-  type J = Record<string, unknown>;
-  const envelope = spikeDocument() as unknown as {
-    requires: string[];
-    doc: { content: Array<{ type: string; content: J[] }> };
-  };
-  envelope.requires = [...new Set([...envelope.requires, 'fields'])];
-  const defs = envelope.doc.content.find((n) => n.type === 'defs');
-  const body = envelope.doc.content.find((n) => n.type === 'body');
-  if (!defs || !body) throw new Error('the spike document has no definitions or no body');
-  // Roles follow the page setups and come before every other definition (03 §4.1).
-  const after = defs.content.findLastIndex((n) => n['type'] === 'page_setup') + 1;
-  defs.content.splice(
-    after,
-    0,
-    { type: 'role_def', attrs: { id: FIELD_IDS.tenant, name: 'Tenant', color: '#1F77B4' } },
-    { type: 'role_def', attrs: { id: FIELD_IDS.landlord, name: 'Landlord', color: '#FF7F0E' } },
-  );
-  const field = (id: string, key: string, kind: string, assignee: string, extra: J): J => ({
-    type: 'form_field',
-    attrs: { id, key, kind, assignee, value: null, ...extra },
-  });
-  body.content.push({
-    type: 'paragraph',
-    attrs: { id: FIELD_IDS.paragraph, style: 'Normal' },
-    content: [
-      { type: 'text', text: 'Fields: ' },
-      field(FIELD_IDS.amount, 'tenant.amount', 'number', FIELD_IDS.tenant, {
-        label: 'Amount',
-        validation: { min: '0', max: '1000' },
-      }),
-      { type: 'text', text: ' ' },
-      field(FIELD_IDS.name, 'tenant.name', 'text', FIELD_IDS.tenant, {
-        label: 'Name',
-        required: true,
-      }),
-      { type: 'text', text: ' ' },
-      field(FIELD_IDS.email, 'tenant.email', 'text', FIELD_IDS.tenant, {
-        label: 'E-mail',
-        required: true,
-        validation: { preset: 'email' },
-      }),
-      { type: 'text', text: ' ' },
-      field(FIELD_IDS.landlordName, 'landlord.name', 'text', FIELD_IDS.landlord, {
-        label: 'Landlord',
-        required: true,
-      }),
-    ],
-  });
-  return envelope as unknown as CdmEnvelope;
-}
 const fieldsDocId = service.createDocument(fieldsDocument());
+
+const rulesDocId = service.createDocument(rulesDocument());
 
 /**
  * The regions document with two role placeholders (FRW-012): regions to grant, and roles to grant
@@ -500,6 +438,7 @@ Object.assign(globalThis, {
     rtlRegionsDocId,
     RTL_REGION_IDS,
     fieldsDocId,
+    rulesDocId,
     regionRolesDocId,
     kindsDocId,
     KIND_IDS,

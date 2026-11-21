@@ -31,17 +31,12 @@ import {
 import type { Node } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import { rolesOf } from './field-entries.ts';
+import { RULE_ATTRS as ATTRS, listRuleDefs, ruleNodes, ruleOf } from './rule-read.ts';
+
+export { listRuleDefs } from './rule-read.ts';
+export type { RuleDefInfo } from './rule-read.ts';
 
 type JsonObject = { [key: string]: JsonValue };
-
-/** The attributes of a `rule_def` that the builder writes. */
-const ATTRS = ['id', 'when', 'then', 'else', 'ext'] as const;
-
-/** A rule of the document as the builder reads it: its attributes as a JSON tree, without nulls. */
-export interface RuleDefInfo {
-  readonly id: string;
-  readonly rule: JsonObject;
-}
 
 /** One change to the rules, as `DocumentCore.editRule` takes it. */
 export type RuleEdit =
@@ -78,35 +73,6 @@ export interface RuleEditOptions {
   readonly writable: (pos: number) => boolean;
   /** Whether the document requires the feature `fields`. */
   readonly formFields: boolean;
-}
-
-const isEmpty = (v: JsonValue): boolean =>
-  typeof v === 'object' && v !== null && !Array.isArray(v) && Object.keys(v).length === 0;
-
-function ruleOf(node: Node): JsonObject {
-  const rule: JsonObject = {};
-  for (const name of ATTRS) {
-    const value = node.attrs[name] as JsonValue | undefined;
-    if (value === null || value === undefined) continue;
-    // `ext` is `{}` unless an extension wrote something: an empty one is no member of the rule.
-    if (name === 'ext' && isEmpty(value)) continue;
-    rule[name] = value;
-  }
-  return rule;
-}
-
-function ruleNodes(doc: Node): Array<{ node: Node; pos: number }> {
-  const out: Array<{ node: Node; pos: number }> = [];
-  doc.firstChild?.forEach((child, offset) => {
-    if (child.type.name === 'rule_def' && typeof child.attrs['id'] === 'string')
-      out.push({ node: child, pos: 1 + offset });
-  });
-  return out;
-}
-
-/** The rules of the document in the order of its definitions. */
-export function listRuleDefs(doc: Node): RuleDefInfo[] {
-  return ruleNodes(doc).map(({ node }) => ({ id: String(node.attrs['id']), rule: ruleOf(node) }));
 }
 
 /** The fields of the document as the rules language reads them, one for each key. */

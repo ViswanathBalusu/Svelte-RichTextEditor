@@ -32,17 +32,9 @@ import type { BuiltInCode } from './codes.ts';
 import { grammarProblems, show } from './grammar-check.ts';
 import type { IndexedNode } from './types.ts';
 
-export const LIMITS = {
-  canonicalBytes: 16 * 1024 * 1024,
-  regions: 500,
-  tableColumns: 63,
-  depth: 12,
-  basedOnDepth: 10,
-  fields: 2000,
-  rules: 500,
-  fieldValueBytes: 4096,
-  footnoteParagraphs: 1,
-} as const;
+import { LIMITS } from './limits.ts';
+
+export { LIMITS };
 
 /** The code a grammar problem of an attribute gets, by the invariant the attribute names. */
 const GRAMMAR_CODES: Partial<Record<InvariantId, BuiltInCode>> = {

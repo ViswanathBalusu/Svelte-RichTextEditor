@@ -8,6 +8,7 @@
  * pane does not redraw for a change elsewhere in the document.
  */
 import type { EditorCore } from '@docedit/engine';
+import { loadParts } from '@docedit/engine/headless';
 import type { RoleChangeResult, RoleSummary, RolesService } from '@docedit/ui';
 
 type Outcome = ReturnType<EditorCore['editRole']>;
@@ -55,6 +56,8 @@ export function rolesService(core: EditorCore): RolesService {
     return outcome.ok;
   };
   return {
+    // The grammar checks of the changes load with the pane (FND-008).
+    prepare: () => loadParts(['authoring']),
     list: { get: read, subscribe: (listener) => core.revision.subscribe(listener) },
     canChange: {
       get: canChange,

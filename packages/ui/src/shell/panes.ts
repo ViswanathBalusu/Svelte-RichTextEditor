@@ -47,6 +47,11 @@ export interface PaneDescriptor {
   readonly capability?: string;
   /** Whether the core offers what the pane shows. */
   readonly available?: (core: CoreApi) => boolean;
+  /**
+   * Loads what the pane needs from the core that is not in the first load (FND-008), when it opens
+   * for the first time. The pane is shown when this and `load` have both resolved.
+   */
+  readonly prepare?: (core: CoreApi) => Promise<void> | undefined;
   /** Further props the host gives the component beside `core` and `close` (UX-060). */
   readonly props?: Readonly<Record<string, unknown>>;
 }
@@ -105,12 +110,14 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     label: 'pane.fields',
     load: () => load(import('../panes/FieldsPane.svelte')),
     available: (core) => core.fieldProperties !== undefined,
+    prepare: (core) => core.fieldProperties?.prepare?.(),
   },
   {
     id: 'rules',
     label: 'pane.rules',
     load: () => load(import('../panes/RulesPane.svelte')),
     available: (core) => core.rules !== undefined,
+    prepare: (core) => core.rules?.prepare?.(),
   },
   {
     id: 'checker',
@@ -123,12 +130,14 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     label: 'pane.sources',
     load: () => load(import('../panes/SourcesPane.svelte')),
     available: (core) => core.sources !== undefined,
+    prepare: (core) => core.sources?.prepare?.(),
   },
   {
     id: 'roles',
     label: 'pane.roles',
     load: () => load(import('../panes/RolesPane.svelte')),
     available: (core) => core.roles !== undefined,
+    prepare: (core) => core.roles?.prepare?.(),
   },
   {
     id: 'assistant',

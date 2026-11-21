@@ -14,6 +14,7 @@ import { MAX_INTEROPERABLE_INTEGER } from '../conventions/validators.ts';
 import { PRESERVED_NAME_PATTERN, REGISTERED_NAMESPACES } from '../definition/namespaces.ts';
 import { DEFINITION_ID_PATTERN } from '../definition/shared.ts';
 import type { Grammar, GrammarProblemKind, RefTarget } from '../definition/grammar.ts';
+import { show } from './show.ts';
 
 /**
  * Names in preserved element trees: a registered prefix (`w:val`), Clark notation for other
@@ -81,15 +82,7 @@ function describe(value: unknown): string {
   return typeof value;
 }
 
-/** A value as text for a message; never throws, whatever a hostile caller passed (CDM-015). */
-export function show(value: unknown): string {
-  if (typeof value === 'string') return value;
-  try {
-    return JSON.stringify(value) ?? typeof value;
-  } catch {
-    return typeof value;
-  }
-}
+export { show };
 
 const pointer = (path: string, key: string): string =>
   `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`;

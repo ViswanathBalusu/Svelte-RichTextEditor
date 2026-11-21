@@ -15,45 +15,31 @@
  * - A document with no rule has no state: every field is visible and enabled, required as authored.
  * - A set of rules that does not compile, or an evaluation over the budget, has no state either: the
  *   editor then shows what the document says and leaves the verdict to the authority.
+ * - The evaluation itself (`field-rules-eval.ts`, with `@docedit/rules`) is the `rules` part
+ *   (`./parts.ts`; FND-008). The element loads it before it mounts a document that has rules. A
+ *   document whose first rule arrives later (another person adds one) has no state until the part
+ *   has loaded, which asks the views to read the states again (`FieldRulesHost.loaded`).
  * - Reads no clock and no store. Universal: no Node.js or browser API.
  */
-import type { JsonValue } from '@docedit/model';
-import {
-  compileDocument,
-  dependentKeys,
-  evaluateRules,
-  fieldFrom,
-  type Evaluation,
-  type FieldState,
-  type RuleSet,
-} from '@docedit/rules';
 import type { Node as PMNode } from 'prosemirror-model';
-import { formFieldsOf } from './field-entries.ts';
+import type { Compiled } from './field-rules-eval.ts';
+import type { FieldRuleState, RuleEvaluationStats } from './field-rules-types.ts';
+import { rulesPart } from './parts.ts';
 
-/** What the rules say about one field, for the control. */
-export interface FieldRuleState {
-  /** False while a rule hides the field: it is not drawn, not reachable, not counted. */
-  readonly visible: boolean;
-  /** False while a rule disables the field. */
-  readonly enabled: boolean;
-  /** Static `required` or a `require` effect; never for a hidden field. */
-  readonly required: boolean;
-  /** The messages of the `validate` effects whose condition fails, in rule order. */
-  readonly messages: readonly string[];
-  /** The computed value of a formula field (a decimal string or a string), or null. */
-  readonly value: string | null;
-  /** Whether the field is a formula, so that its value is shown and cannot be changed. */
-  readonly computed: boolean;
-}
+export type { FieldRuleState, RuleEvaluationStats } from './field-rules-types.ts';
 
 export interface FieldRulesHost {
   state(): { readonly doc: PMNode };
   /** The `role_def` identifiers the person holds (`access.fill.roles`); none when not filling. */
   roles(): readonly string[];
+  /** The rules part has loaded after the states were asked for: read them again. */
+  loaded?(): void;
+  /** The rules part could not be loaded: the states stay empty and the core says so. */
+  loadFailed?(error: unknown): void;
 }
 
 /** Whether `doc` holds a rule (its definitions are the first child of the root). */
-function hasRules(doc: PMNode): boolean {
+export function hasRules(doc: PMNode): boolean {
   let found = false;
   doc.firstChild?.forEach((n) => {
     if (n.type.name === 'rule_def') found = true;
@@ -93,51 +79,7 @@ export function ruleWords(doc: PMNode, id: string): RuleWords | null {
   return { id, message: null };
 }
 
-/** What the last evaluation covered, for the tests and for a measurement. */
-export interface RuleEvaluationStats {
-  /** Evaluations made since the object was made. */
-  readonly evaluations: number;
-  /** How many of them compiled the rules again and evaluated every field. */
-  readonly full: number;
-  /** The number of fields the last evaluation covered; 0 when it was not needed. */
-  readonly lastFields: number;
-}
-
-/** One `form_field` as the editor last read it: the node, and what the rules see of its attributes. */
-interface Seen {
-  readonly node: PMNode;
-  /** The attributes the rules read, without the value (a change of it is a change of the field). */
-  readonly shape: string;
-  readonly value: string;
-}
-
-/**
- * The first `form_field` of each key, in document order (as the rules read a document). Read from
- * the list of the document's fields, which is walked once for every reader (field-entries.ts).
- */
-function scanFields(doc: PMNode): Map<string, PMNode> {
-  const out = new Map<string, PMNode>();
-  for (const { node } of formFieldsOf(doc).list) {
-    const key = node.attrs['key'];
-    if (typeof key === 'string' && !out.has(key)) out.set(key, node);
-  }
-  return out;
-}
-
-const shapeOf = (node: PMNode): string =>
-  JSON.stringify(fieldFrom(node.attrs as Record<string, JsonValue>) ?? null);
-
-const valueOf = (node: PMNode): JsonValue => (node.attrs['value'] ?? null) as JsonValue;
-
-/** What the editor keeps of the document between two evaluations. */
-interface Compiled {
-  /** The definitions node: the rules and the roles are in it. */
-  readonly defs: PMNode | null;
-  /** The compiled rules; null when they do not compile (then no field has a state). */
-  readonly ruleSet: RuleSet | null;
-  readonly seen: ReadonlyMap<string, Seen>;
-  readonly values: Record<string, JsonValue>;
-}
+const NONE: ReadonlyMap<string, FieldRuleState> = new Map();
 
 export class FieldRules {
   readonly #host: FieldRulesHost;
@@ -145,7 +87,9 @@ export class FieldRules {
   #rolesKey = '';
   #states: ReadonlyMap<string, FieldRuleState> = new Map();
   #compiled: Compiled | null = null;
-  #stats = { evaluations: 0, full: 0, lastFields: 0 };
+  #stats: RuleEvaluationStats = { evaluations: 0, full: 0, lastFields: 0 };
+  /** The part's load was asked for, and has not failed. */
+  #asked = false;
 
   constructor(host: FieldRulesHost) {
     this.#host = host;
@@ -161,15 +105,33 @@ export class FieldRules {
     const roles = this.#host.roles();
     const key = roles.join('\u0000');
     if (this.#doc === doc && this.#rolesKey === key) return this.#states;
-    const rolesChanged = this.#rolesKey !== key;
-    this.#doc = doc;
-    this.#rolesKey = key;
     if (!hasRules(doc)) {
+      this.#doc = doc;
+      this.#rolesKey = key;
       this.#compiled = null;
       this.#states = new Map();
       return this.#states;
     }
-    this.#states = this.#update(doc, roles, rolesChanged);
+    const part = rulesPart.peek();
+    if (part === null) {
+      // The rules arrived after the editor opened (or the element did not load the part). The
+      // fields show what the document says until the part is there; `#doc` is left as it was, so
+      // that the next read tries again.
+      this.#load();
+      return NONE;
+    }
+    const rolesChanged = this.#rolesKey !== key;
+    this.#doc = doc;
+    this.#rolesKey = key;
+    const run = part.evaluateFields(
+      { compiled: this.#compiled, states: this.#states, stats: this.#stats },
+      doc,
+      roles,
+      rolesChanged,
+    );
+    this.#compiled = run.compiled;
+    this.#states = run.states;
+    this.#stats = run.stats;
     return this.#states;
   }
 
@@ -178,116 +140,12 @@ export class FieldRules {
     return this.states().get(id) ?? null;
   }
 
-  #update(
-    doc: PMNode,
-    roles: readonly string[],
-    rolesChanged: boolean,
-  ): ReadonlyMap<string, FieldRuleState> {
-    const before = this.#compiled;
-    const found = scanFields(doc);
-    // The fields and the definitions as before, with the value of some fields changed: only the
-    // rules that read those values are evaluated again. Anything else starts again.
-    let changed: string[] | null = null;
-    if (before !== null && before.ruleSet !== null && before.defs === doc.firstChild) {
-      changed = [];
-      if (found.size !== before.seen.size) changed = null;
-      else
-        for (const [key, node] of found) {
-          const prev = before.seen.get(key);
-          if (prev === undefined) {
-            changed = null;
-            break;
-          }
-          if (prev.node === node) continue;
-          if (prev.shape !== shapeOf(node)) {
-            changed = null;
-            break;
-          }
-          if (prev.value !== JSON.stringify(valueOf(node))) changed.push(key);
-        }
-    }
-    if (changed === null || before === null || before.ruleSet === null)
-      return this.#full(doc, roles, found);
-
-    // Remember the nodes and the changed values, then evaluate what depends on them.
-    const seen = new Map<string, Seen>();
-    const values = { ...before.values };
-    for (const [key, node] of found) {
-      const prev = before.seen.get(key)!;
-      if (prev.node === node) seen.set(key, prev);
-      else {
-        seen.set(key, { node, shape: prev.shape, value: JSON.stringify(valueOf(node)) });
-        values[key] = valueOf(node);
-      }
-    }
-    this.#compiled = { defs: before.defs, ruleSet: before.ruleSet, seen, values };
-    if (changed.length === 0 && !rolesChanged) {
-      this.#stats = { ...this.#stats, lastFields: 0 };
-      return this.#states;
-    }
-    const keys = rolesChanged ? undefined : dependentKeys(before.ruleSet, changed);
-    const result = evaluateRules(
-      before.ruleSet,
-      values,
-      { roles: [...roles] },
-      keys === undefined ? {} : { keys },
+  #load(): void {
+    if (this.#asked) return;
+    this.#asked = true;
+    rulesPart.load().then(
+      () => this.#host.loaded?.(),
+      (error: unknown) => this.#host.loadFailed?.(error),
     );
-    this.#stats = {
-      evaluations: this.#stats.evaluations + 1,
-      full: this.#stats.full,
-      lastFields: result.ok ? result.fields.length : 0,
-    };
-    if (!result.ok) {
-      this.#compiled = null;
-      return new Map();
-    }
-    const out = keys === undefined ? new Map<string, FieldRuleState>() : new Map(this.#states);
-    this.#put(out, result);
-    return out;
-  }
-
-  /** Compiles the rules and evaluates every field. */
-  #full(
-    doc: PMNode,
-    roles: readonly string[],
-    found: ReadonlyMap<string, PMNode>,
-  ): ReadonlyMap<string, FieldRuleState> {
-    const compiled = compileDocument({ cdm: 1, requires: [], doc: doc.toJSON() });
-    const seen = new Map<string, Seen>();
-    for (const [key, node] of found)
-      seen.set(key, { node, shape: shapeOf(node), value: JSON.stringify(valueOf(node)) });
-    this.#stats = {
-      evaluations: this.#stats.evaluations + 1,
-      full: this.#stats.full + 1,
-      lastFields: found.size,
-    };
-    if (!compiled.ok) {
-      this.#compiled = { defs: doc.firstChild, ruleSet: null, seen, values: {} };
-      return new Map();
-    }
-    const values = compiled.document.values;
-    this.#compiled = { defs: doc.firstChild, ruleSet: compiled.ruleSet, seen, values };
-    const result = evaluateRules(compiled.ruleSet, values, { roles: [...roles] });
-    if (!result.ok) {
-      this.#compiled = null;
-      return new Map();
-    }
-    const out = new Map<string, FieldRuleState>();
-    this.#put(out, result);
-    return out;
-  }
-
-  #put(out: Map<string, FieldRuleState>, result: Extract<Evaluation, { ok: true }>): void {
-    for (const f of result.fields as FieldState[]) {
-      if (typeof f.id !== 'string') continue;
-      out.set(f.id, {
-        visible: f.visible,
-        enabled: f.enabled,
-        required: f.required,
-        messages: f.messages.map((m) => m.message),
-        value: f.value === undefined ? null : f.value,
-        computed: f.value !== undefined || f.error !== undefined,
-      });
-    }
   }
 }

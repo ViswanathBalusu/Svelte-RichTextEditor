@@ -43,6 +43,13 @@ export { canWrite, capsOf, checkChange, depScope, guardPlugin, type Refusal } fr
 export { identifierPlugin, fillIdentifiers, idTypesOf } from './ids.ts';
 export { INTERNAL, REMOTE } from './meta.ts';
 export {
+  PartNotLoadedError,
+  loadParts,
+  partsFor,
+  type PartName,
+  type PartsInput,
+} from './parts.ts';
+export {
   BodySelection,
   bodyGuard,
   bodyRange,

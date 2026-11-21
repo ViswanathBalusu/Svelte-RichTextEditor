@@ -5,12 +5,16 @@
  */
 import { MockService } from '@docedit/backend-mock';
 import { TextSelection } from 'prosemirror-state';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { DocumentCore } from '../src/headless.ts';
 import { internals } from '../src/testing.ts';
 import { RULE_FIELD_IDS as ID, ruleDocument } from './frw-023-fixture.ts';
 import { FIELD_IDS, fieldsDocument } from './frw-fields-fixture.ts';
 import { join, microtask, posOf, until } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 /** The fields document with a rule that hides the e-mail from whoever holds the landlord role. */
 function roleRuleDocument(): ReturnType<typeof fieldsDocument> {

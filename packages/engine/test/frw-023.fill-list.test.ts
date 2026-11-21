@@ -15,7 +15,7 @@
  * `packages/perf/e2e/frw-023-fill-typing.harness.spec.ts`.
  */
 import type { JsonValue } from '@docedit/model';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { FieldStatus } from '../src/field-entries.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { internals } from '../src/testing.ts';
@@ -23,6 +23,10 @@ import { RULE_FIELD_IDS, ruleDocument } from './frw-023-fixture.ts';
 import { SCALE_FIELDS, scaleDocument, scaleId } from './frw-023-scale-fixture.ts';
 import { participantAccess } from './frw-fields-fixture.ts';
 import { microtask, posOf } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 const FORMAT = new Set(['type', 'pattern', 'preset', 'not_an_option']);
 const RANGE = new Set(['min', 'max', 'min_length', 'max_length', 'too_large']);

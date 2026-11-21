@@ -4,10 +4,14 @@
  * suggestion that a failed check links to (`selectSuggestion`). The dialog and its browser run are in
  * packages/ui; the service over the workflow port is in packages/element.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { DocumentCore } from '../src/headless.ts';
 import { internals } from '../src/testing.ts';
 import { FIELD_IDS, fieldsDocument } from './frw-fields-fixture.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 type J = Record<string, unknown>;
 

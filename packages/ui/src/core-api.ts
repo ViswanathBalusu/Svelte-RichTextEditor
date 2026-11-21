@@ -1238,6 +1238,11 @@ export type SourceChangeResult =
  * reports. Citing an existing source is a change of the text and follows the text's permissions.
  */
 export interface SourcesService {
+  /**
+   * Loads what the service's changes need, when that is not in the first load (FND-008). The pane host
+   * awaits it before it opens the pane; the service's other members are not called before it resolves.
+   */
+  readonly prepare?: () => Promise<void>;
   readonly list: ReadView<readonly SourceSummary[]>;
   readonly canChange: ReadView<boolean>;
   /** The attributes (and `id`) whose value its grammar refuses; empty when all pass. */
@@ -1266,6 +1271,11 @@ export type FieldChangeResult =
  * where the field is, which `canChange` reports.
  */
 export interface FieldPropertiesService {
+  /**
+   * Loads what the service's changes need, when that is not in the first load (FND-008). The pane host
+   * awaits it before it opens the pane; the service's other members are not called before it resolves.
+   */
+  readonly prepare?: () => Promise<void>;
   /** The form fields of the document in order; labels and keys are document content. */
   readonly fields: ReadView<
     readonly { readonly id: string; readonly key: string; readonly label: string }[]
@@ -1338,6 +1348,11 @@ export type RuleChangeResult =
  * definitions through the log, and needs `structure`, which `canEdit` reports.
  */
 export interface RulesService {
+  /**
+   * Loads what the service's changes need, when that is not in the first load (FND-008). The pane host
+   * awaits it before it opens the pane; the service's other members are not called before it resolves.
+   */
+  readonly prepare?: () => Promise<void>;
   readonly rules: ReadView<readonly RuleItem[]>;
   /** The fields rules may name: key and label, document content. */
   readonly fields: ReadView<readonly { readonly key: string; readonly label: string }[]>;
@@ -1512,6 +1527,11 @@ export type RoleChangeResult =
  * the role's `fields` are the references to show.
  */
 export interface RolesService {
+  /**
+   * Loads what the service's changes need, when that is not in the first load (FND-008). The pane host
+   * awaits it before it opens the pane; the service's other members are not called before it resolves.
+   */
+  readonly prepare?: () => Promise<void>;
   readonly list: ReadView<readonly RoleSummary[]>;
   readonly canChange: ReadView<boolean>;
   add(values: { readonly name: string; readonly color: string }): RoleChangeResult;

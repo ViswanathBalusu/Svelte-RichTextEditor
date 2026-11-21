@@ -5,12 +5,15 @@
  * with a problem whose violations name the failures. The dialog is run in the browser
  * (packages/ui/e2e/frw-028-send-dialog.spec.ts).
  */
-import { DocumentCore } from '@docedit/engine/headless';
+import { DocumentCore, loadParts } from '@docedit/engine/headless';
 import type { EditorCore } from '@docedit/engine';
 import { PortError, type WorkflowPort } from '@docedit/protocol';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { refusal, workflowSendService } from '../src/workflow-send.ts';
 import { fieldsDocument } from '../../engine/test/frw-fields-fixture.ts';
+
+// The rules language loads on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['rules']));
 
 const schedule = (run: () => void): void => queueMicrotask(run);
 

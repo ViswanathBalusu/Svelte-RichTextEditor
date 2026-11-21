@@ -8,8 +8,10 @@
  * - Changing a source definition needs `structure` (07 §4). The caller checks that before it calls
  *   this module; it is not checked here.
  */
-import type { Node } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
+import { citationsCiting } from './source-read.ts';
+
+export { citationsCiting } from './source-read.ts';
 
 export type DeleteSourceRefusal = 'not-defined' | 'cited';
 
@@ -17,25 +19,6 @@ export type DeleteSourceResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: 'not-defined' }
   | { readonly ok: false; readonly reason: 'cited'; readonly citedAt: readonly number[] };
-
-/** The document positions of the citation nodes that name `sourceId` in one of their items, in order. */
-export function citationsCiting(doc: Node, sourceId: string): number[] {
-  const out: number[] = [];
-  doc.descendants((node, pos) => {
-    if (node.type.name !== 'citation') return true;
-    const items = node.attrs['items'];
-    if (!Array.isArray(items)) return false;
-    const names = items.some(
-      (item: unknown) =>
-        typeof item === 'object' &&
-        item !== null &&
-        (item as Record<string, unknown>)['source'] === sourceId,
-    );
-    if (names) out.push(pos);
-    return false;
-  });
-  return out;
-}
 
 /**
  * Deletes the source definition `sourceId`, unless a citation still names it. With `dispatch` absent,

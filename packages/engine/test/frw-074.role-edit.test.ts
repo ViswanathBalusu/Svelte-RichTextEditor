@@ -6,10 +6,14 @@
  */
 import type { Access } from '@docedit/protocol';
 import { validate } from '@docedit/model/validate';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { DocumentCore } from '../src/headless.ts';
 import { spikeDocument } from '../src/spike-document.ts';
 import { FIELD_IDS, fieldsDocument, participantAccess } from './frw-fields-fixture.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 const schedule = (run: () => void): void => queueMicrotask(run);
 const core = (): DocumentCore => new DocumentCore({ doc: fieldsDocument(), schedule });

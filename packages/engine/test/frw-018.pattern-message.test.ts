@@ -14,11 +14,15 @@
  * (src/view/frw-018-pattern-message.universal.test.ts); the completion check is tested with the
  * authority and the document service.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { DocumentCore } from '../src/headless.ts';
 import { CODE, MESSAGE, PATTERN, PLAIN, patternDocument } from './frw-018-fixture.ts';
 import { participantAccess } from './frw-fields-fixture.ts';
 import { join, microtask, newService, traffic, until } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 const authored = [{ code: 'pattern', message: MESSAGE, authored: true }];
 

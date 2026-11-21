@@ -18,29 +18,19 @@
  *
  * The module reads no clock and no store. It is universal: no Node.js or browser API.
  */
-import { CDM1, type JsonValue } from '@docedit/model/definition';
+import { CDM1 } from '@docedit/model/definition';
 import { checkGrammar, validateDoc } from '@docedit/model/validate';
-import type { Node } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import { findFormField } from './field-entries.ts';
+import {
+  FIELD_PROPERTY_NAMES,
+  type FieldProperties,
+  type FieldPropertyName,
+} from './field-read.ts';
 
-/** The attributes of a form field an author may set. */
-export const FIELD_PROPERTY_NAMES = [
-  'key',
-  'kind',
-  'label',
-  'assignee',
-  'required',
-  'readOnly',
-  'default',
-  'placeholder',
-  'options',
-  'format',
-  'validation',
-  'width',
-] as const;
-export type FieldPropertyName = (typeof FIELD_PROPERTY_NAMES)[number];
-export type FieldProperties = Record<FieldPropertyName, JsonValue>;
+export { FIELD_PROPERTY_NAMES, fieldProperties, listFormFields } from './field-read.ts';
+export type { FieldProperties, FieldPropertyName } from './field-read.ts';
+
 export type FieldPatch = Partial<FieldProperties>;
 
 export interface FieldEditProblem {
@@ -70,30 +60,6 @@ const FORM_FIELD = CDM1.nodes.find((n) => n.name === 'form_field');
 const isProperty = (name: string): name is FieldPropertyName =>
   (FIELD_PROPERTY_NAMES as readonly string[]).includes(name);
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
-
-/** The authored properties of the form field `id`; null when the document has no such field. */
-export function fieldProperties(doc: Node, id: string): FieldProperties | null {
-  const hit = findFormField(doc, id);
-  if (!hit) return null;
-  const out = {} as FieldProperties;
-  for (const name of FIELD_PROPERTY_NAMES) out[name] = (hit.node.attrs[name] ?? null) as JsonValue;
-  return out;
-}
-
-/** The form fields of the document in order: identifier, key and label. */
-export function listFormFields(doc: Node): Array<{ id: string; key: string; label: string }> {
-  const out: Array<{ id: string; key: string; label: string }> = [];
-  doc.descendants((node) => {
-    if (node.type.name !== 'form_field') return true;
-    const id = node.attrs['id'];
-    const key = String(node.attrs['key'] ?? '');
-    const label = node.attrs['label'];
-    if (typeof id === 'string')
-      out.push({ id, key, label: typeof label === 'string' && label !== '' ? label : key });
-    return false;
-  });
-  return out;
-}
 
 function optionIds(options: unknown): string[] {
   if (!Array.isArray(options)) return [];

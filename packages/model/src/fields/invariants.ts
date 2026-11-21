@@ -14,7 +14,7 @@
 import { FIELD_LIMITS } from '../definition/fields.ts';
 import type { JsonValue } from '../definition/grammar.ts';
 import { REDACTED_FIELD_ATTRIBUTES, isRedactionMarker } from '../definition/projection.ts';
-import { show } from '../validate/grammar-check.ts';
+import { show } from '../validate/show.ts';
 import type { InvariantCheck } from '../validate/types.ts';
 import { fieldValueProblem } from './values.ts';
 

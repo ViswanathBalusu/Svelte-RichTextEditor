@@ -11,6 +11,7 @@
  * - an empty list of options is `null` in the document.
  */
 import type { EditorCore } from '@docedit/engine';
+import { loadParts } from '@docedit/engine/headless';
 import type { FieldChangeResult, FieldDraft, FieldPropertiesService } from '@docedit/ui';
 
 type Patch = Parameters<EditorCore['editField']>[1];
@@ -81,6 +82,8 @@ export function fieldPropertiesService(core: EditorCore): FieldPropertiesService
     return last;
   };
   return {
+    // The grammar and invariant checks of the changes load with the pane (FND-008).
+    prepare: () => loadParts(['authoring']),
     fields: { get: list, subscribe: (listener) => core.revision.subscribe(listener) },
     selected: {
       get: () => core.selectedField(),

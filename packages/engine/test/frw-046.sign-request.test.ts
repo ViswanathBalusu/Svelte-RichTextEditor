@@ -3,7 +3,7 @@
 // are signable is the client's reading of the P7 conditions (the server decides): the field's kind,
 // its role, an active participant, no read-only mark and no rule that hides or disables it.
 import { DocumentCore } from '@docedit/engine/headless';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { participantAccess } from './frw-fields-fixture.ts';
 import {
   INITIALS_TENANT,
@@ -14,6 +14,10 @@ import {
   withSignatures,
 } from './frw-046-fixture.ts';
 import { microtask } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 function core(roles: readonly string[], active = true, rule = false) {
   return new DocumentCore({

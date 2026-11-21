@@ -57,7 +57,7 @@ export type {
   ValidationResult,
   Violation,
 } from './types.ts';
-export { LIMITS } from './node-checks.ts';
+export { LIMITS } from './limits.ts';
 
 interface State {
   ix: DefinitionIndex;

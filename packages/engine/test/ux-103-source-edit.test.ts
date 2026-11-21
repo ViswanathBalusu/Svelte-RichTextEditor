@@ -6,12 +6,16 @@
  */
 import type { Access } from '@docedit/protocol';
 import fc from 'fast-check';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { CdmEnvelope } from '../src/api.ts';
 import { DocumentCore, sourceProblems } from '../src/headless.ts';
 import { internals } from '../src/testing.ts';
 import { AUTH_IDS, authoringEnvelope } from './authoring-doc.ts';
 import { caret, microtask } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 const EDIT = ['view', 'comment', 'suggest', 'edit'] as const;
 const REGION = `region:${AUTH_IDS.region}`;

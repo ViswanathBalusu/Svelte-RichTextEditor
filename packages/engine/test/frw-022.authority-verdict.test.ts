@@ -7,10 +7,14 @@
  * and the same fill is accepted: its verdict is the one that counts.
  */
 import { MockService } from '@docedit/backend-mock';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { DocumentCore } from '../src/headless.ts';
 import { FIELD_IDS, fieldsDocument } from './frw-fields-fixture.ts';
 import { microtask, until } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 /** The fields document with one rule: the name is hidden while the amount is empty. */
 function withHideRule() {

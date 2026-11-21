@@ -18,6 +18,13 @@ export {
   type TransactionInfo,
 } from './core.ts';
 export { REMOTE } from './meta.ts';
+export {
+  PartNotLoadedError,
+  loadParts,
+  partsFor,
+  type PartName,
+  type PartsInput,
+} from './parts.ts';
 export { ATOM_CHAR } from './page-input.ts';
 export type { BlockPoint, BlockSelection, PageViewHandle, PageViewHooks } from './page-input.ts';
 export type {

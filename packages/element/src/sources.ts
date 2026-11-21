@@ -8,6 +8,7 @@
  * pane does not redraw for a change elsewhere in the document.
  */
 import type { EditorCore } from '@docedit/engine';
+import { loadParts } from '@docedit/engine/headless';
 import type { SourceChangeResult, SourceSummary, SourceValues, SourcesService } from '@docedit/ui';
 
 type Edit = Parameters<EditorCore['editSource']>[0];
@@ -49,6 +50,8 @@ export function sourcesService(core: EditorCore): SourcesService {
   };
   const first = (): string | undefined => core.sources()[0]?.id;
   return {
+    // The grammar checks of the changes load with the pane (FND-008).
+    prepare: () => loadParts(['authoring']),
     list: { get: read, subscribe: (listener) => core.revision.subscribe(listener) },
     canChange: {
       get: canChange,

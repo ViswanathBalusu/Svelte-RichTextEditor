@@ -6,10 +6,14 @@
  * nothing. The builder's form and its browser run are in packages/ui.
  */
 import type { Access } from '@docedit/protocol';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { DocumentCore } from '../src/headless.ts';
 import { FIELD_IDS, fieldsDocument, participantAccess } from './frw-fields-fixture.ts';
 import { RULE_FIELD_IDS, ruleDocument } from './frw-023-fixture.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['authoring', 'rules']));
 
 const schedule = (run: () => void): void => queueMicrotask(run);
 const core = (doc = fieldsDocument()): DocumentCore => new DocumentCore({ doc, schedule });

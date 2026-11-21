@@ -8,6 +8,7 @@
  * pane does not redraw for a change elsewhere in the document.
  */
 import type { EditorCore } from '@docedit/engine';
+import { loadParts } from '@docedit/engine/headless';
 import type { RuleChangeResult, RuleItem, RulesService } from '@docedit/ui';
 
 type Outcome = ReturnType<EditorCore['editRule']>;
@@ -58,6 +59,8 @@ export function rulesService(core: EditorCore): RulesService {
     return outcome.ok || (outcome.reason !== 'read-only' && outcome.reason !== 'no-feature');
   };
   return {
+    // The rules language loads with the pane (FND-008).
+    prepare: () => loadParts(['rules']),
     rules: { get: readItems, subscribe: (listener) => core.revision.subscribe(listener) },
     fields: { get: readFields, subscribe: (listener) => core.revision.subscribe(listener) },
     canEdit: {
