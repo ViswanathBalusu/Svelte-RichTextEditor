@@ -53,6 +53,11 @@ export interface SealOptions {
   location?: string;
   /** Room for the CMS in `/Contents`, in bytes. */
   contentsBytes?: number;
+  /**
+   * Visible appearances to draw before the signature is made, so that the signature covers them
+   * (FRW-057). Appended after the input: the bytes that came in stay the first bytes.
+   */
+  appearances?: readonly AppearanceItem[];
 }
 
 const sha256 = (b: Uint8Array): Buffer => createHash('sha256').update(b).digest();
@@ -277,6 +282,125 @@ function appendDss(
   return appendUpdate(doc, objects).bytes;
 }
 
+/** One visible appearance: a rectangle on a page, in points from the lower-left corner of the page's box. */
+export interface AppearanceItem {
+  /** 1-based page number. */
+  readonly page: number;
+  /** `[x0, y0, x1, y1]` in PDF user space. */
+  readonly rect: readonly [number, number, number, number];
+  /** The lines of text; characters outside Latin-1 are drawn as `?` (a standard font is used). */
+  readonly lines: readonly string[];
+  /** The annotation's name and `/Contents`, for readers that list annotations. */
+  readonly label: string;
+}
+
+/** Text as a PDF string in the standard encoding: Latin-1 only, escaped. */
+function pdfText(text: string): string {
+  let out = '';
+  for (const ch of text) {
+    const c = ch.codePointAt(0) as number;
+    const safe = c >= 0x20 && c <= 0x7e ? ch : c >= 0xa0 && c <= 0xff ? ch : '?';
+    out += safe === '(' || safe === ')' || safe === '\\' ? `\\${safe}` : safe;
+  }
+  return out;
+}
+
+/**
+ * Appends the visible appearances as stamp annotations with their own appearance streams (a
+ * border and the lines of text in Helvetica), in one incremental update. They are print-only,
+ * read-only and locked. The page tree is read for the page of each item; an item whose page does
+ * not exist is refused. The bytes that came in are the first bytes that come out.
+ */
+export function appendAppearances(
+  pdf: Uint8Array,
+  items: readonly AppearanceItem[],
+  time: Date = new Date(),
+): Uint8Array {
+  const doc = new PdfDocument(pdf);
+  const pages = doc.pageList();
+  const nums = nextNumbers(doc, items.length * 2 + 1);
+  const fontNum = nums[nums.length - 1] as number;
+  const objects: NewObject[] = [
+    {
+      num: fontNum,
+      value: dict({
+        Type: name('Font'),
+        Subtype: name('Type1'),
+        BaseFont: name('Helvetica'),
+        Encoding: name('WinAnsiEncoding'),
+      }),
+    },
+  ];
+  const byPage = new Map<number, Ref[]>();
+  items.forEach((item, i) => {
+    const page = pages[item.page - 1];
+    if (page === undefined)
+      throw new PdfError(`the page ${item.page} of an appearance does not exist`);
+    const [x0, y0, x1, y1] = item.rect;
+    const w = x1 - x0;
+    const h = y1 - y0;
+    const lines = item.lines.map(pdfText);
+    const longest = Math.max(1, ...lines.map((l) => l.length));
+    // Helvetica's average advance is about half an em: fit the longest line, then the height.
+    const size = Math.max(
+      3,
+      Math.min(10, (w - 4) / (longest * 0.55), (h - 4) / (Math.max(1, lines.length) * 1.2)),
+    );
+    const f = (n: number): string => (Math.round(n * 100) / 100).toString();
+    const content = [
+      'q 0.4 w 0.2 0.2 0.2 RG',
+      `0.5 0.5 ${f(w - 1)} ${f(h - 1)} re S`,
+      'BT',
+      `/F1 ${f(size)} Tf 0.1 0.1 0.1 rg`,
+      `${f(size * 1.2)} TL`,
+      `3 ${f(h - 2 - size)} Td`,
+      ...lines.map((l, k) => `${k === 0 ? '' : 'T* '}(${l}) Tj`),
+      'ET Q',
+    ].join('\n');
+    const apNum = nums[i * 2] as number;
+    const annotNum = nums[i * 2 + 1] as number;
+    objects.push({
+      num: apNum,
+      value: dict({
+        Type: name('XObject'),
+        Subtype: name('Form'),
+        BBox: [int(0), int(0), new Raw(f(w)), new Raw(f(h))],
+        Resources: dict({ Font: dict({ F1: new Ref(fontNum) }) }),
+        Length: int(Buffer.byteLength(content, 'latin1')),
+      }),
+      stream: new Uint8Array(Buffer.from(content, 'latin1')),
+    });
+    objects.push({
+      num: annotNum,
+      value: dict({
+        Type: name('Annot'),
+        Subtype: name('Stamp'),
+        Rect: item.rect.map((n) => new Raw(f(n))),
+        F: int(4 | 64 | 128),
+        P: page.ref,
+        NM: str(item.label),
+        Contents: str(item.label),
+        M: str(pdfDate(time)),
+        AP: dict({ N: new Ref(apNum) }),
+      }),
+    });
+    byPage.set(item.page, [...(byPage.get(item.page) ?? []), new Ref(annotNum)]);
+  });
+  for (const [pageNo, refs] of byPage) {
+    const page = pages[pageNo - 1]!;
+    const pageDict = copyDict(page.dict);
+    const annots = pageDict.get('Annots');
+    if (annots instanceof Ref) {
+      const arr = doc.getObject(annots.num);
+      if (!Array.isArray(arr)) throw new PdfError('/Annots is not an array');
+      objects.push({ num: annots.num, value: [...arr, ...refs] });
+    } else {
+      pageDict.set('Annots', [...(Array.isArray(annots) ? annots : []), ...refs]);
+    }
+    objects.push({ num: page.ref.num, value: pageDict });
+  }
+  return appendUpdate(doc, objects).bytes;
+}
 export interface SealResult {
   pdf: Uint8Array;
   /** The sizes of the file after each step, for the report. */
@@ -292,8 +416,16 @@ export async function sealPdf(input: Uint8Array, opts: SealOptions): Promise<Sea
   const time = opts.signingTime ?? new Date();
   const steps: SealResult['steps'] = [{ name: 'input', length: input.length }];
 
+  // 0. The visible appearances at the field positions, drawn after the compile and before the
+  // signature, which then covers them (FRW-057).
+  let base = input;
+  if (opts.appearances && opts.appearances.length > 0) {
+    base = appendAppearances(input, opts.appearances);
+    steps.push({ name: 'visible appearances', length: base.length });
+  }
+
   // 1. The signature, with its signature time-stamp (B-T).
-  let doc = new PdfDocument(input);
+  let doc = new PdfDocument(base);
   const f1 = appendField(doc, {
     type: 'Sig',
     subFilter: 'ETSI.CAdES.detached',
@@ -303,7 +435,7 @@ export async function sealPdf(input: Uint8Array, opts: SealOptions): Promise<Sea
     reason: opts.reason,
     location: opts.location,
   });
-  const r1 = fixByteRange(f1, input.length);
+  const r1 = fixByteRange(f1, base.length);
   const cms = await buildCms({
     keyService: opts.keyService,
     chain: opts.chain,

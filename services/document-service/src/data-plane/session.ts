@@ -49,7 +49,7 @@ import {
 import type { RoomConnection } from '@docedit/authority';
 import type { WebSocket, RawData } from 'ws';
 import type { GrantStore } from '../storage/types.ts';
-import type { ParticipantOpened, VerifiedIdentity, VerifyToken } from '../seams.ts';
+import type { ParticipantOpened, SessionOpened, VerifiedIdentity, VerifyToken } from '../seams.ts';
 import { recordAsserted, type AssertedRecord } from './asserted-claims.ts';
 import { SessionEngines, engineRegistry } from './engines.ts';
 import type { RateLimits, TokenBucket } from './limits.ts';
@@ -98,6 +98,8 @@ export interface SessionDeps {
   readonly address: string;
   /** The first view of a participant (FRW-040); see DataPlaneDeps.participantOpened. */
   readonly participantOpened?: ((open: ParticipantOpened) => Promise<void> | void) | undefined;
+  /** The record of the session for a document (HIS-003); see DataPlaneDeps.sessionOpened. */
+  readonly sessionOpened?: ((open: SessionOpened) => Promise<void> | void) | undefined;
 }
 
 interface SessionChannel {
@@ -165,6 +167,10 @@ export class Session {
   #features: readonly string[] = [];
   /** The engines negotiated from `hello.engines` (SYN-046 criterion 4); set by `hello`. */
   #engines: SessionEngines | null = null;
+  /** `hello.client.version` as sent, for the session's record (HIS-003); set by `hello`. */
+  #clientVersion = '';
+  /** The documents this session's record is stored for (HIS-003): one record per document. */
+  readonly #recorded = new Set<string>();
   readonly #channels = new Map<number, SessionChannel>();
   #queue: Promise<void> = Promise.resolve();
   readonly #reassembler: Reassembler;
@@ -539,6 +545,7 @@ export class Session {
     this.#connectionTenant = this.#deps.quotas ? identity.tenant : null;
     this.#identity = identity;
     this.#features = m.d.features;
+    this.#clientVersion = m.d.client.version;
     // 05 §5.1, §5.2 (SYN-046 criterion 4): every channel's engine must be one negotiated here.
     this.#engines = new SessionEngines(engineRegistry(s.engines));
     this.#engines.negotiate(m.d.engines);
@@ -822,6 +829,10 @@ export class Session {
           jti: identity.jti,
         };
         c.conn = conn;
+        // HIS-003: the gateway holds the connection, so it records the session, before the owner
+        // opens the channel and can store a commit of it.
+        await this.#sessionOpened(identity, d.doc);
+        if (this.#channels.get(m.ch) !== c || this.#isClosed()) return;
         const remote = await this.#deps.forwarding.open({
           ref,
           key: c.key,
@@ -851,6 +862,9 @@ export class Session {
         );
       if (room.record.cdmVersion !== d.cdm)
         throw new Refusal('unsupported_cdm', `the document is CDM ${room.record.cdmVersion}`);
+      // HIS-003: the session's record is stored before the channel opens (08 §2), so that no commit
+      // of the session can be stored without it.
+      await this.#sessionOpened(identity, d.doc);
       // The permission state in storage, so that a lost notification cannot let a reader in
       // under revoked access (ADR 0019 change 3).
       const stored = await this.#deps.grants.current(ref);
@@ -907,6 +921,32 @@ export class Session {
         }),
       )
       .catch((e: unknown) => this.#report(e, 'participant.opened', doc));
+  }
+
+  /**
+   * The session is about to open a channel on a document (HIS-003 criterion 3; 08 §2): the service
+   * is told once per session and document, with the session, its user, the `User-Agent` of the
+   * upgrade request and the client version of `hello`, and the channel waits for the record. A
+   * failure is reported and refuses the channel with `unavailable`; the client may open it again,
+   * and the record is then tried again.
+   */
+  async #sessionOpened(identity: VerifiedIdentity, doc: string): Promise<void> {
+    const hook = this.#deps.sessionOpened;
+    if (hook === undefined || this.#recorded.has(doc)) return;
+    try {
+      await hook({
+        tenant: identity.tenant,
+        doc,
+        session: this.id,
+        user: identity.connection.sub,
+        userAgent: this.#userAgent,
+        clientVersion: this.#clientVersion,
+      });
+    } catch (e) {
+      this.#report(e, 'session.opened', doc);
+      throw new Refusal('unavailable', 'the session could not be recorded');
+    }
+    this.#recorded.add(doc);
   }
 
   #port(c: SessionChannel, openId: string): ChannelPort {

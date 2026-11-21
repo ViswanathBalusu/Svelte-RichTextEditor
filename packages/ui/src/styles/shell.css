@@ -1005,6 +1005,29 @@
   background: var(--_de-surface);
 }
 
+/* The PDF preview pane (EXP-001): its state, then the viewer's frame, which the core puts in. */
+.de-pdf-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--_de-space-2);
+}
+
+.de-pdf-pane p {
+  margin: 0;
+}
+
+.de-pdf-pane-pages:empty {
+  display: none;
+}
+
+.de-pdf-pane-pages iframe {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 20em;
+  border: 1px solid var(--_de-border);
+  background: var(--_de-surface);
+}
+
 .de-tree,
 .de-tree-group {
   margin: 0;
@@ -1585,16 +1608,28 @@
 
 /* The filter lists of the comments and history panes: at least 24 CSS pixels high (UX-068; WCAG 2.2, 2.5.8). */
 .de-comments-filters select,
-.de-history-filters select {
+.de-history-filters select,
+.de-history-restore select {
   font: inherit;
   min-block-size: 24px;
 }
 
 /* Focus is as visible on the filter lists as on every other control (HIS-009 criterion 5). */
 .de-comments-filters select:focus-visible,
-.de-history-filters select:focus-visible {
+.de-history-filters select:focus-visible,
+.de-history-restore select:focus-visible {
   outline: 2px solid var(--_de-focus);
   outline-offset: 1px;
+}
+
+/* The restore of the history pane (HIS-021): its status line takes no room while it says nothing. */
+.de-history-restore [data-restore-status] {
+  margin: 0;
+}
+.de-history-restore [data-restore-status='previewing'],
+.de-history-restore [data-restore-status='preview'],
+.de-history-restore [data-restore-status='restoring'] {
+  margin-block: 0.5rem;
 }
 
 /* The assistant pane (UX-045): the answer is content, shown as written. */

@@ -56,9 +56,9 @@ const load = (m: Promise<{ default: unknown }>): Promise<PaneComponent> =>
 
 /**
  * The panes of 13 §3, plus the shortcut reference (UX-013) and the fill summary (FRW-078). The
- * content of review, history, fields, the accessibility checker, the assistant and the PDF preview
- * belongs to other stories (HIS, FRW, FE-071, UX-030 to UX-067); the host or those stories give
- * their loaders.
+ * content of review, history, fields, the accessibility checker and the assistant belongs to other
+ * stories (HIS, FRW, UX-030 to UX-067); the host or those stories give their loaders. The PDF
+ * preview (EXP-001) is offered when the core has both a PDF viewer (FE-071) and export jobs.
  */
 export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
   { id: 'outline', label: 'pane.outline', load: () => load(import('../panes/OutlinePane.svelte')) },
@@ -136,7 +136,14 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     load: () => load(import('../panes/AssistantPane.svelte')),
     available: (core) => core.assistant?.available.get() === true,
   },
-  { id: 'pdf', label: 'pane.pdf', feature: 'exports' },
+  {
+    // The PDF preview (EXP-001): the newest PDF of this session in the core's sandboxed viewer.
+    id: 'pdf',
+    label: 'pane.pdf',
+    feature: 'exports',
+    load: () => load(import('../panes/PdfPane.svelte')),
+    available: (core) => core.pdf !== undefined && core.exports?.latestPdf !== undefined,
+  },
   {
     id: 'recovered',
     label: 'pane.recovered',

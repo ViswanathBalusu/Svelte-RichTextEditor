@@ -47,6 +47,8 @@ import {
 } from './support.ts';
 
 const FIELD = 'ff00000000000153';
+const SIGN_FIELD = 'ff00000000000154';
+const INITIALS_FIELD = 'ff00000000000155';
 
 function document(): Record<string, unknown> {
   const d = structuredClone(documentWithRegions()) as {
@@ -76,6 +78,21 @@ function document(): Record<string, unknown> {
       },
     ],
   });
+  // A signature field the layout gives a rectangle, and an initials field it does not (FRW-057).
+  for (const [id, key, kind] of [
+    [SIGN_FIELD, 'tenant.sign', 'signature'],
+    [INITIALS_FIELD, 'tenant.initials', 'initials'],
+  ] as const)
+    d.doc.content[1]!.content.push({
+      type: 'paragraph',
+      attrs: { id: `q${id.slice(1)}` },
+      content: [
+        {
+          type: 'form_field',
+          attrs: { id, key, kind, label: kind, assignee: 'tenant', required: false },
+        },
+      ],
+    });
   return d as unknown as Record<string, unknown>;
 }
 
@@ -172,11 +189,27 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
               objectKeys.exportFile(job.tenant, job.id, 'output.pdf'),
               input,
             );
+            // The layout of the compile: the signature field's box, 20 to 120 points across and 150
+            // to 180 down a 200 by 200 point page, in twentieths of a point (09 section 7.1).
+            await h.parts.objects.put(
+              objectKeys.exportFile(job.tenant, job.id, 'layout.json'),
+              new TextEncoder().encode(
+                JSON.stringify({
+                  seq: job.payload['seq'],
+                  classVersion: '1.0.0',
+                  granularity: 'block',
+                  unit: 'twip',
+                  pages: [],
+                  blocks: {},
+                  fields: { [SIGN_FIELD]: { page: 1, rect: [400, 3000, 2400, 3600] } },
+                }),
+              ),
+            );
             const hash = sha256(input);
             return {
               output: 'output.pdf',
               pages: 1,
-              layout: null,
+              layout: 'layout.json',
               converged: true,
               log: null,
               diagnostics: [],
@@ -379,6 +412,39 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       300_000,
     );
 
+    it.skipIf(skip !== null)(
+      'draws the appearances at the signature fields of the layout, reports the field with no rectangle, and the seal still validates (FRW-057)',
+      async () => {
+        authority.current = new HttpTimestampAuthority(tsa.url);
+        credential.current = DOCUMENT_SERVICE_SECRET;
+        const w = await complete();
+        await waitFor('finalised', async () => (await stateOf(w.ref)) === 'finalised');
+        const pdf = (await sealed.read(w.ref.tenant, w.doc, w.workflowId))!.bytes;
+        const text = Buffer.from(pdf).toString('latin1');
+        // The compile's bytes are the first bytes; the stamp follows, inside the rectangle of the layout.
+        expect(Buffer.from(pdf.subarray(0, input.length)).equals(Buffer.from(input))).toBe(true);
+        expect(text.match(/\/Subtype \/Stamp/g)).toHaveLength(1);
+        expect(text).toContain('/Rect [20 20 120 50]');
+        expect(text).toContain('(Not signed) Tj');
+        // The seal is applied and covers the appearance.
+        const reports = verifyWithOpenssl(pdf, pki);
+        expect(reports).toHaveLength(1);
+        expect(reports[0]!.main.ok, reports[0]!.main.detail).toBe(true);
+        expect((await verifySealedPdf(pdf, [pki.root])).ok).toBe(true);
+        // The initials field has no rectangle: it is on record, and the seal went on.
+        const entries = await h.parts.audit!.query(h.tenant, {
+          doc: w.doc,
+          kind: 'workflow.appearance_diagnostics',
+          limit: 5,
+        });
+        expect(entries).toHaveLength(1);
+        expect(entries[0]!.data).toMatchObject({ workflow: w.workflowId, drawn: 1 });
+        expect(JSON.parse(String(entries[0]!.data['diagnostics']))).toEqual([
+          { id: INITIALS_FIELD, code: 'no_rectangle' },
+        ]);
+      },
+      300_000,
+    );
     it.skipIf(skip !== null)(
       'extends the sealed PDF of a finalised workflow for long-term validation and renews its time-stamp; the sealed object stays and /workflow/final returns the latest (FRW-056)',
       async () => {

@@ -26,13 +26,16 @@
  * stored: a restart forgets which stops were final and tries them once more.
  */
 import { createHash } from 'node:crypto';
+import { uuid7 } from '@docedit/model';
 import type { EventSink } from '../control-plane/events.ts';
-import type { JobQueue } from '../control-plane/jobs/queue.ts';
+import type { JobQueue, JobRecord } from '../control-plane/jobs/queue.ts';
 import { objectKeys, type ObjectStore } from '../objects/store.ts';
 import type { DocRef } from '../storage/types.ts';
 import { ANCHOR_FILE_FORMAT, type AnchorStore } from './anchor-store.ts';
 import { finalExportJobId } from './final-export-start.ts';
+import type { AppearanceRequest } from './signing-client.ts';
 import { raiseWorkflowEvents } from './raise-events.ts';
+import type { WorkflowResourceView } from './workflow-resource.ts';
 import {
   sealAndFinalise,
   stopFinalisation,
@@ -48,6 +51,15 @@ export interface FinalSealDeps extends SealAndFinaliseDeps {
   readonly events: EventSink;
   /** How long the stored sealed bytes are retained, ms from now. */
   readonly retainMs: number;
+  /**
+   * The visible appearances to draw at the signature and initials fields (FRW-057), from the
+   * document, the layout and the evidence. Absent: none are drawn.
+   */
+  readonly appearances?: (
+    ref: DocRef,
+    workflow: WorkflowResourceView,
+    job: JobRecord,
+  ) => Promise<AppearanceRequest | undefined>;
 }
 
 export type FinalSealOutcome =
@@ -137,9 +149,14 @@ export class FinalSealer {
       const anchored = await this.#anchor(ref, workflow.id, seq, head, key);
       if (anchored !== null) return anchored;
 
+      // The appearances are asked for after the compile: they are drawn on the bytes the pair
+      // agreed on, so the pair is not affected (FRW-057 criterion 4). A failure to prepare them is
+      // not a reason to hold the seal back.
+      const appearances = await deps.appearances?.(ref, workflow, job).catch(() => undefined);
       const run = await sealAndFinalise(deps, {
         ref,
         actor: 'system',
+        appearances,
         pdf,
         compileSha256: [a, b],
         seq,
@@ -151,6 +168,25 @@ export class FinalSealer {
         if (!run.retryable) this.#gaveUp.set(key, 'seal_refused');
         return { status: 'stopped', code: 'seal_stopped', retryable: run.retryable };
       }
+      // What was not drawn is on record for the operator and the owner (FRW-057 criterion 6).
+      if (run.appearances && run.appearances.diagnostics.length > 0)
+        await deps.audit?.record([
+          {
+            id: uuid7(),
+            tenant: ref.tenant,
+            doc: ref.doc,
+            actor: 'system',
+            kind: 'workflow.appearance_diagnostics',
+            data: {
+              workflow: workflow.id,
+              drawn: run.appearances.drawn.length,
+              diagnostics: JSON.stringify(
+                run.appearances.diagnostics.map((d) => ({ id: d.id, code: d.code })),
+              ),
+            },
+            at: deps.now(),
+          },
+        ]);
       await raiseWorkflowEvents(deps, ref, run.final.resource, run.final.control, run.final.raised);
       return { status: 'sealed', run };
     } finally {

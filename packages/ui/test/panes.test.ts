@@ -58,9 +58,11 @@ describe('the registry knows the panes of 13 section 3 at start (UX-019, criteri
     expect(() => new PaneRegistry([]).register(pane({ id: 'Bad Name' }))).toThrow(/lower case/);
   });
 
-  it('gives the built-in panes with content a loader, and leaves the PDF and the rest to the host', () => {
+  it('gives the built-in panes with content a loader, and leaves the rest to the host', () => {
     const registry = new PaneRegistry();
     expect(registry.get('outline')?.load).toBeTypeOf('function');
+    // The PDF preview is built in (EXP-001); see its offer below.
+    expect(registry.get('pdf')?.load).toBeTypeOf('function');
     // The review pane is built in (UX-037): it shows what `suggestionItems` of the core lists.
     expect(registry.get('review')?.load).toBeTypeOf('function');
     // The assistant pane is built in (UX-045); it is offered only while a port is attached.
@@ -99,6 +101,21 @@ describe('a pane is offered only when its feature, capability and data are there
     const registry = new PaneRegistry();
     expect(registry.offered('permissions', coreWith({}), [])).toBe(false);
     expect(registry.offered('permissions', coreWith({ regions: true }), [])).toBe(true);
+  });
+
+  it('offers the PDF preview only with the exports feature, a viewer and a core that follows the newest PDF (EXP-001)', () => {
+    const registry = new PaneRegistry();
+    const view = { get: () => null, subscribe: () => () => undefined };
+    const viewer = { open: () => Promise.reject(new Error('not used')) };
+    const core = (parts: Record<string, unknown>) => parts as unknown as CoreApi;
+    const full = core({ pdf: viewer, exports: { latestPdf: view } });
+    expect(registry.offered('pdf', full, ['exports'])).toBe(true);
+    expect(registry.offered('pdf', full, [])).toBe(false);
+    expect(registry.offered('pdf', core({ exports: { latestPdf: view } }), ['exports'])).toBe(
+      false,
+    );
+    expect(registry.offered('pdf', core({ pdf: viewer, exports: {} }), ['exports'])).toBe(false);
+    expect(registry.offered('pdf', core({ pdf: viewer }), ['exports'])).toBe(false);
   });
 
   it('is not offered when the pane is not known at all', () => {

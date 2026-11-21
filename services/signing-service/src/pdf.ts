@@ -343,6 +343,43 @@ export class PdfDocument {
     if (!p) throw new PdfError('no pages');
     return p;
   }
+
+  /**
+   * Every page in order, with its `/MediaBox` (inherited from the page tree when the page has none)
+   * as `[x0, y0, x1, y1]` in points. A page with no box gets null.
+   */
+  pageList(): Array<{
+    ref: Ref;
+    dict: Dict;
+    mediaBox: [number, number, number, number] | null;
+  }> {
+    const out: Array<{
+      ref: Ref;
+      dict: Dict;
+      mediaBox: [number, number, number, number] | null;
+    }> = [];
+    const box = (v: V | undefined): [number, number, number, number] | null => {
+      const arr = v instanceof Ref ? this.getObject(v.num) : v;
+      if (!Array.isArray(arr) || arr.length !== 4) return null;
+      const n = arr.map((x) => asNumber(x instanceof Ref ? (this.getObject(x.num) as V) : x));
+      return [n[0] as number, n[1] as number, n[2] as number, n[3] as number];
+    };
+    const walk = (ref: Ref, inherited: [number, number, number, number] | null, depth: number) => {
+      if (depth > 64) throw new PdfError('the page tree is too deep');
+      const d = this.dictOf(ref);
+      const own = box(d.get('MediaBox')) ?? inherited;
+      const kids = d.get('Kids');
+      if (!Array.isArray(kids)) {
+        out.push({ ref, dict: d, mediaBox: own });
+        return;
+      }
+      for (const k of kids) if (k instanceof Ref) walk(k, own, depth + 1);
+    };
+    const pages = this.catalog().dict.get('Pages');
+    if (!(pages instanceof Ref)) throw new PdfError('no page tree');
+    walk(pages, null, 0);
+    return out;
+  }
 }
 
 function trailerOf(d: Dict): Trailer {

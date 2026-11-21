@@ -5,6 +5,10 @@
  * WebSocket; the harness mints tokens the way a host does (`POST /tokens`) and forges host-signed
  * ones itself (jws.ts), so attacks are not limited to what the component sends.
  *
+ * A suite that needs only the client's half (addresses, tenants, tokens, calls) takes a `Target`.
+ * `startHarness` gives one with the service's parts beside it; stack-target.ts gives one for the
+ * compose stack of BE-005, a service this process did not start (SEC-002 criterion 5).
+ *
  * PostgreSQL comes from the shared integration environment (`infra/test-env.ps1 up -NoExport`);
  * when it is down the PostgreSQL cases skip with the reason. Each PostgreSQL test file gets its own
  * database, migrated by the admin role, which the service role then uses (as the service's own
@@ -161,6 +165,12 @@ export interface TestTenant {
   serviceKey: KeyPair;
   /** An origin registered for the tenant (10 §3.2). */
   origin: string;
+  /** The `kid` the host key is registered under; `host-<tenant>` when absent. */
+  hostKid?: string;
+  /** The `kid` the service-credential key is registered under; `svc-<tenant>` when absent. */
+  serviceKid?: string;
+  /** The `iss` the host key is registered for, when the registration names one (05 §3.1). */
+  issuer?: string;
 }
 
 export interface CallResult {
@@ -171,10 +181,12 @@ export interface CallResult {
   json: any;
 }
 
-export interface Harness {
-  storage: Storage;
-  service: Service;
-  parts: ServiceParts;
+/**
+ * What the adversarial client needs of a service under attack, whether it runs in this process
+ * (`startHarness`) or is already running, as the compose stack of BE-005 is (stack-target.ts;
+ * SEC-002 criterion 5). A suite written against `Target` runs against either.
+ */
+export interface Target {
   base: string;
   wsUrl: string;
   /** The service identifier every token's `aud` must equal (05 §3.1). */
@@ -182,9 +194,6 @@ export interface Harness {
   /** Two tenants: `a` is the victim, `b` the attacker in cross-tenant tests. */
   a: TestTenant;
   b: TestTenant;
-  db: TestDatabase | null;
-  /** Every structured log line the service wrote (SEC-047). */
-  logs: string[];
   now(): number;
 
   /** A host-signed user token (05 §3.1), with sane defaults the caller overrides. */
@@ -220,27 +229,138 @@ export interface Harness {
   close(): Promise<void>;
 }
 
-async function registerTenant(service: Service, origin: string): Promise<TestTenant> {
+/** The target started in this process, with the parts of the service a test may reach into. */
+export interface Harness extends Target {
+  storage: Storage;
+  service: Service;
+  parts: ServiceParts;
+  db: TestDatabase | null;
+  /** Every structured log line the service wrote (SEC-047). */
+  logs: string[];
+}
+
+/**
+ * The client's own half of a target: the tokens it forges and the calls it makes. Nothing here
+ * reaches into the service, so the same code attacks a service that is already running.
+ */
+export function clientFor(
+  base: string,
+  serviceId: string,
+  now: () => number,
+): Pick<Target, 'userToken' | 'mintToken' | 'serviceJwt' | 'call' | 'createDocument'> {
+  const call: Target['call'] = async (method, path, o = {}) => {
+    const headers: Record<string, string> = { ...(o.headers ?? {}) };
+    if (o.token) headers['Authorization'] = `Bearer ${o.token}`;
+    let body: string | undefined = o.raw;
+    if (o.body !== undefined) {
+      body = JSON.stringify(o.body);
+      headers['Content-Type'] ??= 'application/json';
+    }
+    const res = await fetch(`${base}${path}`, {
+      method,
+      headers,
+      ...(body !== undefined ? { body } : {}),
+    });
+    const text = await res.text();
+    let json: unknown;
+    try {
+      json = text ? JSON.parse(text) : undefined;
+    } catch {
+      /* not JSON */
+    }
+    return { status: res.status, headers: res.headers, text, json };
+  };
+  return {
+    userToken(tenant, sub, docs, o = {}) {
+      const iat = Math.floor(now() / 1000);
+      const header = {
+        alg: tenant.hostKey.alg,
+        typ: 'JWT',
+        kid: tenant.hostKid ?? `host-${tenant.id}`,
+        ...o.header,
+      };
+      const claims = {
+        iss: tenant.issuer ?? 'https://host.example.test',
+        aud: serviceId,
+        iat,
+        exp: iat + 600,
+        jti: uuid7(),
+        tid: tenant.id,
+        sub,
+        docs,
+        ...o.claims,
+      };
+      const sign = o.sign ?? tenant.hostKey;
+      return signJws(header, claims, {
+        key: sign.privateKey,
+        ...(o.hmacKey !== undefined ? { hmacKey: o.hmacKey } : {}),
+      });
+    },
+    async mintToken(tenant, sub, docs, extra = {}) {
+      const r = await call('POST', '/v1/tokens', {
+        token: tenant.apiKey,
+        body: { sub, docs, ...extra },
+      });
+      if (r.status !== 200) throw new Error(`mint failed: ${r.status} ${r.text}`);
+      return r.json.token as string;
+    },
+    serviceJwt(tenant, claims = {}, sign = tenant.serviceKey) {
+      const iat = Math.floor(now() / 1000);
+      return signJws(
+        { alg: sign.alg, typ: 'dep-svc+jwt', kid: tenant.serviceKid ?? `svc-${tenant.id}` },
+        {
+          iss: 'host-backend',
+          aud: serviceId,
+          iat,
+          exp: iat + 300,
+          jti: uuid7(),
+          tid: tenant.id,
+          ...claims,
+        },
+        { key: sign.privateKey },
+      );
+    },
+    call,
+    async createDocument(tenant, content) {
+      const r = await call('POST', '/v1/documents', {
+        token: tenant.apiKey,
+        body: content ? { content } : {},
+      });
+      if (r.status !== 201) throw new Error(`create failed: ${r.status} ${r.text}`);
+      return r.json.id as string;
+    },
+  };
+}
+
+/**
+ * Registers a new tenant with a host key, a service-credential key, an API key and one origin, as
+ * an operator would. The registry is the service's own: in process, or over the database of a
+ * service that is already running (stack-target.ts). `apiKeyId` lets the caller withdraw the key.
+ */
+export async function registerTenant(
+  registry: ServiceParts['registry'],
+  origin: string,
+): Promise<TestTenant & { apiKeyId: string }> {
   const id = randomUUID();
-  await service.parts.registry.putTenant(id, `tenant ${id}`);
+  await registry.putTenant(id, `tenant ${id}`);
   const hostKey = keyPair('EdDSA');
-  await service.parts.registry.addKey(id, {
+  await registry.addKey(id, {
     kid: `host-${id}`,
     use: 'user',
     alg: 'EdDSA',
     jwk: hostKey.jwk,
   });
   const serviceKey = keyPair('ES256');
-  await service.parts.registry.addKey(id, {
+  await registry.addKey(id, {
     kid: `svc-${id}`,
     use: 'service',
     alg: 'ES256',
     jwk: serviceKey.jwk,
   });
   const api = newApiKey(id);
-  await service.parts.registry.addApiKey(id, { id: api.id, secretHash: hashSecret(api.secret) });
-  await service.parts.registry.addOrigin(id, origin);
-  return { id, apiKey: api.credential, hostKey, serviceKey, origin };
+  await registry.addApiKey(id, { id: api.id, secretHash: hashSecret(api.secret) });
+  await registry.addOrigin(id, origin);
+  return { id, apiKey: api.credential, hostKey, serviceKey, origin, apiKeyId: api.id };
 }
 
 export interface HarnessOptions {
@@ -354,8 +474,8 @@ export async function startHarness(storage: Storage, opts: HarnessOptions = {}):
     (service as { url: string }).url = service.url.replace('//0.0.0.0:', '//127.0.0.1:');
   }
   const serviceId = service.url;
-  const a = await registerTenant(service, 'https://app-a.example.test');
-  const b = await registerTenant(service, 'https://app-b.example.test');
+  const a: TestTenant = await registerTenant(service.parts.registry, 'https://app-a.example.test');
+  const b: TestTenant = await registerTenant(service.parts.registry, 'https://app-b.example.test');
   const wsUrl = `${service.url.replace(/^http/, 'ws')}/dep`;
 
   const h: Harness = {
@@ -370,80 +490,7 @@ export async function startHarness(storage: Storage, opts: HarnessOptions = {}):
     db,
     logs,
     now,
-    userToken(tenant, sub, docs, o = {}) {
-      const iat = Math.floor(now() / 1000);
-      const header = { alg: tenant.hostKey.alg, typ: 'JWT', kid: `host-${tenant.id}`, ...o.header };
-      const claims = {
-        iss: 'https://host.example.test',
-        aud: serviceId,
-        iat,
-        exp: iat + 600,
-        jti: uuid7(),
-        tid: tenant.id,
-        sub,
-        docs,
-        ...o.claims,
-      };
-      const sign = o.sign ?? tenant.hostKey;
-      return signJws(header, claims, {
-        key: sign.privateKey,
-        ...(o.hmacKey !== undefined ? { hmacKey: o.hmacKey } : {}),
-      });
-    },
-    async mintToken(tenant, sub, docs, extra = {}) {
-      const r = await h.call('POST', '/v1/tokens', {
-        token: tenant.apiKey,
-        body: { sub, docs, ...extra },
-      });
-      if (r.status !== 200) throw new Error(`mint failed: ${r.status} ${r.text}`);
-      return r.json.token as string;
-    },
-    serviceJwt(tenant, claims = {}, sign = tenant.serviceKey) {
-      const iat = Math.floor(now() / 1000);
-      return signJws(
-        { alg: sign.alg, typ: 'dep-svc+jwt', kid: `svc-${tenant.id}` },
-        {
-          iss: 'host-backend',
-          aud: serviceId,
-          iat,
-          exp: iat + 300,
-          jti: uuid7(),
-          tid: tenant.id,
-          ...claims,
-        },
-        { key: sign.privateKey },
-      );
-    },
-    async call(method, path, o = {}) {
-      const headers: Record<string, string> = { ...(o.headers ?? {}) };
-      if (o.token) headers['Authorization'] = `Bearer ${o.token}`;
-      let body: string | undefined = o.raw;
-      if (o.body !== undefined) {
-        body = JSON.stringify(o.body);
-        headers['Content-Type'] ??= 'application/json';
-      }
-      const res = await fetch(`${service.url}${path}`, {
-        method,
-        headers,
-        ...(body !== undefined ? { body } : {}),
-      });
-      const text = await res.text();
-      let json: unknown;
-      try {
-        json = text ? JSON.parse(text) : undefined;
-      } catch {
-        /* not JSON */
-      }
-      return { status: res.status, headers: res.headers, text, json };
-    },
-    async createDocument(tenant, content) {
-      const r = await h.call('POST', '/v1/documents', {
-        token: tenant.apiKey,
-        body: content ? { content } : {},
-      });
-      if (r.status !== 201) throw new Error(`create failed: ${r.status} ${r.text}`);
-      return r.json.id as string;
-    },
+    ...clientFor(service.url, serviceId, now),
     async close() {
       await service.close();
       await db?.drop();

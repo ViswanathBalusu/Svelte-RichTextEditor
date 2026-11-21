@@ -106,6 +106,8 @@ import {
 } from './control-plane/document-purge.ts';
 import { PgPurgeStore } from './control-plane/document-purge-pg.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
+import { MemorySessionRecordStore, SessionRecords } from './control-plane/session-records.ts';
+import { PgSessionRecordStore } from './control-plane/session-records-pg.ts';
 import {
   MemoryWorkflowResourceStore,
   type WorkflowResourceStore,
@@ -123,6 +125,7 @@ import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
 import type { ConsentTextStore } from './workflow/consent-service.ts';
 import { sweepTenant } from './workflow/schedule-sweep.ts';
 import { FinalSealer } from './workflow/final-seal.ts';
+import { appearanceRequestFor } from './workflow/appearances.ts';
 import { MemoryAnchorStore, type AnchorStore } from './workflow/anchor-store.ts';
 import { HttpSigningClient, type SigningClient } from './workflow/signing-client.ts';
 import { recordParticipantOpened } from './workflow/participant-view.ts';
@@ -178,6 +181,7 @@ import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-ho
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
 import { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
 import { restrictedViews, type Views } from './control-plane/visibility.ts';
+import { serialisedInPool } from './control-plane/workers/checkpoint-store.ts';
 import { WorkerPool } from './control-plane/workers/pool.ts';
 import {
   Autoscaler,
@@ -209,7 +213,14 @@ import type { KeyService } from './storage/key-service.ts';
 import { S3ObjectStore } from './objects/s3.ts';
 import { AzureBlobObjectStore } from './objects/azure.ts';
 import { MemoryObjectStore, type ObjectStore } from './objects/store.ts';
-import type { CreateDataPlane, DataPlane, ErrorContext, ParticipantOpened, Span } from './seams.ts';
+import type {
+  CreateDataPlane,
+  DataPlane,
+  ErrorContext,
+  ParticipantOpened,
+  SessionOpened,
+  Span,
+} from './seams.ts';
 import { createPool, inTenant, isUuid, sqlState, type Pool } from './storage/db.ts';
 import { PgDocumentStore } from './storage/document-store.ts';
 import { PgGrantStore } from './storage/grant-store.ts';
@@ -337,6 +348,11 @@ export interface ServiceParts {
   leases?: NodeLeaseStore;
   /** The read markers of `/read-marker` (HIS-027). Absent: the route is not offered. */
   readMarkers?: ReadMarkerStore;
+  /**
+   * The session records (HIS-003; 08 §2): the user agent family and the client version of each
+   * session, stored before its channel opens. Absent: no session is recorded.
+   */
+  sessionRecords?: SessionRecords;
   /** The comment threads of `/threads` (PRO-059, PRO-060). Absent: the routes are not offered. */
   threads?: ThreadStore;
   /** The named versions of `/versions` (HIS-006; PRO-054). Absent: the routes are not offered. */
@@ -653,6 +669,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     leases: new PgNodeLeases(pool),
     homeRegions: new PgHomeRegions(pool),
     readMarkers: new PgReadMarkerStore(pool),
+    sessionRecords: new SessionRecords(new PgSessionRecordStore(pool)),
     threads: new PgThreadStore(pool),
     versions: new PgVersionStore(pool),
   };
@@ -698,6 +715,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     leases: new MemoryNodeLeases(),
     homeRegions: new MemoryHomeRegions(),
     readMarkers: new MemoryReadMarkerStore(),
+    sessionRecords: new SessionRecords(new MemorySessionRecordStore()),
     threads: new MemoryThreadStore(),
     versions: new MemoryVersionStore((ref) => store.head(ref).then((h) => h.seq)),
   };
@@ -1031,6 +1049,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
             ).then(() => undefined),
         }
       : {}),
+    // HIS-003: the user agent family and the client version of each session (08 §2; decision 24).
+    ...(parts.sessionRecords
+      ? { sessionOpened: (open: SessionOpened) => parts.sessionRecords!.opened(open) }
+      : {}),
     now,
     checkpoints,
     settings: {
@@ -1190,6 +1212,18 @@ export async function startService(opts: StartOptions): Promise<Service> {
       objects: parts.objects,
       queue: parts.queue,
       events,
+      // The visible appearances at the signature and initials fields (FRW-057).
+      ...(parts.evidence
+        ? {
+            appearances: (ref, workflow, job) =>
+              appearanceRequestFor(
+                { objects: parts.objects, content, evidence: parts.evidence! },
+                ref,
+                workflow,
+                job,
+              ),
+          }
+        : {}),
       // The operator's alert (FRW-052 criterion 5): an error line and a counter to alert on. The
       // audit entry `workflow.finalisation_failed` is written by the step itself.
       alert: (a) => {
@@ -1644,7 +1678,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
     documents: parts.documents,
     grants: parts.grants,
     logs,
-    checkpoints,
+    // The content at seq 0 of a new document is serialised in the pool (BE-001 criterion 3).
+    checkpoints: serialisedInPool(checkpoints, pool),
     assets,
     users: parts.users,
     ...(parts.audit ? { audit: parts.audit } : {}),

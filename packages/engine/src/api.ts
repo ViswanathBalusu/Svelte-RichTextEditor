@@ -903,7 +903,13 @@ import type { ThreadSelection } from './comment-decorations.ts';
 import type { SuggestionItem } from './suggestion-list.ts';
 import type { SectionWarning } from './breaks-sections.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
-import type { LocatedFinding, ProofingClock, ProofingInfo, ProofingPort } from './proofing.ts';
+import type {
+  LocatedFinding,
+  ProofingClock,
+  ProofingFindingInfo,
+  ProofingInfo,
+  ProofingPort,
+} from './proofing.ts';
 import type { AssistantRequest, HostAttachment } from './assistant-context.ts';
 
 export interface DocumentApi {
@@ -1071,6 +1077,8 @@ export interface DocumentApi {
   proofingFindings(): readonly LocatedFinding[];
   /** The identifier of the finding the last navigation chose, while it is shown. */
   proofingCurrentId(): string | null;
+  /** The finding with this identifier as the interface reads it; null when it is not shown (UX-008). */
+  proofingFinding(id: string): ProofingFindingInfo | null;
   /** Moves the selection to the next (or previous) finding, wrapping; false when there is none. */
   proofingStep(direction?: 1 | -1): boolean;
   /** Applies one suggestion of a finding as an ordinary edit through the guards (UX-042). */

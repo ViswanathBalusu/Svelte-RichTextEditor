@@ -429,6 +429,11 @@ export class ProofingController {
     return this.locate().find((f) => f.id === id) ?? null;
   }
 
+  /** The finding with this identifier as the interface reads it, while it is shown; null otherwise. */
+  infoOf(id: string): ProofingFindingInfo | null {
+    return asInfo(this.find(id));
+  }
+
   /** The finding that holds `pos`, the first when several do. */
   at(pos: number): LocatedFinding | null {
     return this.locate().find((f) => pos >= f.from && pos <= f.to) ?? null;
