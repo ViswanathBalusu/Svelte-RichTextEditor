@@ -300,9 +300,13 @@ export type CoreQueryName1b =
  * - `insertCaption`: none; numbers the figure, the table or the selected equation the selection is
  *   on, in its caption sequence (FE-134 criterion 1);
  * - `insertCrossReference`: `{ target, format? }`, a target of `referenceTargets` and `null` or
- *   `page` as the format; inserts a `ref` field at the caret (FE-134 criterion 2).
+ *   `page` as the format; inserts a `ref` field at the caret (FE-134 criterion 2);
+ * - `setParagraphFormat`: a patch of `indentLeft`, `indentRight`, `indentFirstLine` (twips) and
+ *   `tabs` (the whole list, or null for none) for the selected paragraphs; the ruler and the
+ *   paragraph dialog both run it (UX-102 criterion 2; FE-129).
  */
 export type CoreCommandName =
+  | 'setParagraphFormat'
   | 'copyFormat'
   | 'pasteFormat'
   | 'paragraphStyle'
@@ -462,6 +466,68 @@ export interface DocumentStats {
     readonly seq: number;
     readonly stale: boolean;
   } | null;
+}
+
+/** One tab stop of a paragraph (03 §7): its place from the left margin, in twips. */
+export interface TabStopView {
+  readonly position: number;
+  readonly align: 'left' | 'center' | 'right' | 'decimal';
+  readonly leader: 'none' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' | 'heavy';
+}
+
+/**
+ * The indents and tab stops of the paragraphs at the selection, for the ruler and the paragraph
+ * dialog (UX-102; 13 §2). Lengths are twips, as the document stores them. A value the selected
+ * paragraphs do not share is null.
+ */
+export interface ParagraphFormatView {
+  /** How many paragraphs the selection covers. */
+  readonly count: number;
+  readonly indentLeft: number | null;
+  readonly indentRight: number | null;
+  /** From the left indent; negative for a hanging indent. */
+  readonly indentFirstLine: number | null;
+  /** By position. */
+  readonly tabs: readonly TabStopView[] | null;
+  /** Where a tab goes when no tab stop lies ahead. */
+  readonly defaultTabStop: number;
+  /** The page the PDF sets this section on; null when the document names none. */
+  readonly page: {
+    readonly width: number;
+    readonly marginLeft: number;
+    readonly marginRight: number;
+  } | null;
+  /** Whether the paragraphs may be changed now. */
+  readonly editable: boolean;
+}
+
+/** The pages of the view on screen, as the navigation pane's thumbnails need them (UX-021). */
+export interface PagesInfo {
+  /** How many pages the view's layout has. */
+  readonly count: number;
+  /** The page the view shows now, counted from 0. */
+  readonly current: number;
+  /** A number that grows with every new layout: a thumbnail drawn before it may be out of date. */
+  readonly revision: number;
+}
+
+/**
+ * Page thumbnails for the navigation pane (UX-021; 13 §2), offered by a view that has pages and a
+ * layout tree to draw them from. The shell draws nothing itself: it gives an element to `paint`.
+ */
+export interface PageThumbnails {
+  /** Null while the view on screen shows no pages (the web view, 02 §7): no thumbnails are offered. */
+  readonly state: ReadView<PagesInfo | null>;
+  /** The size of page `index` in points; null when there is no such page. */
+  size(index: number): { readonly width: number; readonly height: number } | null;
+  /**
+   * Draws page `index` into `target`, `width` CSS pixels wide, in place of what `target` held. The
+   * drawing is a picture for the eye: the shell hides it from assistive technology and names the
+   * thumbnail itself. False when there is no such page.
+   */
+  paint(index: number, target: HTMLElement, width: number): boolean;
+  /** Moves the view to the page; false when there is no such page. */
+  goTo(index: number): boolean;
 }
 
 /** A style the document defines (03 §4 `style_def`; UX-022). Names are content. */
@@ -938,6 +1004,13 @@ export interface CoreApi {
 
   /** Word and page counts (UX-018). */
   readonly stats?: ReadView<DocumentStats>;
+  /** The pages of the view on screen, for the navigation pane's thumbnails (UX-021). */
+  readonly pages?: PageThumbnails;
+  /**
+   * The indents and tab stops at the selection (UX-102); null when the selection covers no
+   * paragraph. Absent: the shell offers no ruler and no paragraph dialog.
+   */
+  readonly paragraphFormat?: ReadView<ParagraphFormatView | null>;
   /** The document's default language (`settings.lang`), a BCP 47 tag; null when not set. */
   readonly language?: ReadView<string | null>;
   /**

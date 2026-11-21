@@ -74,6 +74,8 @@ import { signRequestWatch, signingService, type SigningSource } from './signing.
 import { workflowSendService, type WorkflowSendSource } from './workflow-send.ts';
 import { fieldPropertiesService } from './field-properties.ts';
 import { mathEditorService } from './math-editor.ts';
+import { pagesBridge } from './page-thumbnails.ts';
+import type { PageViewPages } from './page-view/pages.ts';
 import { mayChange } from './status.ts';
 import { attachStyles, type StylePath } from './styles.ts';
 
@@ -138,6 +140,11 @@ export interface MountOptions {
   settings: SettingsStore;
   /** The `mode` the host asked for (05 §8.1); the core applies the most restrictive one allowed. */
   mode: EditMode;
+  /**
+   * The journal holds work an earlier visit left unconfirmed (FE-009): the save indicator starts at
+   * `unsaved` and stays there until the channel is attached (UX-016 criterion 5).
+   */
+  journalHoldsWork?: boolean;
   /**
    * Called when the owner activates the share command; the element raises `de-share-request` from
    * it (PRO-089, UX-039). The shell shows the command when this is given.
@@ -216,6 +223,11 @@ export interface MountedEditor extends EditorHandle {
   text(key: string, params: Readonly<Record<string, string | number>>): string | null;
   /** Brings the host's extensions in line with the list the element holds (UX-050). */
   setExtensions(list: readonly unknown[]): void;
+  /**
+   * The view that shows pages now, for the navigation pane's thumbnails (UX-021); null when the
+   * view on screen has none (the web view), and the pane then offers no thumbnails.
+   */
+  setPageSource(source: PageViewPages | null): void;
   /**
    * Runs the registry command bound to a key event, as the shell's own listener does, for the page
    * view's input bridge, which is a text field that listener leaves alone (FE-098 criterion 6). True
@@ -371,6 +383,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     selectionShim: config.selectionShim,
     deferRemoteWhileComposing: config.deferRemoteWhileComposing,
     mode: options.mode,
+    ...(options.journalHoldsWork ? { journalHoldsWork: true } : {}),
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
     ...(options.assetImage ? { assetImage: options.assetImage } : {}),
     ...(options.drawEquation ? { drawEquation: options.drawEquation } : {}),
@@ -414,6 +427,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The guided bar follows `wf.changed` through the same status (FRW-035 criterion 6).
   const fill = fillView(core, fillActions?.status);
   const suggestionTimes = suggestionTimeCache((id) => core.suggestionTime(id));
+  // The pages of the view on screen, for the navigation pane's thumbnails (UX-021): the page view
+  // gives them while it is shown, and the web view has none.
+  const pages = pagesBridge();
   // The thread service (UX-028 to UX-032): the comments port, with the core's placement of each thread.
   const threads = options.threads ? threadsService(core, options.threads) : null;
   const port = options.permissions ?? null;
@@ -641,6 +657,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The status bar's word count, made off the typing path, and the document's default language
       // (UX-018). There is no typeset result here, so no page count: the web view shows none (02 §7).
       stats: derived<DocumentStats>([core.words], () => ({ words: core.words.get(), pages: null })),
+      // Page thumbnails (UX-021): the state is null until a view with pages is shown.
+      pages: pages.service,
       language: core.language,
       // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
       // port `proofing.get().available` is false and the shell shows no proofing control.
@@ -896,6 +914,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
     setExtensions(list: readonly unknown[]) {
       app.setExtensions(list);
     },
+    setPageSource(source: PageViewPages | null) {
+      pages.set(source);
+    },
     pageShortcut(event: KeyboardEvent) {
       const key = eventKey(event);
       if (key === null) return false;
@@ -927,6 +948,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       signing?.dispose?.();
       fillActions?.dispose();
       workflowCompleteListeners.clear();
+      pages.set(null);
       void unmount(app);
       registry.destroy();
       core.destroy();

@@ -38,6 +38,7 @@ import { paintSelection } from '../../../painter/src/selection-paint.ts';
 import { mountPageWindow, type PageWindow } from '../../../painter/src/window.ts';
 import { shortcutName, SHELL_SHORTCUTS } from '../shortcuts.ts';
 import { FlowText, cssFamily } from './flow-text.ts';
+import { mostVisiblePage, paintThumbnail, textStarts, type PageViewPages } from './pages.ts';
 import { pageProviders } from './providers.ts';
 
 const PX_PER_PT = 96 / 72;
@@ -82,6 +83,8 @@ export interface MountedPageView {
   suspend(): void;
   /** The element is back: the view listens again and lays out once more, as a face may have arrived. */
   resume(): void;
+  /** The pages, for the navigation pane's thumbnails (UX-021). */
+  readonly pages: PageViewPages;
   /** Removes the view and detaches it from the core. Safe to call twice. */
   destroy(): void;
 }
@@ -175,6 +178,11 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
   let status: PageStatus | null = null;
   let win: PageWindow | null = null;
   let tops: number[] = [];
+  /** The pages' heights in points, beside `tops`, and what the thumbnails are told (UX-021). */
+  let heights: number[] = [];
+  let revision = 0;
+  let shownPage = 0;
+  const pageListeners = new Set<() => void>();
   let destroyed = false;
   let failed = false;
   let queued = false;
@@ -249,13 +257,99 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
     win = fresh;
     old?.dispose();
     tops = [];
+    heights = [];
     let y = 0;
     for (const page of result.tree.pages) {
       tops.push(y);
+      heights.push(page.height);
       y += page.height + PAGE_GAP_PT;
     }
     options.onLayout?.(status, performance.now() - started);
+    revision++;
+    shownPage = currentPage();
+    tellPages();
   }
+
+  // --- The pages, for thumbnails (UX-021) ----------------------------------------------------
+
+  /** The page that takes most of the scroller's viewport. */
+  function currentPage(): number {
+    return mostVisiblePage(
+      tops,
+      heights,
+      scroller.scrollTop / PX_PER_PT,
+      scroller.clientHeight / PX_PER_PT,
+    );
+  }
+
+  function tellPages(): void {
+    for (const listener of [...pageListeners]) listener();
+  }
+
+  /** After a scroll: tells the thumbnails when the view shows another page. */
+  function followPage(): void {
+    const now = currentPage();
+    if (now === shownPage) return;
+    shownPage = now;
+    tellPages();
+  }
+
+  /**
+   * Moves the view to a page. The caret goes with it, to the start of the page's text, as it does
+   * for a heading chosen in the pane; left where it was, the next edit, or a change from someone
+   * else, would bring the view back to the caret.
+   */
+  function goToPage(index: number): boolean {
+    if (destroyed || failed || tree === null) return false;
+    const page = tree.pages[index];
+    if (!page) return false;
+    guard(() => {
+      // The first place the core knows as body text: a block the layout made itself is passed over.
+      for (const start of textStarts(page)) {
+        if (!handle.select(start, start)) continue;
+        project();
+        break;
+      }
+      goalX = undefined;
+      scroller.scrollTop = (tops[index] ?? 0) * PX_PER_PT;
+      win?.update();
+      paintCaret();
+      followCaret(false);
+      followPage();
+    });
+    return !failed;
+  }
+
+  const pages: PageViewPages = {
+    info: () => ({
+      count: destroyed || failed ? 0 : (tree?.pages.length ?? 0),
+      current: shownPage,
+      revision,
+    }),
+    size(index) {
+      const page = tree?.pages[index];
+      return page ? { width: page.width, height: page.height } : null;
+    },
+    paint(index, target, width) {
+      if (destroyed || failed || tree === null || text === null) return false;
+      const flowText = text;
+      try {
+        return paintThumbnail(target, tree, index, source(flowText), width, {
+          justify: (blockId) => flowText.justified(blockId) === true,
+        });
+      } catch {
+        // A thumbnail that cannot be drawn is left empty; the page view itself goes on.
+        return false;
+      }
+    },
+    goTo: goToPage,
+    subscribe(listener) {
+      pageListeners.add(listener);
+      return () => {
+        pageListeners.delete(listener);
+      };
+    },
+  };
 
   /** The page elements that are mounted, by page index. */
   function mountedPages(): HTMLElement[] {
@@ -600,6 +694,7 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
       if (tree !== null) {
         paintCaret();
         followCaret(false);
+        followPage();
       }
     }),
   ];
@@ -654,6 +749,7 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
     handle.detach();
     win?.dispose();
     win = null;
+    pageListeners.clear();
     root.remove();
   }
 
@@ -676,6 +772,7 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
       // A face that finished loading during the suspension was not heard: measure again.
       if (loadedFaces() !== facesAtSuspension) onFonts();
     },
+    pages,
     destroy,
   };
 }

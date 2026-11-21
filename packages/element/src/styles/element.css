@@ -741,6 +741,10 @@ table.de-suggest-gone {
 .de-page-view .de-line {
   tab-size: 36pt;
 }
+/* A page thumbnail of the navigation pane (UX-021) is the same painting, scaled down. */
+.de-thumb-sheet .de-line {
+  tab-size: 36pt;
+}
 /* The bridge is a real text field, kept at the caret and invisible: input methods and assistive
    technology find it, and the painted pages are what the eye sees (ADR 0380). */
 .de-page-bridge {

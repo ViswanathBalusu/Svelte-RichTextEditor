@@ -5,9 +5,10 @@
  * user may edit. Each value is checked against the CDM's own range before anything changes: an
  * unknown property, an out-of-range integer or an unknown enumeration makes the command unavailable
  * and changes nothing. The properties are the ones `paragraphProps` in `packages/model`
- * (cdm1.ts) defines, except `tabs` (criterion 2, not built here). `borders` and `shading` are
- * stored whole, as the CDM defines them (criterion 5). The web view draws the stored values
- * (`view/paragraph-format-view.ts`).
+ * (cdm1.ts) defines. `borders`, `shading` and `tabs` are stored whole, as the CDM defines them
+ * (criterion 5; `tabs` for the ruler and the paragraph dialog, UX-102). The web view draws the
+ * stored values but for the tab stops (`view/paragraph-format-view.ts`): a tab in the text is still
+ * the browser's own there (criterion 2 stays open on that).
  */
 import type { Node as PMNode } from 'prosemirror-model';
 import type { Command } from 'prosemirror-state';
@@ -24,6 +25,10 @@ const LINE_RULE = ['multiple', 'exact', 'atLeast'] as const;
 const BORDER_STYLES = ['none', 'single', 'double', 'dotted', 'dashed', 'thick'] as const;
 const BORDER_SIDES = ['top', 'bottom', 'left', 'right', 'between'] as const;
 const COLOUR = /^#[0-9A-F]{6}$/;
+/** A tab stop of the CDM (03 §4.5, §7; `TAB` in cdm1.ts): at most 64 on a paragraph. */
+const TAB_ALIGN = ['left', 'center', 'right', 'decimal'] as const;
+const TAB_LEADER = ['none', 'dot', 'hyphen', 'underscore', 'middleDot', 'heavy'] as const;
+const TAB_LIMIT = 64;
 
 /** The paragraph properties this command may set, with the check each value must pass. */
 const CHECKS = {
@@ -42,6 +47,7 @@ const CHECKS = {
   contextualSpacing: isNullOrBool,
   borders: (v: unknown) => v === null || validBorders(v),
   shading: (v: unknown) => v === null || validShading(v),
+  tabs: (v: unknown) => v === null || validTabs(v),
 } as const;
 
 export type ParagraphFormatKey = keyof typeof CHECKS;
@@ -89,6 +95,26 @@ function validShading(v: unknown): boolean {
     typeof v['fill'] === 'string' &&
     COLOUR.test(v['fill'])
   );
+}
+
+/**
+ * The tab stops of a paragraph, as the CDM's grammar has them: a list of at most 64, each with a
+ * position from the left margin in twips, an alignment and a leader, and nothing else. The order is
+ * the caller's; the ruler and the dialog send them by position, one at a position.
+ */
+function validTabs(v: unknown): boolean {
+  if (!Array.isArray(v) || v.length > TAB_LIMIT) return false;
+  return v.every((tab: unknown) => {
+    if (!isRecord(tab)) return false;
+    const keys = Object.keys(tab);
+    return (
+      keys.length === 3 &&
+      isNullOrInt(tab['position'], ULENGTH_MIN, ULENGTH_MAX) &&
+      tab['position'] !== null &&
+      (TAB_ALIGN as readonly unknown[]).includes(tab['align']) &&
+      (TAB_LEADER as readonly unknown[]).includes(tab['leader'])
+    );
+  });
 }
 
 function isNullOrBool(v: unknown): boolean {
