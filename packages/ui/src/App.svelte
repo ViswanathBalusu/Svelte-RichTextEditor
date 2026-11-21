@@ -29,9 +29,14 @@
   import type { CommandRegistry } from './commands/registry.ts';
   import { bindShortcuts } from './commands/shortcuts.ts';
   import type { CommandEntry, ContextTarget } from './commands/types.ts';
-  // The parts a user reaches only by an action (a right click, the command search, a fill, a
-  // workflow, the full toolbar) are `{#await import()}` blocks in the markup below, so that their
-  // code is not in the first interactive load (FND-008; owner decision 32).
+  // The parts that only show something (the mini toolbar, the full toolbar, the bars of a fill, a
+  // workflow and a role preview, the carets, the access-key tips) are `{#await import()}` blocks in
+  // the markup below, so that their code is not in the first interactive load (FND-008; owner
+  // decision 32). The command search and the context menu are not: each takes the keyboard as it
+  // opens (Alt+Q and then the name; Shift+F10 and then the arrows or Enter), and while a chunk
+  // loaded those keys went to the text (packages/ui/e2e/ux-011-command-search.spec.ts).
+  import CommandSearch from './components/CommandSearch.svelte';
+  import ContextMenu from './components/ContextMenu.svelte';
   import { pressAccessKey } from './commands/access-keys.ts';
   import {
     AccessKeyGesture,
@@ -1668,19 +1673,15 @@
     statusItems={props.statusItems}
   />
   {#if menu}
-    {#await import('./components/ContextMenu.svelte') then { default: ContextMenu }}
-      <ContextMenu
-        point={menu.point}
-        targets={menu.targets}
-        finding={menu.finding}
-        onClose={closeMenu}
-      />
-    {/await}
+    <ContextMenu
+      point={menu.point}
+      targets={menu.targets}
+      finding={menu.finding}
+      onClose={closeMenu}
+    />
   {/if}
   {#if commandSearchOpen}
-    {#await import('./components/CommandSearch.svelte') then { default: CommandSearch }}
-      <CommandSearch onClose={closeCommandSearch} />
-    {/await}
+    <CommandSearch onClose={closeCommandSearch} />
   {/if}
   {#if accessMode}
     {#await import('./components/AccessKeyTips.svelte') then { default: AccessKeyTips }}

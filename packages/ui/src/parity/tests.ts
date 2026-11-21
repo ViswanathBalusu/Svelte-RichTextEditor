@@ -345,6 +345,22 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       },
     ],
   ],
+  // Shipped when UX-037 closed (lane w3, 2026-11-18); entry added by the batch 1 integrator of
+  // 2026-11-20. Suggesting while typing, the review tools and the review pane in the real element,
+  // the shell's review tools, and the resolve commit and the bulk accept and reject in Node.js.
+  [
+    'suggestions',
+    [
+      { path: 'packages/element/e2e/fe-042-composition-suggest.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-036-review-tools.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-037-review-pane.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-037-review-time.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-036-review.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/fe-047-resolve-commit.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/ux-036-review.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/ux-036-037-review-bulk-live.test.ts', kind: 'unit' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);
