@@ -13,6 +13,7 @@ import type { Session } from '../../src/data-plane/session.ts';
 import { DepClient } from '../data-plane/client.ts';
 import { posOf, schema } from '../../../../packages/authority/test/fixtures.ts';
 import { sweepTenant } from '../../src/workflow/schedule-sweep.ts';
+import { openAndSettle } from './first-view.ts';
 import {
   documentWithRegions,
   skipReason,
@@ -119,20 +120,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     }
 
     async function open(c: DepClient, doc: string, ch = 1) {
-      const o = await c.open(ch, doc);
+      // A bound participant's first view is recorded after the channel opens (FRW-040): wait until
+      // the room has it, so that its transition does not interleave with what the test does next.
+      const o = await openAndSettle(h, c, doc, ch);
       expect(o.t, JSON.stringify(o.d)).toBe('ch.opened');
-      const fill = (o.d as { access: { fill: { participant?: string } | null } }).access.fill;
-      // A bound participant's first view is recorded after the channel opens (FRW-040): wait for
-      // it, so that its transition does not interleave with what the test does next.
-      if (fill?.participant !== undefined) {
-        const pid = fill.participant;
-        for (let i = 0; i < 100; i++) {
-          const row = await h.parts.workflows!.read(h.tenant, doc);
-          if (row?.participants.find((p) => p.id === pid)?.firstViewedAt !== undefined) break;
-          await new Promise((r) => setTimeout(r, 30));
-        }
-      }
-      return fill;
+      return (o.d as { access: { fill: { participant?: string } | null } }).access.fill;
     }
 
     const base = async (ref: { tenant: string; doc: string }) => (await h.parts.logs.head(ref)).seq;

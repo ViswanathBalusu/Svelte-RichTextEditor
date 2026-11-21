@@ -17,7 +17,7 @@ import {
   type Storage,
 } from './support.ts';
 
-const comment = { text: 'Is this still right?' };
+const comment = { body: [{ type: 'text', text: 'Is this still right?' }] };
 
 /** A position at the start of the first text block of the document (the text `Hello`). */
 function firstTextPosition(doc: unknown): number {

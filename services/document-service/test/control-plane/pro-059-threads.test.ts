@@ -35,7 +35,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     /** A user token for `sub` with `role` on `doc`; a fresh one each call, as tokens expire. */
     const as = (doc: string, role: string, sub: string) => h.userToken({ [doc]: role }, { sub });
     const threads = (doc: string) => `/v1/documents/${doc}/threads`;
-    const comment = { text: 'Is this still right?' };
+    const comment = { body: [{ type: 'text', text: 'Is this still right?' }] };
 
     it.skipIf(skip)(
       'starts a thread on a block, reads it, refuses a non-author and lets the author delete it (PRO-059 criterion 1 block branch; PRO-060 criteria 1 and 3)',

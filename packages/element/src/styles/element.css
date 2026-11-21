@@ -18,6 +18,9 @@
  *   --de-link                 #0969da     footnote references and links
  *   --de-region               #8250df     a region's rule and title
  *   --de-region-background    #fbefff     a region's background
+ *   --de-region-locked        the text colour            the rule, title and lock indicator of a
+ *                                                        region the user cannot edit
+ *   --de-region-locked-background  a tint of the text colour   its shading
  *   --de-field-background     #eaeef2     fields
  * The shell's sheet documents the properties it reads (colours of controls, spacing, avatars).
  * ProseMirror's own required rules (prosemirror-view/style/prosemirror.css and
@@ -252,6 +255,69 @@ img.ProseMirror-separator {
   color: var(--de-region, #8250df);
   user-select: none;
   margin-bottom: 0.25em;
+}
+
+/*
+ * A region the user cannot edit (PRM-026; 07 §7): shaded, with a lock indicator that says in words
+ * who can edit it. The shading is a tint of the text colour, so it reads on a light page and on a
+ * dark one. The meaning is carried by the indicator's icon and words, never by the shading alone.
+ * The core adds the class from the access in force, so it follows `perm.changed` without a reload.
+ */
+.de-region-locked {
+  border-inline-start-color: var(--de-region-locked, currentColor);
+  background: var(--de-region-locked-background, color-mix(in srgb, currentColor 8%, transparent));
+}
+
+.de-region-locked > .de-region-title {
+  color: var(--de-region-locked, inherit);
+}
+
+.de-region-lock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.4em;
+  margin: 0 0 0.4em;
+  padding: 0.15em 0.4em;
+  border: 1px solid var(--de-region-locked, currentColor);
+  border-radius: 2px;
+  font-family: var(--de-font-ui, system-ui, sans-serif);
+  font-size: 0.8em;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.de-region-lock-label {
+  font-weight: 600;
+}
+
+/* The padlock: a bordered body with a shackle above it. Borders only, so that it is drawn in the
+   text colour and survives forced colours without an image or a font glyph. */
+.de-region-lock-icon {
+  position: relative;
+  flex: none;
+  align-self: center;
+  box-sizing: border-box;
+  inline-size: 0.8em;
+  block-size: 0.6em;
+  margin-block-start: 0.3em;
+  border: 0.14em solid currentColor;
+  border-radius: 0.1em;
+}
+
+.de-region-lock-icon::before {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+  inset-block-end: 100%;
+  inset-inline-start: 50%;
+  inline-size: 0.46em;
+  block-size: 0.4em;
+  margin-inline-start: -0.23em;
+  border: 0.14em solid currentColor;
+  border-block-end-width: 0;
+  border-start-start-radius: 0.23em;
+  border-start-end-radius: 0.23em;
 }
 
 /* FE-141 criterion 1: a placeholder for a hidden region has one fixed size, whatever its title. */
@@ -531,6 +597,29 @@ table.de-suggest-gone {
     border-inline-start-color: CanvasText;
   }
 
+  /* A region the user cannot edit (PRM-026 criterion 3): forced colours drop the shading, so the
+     region is outlined, and its indicator is the system's text colour on the system's canvas. */
+  .de-region-locked {
+    border-inline-start-color: CanvasText;
+    outline: 1px dashed CanvasText;
+    background: Canvas;
+  }
+
+  .de-region-locked > .de-region-title {
+    color: CanvasText;
+  }
+
+  .de-region-lock {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .de-region-lock-icon,
+  .de-region-lock-icon::before {
+    border-color: CanvasText;
+  }
+
   /* Decorations keep a cue that is not a background colour (FE-019 criterion 3): forced colours
      drop the background, so the find matches carry an outline; the current match is heavier. */
   .de-find-match {
@@ -621,4 +710,58 @@ table.de-suggest-gone {
 }
 .de-suggestion-card[hidden] {
   display: none;
+}
+
+/* The page view (FE-101): painted pages on a desk, and the input bridge. The shell's .de-page is the
+   sheet of the web view; in the page view the sheet is the desk and each painted page is its own
+   sheet, so the shell's padding, border and flex rules are reset for the pages inside it. */
+.de-page[data-view='print'] {
+  flex: 1 1 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.de-page-view {
+  position: relative;
+}
+.de-page-scroller {
+  /* The host sets the height it wants; the default is three quarters of the viewport. */
+  height: var(--de-page-view-height, 75vh);
+  overflow: auto;
+  background: var(--de-desk, #d8dce1);
+  overscroll-behavior: contain;
+}
+.de-page-view .de-window .de-page {
+  flex: none;
+  padding: 0;
+  border: 0;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  cursor: text;
+}
+.de-page-view .de-line {
+  tab-size: 36pt;
+}
+/* The bridge is a real text field, kept at the caret and invisible: input methods and assistive
+   technology find it, and the painted pages are what the eye sees (ADR 0380). */
+.de-page-bridge {
+  position: absolute;
+  z-index: 2;
+  inline-size: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  opacity: 0;
+  white-space: pre;
+  font: 11pt serif;
+  line-height: 1;
+  caret-color: transparent;
+}
+.de-page-view:focus-within .de-page-scroller {
+  outline: 2px solid var(--de-focus, #0969da);
+  outline-offset: -2px;
 }

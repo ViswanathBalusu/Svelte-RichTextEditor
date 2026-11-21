@@ -15,7 +15,8 @@
  * It needs the kernel build (`pnpm --filter @docedit/layout-kernel build:wasm`).
  */
 import { type Page, expect, test } from '@playwright/test';
-import { openLib } from './embed-helpers.ts';
+import { KERNEL_ABI_VERSION } from '@docedit/layout-kernel';
+import { editorShown, openLib } from './embed-helpers.ts';
 import { record } from './helpers.ts';
 
 interface Diagnostic {
@@ -83,8 +84,6 @@ async function mountPrint(page: Page, count: number): Promise<void> {
   }, count);
 }
 
-const editor = (i: number) => `doc-editor[data-test="kernel-${i}"]`;
-
 test.describe('the layout worker (WASM-004)', () => {
   test('one editor in the page view starts one module worker from the library, with no shared memory', async ({
     page,
@@ -100,7 +99,8 @@ test.describe('the layout worker (WASM-004)', () => {
     expect(seen.created[0]!.options).toMatchObject({ type: 'module' });
     // No cross-origin isolation was asked of the host, and none was needed.
     expect(await page.evaluate(() => crossOriginIsolated)).toBe(false);
-    await expect(page.locator(`${editor(0)} .de-editing-surface`)).toBeVisible();
+    // The editor is up in the view this browser gets for `print` (FE-101).
+    await editorShown(page, 'kernel-0');
   });
 
   test('a second editor on the page reuses the compiled module: one file request, two workers', async ({
@@ -156,6 +156,68 @@ test.describe('the layout worker (WASM-004)', () => {
     const after = await probe(page);
     expect(after.created).toHaveLength(1);
     expect(after.terminated).toBe(1);
+  });
+
+  // The kernel's request code is a chunk that loads when `view="print"` is asked for (FND-008), so
+  // the element can be destroyed or suspended before that chunk has arrived.
+  test('an element destroyed while the request code loads starts no worker and raises nothing', async ({
+    page,
+  }) => {
+    await watchWorkers(page);
+    await openLib(page);
+    await page.evaluate(() =>
+      (window as unknown as { __lib: { load(): Promise<unknown> } }).__lib.load(),
+    );
+    await page.evaluate(() => {
+      const w = window as unknown as { __probe: Probe };
+      const el = document.createElement('doc-editor') as HTMLElement & { destroy(): void };
+      el.dataset['test'] = 'kernel-destroyed';
+      el.addEventListener('de-diagnostic', (e) =>
+        w.__probe.diagnostics.push((e as CustomEvent<Diagnostic>).detail),
+      );
+      document.getElementById('mount')!.append(el);
+      // The attribute asks for the kernel; destroy() follows in the same task, before the chunk.
+      el.setAttribute('view', 'print');
+      el.destroy();
+    });
+    await page.waitForTimeout(500);
+    const seen = await probe(page);
+    expect(seen.created).toHaveLength(0);
+    expect(seen.diagnostics).toHaveLength(0);
+  });
+
+  test('an element taken out of the page while the request code loads starts no worker', async ({
+    page,
+  }) => {
+    await watchWorkers(page);
+    await openLib(page);
+    await page.evaluate(() =>
+      (window as unknown as { __lib: { load(): Promise<unknown> } }).__lib.load(),
+    );
+    await page.evaluate(() => {
+      const w = window as unknown as { __probe: Probe; __held: Element };
+      const el = document.createElement('doc-editor');
+      el.dataset['test'] = 'kernel-suspended';
+      el.addEventListener('de-diagnostic', (e) =>
+        w.__probe.diagnostics.push((e as CustomEvent<Diagnostic>).detail),
+      );
+      document.getElementById('mount')!.append(el);
+      el.setAttribute('view', 'print');
+      // Suspend in the same task: the element leaves the page before the chunk has arrived.
+      w.__held = el;
+      el.remove();
+    });
+    await page.waitForTimeout(500);
+    expect((await probe(page)).created).toHaveLength(0);
+
+    // Resume: as after any suspend, nothing is created until the kernel is used.
+    await page.evaluate(() =>
+      document.getElementById('mount')!.append((window as unknown as { __held: Element }).__held),
+    );
+    await page.waitForTimeout(300);
+    const after = await probe(page);
+    expect(after.created).toHaveLength(0);
+    expect(after.diagnostics).toHaveLength(0);
   });
 
   test('the built worker answers a batch of whole blocks; the arrays are transferred; cost is measured', async ({
@@ -247,9 +309,11 @@ test.describe('the layout worker (WASM-004)', () => {
         medianWorkerMs: median(sorted('worker')),
       };
     });
+    // The worker answers with the interface version of the kernel it was built with, which is the
+    // one this package expects (the literal 4 that stood here went stale when the interface grew).
     expect(result).toMatchObject({
       type: 'ready',
-      abi: 4,
+      abi: KERNEL_ABI_VERSION,
       isModule: true,
       detached: true,
       matches: true,

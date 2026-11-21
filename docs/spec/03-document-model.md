@@ -28,9 +28,21 @@ The Canonical Document Model is the stored and transferred form of a document. T
 - `requires` lists the optional features (section 11) this document uses. A reader that lacks one of them MUST refuse the document with a clear message; it MUST NOT open it and drop what it does not understand.
 - Title, owner, timestamps and other metadata are not part of the CDM; they belong to the document resource in the control plane.
 
-**Canonical form.** Wherever a hash of a document is taken, the input is the RFC 8785 serialisation of the envelope with these rules: an attribute whose value equals its schema default is omitted; marks on a text node are ordered by their position in the schema's mark list and then by the canonical serialisation of their attributes; adjacent text nodes with equal marks are merged. The conformance kit carries hash fixtures.
+**Canonical form.** Wherever a hash of a document is taken, the input is the RFC 8785 serialisation of the envelope with the rules below. They are those of [ADR 0018](../adr/0018-cdm-attribute-grammars.md), which the owner accepted on 2026-11-15 (decision 7 of the [owner's decisions](../owner-decisions-2026-11-15.md)).
 
-**Units.** Lengths are integers in twentieths of a point (1/1440 inch), including font sizes. `lineSpacing` under the `multiple` rule is an integer in thousandths (1150 means 1.15 lines). Colours are `#RRGGBB`.
+1. An attribute whose value equals its schema default is omitted. That includes an `ext` equal to `{}` and an `id` equal to null. An attribute whose value is an object or a list is compared with its default as a whole: a default inside it is not stripped.
+2. An empty `attrs`, `content` or `marks` is omitted, as the example of section 12 omits `content` on an empty paragraph.
+3. Marks are ordered by their position in the schema's mark list and then by the canonical serialisation of their attributes. The order of the mark list is part of the published schema and of its hash. The `suggest` list of a block (section 5) is an attribute, and the canonical form does not reorder it.
+4. Adjacent text nodes with equal marks are merged, and a text node without text is dropped.
+5. `requires` is sorted by UTF-16 code units and holds no value twice.
+6. Every number is an integer in the interoperable range of RFC 8785 (principle 7). A document that holds any other number has no canonical form: canonicalisation fails with an error and never writes a floating-point number.
+7. The bytes are the UTF-8 encoding of the RFC 8785 text, and a hash is the SHA-256 of those bytes.
+
+The canonical form of a subtree is the canonical form of that node alone, without the envelope, under the same rules. An approval hashes a region this way (07, section 11).
+
+The rules have a version of their own, the canonical form version. It is 1. Whatever stores a hash to compare later, such as a commit, a checkpoint or an approval, records the version beside the hash, so that an old hash can still be checked after the rules change. A change of the rules raises the version and is declared with the release; the expected bytes of an existing fixture never change under one version. The conformance kit carries the hash fixtures: for each rule, inputs with their canonical bytes and their SHA-256.
+
+**Units.** Lengths are integers in twentieths of a point (1/1440 inch), including font sizes. `lineSpacing` under the `multiple` rule is an integer in thousandths (1150 means 1.15 lines). Colours are `#RRGGBB` with the letters in upper case, so that two implementations write the same bytes. Every integer lies inside the range that RFC 8785 serialises the same way in every language; section 4.8 gives the ranges.
 
 ## 3. Structure
 
@@ -56,7 +68,7 @@ doc
 
 ## 4. Nodes
 
-An attribute value of `null` means "not set here; inherit". Every node and mark also has an `ext` attribute (section 11.2).
+An attribute value of `null` means "not set here; inherit". Every node and mark also has an `ext` attribute (section 11.2). Every attribute has a grammar and a default; section 4.8 gives the rules, and the tables below name the attributes.
 
 ### 4.1 Definition nodes
 
@@ -71,7 +83,7 @@ An attribute value of `null` means "not set here; inherit". Every node and mark 
 | `source_def` | none | Draft (section 4.7). `id`, `kind` (a CSL item type), `title`, `authors`, `editors` (lists of names), `issued`, `accessed` (dates as EDTF strings), `containerTitle`, `publisher`, `publisherPlace`, `edition`, `volume`, `issue`, `pages`, `number`, `doi`, `url`, `isbn`, `issn`, `language`, `note`, `extra` (further CSL variables) |
 | `story` | `block+` | `id`, `kind` (`header`, `footer`) |
 
-Built-in styles (`Normal`, `Heading1` to `Heading9`, `Caption`, `FootnoteText` and the like) have reserved identifiers and are present in every document. Every other definition gets a random identifier; its human-readable label is `name`. When pasted content brings a definition whose identifier already exists, the editing core maps it to the existing one instead of inserting a duplicate.
+Built-in styles (`Normal`, `Heading1` to `Heading9`, `Caption`, `FootnoteText` and the others that section 4.8 lists) have reserved identifiers. A reserved identifier may be used only by a built-in style of its kind. The built-in styles are available to every document: a document defines the ones it uses, as the example of section 12 defines two, and a document that lacks a built-in style is valid (owner decision 7 of 2026-11-15). A new document made by the model has all of them. Every other definition gets a random identifier from the editor; its human-readable label is `name`. When pasted content brings a definition whose identifier already exists, the editing core maps it to the existing one instead of inserting a duplicate.
 
 Formatting properties of a style are separate attributes so that two people changing different properties of the same style do not overwrite each other. `levels` in a numbering definition is one attribute; concurrent edits to the same numbering definition resolve to the later commit.
 
@@ -157,6 +169,34 @@ Draft, from [ADR 0031](../adr/0031-cdm-1-model-completion.md) (proposed; CDM-052
 - A `citation` is an inline atom naming one or more sources in order. Every cited source exists, and a source that is still cited cannot be deleted (invariant I4).
 - A `bibliography` is a block atom. Its entries, like the text of a citation, are generated at layout and export time in the style `settings.citationStyle` names.
 
+### 4.8 Attribute grammars, defaults and reference forms
+
+From [ADR 0018](../adr/0018-cdm-attribute-grammars.md), which the owner accepted on 2026-11-15 (decision 7 of the [owner's decisions](../owner-decisions-2026-11-15.md)). Every attribute has a grammar, which invariant I11 checks: a type, and a range, a length or a pattern. Every attribute has a default, which the canonical form omits (section 2). The values live in one place, the definition in `packages/model`. The table generated from it, [`spec/cdm/cdm-1.attributes.md`](../../spec/cdm/cdm-1.attributes.md), gives the grammar and the default of every attribute of every node and mark, and is normative for each of them. These are the rules behind it.
+
+| Topic | Rule |
+|---|---|
+| Required values | An `id`, and a few others such as the `asset` of a figure, the `name` of a style and the `pageSetup` of the body, are required in a stored document. Their default is null only so that ProseMirror can create the node (section 9). I2 refuses a null `id` at the end of a commit, and I11 refuses null in the others |
+| Integers | Lengths are at most 31,680 twips (22 inches); indents may be negative by as much. Font sizes are 20 to 32,760 twips (1 to 1,638 points). Every range lies inside the interoperable range of RFC 8785, at most 2^53 - 1 in size |
+| Colours | `#RRGGBB` with the letters `A` to `F` in upper case |
+| Strings | Lengths count Unicode code points, as JSON Schema does. Free text refuses the C0 and C1 control characters and DEL, except tab and line feed. Patterns are ASCII regular expressions that behave the same in ECMAScript and in Python |
+| Alignment | Paragraphs: `start`, `center`, `end`, `justify`, `distribute`. These are logical values, because a paragraph has a direction. Tables, figures and numbering levels: `start`, `center`, `end` |
+| Tab stops | Alignment: `left`, `center`, `right`, `decimal`. Leader: `none`, `dot`, `hyphen`, `underscore`, `middleDot`, `heavy`. Positions are measured from the left margin (section 7) |
+| Borders | An object `{ style, width, color, space }`. Style: `none`, `single`, `double`, `dotted`, `dashed`, `thick`. The width is 0 to 240 twips, a null colour means automatic, and the space is 0 to 620 twips. A paragraph has the sides `top`, `bottom`, `left`, `right` and `between`; a table has `top`, `bottom`, `left`, `right`, `insideH` and `insideV`; a cell has the four sides |
+| Shading | An object `{ fill }`, so that a pattern can be added later without a new attribute |
+| Other value sets | Orientation: `portrait`, `landscape`. Page number format: `decimal`, `lowerRoman`, `upperRoman`, `lowerLetter`, `upperLetter`. Footnote format: `decimal`, `lowerRoman`, `upperRoman`, `lowerLetter`, `upperLetter`, `symbol`. Vertical alignment of a cell: `top`, `center`, `bottom`. Highlight: `yellow`, `green`, `cyan`, `magenta`, `blue`, `red`, `darkBlue`, `darkCyan`, `darkGreen`, `darkMagenta`, `darkRed`, `darkYellow`, `darkGray`, `lightGray`, `black`, `white`; these are the sixteen highlight colours of Word files, so that imports round-trip (A2). A language is a well-formed BCP 47 tag |
+| Built-in styles | Paragraph styles: `Normal`, `Heading1` to `Heading9`, `Title`, `Subtitle`, `Quote`, `IntenseQuote`, `ListParagraph`, `NoSpacing`, `Caption`, `FootnoteText`, `Header`, `Footer`, `TOCHeading`, `TOC1` to `TOC9`. Character styles: `DefaultParagraphFont`, `FootnoteReference`, `Hyperlink`, `Strong`, `Emphasis`. Table styles: `TableNormal`, `TableGrid` |
+| Bullets | The published list for `bulletChar`: • ◦ ▪ ■ □ ● ○ – — ➢ ✓ ♦ ◆ * - |
+| Definition identifiers | 1 to 64 characters from the letters `A` to `Z` and `a` to `z`, the digits, `_` and `-`, so the `ps1` of the example in section 12 is valid. The editor gives a new definition a random identifier of 16 characters |
+| Node identifiers | 16 characters of the URL-safe Base64 alphabet (section 9). A `listId` has the same form |
+| Field targets | One form for each kind of target of `field.target`: `bookmark:<name>`; `node:<paragraph id>` for a heading, a numbered paragraph and a caption; `eq:<label>` for an equation; `style:<style id>` for `styleRef`; `field:<key>` for `formValue` |
+| Link targets | `link.href` is an `http`, `https` or `mailto` address, or `#<name>` for a target in the document (I9) |
+| Unique names | The `name` of an `anchor` and the `label` of an equation are unique in the document, because references point at them |
+| The `ext` attribute | An object whose keys have the form `vendor.example:name`. At most 4 KiB of canonical JSON, at most 8 levels deep, integers only (section 11.2) |
+| The `before` of a `fmt` suggestion | `{ "marks": [mark JSON], "attrs": { name: value } }`, at most 4 KiB |
+| Extension payloads | At most 16 KiB on an `extension_block` (I12) and at most 4 KiB on an `extension_inline`. A payload never holds a number that is not an integer |
+
+The limits of preserved data are in section 4.6.
+
 ## 5. Marks
 
 | Mark | Attributes | Notes |
@@ -196,18 +236,86 @@ For runs, continue with:
 7. The character style chain.
 8. Direct marks. A toggle mark with `value: false` switches the property off.
 
+The details are those of [ADR 0032](../adr/0032-layout-semantics.md), section 1 (accepted, section 7), and the fixtures are in `cascade.json`:
+
+- When no layer sets a property, a paragraph has `align: start`, indents and spaces of 0, a `lineSpacing` of 1000 under `multiple`, `widowControl` on and every other boolean off, and no tabs, borders or shading. Its `dir` comes from `settings.dir`. A run has a `fontSize` of 220, every toggle off, `underline: none`, `vertAlign: baseline`, and no colour or highlight. Its `lang` comes from `settings.lang`, and a null `fontFamily` means the default face of the font registry.
+- A style counts once, at the first layer that reaches it. The default paragraph style is layer 1 and is not applied again in layer 3, so a table style overrides it for content in a table.
+- The numbering level contributes its `indentLeft`, and its `hanging` as a negative `indentFirstLine`. Its `align` places the label and its `runProps` format the label only.
+- `numbering` resolves like a property through the style layers. A paragraph's own `numbering` replaces it whole.
+- `tabs`, `borders`, `shading` and `numbering` are whole values: the last layer that sets one gives all of it. An empty `tabs` list clears the stops a style sets.
+- Every other property resolves by itself, `lineSpacing` and `lineRule` included. The last layer that sets a toggle wins.
+- The marks `link`, `ins`, `del`, `fmt` and `preserved` do not format. Text with a `fmt` suggestion shows the formatting it suggests.
+- The `outlineLevel` of a heading comes from the paragraph's own style chain, not from the default style.
+- A missing style, a cycle and a chain of more than ten styles are typed errors, and resolution always ends.
+
 ## 7. Layout semantics
 
-The editor, the LaTeX writer and the DOCX writer must agree on more than formatting values. These rules are normative, and `packages/model` holds their one implementation and the shared fixtures. They are to be completed with fixtures during phases 0 and 1.
+The editor, the LaTeX writer and the DOCX writer must agree on more than formatting values. These rules are normative, and `packages/model` holds their one implementation and the shared fixtures. They are the rules of [ADR 0032](../adr/0032-layout-semantics.md), which gives the reasons; the owner accepted it on 2026-11-15 (decisions 9, 10 and 11 of the [owner's decisions](../owner-decisions-2026-11-15.md)). Each rule has fixtures in `packages/model/fixtures/semantics/`: language-neutral JSON with the input, the expected labels or geometry, and the edge cases. An engine or a writer in any language checks its own output against them.
 
-| Topic | Rule |
-|---|---|
-| Numbering | One algorithm computes every label from `numbering_def`, `numbering`, `listId`, `numberingRestart` and document order, across regions and tables. Writers print the computed label as literal text; they do not rely on their own counters. Cross-references to numbered items print the computed label too. Page numbers are the one exception, because only the typesetter knows them |
-| Paragraph spacing | The gap between two paragraphs is the larger of the first one's `spaceAfter` and the second one's `spaceBefore`. With `contextualSpacing`, the gap between two paragraphs of the same style is zero |
-| Line spacing | `multiple` applies per line to the height of the tallest run on that line; `exact` and `atLeast` are lengths |
-| Header growth | A header taller than the space the page setup gives it pushes the body down |
-| Tabs | Left, centre, right and decimal tab stops with leaders, measured from the left margin |
-| Fields | `date` fields, and form fields of kind `dateSigned` (12, section 3.3), use the time zone of the workflow or of the export job, never the client's |
+| Topic | Rule | Fixtures |
+|---|---|---|
+| Numbering | One algorithm computes every label from `numbering_def`, `numbering`, `listId`, `numberingRestart` and document order, across regions and tables. The LaTeX writer prints the computed label as literal text and uses no counters of its own. The DOCX writer writes Word's own numbering from the same definitions, so that a list stays a list in Word, and Word counts (owner decision 215). Cross-references to numbered items print the computed label too. Page numbers are the one exception, because only the typesetter knows them. Section 7.1 | `numbering-lists.json`, `numbering-sequences.json`, `numbering-footnotes.json`, `numbering-references.json`, `numbering-projections.json` |
+| Paragraph spacing | The gap between two paragraphs is the larger of the first one's `spaceAfter` and the second one's `spaceBefore`. With `contextualSpacing`, the gap between two paragraphs of the same style is zero. Section 7.2 | `paragraph-spacing.json` |
+| Line spacing | `multiple` applies per line to the height of the tallest run on that line; `exact` and `atLeast` are lengths. Section 7.3 | `line-spacing.json` |
+| Tabs | Left, centre, right and decimal tab stops with leaders, measured from the left margin. Section 7.4 | `tabs.json` |
+| Header growth | A header taller than the space the page setup gives it pushes the body down. A footer grows the same way, upwards. Section 7.5 | `header-growth.json` |
+| Spaces | Every space is kept; a run of spaces is not collapsed. Section 7.6 | `whitespace.json` |
+| Fields | `date` fields, and form fields of kind `dateSigned` (12, section 3.3), use the time zone of the workflow or of the export job, never the client's. Section 7.7 | `date-fields.json` |
+
+The cascade of section 6 has its fixtures in the same folder, in `cascade.json`. The expected values of every fixture were written by hand from the rules, not generated by the implementation.
+
+### 7.1 Numbering
+
+- A list instance is a `listId`. Each of its nine levels has a counter, which starts at `start - 1`. A paragraph counted at a level adds one to that level's counter, or sets it to the paragraph's `numberingRestart`. Paragraphs on two definitions that share a `listId` share the counters, and each is formatted by its own definition.
+- `restartAfter` is a level index counted from 0, like the `level` of `numbering`. When it is null, the level restarts after any higher level is counted. A value below the level means that it restarts only when a level from 0 to that value is counted. A value at or above the level itself means that it never restarts.
+- `numberingRestart` sets the counter of the paragraph's own level, and the label shows it. Deeper levels restart as after any count. Higher levels do not change.
+- A placeholder shows the counter of its level. A level that has not been counted yet shows `start - 1`, never less than 0, so level 0 followed by level 2 gives "1.0.1". A placeholder for a level that the definition does not have shows nothing.
+- With `legal`, the placeholders for the levels above the paragraph's own are decimal, whatever their format.
+- Letters run a to z, then aa to zz, then aaa. Roman numerals write thousands beyond three as repeated m. Neither has a zero: 0 is written "0". A bullet level prints its `bulletChar`, or • when that is null, and still counts. The format `none` prints nothing for its own level.
+- The `numbering` of a paragraph style joins the list instance that its `listId` names. A style based on a numbered style joins the same list, which is how headings are numbered.
+- A paste gives each `listId` in the pasted content a fresh one, the same fresh one for every paragraph that had it, so the copy is a new list that counts from its start values. A move keeps the `listId`.
+- A `seq` field counts in the sequence its `name` gives, in document order through the body: regions, table cells, figure captions and footnotes alike. Its `format` names a number format, decimal when it names none. A `seq` field without a name counts in no sequence and shows nothing. Numbered equation blocks count in the sequence `Equation`, together with the `seq` fields of that name, and an equation shows its number in parentheses.
+- Footnotes are counted in document order through the body, in the format of `settings.footnoteFormat`. The format `symbol` cycles * † ‡ § and then doubles them. With `footnoteRestart` set to `perPageSection`, the count restarts at every section break. The paragraph of a footnote is visited at the footnote's place in the text, so its numbered paragraphs and `seq` fields count there.
+- Each header and footer story is numbered on its own. A footnote in a story gets no mark.
+- A `ref` field prints the label of its target as it stands, punctuation included. For a `node:` target that is the paragraph's list label, or else its first `seq` number. For a `bookmark:` target it is the label of the paragraph or figure that holds the bookmark, or the mark of the footnote that holds it. For an `eq:` target it is the equation's number. A target without a label and a hidden target give no text, and the writer reports it.
+- A reader of a projection (ADR 0019) sees the numbers of the full document, and gaps may show (owner decision 11). The placeholder of a hidden region carries a counter effect, computed on the full document, which is applied at its place.
+
+### 7.2 Paragraph spacing
+
+- Contextual spacing is each paragraph's own, for its own side. When two neighbours have the same resolved style, a paragraph that has `contextualSpacing` drops its space on the side that faces the other. Two paragraphs of one style that both have it have no gap. If only the upper one has it, the lower one's `spaceBefore` remains.
+- The same style means the same resolved style: a paragraph whose `style` is null has the default paragraph style.
+- The first paragraph of a cell, a story, a footnote or the body keeps its `spaceBefore`, and the last keeps its `spaceAfter`. Both count in the height of the container.
+- Regions and section breaks are transparent: spacing and contextual spacing run across them as if they were not there.
+- A table, a figure, a display equation, a table of contents, an extension block, a preserved block and the placeholder of a hidden region have no spacing of their own. The gap next to one is the paragraph's own space.
+- The paragraphs of consecutive footnotes on a page follow the same rule.
+- Whether `spaceBefore` is dropped at the top of a page or a column is not fixed here. It belongs to pagination (02, section 9.4).
+
+### 7.3 Line spacing
+
+- Under `multiple`, the height of a line is `lineSpacing` thousandths of the natural single-spaced height of the tallest run on the line, rounded half up to whole twips: 1150 thousandths of 253 twips is 290.95 and gives 291 (owner decision 78). The height of a run is the line height of its font at its size. An inline picture or box counts as a run of its own height. An empty line has the height of the paragraph mark.
+- Under `exact`, `lineSpacing` is the height of the line whatever its runs hold. Under `atLeast`, the height is the larger of `lineSpacing` and the natural height of the tallest run.
+
+### 7.4 Tabs
+
+- A tab moves to the nearest of three candidates: the first of the paragraph's stops to the right of the current position; with a hanging indent, the left indent; and the next multiple of `settings.defaultTabStop` to the right of both the current position and the paragraph's last stop. Explicit stops clear the default stops to their left; the stop of a hanging indent does not. At one position an explicit stop wins over the stop of a hanging indent, and that over a default stop.
+- A list label is followed by a tab, which the same rule resolves.
+- The segment after a tab is the text up to the next tab, line break or end of the paragraph. A left stop starts the segment at the stop. A right stop ends it there. A centre stop centres it there, with half the width rounded down. A decimal stop puts the first decimal separator of the segment there, or its end when it has none. A segment that does not fit starts at the current position. The leader fills the span from the current position to the segment.
+- In version 1 the decimal separator is a full stop, and a right-to-left paragraph measures its tabs the same way.
+
+### 7.5 Header and footer growth
+
+- The body starts at the larger of `marginTop` and `headerDistance` plus the height of the header.
+- The body ends at the smaller of `height - marginBottom` and `height - footerDistance` less the height of the footer.
+- When the header and the footer leave no room, the height of the body is 0. The first page is shipped with an empty body, and the body starts on the next page at the same top (owner decision 77).
+- With `differentFirstPage`, the first page of a page section shows `headerFirst`. Otherwise, with `differentOddEven`, an even page shows `headerEven`. Otherwise a page shows `headerDefault`. Footers follow the same rule. A null slot means no header on those pages; it does not fall back to another slot.
+
+### 7.6 Spaces
+
+Each U+0020 is one space wide and stretches under justification (02, section 9.3). Leading and trailing spaces of a paragraph are kept. Other space characters are ordinary characters.
+
+### 7.7 Date fields
+
+The text of a `date` field is computed from the server's instant and the time zone of the workflow or of the export job. There is no default zone. The `format` picture has the tokens `yyyy`, `yy`, `MM`, `M`, `dd`, `d`, `HH`, `H`, `mm` and `ss`; text in single quotes and every other character is literal; a null `format` gives `yyyy-MM-dd`. Month and day names are not supported in version 1, because they need locale data that differs between engines.
 
 ## 8. Invariants
 
@@ -225,7 +333,7 @@ The authority MUST reject a commit whose result violates any of these. `model.va
 | I8 | `latex` attributes pass the math gate in 09 |
 | I9 | `link.href` uses an allowed scheme: `http`, `https`, `mailto`, or an in-document target |
 | I10 | Forbidden combinations: a footnote inside a footnote or a caption; a figure with `placement: float` inside a table cell; page and column breaks inside cells, captions and footnotes; tables inside stories and footnotes; form fields inside stories and footnotes (12, section 3.2) |
-| I11 | Every attribute value matches the grammar declared for it in the schema: type, range, length and pattern. Identifiers, names, templates, colours and lengths all have one. This is what keeps hostile strings out of the exporters (09) and out of the editor's styles |
+| I11 | Every attribute value matches the grammar declared for it in the schema: type, range, length and pattern (section 4.8). Identifiers, names, templates, colours and lengths all have one. This is what keeps hostile strings out of the exporters (09) and out of the editor's styles |
 | I12 | Reserved for the rules on extensions: the envelope of an extension node is valid and within its size limit |
 
 I13 to I15 are defined in 12.
@@ -234,14 +342,16 @@ I13 to I15 are defined in 12.
 
 Node identifiers are 16-character strings over the URL-safe Base64 alphabet, generated randomly by the client that creates the node.
 
-In the editing schema `id` defaults to null, because ProseMirror cannot create or fill nodes that have a required attribute. The identifier plugin sets missing identifiers in the same transaction, and invariant I2 is checked at the end of the commit. When a paragraph is split, the part that keeps the existing content keeps the identifier; pressing Enter at the start of a paragraph gives the fresh identifier to the new empty paragraph. Copies made by pasting or duplicating get fresh identifiers.
+In the editing schema `id` defaults to null, because ProseMirror cannot create or fill nodes that have a required attribute. The identifier plugin sets missing identifiers in the same transaction, and invariant I2 is checked at the end of the commit. When a paragraph is split, the part that keeps the existing content keeps the identifier; pressing Enter at the start of a paragraph gives the fresh identifier to the new empty paragraph. When a paragraph is split in the middle, the first part keeps the identifier and the second gets a fresh one, as at the end of a paragraph: the identifier stays with the start of the content, which is what comments on blocks and diagnostics point at (ADR 0018). Copies made by pasting or duplicating get fresh identifiers.
+
+Definition identifiers have their own, wider form (section 4.8): a reserved built-in name, or any short identifier such as the `ps1` of the example in section 12. The editor gives a new definition a random identifier of 16 characters.
 
 ## 10. Writer support
 
 | Construct | LaTeX (PDF) | DOCX | Notes |
 |---|---|---|---|
 | Named styles, direct formatting, fonts, colours | Yes | Yes | LaTeX uses macros generated from the styles |
-| Multi-level numbering | Yes | Yes | Literal labels from the shared algorithm |
+| Multi-level numbering | Yes | Yes | LaTeX prints literal labels from the shared algorithm. DOCX writes Word's own numbering from the same definitions (section 7; owner decision 215) |
 | Tables with spans, borders, shading, repeated header rows | Partial | Yes | Three table writers in LaTeX (09, section 3.2). A row taller than a page is split by the converter at paragraph boundaries. Tables inside multi-column sections, headers and footnotes cannot span pages |
 | Inline images and block figures with captions | Yes | Yes | |
 | Floating figures with text wrap | No | No | Not in the model in version 1 |
@@ -270,6 +380,8 @@ The writer-support table of every construct (each node type, mark, `field` kind 
 ### 11.2 Additive attributes
 
 A ProseMirror schema silently drops attributes it does not declare. New optional attributes are therefore introduced inside `ext`, an object attribute present on every node and mark with default `{}`, under a namespaced key. Every reader preserves `ext` unchanged. An attribute moves out of `ext` only at the next major version.
+
+A key of `ext` has the form `vendor.example:name`: a namespace in lower-case letters, digits, dots and hyphens, a colon, and a name. The whole object is at most 4 KiB of canonical JSON and at most 8 levels deep, and it holds no number that is not an integer (section 4.8; I11).
 
 ### 11.3 Migration
 
@@ -316,3 +428,7 @@ A ProseMirror schema silently drops attributes it does not declare. New optional
 - Citations and a bibliography are a version 1 requirement since the owner's decision of 2026-11-06 that the first release serves all three candidate markets, academic writing included. Section 4.7 defines them as a draft (CDM-052; ADR 0031, proposed), and EXP-121 maps them to `biblatex`. The citation styles of the house class (`settings.citationStyle`) are proposed, not decided.
 - `levels` of a numbering definition is one attribute. If concurrent edits to numbering definitions prove common, levels should become child nodes.
 - Block-level suggestions for table cells and columns are not defined.
+- The template of a numbering level takes only the placeholders `%1` to `%9` and a little punctuation (section 4.1), so the "Article %1" of a Word file cannot be stored. The grammar must widen before such files are imported without loss (A2; ADR 0018, open questions; review SR-M22).
+- A list of tab stops replaces the inherited list as a whole. It cannot clear one inherited stop, which Word files do (ADR 0018, open questions).
+- `caption` has no `id`, although principle 6 gives every block-level node one, and the `title` field has no source of its text inside the CDM (ADR 0018, open questions).
+- Layout semantics that ADR 0032 leaves open (section 7): a paragraph cannot switch off the numbering its style gives it; a numbering level cannot choose what follows its label (a tab, a space or nothing); whether the decimal separator of a decimal tab follows the language; whether a right-to-left paragraph measures its tabs from the right margin; whether `spaceBefore` is dropped at the top of a page or a column, and where the extra space of a `multiple` line goes; whether footnotes are allowed in headers and footers; and month and day names in date pictures. The first two need a change of the definition before Word files are imported without loss (A2).

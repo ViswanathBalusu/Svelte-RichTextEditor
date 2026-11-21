@@ -9,6 +9,7 @@ import type { AccessObject, AccessSummary, RegionSummary } from '../src/core-api
 import { sourceTranslator } from '../src/i18n/strings.ts';
 import {
   mayEditRegion,
+  regionLabelDefaults,
   regionLabels,
   scopeAnnouncement,
   whoCanEdit,
@@ -102,12 +103,27 @@ describe('lock indicators (PRM-026, criterion 1, the shell side)', () => {
 
   it('labels a region the user may only suggest in, since they cannot edit it', () => {
     const labels = regionLabels(
-      [region({ id: 'r1' })],
-      access({ 'region:r1': ['view', 'suggest'] }),
+      [region({ id: 'r1' }), region({ id: 'r2' })],
+      access({ 'region:r1': ['view', 'suggest'], 'region:r2': ['view', 'comment'] }),
       tr,
       nameOf,
     );
-    expect(Object.keys(labels)).toEqual(['r1']);
+    expect(Object.keys(labels)).toEqual(['r1', 'r2']);
+    // It is not read-only for them: the short words say that they may suggest there.
+    expect(labels['r1']!.indicator).toBe('Suggestions only');
+    expect(labels['r2']!.indicator).toBe('Read-only');
+  });
+
+  it('gives the core words for a locked region the list does not name', () => {
+    // The core shades from the access, so it may lock a region before the list holds it: one the
+    // access does not list yet says why, any other says only that it is read-only.
+    expect(regionLabelDefaults(tr)).toEqual({
+      locked: { indicator: 'Read-only', description: '' },
+      unlisted: {
+        indicator: 'Read-only',
+        description: 'Your permissions for this new part have not arrived yet.',
+      },
+    });
   });
 });
 

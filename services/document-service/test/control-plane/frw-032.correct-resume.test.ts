@@ -10,6 +10,7 @@ import { DepClient, insertText as insertAt } from '../data-plane/client.ts';
 import { posInside, posOf, schema } from '../../../../packages/authority/test/fixtures.ts';
 import { recordCompletion, recordFirstView } from '../../src/workflow/progress.ts';
 import type { TransitionDeps } from '../../src/workflow/transitions.ts';
+import { openAndSettle } from './first-view.ts';
 import {
   documentWithRegions,
   skipReason,
@@ -245,18 +246,14 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         clients.push(client);
         const token = h.userToken({ [doc]: 'filler' }, { sub: 'sub-p1', wfp: 'p1' });
         expect((await client.hello(token)).t).toBe('welcome');
-        const opened = await client.open(1, doc);
+        // Waits until the room has the first view the open records, so that its transition does not
+        // interleave with the commit below.
+        const opened = await openAndSettle(h, client, doc);
         expect(opened.t).toBe('ch.opened');
         expect((opened.d as { access: { fill: unknown } }).access.fill).toMatchObject({
           participant: 'p1',
           active: true,
         });
-        // Wait for the first view the open records, so that its transition does not interleave.
-        for (let i = 0; i < 100; i++) {
-          const row = await h.parts.workflows!.read(ref.tenant, doc);
-          if (row?.participants.find((p) => p.id === 'p1')?.firstViewedAt !== undefined) break;
-          await new Promise((r) => setTimeout(r, 30));
-        }
         const before = await client.submit(1, {
           base: (await h.parts.logs.head(ref)).seq,
           steps: [set('Ada')],

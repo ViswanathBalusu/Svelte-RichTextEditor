@@ -2,9 +2,11 @@
  * The CDM, version 1 (draft): the one declarative definition from which the TypeScript types, the
  * JSON Schema, the ProseMirror schema and the attribute tables are generated (CDM-006).
  *
- * Sources: 03 §3 to §5 and §4.6, 12 §3, ADR 0017, ADR 0019. Values that 03 leaves open are decided
- * here as a proposal (CDM-002, CDM-003); the decision records are docs/adr/0018-cdm-attribute-grammars.md
- * and docs/adr/0031-cdm-1-model-completion.md, and the generated table is spec/cdm/cdm-1.attributes.md.
+ * Sources: 03 §3 to §5 and §4.6, 12 §3, ADR 0017, ADR 0019. The values that 03 left open (CDM-002,
+ * CDM-003) are those of docs/adr/0018-cdm-attribute-grammars.md, which the owner accepted (decision 7
+ * of docs/owner-decisions-2026-11-15.md); 03 §4.8 states the rules and src/schema/prose-grammar.test.ts
+ * compares it with this file. docs/adr/0031-cdm-1-model-completion.md records the later ones, and the
+ * generated table is spec/cdm/cdm-1.attributes.md.
  *
  * The nodes of fields come from FRW's module (fields.ts, 12 §3; CDM-022), the citation nodes from
  * citations.ts (CDM-052), and the projection placeholder from projection.ts (ADR 0019; CDM-053).

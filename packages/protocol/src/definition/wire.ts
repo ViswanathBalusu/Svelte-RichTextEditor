@@ -8,7 +8,7 @@
  */
 import { CDM1 } from '@docedit/model/definition';
 import { COMMON_SHAPES, ENGINES, PROTOCOL_VERSION } from './common.ts';
-import { EVENT_SHAPES, NOTIFICATIONS } from './events.ts';
+import { EVENT_SHAPES } from './events.ts';
 import type { DepDefinition } from './extension.ts';
 import { FEATURES } from './features.ts';
 import { FRW_EXTENSION } from './frw.ts';
@@ -33,9 +33,7 @@ export const DEP1_WIRE: WireDefinition = {
 
 /**
  * The notification types of DEP 1.0 with the additions of 12 §10, as a client reads them. The
- * element's dispatcher needs only the names, so it does not import the whole definition.
+ * names live in a module of their own, so that the element's dispatcher does not import the whole
+ * definition (FND-008).
  */
-export const DEP1_WIRE_NOTIFICATION_TYPES: readonly string[] = [
-  ...NOTIFICATIONS,
-  ...FRW_EXTENSION.notifications,
-].map((n) => n.type);
+export { DEP1_WIRE_NOTIFICATION_TYPES } from './notification-types.ts';

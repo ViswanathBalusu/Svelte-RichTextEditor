@@ -1005,6 +1005,29 @@
   background: var(--_de-surface);
 }
 
+/* The PDF preview pane (EXP-001): its state, then the viewer's frame, which the core puts in. */
+.de-pdf-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--_de-space-2);
+}
+
+.de-pdf-pane p {
+  margin: 0;
+}
+
+.de-pdf-pane-pages:empty {
+  display: none;
+}
+
+.de-pdf-pane-pages iframe {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 20em;
+  border: 1px solid var(--_de-border);
+  background: var(--_de-surface);
+}
+
 .de-tree,
 .de-tree-group {
   margin: 0;

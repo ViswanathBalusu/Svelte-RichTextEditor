@@ -7,13 +7,34 @@
  *
  * It answers 200 with `{"ok": true, "pdf": base64, "sealedSha256", "profile", "timestamped": true,
  * "timestampTime", "sealedAt", "keyId", "keyOwner"}`, or an error status with `{"ok": false,
- * "code", "retryable"}`. `GET /healthz` answers 200 and touches nothing else. No other route exists.
+ * "code", "retryable"}`. `GET /healthz` answers 200 and touches nothing else.
+ *
+ *     POST /v1/anchor     (FRW-054 criterion 3)
+ *     {"tenant", "documentId", "workflow", "seq", "chainHead"}
+ *
+ * signs and time-stamps a chain head: 200 with `{"ok": true, "record", "recordSha256", "cms": base64,
+ * "timestampTime", "anchoredAt", "keyId", "keyOwner"}`; the failures are those of `/v1/seal`.
+ *
+ *     POST /v1/extend     (FRW-056)
+ *     {"tenant", "documentId", "seq", "pdf": base64, "pdfSha256", "idempotencyKey", "validation": boolean}
+ *
+ * appends fresh validation data (when `validation`) and a further document time-stamp as incremental
+ * updates: 200 with `{"ok": true, "pdf": base64, "sealedSha256", "timestampTime", "extendedAt",
+ * "expiresAtMs", "validationAdded"}`; the failures are those of `/v1/seal`. No other
+ * route exists.
  *
  * Nothing of a request is logged here: not the body, not the credential. The audit log of the
  * service (`audit.ts`) holds the identifiers and hashes.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import type { SealCommand, SealFailureCode, SigningService } from './service.ts';
+import type {
+  AnchorCommand,
+  AppearanceRequest,
+  ExtendCommand,
+  SealCommand,
+  SealFailureCode,
+  SigningService,
+} from './service.ts';
 
 export interface HttpOptions {
   /** The largest request body accepted, in bytes. The specification gives no figure. */
@@ -65,6 +86,31 @@ function bearer(req: IncomingMessage): string | null {
   return m?.[1] ?? null;
 }
 
+/** The appearance request of a seal, or null when it is not of the shape. */
+function parseAppearances(raw: unknown): AppearanceRequest | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  const layout = o['layout'];
+  const targets = o['targets'];
+  if (typeof layout !== 'object' || layout === null || Array.isArray(layout)) return null;
+  if (!Array.isArray(targets)) return null;
+  const list: AppearanceRequest['targets'][number][] = [];
+  for (const t of targets) {
+    if (typeof t !== 'object' || t === null) return null;
+    const x = t as Record<string, unknown>;
+    if (
+      typeof x['id'] !== 'string' ||
+      typeof x['key'] !== 'string' ||
+      typeof x['kind'] !== 'string' ||
+      !Array.isArray(x['lines']) ||
+      !x['lines'].every((l) => typeof l === 'string')
+    )
+      return null;
+    list.push({ id: x['id'], key: x['key'], kind: x['kind'], lines: x['lines'] as string[] });
+  }
+  return { layout: layout as Record<string, unknown>, targets: list };
+}
+
 function parseCommand(raw: unknown): SealCommand | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const o = raw as Record<string, unknown>;
@@ -82,7 +128,11 @@ function parseCommand(raw: unknown): SealCommand | null {
     (o['seal'] !== undefined && typeof o['seal'] !== 'string')
   )
     return null;
+  const appearances =
+    o['appearances'] === undefined ? undefined : parseAppearances(o['appearances']);
+  if (appearances === null) return null;
   return {
+    ...(appearances !== undefined ? { appearances } : {}),
     tenant: o['tenant'],
     documentId: o['documentId'],
     seq: o['seq'],
@@ -93,11 +143,133 @@ function parseCommand(raw: unknown): SealCommand | null {
   };
 }
 
+function parseAnchor(raw: unknown): AnchorCommand | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o['tenant'] !== 'string' ||
+    typeof o['documentId'] !== 'string' ||
+    typeof o['workflow'] !== 'string' ||
+    typeof o['seq'] !== 'number' ||
+    typeof o['chainHead'] !== 'string'
+  )
+    return null;
+  return {
+    tenant: o['tenant'],
+    documentId: o['documentId'],
+    workflow: o['workflow'],
+    seq: o['seq'],
+    chainHead: o['chainHead'],
+  };
+}
+
+/** `POST /v1/anchor`: signs and time-stamps a chain head (FRW-054 criterion 3). */
+async function anchorRoute(
+  service: SigningService,
+  req: IncomingMessage,
+  res: ServerResponse,
+  maxBodyBytes: number,
+): Promise<void> {
+  const body = await readBody(req, maxBodyBytes);
+  if (body === null) return send(res, 413, { ok: false, code: 'too_large', retryable: false });
+  let cmd: AnchorCommand | null;
+  try {
+    cmd = parseAnchor(JSON.parse(body.toString('utf8')));
+  } catch {
+    cmd = null;
+  }
+  // A body that is not a request is refused as `bad_request` after the credential is checked.
+  const out = await service.anchor(
+    bearer(req),
+    cmd ?? { tenant: '', documentId: '', workflow: '', seq: -1, chainHead: '' },
+  );
+  if (!out.ok)
+    return send(res, STATUS[out.code], { ok: false, code: out.code, retryable: out.retryable });
+  return send(res, 200, {
+    ok: true,
+    record: out.record,
+    recordSha256: out.recordSha256,
+    cms: Buffer.from(out.cms).toString('base64'),
+    timestampTime: out.timestampTime.toISOString(),
+    anchoredAt: out.anchoredAt.toISOString(),
+    keyId: out.keyId,
+    keyOwner: out.keyOwner,
+  });
+}
+
+function parseExtend(raw: unknown): ExtendCommand | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o['tenant'] !== 'string' ||
+    typeof o['documentId'] !== 'string' ||
+    typeof o['seq'] !== 'number' ||
+    typeof o['pdfSha256'] !== 'string' ||
+    typeof o['pdf'] !== 'string' ||
+    typeof o['idempotencyKey'] !== 'string' ||
+    typeof o['validation'] !== 'boolean'
+  )
+    return null;
+  return {
+    tenant: o['tenant'],
+    documentId: o['documentId'],
+    seq: o['seq'],
+    pdfSha256: o['pdfSha256'],
+    pdf: new Uint8Array(Buffer.from(o['pdf'], 'base64')),
+    idempotencyKey: o['idempotencyKey'],
+    validation: o['validation'],
+  };
+}
+
+/** `POST /v1/extend`: long-term validation data and a renewed time-stamp (FRW-056). */
+async function extendRoute(
+  service: SigningService,
+  req: IncomingMessage,
+  res: ServerResponse,
+  maxBodyBytes: number,
+): Promise<void> {
+  const body = await readBody(req, maxBodyBytes);
+  if (body === null) return send(res, 413, { ok: false, code: 'too_large', retryable: false });
+  let cmd: ExtendCommand | null;
+  try {
+    cmd = parseExtend(JSON.parse(body.toString('utf8')));
+  } catch {
+    cmd = null;
+  }
+  const out = await service.extend(
+    bearer(req),
+    cmd ?? {
+      tenant: '',
+      documentId: '',
+      seq: -1,
+      pdf: new Uint8Array(),
+      pdfSha256: '',
+      idempotencyKey: '',
+      validation: false,
+    },
+  );
+  if (!out.ok)
+    return send(res, STATUS[out.code], { ok: false, code: out.code, retryable: out.retryable });
+  return send(res, 200, {
+    ok: true,
+    pdf: Buffer.from(out.pdf).toString('base64'),
+    sealedSha256: out.sealedSha256,
+    timestampTime: out.timestampTime.toISOString(),
+    extendedAt: out.extendedAt.toISOString(),
+    expiresAtMs: out.expiresAtMs,
+    validationAdded: out.validationAdded,
+  });
+}
+
 export function createSigningServer(service: SigningService, opts: HttpOptions): Server {
   return createServer((req, res) => {
     void (async () => {
       const path = (req.url ?? '').split('?')[0];
       if (req.method === 'GET' && path === '/healthz') return send(res, 200, { ok: true });
+      if (req.method === 'POST' && path === '/v1/anchor')
+        return anchorRoute(service, req, res, opts.maxBodyBytes);
+      if (req.method === 'POST' && path === '/v1/extend')
+        return extendRoute(service, req, res, opts.maxBodyBytes);
       if (req.method !== 'POST' || path !== '/v1/seal')
         return send(res, 404, { ok: false, code: 'not_found', retryable: false });
       const body = await readBody(req, opts.maxBodyBytes);
@@ -135,6 +307,7 @@ export function createSigningServer(service: SigningService, opts: HttpOptions):
         sealedAt: out.sealedAt.toISOString(),
         keyId: out.keyId,
         keyOwner: out.keyOwner,
+        ...(out.appearances ? { appearances: out.appearances } : {}),
       });
     })().catch(() => {
       if (!res.headersSent) send(res, 500, { ok: false, code: 'seal_failed', retryable: false });

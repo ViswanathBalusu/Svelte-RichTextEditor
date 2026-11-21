@@ -1,0 +1,27 @@
+{
+  "$comment": "The Unicode Consortium's conformance test files for the kernel's segmentation (WASM-007). They are test data, downloaded once from unicode.org on 2026-11-18 on owner decision 224 of docs/owner-decisions-2026-11-15.md, and kept byte for byte as downloaded (the files are read, never run). The folder name is the Unicode version of the file's URL. Each version is the one that a pinned crate implements (crates/layout-kernel/Cargo.toml): unicode-linebreak 0.1.5 implements Unicode 15.0.0 and unicode-segmentation 1.13.3 implements Unicode 17.0.0, so the two files are of different versions. Upgrading a crate means downloading the file of its new version, changing the entry here (the test checks the SHA-256 and the version in the file's header), and rerunning the tests. Licence: the Unicode Terms of Use (https://www.unicode.org/terms_of_use.html), named in each file's header; the notice is kept in the files, and licences/kernel-data.json records the review.",
+  "files": [
+    {
+      "path": "unicode-15.0.0/LineBreakTest.txt",
+      "url": "https://www.unicode.org/Public/15.0.0/ucd/auxiliary/LineBreakTest.txt",
+      "unicodeVersion": "15.0.0",
+      "algorithm": "UAX #14, the default Line Breaking Algorithm",
+      "crate": "unicode-linebreak 0.1.5",
+      "bytes": 1085570,
+      "sha256": "371bde4052aa593b108684ae292d8ea2dbb93c19990e0cdf416fa7239557aac3",
+      "headerDate": "2022-02-26, 00:38:39 GMT",
+      "downloaded": "2026-11-18"
+    },
+    {
+      "path": "unicode-17.0.0/GraphemeBreakTest.txt",
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/auxiliary/GraphemeBreakTest.txt",
+      "unicodeVersion": "17.0.0",
+      "algorithm": "UAX #29, extended grapheme clusters",
+      "crate": "unicode-segmentation 1.13.3",
+      "bytes": 126570,
+      "sha256": "e2d134d2c52919bace503ebb6a551c1855fe1a1faec18478c78fff254a1793ec",
+      "headerDate": "2025-03-24, 14:45:55 GMT",
+      "downloaded": "2026-11-18"
+    }
+  ]
+}

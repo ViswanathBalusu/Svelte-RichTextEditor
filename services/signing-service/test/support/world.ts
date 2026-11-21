@@ -69,6 +69,22 @@ export function flipByte(pdf: Uint8Array, at: number): Uint8Array {
   return out;
 }
 
+/**
+ * Changes one hex digit of the file to a different hex digit (of the same case). `flipByte` is not
+ * for the signature's `/Contents` string: it flips the lowest bit, which turns `a` into a backquote
+ * and `f` into `g` (and `A` into `@`, `F` into `G`), so for 2 digits in 16 the string stops being
+ * hex, is cut short where it is read back, and the verifier fails on the CMS instead of on the
+ * signature value the test means to change. The signature differs from run to run, so does the digit.
+ */
+export function flipHexDigit(pdf: Uint8Array, at: number): Uint8Array {
+  const out = new Uint8Array(pdf);
+  const c = String.fromCharCode(out[at] as number);
+  if (!/^[0-9a-fA-F]$/.test(c)) throw new Error(`byte ${at} is not a hex digit: ${c}`);
+  const next = (parseInt(c, 16) ^ 1).toString(16);
+  out[at] = (c >= 'A' && c <= 'F' ? next.toUpperCase() : next).charCodeAt(0);
+  return out;
+}
+
 export function startsWith(whole: Uint8Array, prefix: Uint8Array): boolean {
   return (
     whole.length >= prefix.length &&

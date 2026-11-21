@@ -1,6 +1,7 @@
 // PRO-124: the `core-relay` profile. Selection (criterion 1) and the discovery scenario
-// (criterion 4) are tested here. A relay server that speaks DEP does not exist, so the discovery is
-// a document the test serves to the scenario, as a relay would.
+// (criterion 4) are tested here, with a discovery document the test serves to the scenario. The
+// scenarios that submit commits (criteria 2 and 3) run against a relay server in
+// pro-124-core-relay.relay-target.test.ts.
 import { describe, expect, it } from 'vitest';
 import { KitFailure } from '../src/assert.ts';
 import { resolveConfig } from '../src/config.ts';
@@ -67,7 +68,12 @@ describe('core-relay selection (criterion 1)', () => {
   it('has a scenario and is no longer listed as pending', () => {
     const p = profile('core-relay');
     expect(p.pending).toBeUndefined();
-    expect(p.scenarios.map((x) => x.id)).toEqual(['core-relay.discovery.mode-and-features']);
+    expect(p.scenarios.map((x) => x.id)).toEqual([
+      'core-relay.discovery.mode-and-features',
+      'core-relay.sync.stale-base',
+      'core-relay.sync.store-and-relay',
+      'core-relay.sync.steps-unread',
+    ]);
     expect(p.stories).toEqual(['PRO-124']);
   });
 });

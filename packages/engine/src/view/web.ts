@@ -36,6 +36,18 @@ import {
   commentDecorations,
 } from '../comment-decorations.ts';
 import { pageGuideDecorations } from '../page-guide-decorations.ts';
+import {
+  blockText,
+  findBlock,
+  pressKey,
+  replaceTransaction,
+  selectionOf,
+  selectTransaction,
+  stepFrom,
+  textBlocks,
+  type PageViewHandle,
+  type PageViewHooks,
+} from '../page-input.ts';
 import { proofingDecorations } from '../proofing-decorations.ts';
 import { ReadValue, sameJson } from '../read-value.ts';
 import { FIND_CURRENT_CLASS, findDecorations } from '../search-highlight.ts';
@@ -50,6 +62,8 @@ import { picturePlaceholderView } from './picture-placeholder-view.ts';
 import type { ComparisonSpec } from '../comparison-markup.ts';
 import type { SuggestionLabel } from '../suggestion-markup.ts';
 import { comparisonDecorations } from './comparison-decorations.ts';
+import type { RegionLockDefaults, RegionLockLabel } from '../region-lock.ts';
+import { regionLockDecorations } from './region-lock-view.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
 import { sectionWarningPlugin } from './section-warning-view.ts';
@@ -214,6 +228,15 @@ export class EditorCore extends DocumentCore {
   /** Draws the suggestions again with the new words for assistive technology (UX-035 criterion 4). */
   override setSuggestionLabel(label: SuggestionLabel | null): void {
     super.setSuggestionLabel(label);
+    this.#view?.setProps({});
+  }
+
+  /** Draws the lock indicators again with the shell's new words (PRM-026 criterion 2). */
+  override setRegionLabels(
+    labels: Readonly<Record<string, RegionLockLabel>>,
+    defaults: RegionLockDefaults = {},
+  ): void {
+    super.setRegionLabels(labels, defaults);
     this.#view?.setProps({});
   }
 
@@ -432,6 +455,23 @@ export class EditorCore extends DocumentCore {
     }
   }
 
+  /**
+   * Reads the browser's selection into the state now (UX-008; ui `CoreApi.syncSelection`). The view
+   * follows the browser's selection on `selectionchange`, and a browser may deliver that event after
+   * the one that asks what is at the caret. A context click is the case: it moves the caret, the
+   * menu opens and takes focus, and the event that arrives then is no longer read, so the menu would
+   * be built for the place the caret was before the click. The view's own reader is called, so the
+   * selection is read exactly as it would be on the event. Nothing changes while the view has no
+   * focus, or when the state already holds the browser's selection.
+   */
+  syncSelection(): void {
+    const view = this.#sub?.view.hasFocus() ? this.#sub.view : this.#view;
+    if (!view) return;
+    // The view's types do not publish its DOM observer, so it is called only when present; without
+    // it the state follows on the event, as before.
+    (view as unknown as { domObserver?: { flush?: () => void } }).domObserver?.flush?.();
+  }
+
   /** Mounts the body web view on an element inside the shadow root. */
   mountBody(target: HTMLElement): () => void {
     if (this.#view) throw new Error('the body view is already mounted');
@@ -556,9 +596,11 @@ export class EditorCore extends DocumentCore {
         },
         // The find highlights (FE-059): drawn from the document and the find state, never stored.
         // The suggestion marks are drawn in the markup view the reader chose, `all` first (FE-046
-        // criterion 4; FE-045 criterion 1; UX-035).
+        // criterion 4; FE-045 criterion 1; UX-035). The regions the user cannot edit are shaded and
+        // carry a lock indicator (PRM-026), read from the access in force.
         decorations: (state) => {
           const f = this.findState.get();
+          const locks = regionLockDecorations(state.doc, this.regionLocksIn(state.doc));
           return findDecorations(state.doc, {
             query: f.query,
             current: f.current,
@@ -582,6 +624,7 @@ export class EditorCore extends DocumentCore {
               ).find(),
             )
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
+            .add(state.doc, locks.find())
             .add(state.doc, comparisonDecorations(state.doc, this.#comparison).find())
             .add(
               state.doc,
@@ -661,9 +704,12 @@ export class EditorCore extends DocumentCore {
       },
       // `editable` is read again by setProps; the open sub-editor follows the same lock (FE-029).
       // The fields a person may fill depend on the access too, and the access arrives after the
-      // controls are drawn (FRW-076 criterion 1).
+      // controls are drawn (FRW-076 criterion 1). The shading of the regions the user cannot edit
+      // follows the access as well, with no new state and no reload (PRM-006 criterion 5).
       accessChanged: () => {
-        if (this.#view) this.#fieldViews.refresh(this.#view.state.doc);
+        if (!this.#view) return;
+        this.#view.setProps({});
+        this.#fieldViews.refresh(this.#view.state.doc);
       },
       lockChanged: () => {
         this.#view?.setProps({});
@@ -714,6 +760,83 @@ export class EditorCore extends DocumentCore {
       for (const t of transactions) mapping.appendMapping(t.mapping);
       if (!sub.sync(state, mapping)) this.closePanel();
     }
+  }
+
+  /**
+   * Attaches the page view to this core (02 §9.6; FE-098). The page view has no ProseMirror view of
+   * its own: it reads the document and the selection as block identifiers and offsets, and every
+   * change goes through `dispatchTransaction`, so the guards, suggestion mode, the sync queue and the
+   * history treat it as an edit made in the web view. The body view may stay mounted behind it, so
+   * switching views keeps one core. `hooks.update` is told of every new state (local, remote or a
+   * replaced document); `hooks.focus` is called when something asks the core to take focus.
+   * Returns the page view's handle; `detach` removes the hooks.
+   */
+  attachPageView(hooks: PageViewHooks): PageViewHandle {
+    let composingBlock: string | null = null;
+    const remove = this.addView({
+      update: (state, transactions) =>
+        hooks.update(
+          transactions.some((t) => t.docChanged) || transactions.length === 0,
+          transactions.length === 0,
+        ),
+      composing: () => {
+        if (composingBlock === null) return null;
+        const block = findBlock(this.editorState.doc, composingBlock);
+        return block === null ? null : block.pos;
+      },
+      focus: () => hooks.focus(),
+      // A change of the mode or the access moves what may be edited, with no new state (FE-029).
+      lockChanged: () => hooks.update(false, false),
+      accessChanged: () => hooks.update(false, false),
+    });
+    return {
+      content: () => this.getContent(),
+      selection: () => selectionOf(this.editorState),
+      select: (anchor, head = anchor) => {
+        const tr = selectTransaction(this.editorState, anchor, head);
+        if (tr === null) return false;
+        this.dispatch(tr);
+        return true;
+      },
+      text: (blockId) => {
+        const block = findBlock(this.editorState.doc, blockId);
+        return block === null ? null : blockText(block.node);
+      },
+      blocks: () => textBlocks(this.editorState.doc),
+      replace: (blockId, from, to, text, caret) => {
+        if (this.readOnly) return false;
+        const before = this.editorState.doc;
+        const tr = replaceTransaction(this.editorState, blockId, from, to, text, caret);
+        if (tr === null) return false;
+        this.dispatch(tr);
+        return this.editorState.doc !== before;
+      },
+      key: (key) => {
+        if (this.readOnly) return false;
+        return pressKey(this.editorState, key, (tr) => this.dispatch(tr));
+      },
+      step: (point, direction) => stepFrom(this.editorState.doc, point, direction),
+      takeDirty: () => this.takeLayoutDirty(),
+      // The clipboard goes through the core as the web view's does: a refused copy writes nothing (FE-055).
+      copy: (event) => writeClipboard(event, this.copySelection()),
+      cut: (event) => writeClipboard(event, this.cutSelection().payload),
+      paste: (event) => {
+        if (this.readOnly || !this.#paste(event.clipboardData)) return false;
+        event.preventDefault();
+        return true;
+      },
+      run: (command) => this.run(command),
+      composing: (blockId) => {
+        const ended = composingBlock !== null && blockId === null;
+        composingBlock = blockId;
+        if (ended) this.compositionEnded();
+      },
+      readOnly: () => this.readOnly,
+      detach: () => {
+        composingBlock = null;
+        remove();
+      },
+    };
   }
 
   /** The block being composed: the body paragraph, or the open sub-editor's whole node (S1). */

@@ -11,7 +11,7 @@
  * --only, --skip   step names: eslint, prettier, typecheck, deps, build, test.
  * --logs <dir>     where the logs go (default node_modules/.cache/check).
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createWriteStream, mkdirSync, readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -93,6 +93,18 @@ function run(step: Step): Promise<Outcome> {
     child.on('error', () => finish(1));
     child.on('close', (code) => finish(code ?? 1));
   });
+}
+
+// The reference host's tsconfig extends "$app/tsconfig", which `svelte-kit sync` writes under its
+// node_modules. In `pnpm check` the type-check runs before the tests and does it. Side by side the
+// tests started first and the files that import the host failed with "Tsconfig not found". So sync
+// once, before anything starts.
+if (steps.some((s) => s.name === 'test' || s.name === 'typecheck')) {
+  const sync = spawnSync('pnpm --filter @docedit/reference-host exec svelte-kit sync', {
+    shell: true,
+    stdio: 'inherit',
+  });
+  if (sync.status !== 0) throw new Error('svelte-kit sync failed');
 }
 
 const started = performance.now();

@@ -442,6 +442,7 @@ describe('the DEP definition', () => {
       'G61',
       'G64',
       'G65',
+      'G71',
       'G73',
       'G78',
       'G97',

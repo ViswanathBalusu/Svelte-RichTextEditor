@@ -1,0 +1,642 @@
+/**
+ * The editable page view (02 §7, §9; FE-101): pages painted from the layout engine's tree, with an
+ * input bridge for the keyboard and input methods (ADR 0380). It runs over the element's one editing
+ * core: it reads the document and the selection as block identifiers and offsets, and every change
+ * goes back through the core's own transaction path, so the guards, suggestion mode, the sync queue
+ * and the history see an edit as they see one made in the web view.
+ *
+ * - The pages are `toFlow`, `incrementalLayout` and `mountPageWindow` (only the visible pages and an
+ *   overscan are in the DOM), painted by `paintTree` with runs from `FlowText`.
+ * - The bridge is one single-line textarea, in the same shadow root, that holds the text of the
+ *   current block around the caret and is placed on the painted caret. Typing and composition happen
+ *   in it; each `input` event is one text edit of the block (a composition is a series of edits). It
+ *   is moved, not rewritten, while a composition is open (ADR 0380 item 1).
+ * - Movement by line, page, Home and End, and a click, come from the layout tree
+ *   (`applyPageKey`, `hitTest`), never from the bridge (ADR 0380 item 2). Left and Right follow the
+ *   document's block order.
+ * - A failure of the layout or the painter is passed to `onError`; the element then shows the web
+ *   view again with the document and its unconfirmed work (FE-101 criterion 3).
+ *
+ * This module is a lazy chunk (`./index.ts`): a session that never asks for the page view loads none
+ * of it. It reads no `prosemirror-*`.
+ */
+import type { PageViewHandle, PageViewHooks, BlockPoint, BlockSelection } from '@docedit/engine';
+import {
+  caretGeometry,
+  hitTest,
+  type DocPosition,
+  type SpanWidth,
+} from '../../../layout/src/caret.ts';
+import { toFlow, type CdmEnvelopeLike } from '../../../layout/src/flow.ts';
+import { incrementalLayout, type IncrementalLayout } from '../../../layout/src/incremental.ts';
+import type { ItemProviders } from '../../../layout/src/items.ts';
+import { pageStatus, type PageStatus } from '../../../layout/src/readonly-view.ts';
+import type { LayoutTree } from '../../../layout/src/tree.ts';
+import { applyPageKey, pageKeyOf } from '../../../layout/src/page-keys.ts';
+import { type PaintSource } from '../../../painter/src/painter.ts';
+import { paintSelection } from '../../../painter/src/selection-paint.ts';
+import { mountPageWindow, type PageWindow } from '../../../painter/src/window.ts';
+import { shortcutName, SHELL_SHORTCUTS } from '../shortcuts.ts';
+import { FlowText, cssFamily } from './flow-text.ts';
+import { pageProviders } from './providers.ts';
+
+const PX_PER_PT = 96 / 72;
+/** The space between pages in points, as the painter's default. */
+const PAGE_GAP_PT = 12;
+/** How many characters of the block the bridge holds each side of the caret (ADR 0380 item 1). */
+export const BRIDGE_RADIUS = 200;
+
+/** What the element gives the page view. */
+export interface PageViewOptions {
+  /** The core: `EditorCore.attachPageView`. */
+  readonly host: { attachPageView(hooks: PageViewHooks): PageViewHandle };
+  /** The element the view is appended to (the shell's body frame). */
+  readonly parent: HTMLElement;
+  /** The accessible name of the input bridge. */
+  readonly label: string;
+  /** Runs a registry shortcut for a key event; true when one ran (FE-098 criterion 6). */
+  readonly shortcut?: (event: KeyboardEvent) => boolean;
+  /** An unrecoverable error of the layout or the painter: the element falls back to the web view. */
+  readonly onError: (error: unknown) => void;
+  /** Injected providers, for tests; the default is canvas measurement and the placeholder breaks. */
+  readonly providers?: ItemProviders;
+  /** The frame scheduler; the default is `requestAnimationFrame`. */
+  readonly frame?: (run: () => void) => void;
+  /** Called after each layout pass with the page status and the time the pass took (ms). */
+  readonly onLayout?: (status: PageStatus, ms: number) => void;
+}
+
+export interface MountedPageView {
+  /** The view's root element. */
+  readonly root: HTMLElement;
+  /** Moves focus to the input bridge. */
+  focus(): void;
+  /** The number of pages of the last layout, and whether it is final. */
+  status(): PageStatus | null;
+  /** Lays the document out and paints now (tests; the view does it on the next frame itself). */
+  flush(): void;
+  /** Removes the view and detaches it from the core. Safe to call twice. */
+  destroy(): void;
+}
+
+/** The common prefix and suffix of two strings, so an edit becomes one replaced range. */
+export function diffText(
+  before: string,
+  after: string,
+): { readonly at: number; readonly removed: number; readonly inserted: string } {
+  const max = Math.min(before.length, after.length);
+  let p = 0;
+  while (p < max && before.charCodeAt(p) === after.charCodeAt(p)) p++;
+  let s = 0;
+  while (
+    s < max - p &&
+    before.charCodeAt(before.length - 1 - s) === after.charCodeAt(after.length - 1 - s)
+  )
+    s++;
+  return { at: p, removed: before.length - p - s, inserted: after.slice(p, after.length - s) };
+}
+
+/** The key name of a keyboard event in prosemirror-keymap's notation, for the keys the core binds. */
+export function keymapName(event: KeyboardEvent): string | null {
+  const mods =
+    (event.altKey ? 'Alt-' : '') +
+    (event.ctrlKey || event.metaKey ? 'Mod-' : '') +
+    (event.shiftKey ? 'Shift-' : '');
+  switch (event.key) {
+    case 'Enter':
+    case 'Backspace':
+    case 'Delete':
+    case 'Tab':
+      return `${mods}${event.key}`;
+    case 'Home':
+    case 'End':
+      return event.ctrlKey || event.metaKey ? `${mods}${event.key}` : null;
+    default:
+      break;
+  }
+  if (event.key.length === 1 && /^[a-z]$/i.test(event.key) && (event.ctrlKey || event.metaKey))
+    return `${mods}${event.key.toLowerCase()}`;
+  return null;
+}
+
+/** The offset of the word boundary before or after `offset` in `text`. */
+export function wordBoundary(text: string, offset: number, direction: 'left' | 'right'): number {
+  if (direction === 'left') {
+    let i = offset;
+    while (i > 0 && /\s/.test(text.charAt(i - 1))) i--;
+    while (i > 0 && !/\s/.test(text.charAt(i - 1))) i--;
+    return i;
+  }
+  let i = offset;
+  while (i < text.length && !/\s/.test(text.charAt(i))) i++;
+  while (i < text.length && /\s/.test(text.charAt(i))) i++;
+  return i;
+}
+
+const samePoint = (a: DocPosition, b: DocPosition): boolean =>
+  a.blockId === b.blockId && a.offset === b.offset;
+
+/** Mounts the page view. Throws when the document cannot be laid out the first time. */
+export function mountPageView(options: PageViewOptions): MountedPageView {
+  const doc = options.parent.ownerDocument;
+  const frame = options.frame ?? ((run) => requestAnimationFrame(() => run()));
+
+  // The measurer is made first: with no canvas it throws here, before anything is in the page.
+  let providers = options.providers ?? pageProviders();
+  let layout: IncrementalLayout = incrementalLayout(providers);
+
+  const root = doc.createElement('div');
+  root.className = 'de-page-view';
+  root.dataset['view'] = 'print';
+  const scroller = doc.createElement('div');
+  scroller.className = 'de-page-scroller';
+  const bridge = doc.createElement('textarea');
+  bridge.className = 'de-page-bridge';
+  bridge.rows = 1;
+  bridge.wrap = 'off';
+  bridge.spellcheck = false;
+  bridge.setAttribute('autocomplete', 'off');
+  bridge.setAttribute('autocapitalize', 'off');
+  bridge.setAttribute('autocorrect', 'off');
+  bridge.setAttribute('aria-label', options.label);
+  bridge.setAttribute('aria-multiline', 'true');
+  root.append(scroller, bridge);
+  options.parent.append(root);
+
+  let tree: LayoutTree | null = null;
+  let text: FlowText | null = null;
+  let status: PageStatus | null = null;
+  let win: PageWindow | null = null;
+  let tops: number[] = [];
+  let destroyed = false;
+  let failed = false;
+  let queued = false;
+  let relayout = true;
+  let goalX: number | undefined;
+  let composing = false;
+  // What the bridge holds: the block, the offset of its first character, and its text.
+  let proj: { blockId: string; start: number; value: string } | null = null;
+
+  const fail = (error: unknown): void => {
+    if (failed) return;
+    failed = true;
+    options.onError(error);
+  };
+
+  const guard = <T>(run: () => T): T | undefined => {
+    if (failed || destroyed) return undefined;
+    try {
+      return run();
+    } catch (error) {
+      fail(error);
+      return undefined;
+    }
+  };
+
+  // --- The core ------------------------------------------------------------------------------
+
+  const handle: PageViewHandle = options.host.attachPageView({
+    update(docChanged) {
+      if (destroyed) return;
+      if (docChanged) relayout = true;
+      if (!composing) project();
+      schedule();
+    },
+    focus() {
+      bridge.focus({ preventScroll: true });
+    },
+  });
+
+  const selection = (): BlockSelection | null => handle.selection();
+
+  // --- Layout and paint ----------------------------------------------------------------------
+
+  const span: SpanWidth = (blockId, from, to) => text?.width(blockId, from, to) ?? 0;
+
+  const source = (flowText: FlowText): PaintSource => ({
+    lineText: (blockId, from, to) =>
+      flowText
+        .runs(blockId, from, to)
+        ?.map((r) => r.text)
+        .join('') ?? '',
+    fontFamily: cssFamily('Noto Serif'),
+    fontSizePt: 11,
+    runs: (blockId, from, to) => flowText.runs(blockId, from, to),
+    measureRange: (blockId, from, to) => flowText.width(blockId, from, to),
+  });
+
+  function layoutNow(): void {
+    const started = performance.now();
+    const content = handle.content() as unknown as CdmEnvelopeLike;
+    const flow = toFlow(content);
+    const result = layout.update(flow, handle.takeDirty());
+    tree = result.tree;
+    text = new FlowText(flow, providers.measurer);
+    status = pageStatus(result);
+    // Mount the new window before the old one goes, so the scroll position is kept.
+    const old = win;
+    const fresh = mountPageWindow(scroller, result.tree, source(text), {
+      justify: (blockId) => text?.justified(blockId) === true,
+      pageGap: PAGE_GAP_PT,
+    });
+    win = fresh;
+    old?.dispose();
+    tops = [];
+    let y = 0;
+    for (const page of result.tree.pages) {
+      tops.push(y);
+      y += page.height + PAGE_GAP_PT;
+    }
+    options.onLayout?.(status, performance.now() - started);
+  }
+
+  /** The page elements that are mounted, by page index. */
+  function mountedPages(): HTMLElement[] {
+    const out: HTMLElement[] = [];
+    for (const el of scroller.querySelectorAll<HTMLElement>('.de-window > .de-page')) {
+      const n = Number(el.dataset['page']);
+      if (Number.isInteger(n)) out[n] = el;
+    }
+    return out;
+  }
+
+  function paintCaret(): void {
+    if (tree === null) return;
+    const pages = mountedPages();
+    for (const el of pages)
+      el?.querySelectorAll('.de-caret, .de-selection').forEach((n) => n.remove());
+    const sel = selection();
+    if (sel === null) return;
+    paintSelection(doc, pages, tree, span, { anchor: sel.anchor, head: sel.head });
+  }
+
+  /** Scrolls so that the caret is inside the scroller, and places the bridge on it. */
+  function followCaret(reveal: boolean): void {
+    const sel = selection();
+    if (tree === null || sel === null) return;
+    const g = caretGeometry(tree, sel.head, span);
+    if (g === null) return;
+    const top = ((tops[g.page] ?? 0) + g.y) * PX_PER_PT;
+    const bottom = top + g.height * PX_PER_PT;
+    if (reveal) {
+      const margin = 24;
+      if (top - margin < scroller.scrollTop) scroller.scrollTop = Math.max(0, top - margin);
+      else if (bottom + margin > scroller.scrollTop + scroller.clientHeight)
+        scroller.scrollTop = bottom + margin - scroller.clientHeight;
+      win?.update();
+      paintCaret();
+    }
+    const page = mountedPages()[g.page];
+    if (!page) return;
+    const rect = page.getBoundingClientRect();
+    const host = root.getBoundingClientRect();
+    bridge.style.left = `${rect.left - host.left + g.x * PX_PER_PT}px`;
+    bridge.style.top = `${rect.top - host.top + g.y * PX_PER_PT}px`;
+    bridge.style.height = `${g.height * PX_PER_PT}px`;
+  }
+
+  function schedule(): void {
+    if (queued) return;
+    queued = true;
+    frame(() => {
+      queued = false;
+      if (destroyed) return;
+      flush();
+    });
+  }
+
+  function flush(): void {
+    guard(() => {
+      if (relayout || tree === null) {
+        relayout = false;
+        layoutNow();
+      }
+      paintCaret();
+      followCaret(true);
+    });
+  }
+
+  // --- The input bridge ----------------------------------------------------------------------
+
+  /** Shows the head's block around the caret in the bridge; not while a composition is open. */
+  function project(): void {
+    const sel = selection();
+    bridge.readOnly = handle.readOnly();
+    if (sel === null) {
+      proj = null;
+      if (bridge.value !== '') bridge.value = '';
+      return;
+    }
+    const full = handle.text(sel.head.blockId) ?? '';
+    const start = Math.max(0, sel.head.offset - BRIDGE_RADIUS);
+    const end = Math.min(full.length, sel.head.offset + BRIDGE_RADIUS);
+    const value = full.slice(start, end);
+    proj = { blockId: sel.head.blockId, start, value };
+    if (bridge.value !== value) bridge.value = value;
+    const head = sel.head.offset - start;
+    let from = head;
+    let to = head;
+    if (sel.anchor.blockId === sel.head.blockId) {
+      const anchor = sel.anchor.offset - start;
+      if (anchor >= 0 && anchor <= value.length) {
+        from = Math.min(anchor, head);
+        to = Math.max(anchor, head);
+      }
+    }
+    const direction =
+      sel.anchor.blockId === sel.head.blockId && sel.anchor.offset > sel.head.offset
+        ? 'backward'
+        : 'forward';
+    if (bridge.selectionStart !== from || bridge.selectionEnd !== to)
+      bridge.setSelectionRange(from, to, direction);
+  }
+
+  /** A selection that is not inside the block the bridge holds is deleted before text replaces it. */
+  function clearForeignSelection(): void {
+    const sel = selection();
+    if (sel === null || handle.readOnly()) return;
+    const collapsed = samePoint(sel.anchor, sel.head);
+    if (collapsed || sel.anchor.blockId === sel.head.blockId) return;
+    handle.key('Backspace');
+    project();
+  }
+
+  function onInput(): void {
+    if (proj === null || destroyed) return;
+    const value = bridge.value;
+    const { at, removed, inserted } = diffText(proj.value, value);
+    if (removed === 0 && inserted === '') return;
+    const blockId = proj.blockId;
+    const from = proj.start + at;
+    const caret = proj.start + bridge.selectionEnd;
+    proj.value = value;
+    const ok = handle.replace(blockId, from, from + removed, inserted, caret);
+    if (!ok) {
+      // Refused or no longer there: the bridge shows what the document holds again.
+      composing = false;
+      handle.composing(null);
+      project();
+    }
+  }
+
+  const point = (position: DocPosition): BlockPoint => position;
+
+  function select(anchor: DocPosition, head: DocPosition): void {
+    handle.select(point(anchor), point(head));
+    project();
+    schedule();
+  }
+
+  function moveBy(direction: 'left' | 'right', extend: boolean, byWord: boolean): void {
+    const sel = selection();
+    if (sel === null) return;
+    let head: BlockPoint;
+    if (byWord) {
+      const block = handle.text(sel.head.blockId) ?? '';
+      const offset = wordBoundary(block, sel.head.offset, direction);
+      head =
+        offset !== sel.head.offset
+          ? { blockId: sel.head.blockId, offset }
+          : handle.step(sel.head, direction);
+    } else if (!extend && !samePoint(sel.anchor, sel.head)) {
+      // Without Shift a range collapses to its edge on that side (as a text field does).
+      const forward =
+        sel.anchor.blockId === sel.head.blockId
+          ? sel.anchor.offset <= sel.head.offset
+          : handle.blocks().findIndex((b) => b.id === sel.anchor.blockId) <=
+            handle.blocks().findIndex((b) => b.id === sel.head.blockId);
+      const edge =
+        direction === 'right' ? (forward ? sel.head : sel.anchor) : forward ? sel.anchor : sel.head;
+      select(edge, edge);
+      return;
+    } else head = handle.step(sel.head, direction);
+    goalX = undefined;
+    select(extend ? sel.anchor : head, head);
+  }
+
+  function onKeyDown(event: KeyboardEvent): void {
+    if (event.isComposing || composing || event.keyCode === 229 || tree === null) return;
+    // Registry shortcuts first (Mod-f, Mod-k, ...): the shell's own table and the host's buttons agree.
+    if (options.shortcut?.(event) === true) {
+      event.preventDefault();
+      return;
+    }
+    const nav = pageKeyOf(event);
+    if (nav !== null) {
+      const sel = selection();
+      if (sel === null) return;
+      event.preventDefault();
+      const moved = applyPageKey(
+        tree,
+        { anchor: sel.anchor, head: sel.head, goalX },
+        nav.key,
+        nav.extend,
+        span,
+      );
+      goalX = moved.goalX;
+      handle.select(point(moved.anchor), point(moved.head));
+      project();
+      schedule();
+      return;
+    }
+    if (
+      (event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
+      !event.altKey &&
+      !event.metaKey
+    ) {
+      event.preventDefault();
+      moveBy(event.key === 'ArrowLeft' ? 'left' : 'right', event.shiftKey, event.ctrlKey);
+      return;
+    }
+    const name = keymapName(event);
+    if (name !== null) {
+      const short = shortcutName(event);
+      const command = short === null ? undefined : SHELL_SHORTCUTS[short];
+      if (command === 'undo' || command === 'redo') {
+        event.preventDefault();
+        handle.run(command);
+        goalX = undefined;
+        return;
+      }
+      if (handle.key(name)) {
+        event.preventDefault();
+        goalX = undefined;
+        project();
+        schedule();
+      }
+      // A key the core does not bind (a Backspace inside a block, a Tab outside a table) is left to
+      // the bridge: the browser edits its text and `input` follows.
+    }
+  }
+
+  function onBeforeInput(event: InputEvent): void {
+    if (event.inputType.startsWith('insert') || event.inputType.startsWith('delete'))
+      clearForeignSelection();
+    goalX = undefined;
+  }
+
+  function onCompositionStart(): void {
+    clearForeignSelection();
+    composing = true;
+    if (proj) handle.composing(proj.blockId);
+  }
+
+  function onCompositionEnd(): void {
+    composing = false;
+    handle.composing(null);
+    project();
+    schedule();
+  }
+
+  // --- The pointer ---------------------------------------------------------------------------
+
+  function positionAt(event: PointerEvent): DocPosition | null {
+    if (tree === null) return null;
+    for (const el of mountedPages()) {
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (
+        event.clientY < r.top - (PAGE_GAP_PT * PX_PER_PT) / 2 ||
+        event.clientY > r.bottom + (PAGE_GAP_PT * PX_PER_PT) / 2
+      )
+        continue;
+      const n = Number(el.dataset['page']);
+      const x = (event.clientX - r.left) / PX_PER_PT;
+      const y = (event.clientY - r.top) / PX_PER_PT;
+      return hitTest(tree, n, x, y, span);
+    }
+    return null;
+  }
+
+  let dragging: { anchor: DocPosition } | null = null;
+
+  function onPointerDown(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('.de-control') !== null) return;
+    const pos = positionAt(event);
+    if (pos === null) return;
+    event.preventDefault();
+    bridge.focus({ preventScroll: true });
+    goalX = undefined;
+    const sel = selection();
+    if (event.detail >= 2 && sel !== null) {
+      const block = handle.text(pos.blockId) ?? '';
+      if (event.detail >= 3) {
+        select({ blockId: pos.blockId, offset: 0 }, { blockId: pos.blockId, offset: block.length });
+      } else {
+        const from = wordBoundary(block, Math.min(block.length, pos.offset + 1), 'left');
+        const end = wordBoundary(block, from, 'right');
+        let stop = end;
+        while (stop > from && /\s/.test(block.charAt(stop - 1))) stop--;
+        select({ blockId: pos.blockId, offset: from }, { blockId: pos.blockId, offset: stop });
+      }
+      return;
+    }
+    const anchor = event.shiftKey && sel !== null ? sel.anchor : pos;
+    select(anchor, pos);
+    dragging = { anchor };
+    scroller.setPointerCapture?.(event.pointerId);
+  }
+
+  function onPointerMove(event: PointerEvent): void {
+    if (dragging === null) return;
+    const pos = positionAt(event);
+    if (pos === null) return;
+    select(dragging.anchor, pos);
+  }
+
+  function onPointerUp(event: PointerEvent): void {
+    if (dragging === null) return;
+    dragging = null;
+    scroller.releasePointerCapture?.(event.pointerId);
+  }
+
+  // --- The clipboard -------------------------------------------------------------------------
+
+  const onCopy = (event: ClipboardEvent): void => handle.copy(event);
+  const onCut = (event: ClipboardEvent): void => {
+    if (handle.readOnly()) return handle.copy(event);
+    handle.cut(event);
+  };
+  const onPaste = (event: ClipboardEvent): void => {
+    if (handle.paste(event)) {
+      goalX = undefined;
+      project();
+      schedule();
+    }
+  };
+
+  // --- Wiring --------------------------------------------------------------------------------
+
+  const on = <K extends keyof HTMLElementEventMap>(
+    target: HTMLElement,
+    name: K,
+    listener: (event: HTMLElementEventMap[K]) => void,
+  ): (() => void) => {
+    target.addEventListener(name, listener);
+    return () => target.removeEventListener(name, listener);
+  };
+  const stops = [
+    on(bridge, 'keydown', onKeyDown),
+    on(bridge, 'beforeinput', onBeforeInput),
+    on(bridge, 'input', onInput),
+    on(bridge, 'compositionstart', onCompositionStart),
+    on(bridge, 'compositionend', onCompositionEnd),
+    on(bridge, 'copy', onCopy),
+    on(bridge, 'cut', onCut),
+    on(bridge, 'paste', onPaste),
+    on(scroller, 'pointerdown', onPointerDown),
+    on(scroller, 'pointermove', onPointerMove),
+    on(scroller, 'pointerup', onPointerUp),
+    on(scroller, 'scroll', () => {
+      if (tree !== null) {
+        paintCaret();
+        followCaret(false);
+      }
+    }),
+  ];
+  // A face that arrives after the first layout changes the widths: lay out again (FE-064).
+  const fonts = doc.fonts;
+  const onFonts = (): void => {
+    providers = options.providers ?? pageProviders(undefined, Date.now());
+    layout = incrementalLayout(providers);
+    relayout = true;
+    schedule();
+  };
+  fonts?.addEventListener?.('loadingdone', onFonts);
+
+  project();
+  // The first pass runs now, so the pages exist when the element reports the view as shown.
+  try {
+    layoutNow();
+    relayout = false;
+    paintCaret();
+    followCaret(true);
+  } catch (error) {
+    destroy();
+    throw error;
+  }
+
+  function destroy(): void {
+    if (destroyed) return;
+    destroyed = true;
+    for (const stop of stops) stop();
+    fonts?.removeEventListener?.('loadingdone', onFonts);
+    handle.detach();
+    win?.dispose();
+    win = null;
+    root.remove();
+  }
+
+  return {
+    root,
+    focus: () => bridge.focus({ preventScroll: true }),
+    status: () => status,
+    flush: () => {
+      relayout = true;
+      flush();
+    },
+    destroy,
+  };
+}

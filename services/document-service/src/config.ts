@@ -164,6 +164,27 @@ export interface ServiceConfig {
    * spec gives none (ADR 0146): `DOCEDIT_WEBHOOKS=true` needs all four of them.
    */
   webhooks: WebhookSettings | null;
+  /**
+   * The signing service that seals the final PDF (12 §8.2 step 3; FRW-052, FRW-053). Null: no
+   * workflow is sealed here and a completed workflow stays `completed`. `DOCEDIT_SEAL_URL` turns it
+   * on and then needs the other five settings, which have no default because the spec gives none.
+   */
+  sealing: SealingSettings | null;
+}
+
+/** The settings of the live seal step (server.ts composes it; docs/adr/0412). */
+export interface SealingSettings {
+  /** Base URL of the signing service. */
+  url: string;
+  /** The document service's credential for it (a secret: environment only). */
+  credential: string;
+  /** How long to wait for one answer, ms. */
+  timeoutMs: number;
+  /** Attempts of one run (at least 1); the waits are `delaysMs`, the last one repeating. */
+  attempts: number;
+  delaysMs: number[];
+  /** How long the stored sealed bytes are retained, days from the seal. */
+  retentionDays: number;
 }
 
 /** The settings of the webhook dispatcher and its egress proxy (server.ts composes them). */
@@ -250,6 +271,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   scheduler: true,
   searchIndex: false,
   webhooks: null,
+  sealing: null,
 };
 
 /** A setting the spec gives no figure for: required, with no default (ADR 0146). */
@@ -297,6 +319,37 @@ function webhookSettings(env: NodeJS.ProcessEnv): WebhookSettings | null {
     timeoutMs: required(env, 'DOCEDIT_WEBHOOK_TIMEOUT_MS', 1),
     maxRedirects: required(env, 'DOCEDIT_WEBHOOK_MAX_REDIRECTS', 0),
     source: env['DOCEDIT_WEBHOOK_SOURCE'] || null,
+  };
+}
+
+/** The seal settings from DOCEDIT_SEAL_* variables, or null when DOCEDIT_SEAL_URL is not set. */
+function sealingSettings(env: NodeJS.ProcessEnv): SealingSettings | null {
+  const url = env['DOCEDIT_SEAL_URL'];
+  if (url === undefined || url === '') return null;
+  const need = (name: string): string => {
+    const v = env[name];
+    if (v === undefined || v === '')
+      throw new Error(`DOCEDIT_SEAL_URL needs ${name}; it has no default`);
+    return v;
+  };
+  const delays = need('DOCEDIT_SEAL_DELAYS_MS')
+    .split(',')
+    .map((s) => Number(s.trim()));
+  if (delays.some((n) => !Number.isSafeInteger(n) || n < 0))
+    throw new Error('DOCEDIT_SEAL_DELAYS_MS is a comma-separated list of non-negative integers');
+  const num = (name: string, min: number): number => {
+    const n = Number(need(name));
+    if (!Number.isSafeInteger(n) || n < min)
+      throw new Error(`${name} must be an integer of at least ${min}`);
+    return n;
+  };
+  return {
+    url: url.replace(/\/+$/, ''),
+    credential: need('DOCEDIT_SEAL_CREDENTIAL'),
+    timeoutMs: num('DOCEDIT_SEAL_TIMEOUT_MS', 1),
+    attempts: num('DOCEDIT_SEAL_ATTEMPTS', 1),
+    delaysMs: delays,
+    retentionDays: num('DOCEDIT_SEAL_RETENTION_DAYS', 1),
   };
 }
 
@@ -443,6 +496,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     scheduler: flag(env, 'DOCEDIT_SCHEDULER', DEFAULTS.scheduler),
     searchIndex: flag(env, 'DOCEDIT_SEARCH_INDEX', DEFAULTS.searchIndex),
     webhooks: webhookSettings(env),
+    sealing: sealingSettings(env),
   };
   checkConfig(config);
   return config;

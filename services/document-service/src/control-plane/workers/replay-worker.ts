@@ -6,11 +6,17 @@
  * It also compares two versions (HIS-011 criterion 4): the comparison walks both documents and the
  * commits between them, which can take long on a large document, so it runs here and never on the
  * loop that serves requests and rooms.
+ *
+ * And it serialises the content a document is created with (`serialise`; BE-001 criterion 3): that
+ * content is the checkpoint at sequence number 0, and its canonical text and compression are the
+ * same work as any other checkpoint's.
  */
 import { parentPort, threadId, workerData } from 'node:worker_threads';
 import { DEFAULT_LIMITS, applySteps, parseSteps } from '@docedit/authority';
+import type { JsonEnvelope } from '@docedit/model';
 import { compareTask, type CompareTask } from './compare-task.ts';
 import { cdmSchema } from '@docedit/model/prosemirror';
+import { encodeCheckpoint } from '../../objects/checkpoints.ts';
 
 interface Materialise {
   /** The document root at the checkpoint. */
@@ -44,6 +50,16 @@ parentPort?.on('message', (m: { id: number; kind: string; input: unknown }) => {
         id: m.id,
         ok: true,
         value: { result: compareTask(m.input as CompareTask), threadId },
+      });
+    else if (m.kind === 'serialise')
+      parentPort!.postMessage({
+        id: m.id,
+        ok: true,
+        value: {
+          // A copy in a buffer of its own: what Zstandard returns may share a pooled one.
+          bytes: new Uint8Array(encodeCheckpoint((m.input as { content: JsonEnvelope }).content)),
+          threadId,
+        },
       });
     else if (m.kind === 'crash' && allowCrash) process.exit(70);
     else if (m.kind === 'thread') parentPort!.postMessage({ id: m.id, ok: true, value: threadId });

@@ -537,6 +537,16 @@ export interface RegionLabel {
 }
 
 /**
+ * The words of a region the user cannot edit that has no label of its own (PRM-026): `unlisted` for
+ * a region the access in force does not list yet (05 §5.5), `locked` for any other, which is every
+ * locked region when the backend gives no region list.
+ */
+export interface RegionLabelDefaults {
+  readonly locked?: RegionLabel;
+  readonly unlisted?: RegionLabel;
+}
+
+/**
  * Another session's caret and selection (UX-027), in CSS pixels relative to the element the core's
  * body view is mounted in (`mountBody`'s target), so scrolling does not move them. The view holds
  * only peers this user may see, never inside hidden content (ADR 0019).
@@ -621,16 +631,40 @@ export interface ExportService {
   /**
    * The warnings of the preflight shared with the converter (09 §1; EXP-003), for the document as
    * the core holds it now, before any job is created. Empty when nothing was found. Absent when
-   * the core has no preflight; the dialog then creates the job at once.
+   * the core has no preflight; the dialog then creates the job at once. `options` are the ones the
+   * job would be asked for, so that a finding has the severity the job would give it.
    */
   preflight?(
     target: ExportTarget,
+    options?: ExportOptions,
   ): readonly ExportDiagnostic[] | Promise<readonly ExportDiagnostic[]>;
   /** Starts a job; resolves with its identifier, or rejects with an error that has a `code`. */
   request(target: ExportTarget, options: ExportOptions): Promise<{ jobId: string }>;
   /** The job as `export.*` events report it; null for an unknown job. */
   job(jobId: string): ReadView<ExportJobView | null>;
   cancel(jobId: string): Promise<void>;
+  /**
+   * The newest job of target `pdf` that this service started, as its reports arrive; null before
+   * the first. The PDF pane shows it (EXP-001). Absent: the core does not follow one, and the pane
+   * is not offered.
+   */
+  readonly latestPdf?: ReadView<ExportJobView | null>;
+}
+
+/**
+ * The viewer of a typeset PDF (FE-071; 09 §9.3 rule 7): the core puts a sandboxed frame of another
+ * origin into `container` and opens the PDF in it. The shell never fetches or parses the file.
+ */
+export interface PdfViewService {
+  /**
+   * Opens the PDF at a signed URL in a new frame inside `container`; resolves with the page count
+   * once the first page is drawn, and rejects when the viewer or the file cannot be loaded.
+   * `destroy()` removes the frame.
+   */
+  open(
+    container: Element,
+    source: { readonly url: string },
+  ): Promise<{ readonly viewer: { destroy(): void }; readonly pages: number }>;
 }
 
 /** Roles a region grant may give (07 §2). */
@@ -659,6 +693,37 @@ export interface GrantsService {
    * `precondition_failed` when someone changed the grants first; nothing is overwritten.
    */
   save(grants: readonly RegionGrant[], etag: string): Promise<GrantsSnapshot>;
+}
+
+/** A region lease this session holds (05 §6.2 `Lease`; 07 §10). */
+export interface HeldLease {
+  readonly region: string;
+  /** The holder: the host's user identifier. */
+  readonly holder: string;
+  /** When the lease ends unless it is extended (RFC 3339). */
+  readonly expiresAt: string;
+}
+
+/**
+ * Check-out of a region through the backend's leases port (PRM-043): the user holds a region
+ * alone for a short time. The lease is kept alive until it is released (the port sends the
+ * heartbeats, 07 §10). Absent when the backend does not announce `leases` (05 §8.3), and then the
+ * shell offers no check-out.
+ */
+export interface LeasesService {
+  /**
+   * The leases this session took and has not released, as a view. A lease that lapsed or that
+   * someone broke stays here until the next `acquire` or `release` of its region; the shell compares
+   * its holder with the region list (`RegionEditors.leasedTo`) before it says the user holds it.
+   */
+  readonly held: ReadView<readonly HeldLease[]>;
+  /**
+   * `POST /documents/{id}/regions/{rid}/lease`. Rejects with an error whose `code` is `forbidden`
+   * (no `edit` in the region, or an approved region) or `conflict` (another user holds it).
+   */
+  acquire(region: string): Promise<HeldLease>;
+  /** `DELETE /documents/{id}/regions/{rid}/lease`: the holder gives the region back. */
+  release(region: string): Promise<void>;
 }
 
 /** A field of the document as fill mode shows it (FRW-076, FRW-077, FRW-078). */
@@ -864,6 +929,12 @@ export interface CoreApi {
   ignoreFinding?(id: string, everywhere?: boolean): boolean;
   /** Adds the finding's text to the port's custom dictionary. */
   addFindingToDictionary?(id: string): Promise<boolean>;
+  /**
+   * The finding with this identifier, while it is shown; null otherwise. The editing surface marks a
+   * finding's text with `data-de-finding`, and a context click on the mark asks for that finding
+   * (UX-008 criterion 5). Absent: the menu uses the finding at the caret.
+   */
+  proofingFinding?(id: string): ProofingFindingView | null;
 
   /** Word and page counts (UX-018). */
   readonly stats?: ReadView<DocumentStats>;
@@ -880,8 +951,15 @@ export interface CoreApi {
   styleEdit?(op: StyleEditOp, id?: string): StyleEditCheck;
   /** The derived region list, as this reader may see it (PRM-032; ADR 0019). */
   readonly regions?: ReadView<readonly RegionSummary[]>;
-  /** The words for the lock indicators of regions the user cannot edit, by region id (PRM-026). */
-  setRegionLabels?(labels: Readonly<Record<string, RegionLabel>>): void;
+  /**
+   * The words for the lock indicators of regions the user cannot edit, by region id (PRM-026).
+   * The core decides from the access which regions are locked and shades them; `defaults` are the
+   * words of a locked region that `labels` does not name.
+   */
+  setRegionLabels?(
+    labels: Readonly<Record<string, RegionLabel>>,
+    defaults?: RegionLabelDefaults,
+  ): void;
   /** Other sessions' carets and selections, mapped through local steps (UX-027). */
   readonly carets?: ReadView<readonly PeerCaret[]>;
 
@@ -900,9 +978,17 @@ export interface CoreApi {
   selectMatch?(match: SearchMatch): boolean;
   /** The caret's rectangle in viewport coordinates, for menus opened from the keyboard. */
   caretRect?(): ShellRect | null;
+  /**
+   * Has the core read the browser's selection now, where it would otherwise follow it on a later
+   * event. The context menu calls it before it reads `selection`, so that the menu is built for the
+   * place that was clicked (UX-008). Absent: the views are taken as current.
+   */
+  syncSelection?(): void;
 
   /** Export jobs (UX-101), when the backend announces `exports`. */
   readonly exports?: ExportService;
+  /** The viewer of the typeset PDF, for the PDF pane (EXP-001; FE-071). Absent: no PDF pane. */
+  readonly pdf?: PdfViewService;
   /**
    * The document as this reader holds it (the engine's `getContent()`, a CDM envelope), for the
    * client export filters of extensions (UX-055; 13 §7.1). Never hidden content (ADR 0019).
@@ -917,6 +1003,11 @@ export interface CoreApi {
   extensionApi?(options: ExtensionApiOptions): ExtensionDocumentApi;
   /** Region grants (PRM-035), when the backend announces `regions`. */
   readonly grants?: GrantsService;
+  /**
+   * Check-out of regions (PRM-043), when the backend announces `leases`. Absent: the permissions
+   * pane shows no check-out control.
+   */
+  readonly leases?: LeasesService;
   /** Fill mode for this participant (FRW-076), or null outside fill mode. */
   readonly fill?: ReadView<FillSummary | null>;
   /** Moves focus to a field and scrolls it into view (FRW-078); false when it is gone. */
