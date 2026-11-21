@@ -115,6 +115,19 @@ export interface InvariantCheck {
   /** Unique name, such as `fields` or `rules`. */
   name: string;
   codes: Readonly<Record<string, CodeDoc>>;
+  /**
+   * What the check's findings depend on, so that the validation of a commit (incremental.ts;
+   * ADR 0422) can leave the check out when the commit changed none of it. A check that declares
+   * `reads` promises that its violations and its `notChecked` lines, but for the paths in them, are
+   * a function of the nodes of the listed types in document order (their attributes, their marks
+   * and the types of the nodes around them) and of the listed members of the context. It reads no
+   * text, no other node type, and uses `path` and `nodeId` only to report. A check without `reads`
+   * may depend on anything, and every commit is then validated in full.
+   */
+  reads?: {
+    readonly nodes: readonly string[];
+    readonly context?: readonly ('attachedAssets' | 'retiredRegionIds' | 'mathGate')[];
+  };
   /** Invariants this check could not evaluate with the context it got. */
   notChecked?(view: DocumentView): readonly string[];
   check(view: DocumentView, report: (v: ViolationReport) => void): void;

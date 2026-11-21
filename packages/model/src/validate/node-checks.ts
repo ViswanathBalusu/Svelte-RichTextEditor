@@ -1,16 +1,16 @@
 /**
  * The checks of one node (03 §8), shared by the full validator (validate.ts) and the incremental one
- * (incremental.ts; ADR 0056). A check reports through a Recorder. What depends on the node alone is
+ * (incremental.ts; ADR 0422). A check reports through a Recorder. What depends on the node alone is
  * a violation at once (`add`). What depends on the rest of the document goes to the recorder, which
  * decides when it can: identifiers (I2), suggestion users (I2), bookmark names and equation labels
- * (I4), features against `requires` (I1), retired regions (I3), the math gate (I8) and the nesting
- * limit (I7). What the document-wide checks need (references, definitions, numbering uses, field
- * targets) is collected the same way.
+ * (I4), features against `requires` (I1), retired regions (I3), the math gate (I8), the nesting
+ * limit and the size of one attribute value (I7). What the document-wide checks need (references,
+ * definitions, numbering uses, field targets) is collected the same way.
  *
- * The full validator's recorder holds the state of the walk and decides in walk order; the
- * incremental one records each node's findings with paths relative to the node and decides when it
- * reports, from indexes in document order. Both run this code, so the two cannot differ in what a
- * node is checked for.
+ * The full validator's recorder holds the state of the walk and decides in walk order. The
+ * incremental one records what the nodes a commit removed and added give and take, and decides from
+ * its indexes of the document before the commit. Both run this code, so the two cannot differ in
+ * what a node is checked for.
  */
 import {
   BLOCK_FORMAT_ATTRIBUTES,
@@ -104,6 +104,13 @@ export interface Recorder {
   feature(feature: string, path: string, nodeId: string | null, message: string): void;
   /** I7: a node nested deeper than the limit; the walk does not enter it. Reported once. */
   deep(path: string, nodeId: string | null): void;
+  /**
+   * I7: an attribute value that alone is over the canonical size limit. Its grammar is not walked
+   * item by item, and the other attributes of its node or mark are not read.
+   */
+  oversize(path: string, nodeId: string | null): void;
+  /** Whether the walk is to stop here: the full validator stops where the size passed its limit. */
+  stopped(): boolean;
   /** I2: the identifier of an identified node, at `path` (`…/attrs/id`). */
   id(id: string, path: string): void;
   /** I2: a suggestion identifier and its user, at `path` (`…/attrs/user`). */
@@ -257,6 +264,19 @@ export function visitNode(
 }
 
 /**
+ * The node types whose checks read their children: the paragraphs of a footnote (`checkContent`),
+ * the rows and cells of a table and the fields of a paragraph (`afterChildren`). The incremental
+ * validator runs these checks again only for these types, and only when the children changed. A
+ * check of the children of another type must be added here, or it does not run.
+ */
+const READS_CHILDREN: ReadonlySet<string> = new Set(['footnote', 'table', 'paragraph']);
+
+/** Whether `checkContent` or `afterChildren` reads the children of a node of this type. */
+export function readsChildren(type: string): boolean {
+  return READS_CHILDREN.has(type);
+}
+
+/**
  * The checks of a node's `content` before its children. `isArray` says whether `content` is an
  * array; `paragraphs` counts the paragraphs among the children (asked only for a footnote).
  * Returns whether the children are to be walked.
@@ -274,6 +294,7 @@ export function checkContent(
   }
   if (!v.nd.content)
     rec.add('content_on_leaf', `${path}/content`, v.nodeId, `${v.type} has no content`);
+  if (!READS_CHILDREN.has(v.type)) return true;
   if (v.type === 'footnote') {
     const count = paragraphs();
     if (count > LIMITS.footnoteParagraphs)
@@ -289,17 +310,20 @@ export function checkContent(
 
 /**
  * The checks after a node's children: table geometry (I6) and whether a paragraph is a caption.
- * `children` is the node's `content` as JSON; for a table its rows with their cells' attributes.
+ * `children` gives the node's `content` as JSON when a check asks for it. A check reads the type
+ * and the attributes of the children and of their children, and nothing deeper: the incremental
+ * validator hands in exactly that much for a node whose children it did not walk.
  */
 export function afterChildren(
   rec: Recorder,
   v: Visit,
   path: string,
-  children: readonly unknown[],
+  children: () => readonly unknown[],
 ): void {
-  if (v.type === 'table') checkTableGeometry(rec, v.attrs, children, path, v.nodeId);
+  if (!READS_CHILDREN.has(v.type)) return;
+  if (v.type === 'table') checkTableGeometry(rec, v.attrs, children(), path, v.nodeId);
   if (v.type === 'paragraph' && typeof v.own === 'string')
-    rec.caption(v.own, children.some(isSeqField));
+    rec.caption(v.own, children().some(isSeqField));
 }
 
 /** Whether a child (as JSON) is a `seq` field, which makes its paragraph a caption. */
@@ -307,6 +331,86 @@ export function isSeqField(c: unknown): boolean {
   return (
     isObject(c) && c['type'] === 'field' && isObject(c['attrs']) && c['attrs']['kind'] === 'seq'
   );
+}
+
+/** Children that are not node objects reported per content array before the walk gives up. */
+const MAX_MALFORMED_CHILDREN = 16;
+
+/**
+ * Walks a node and its subtree as JSON and runs the checks of every node. The recursion stops at the
+ * nesting limit (`visitNode`), so hostile nesting costs no unbounded recursion, and wherever the
+ * recorder says the walk has stopped.
+ */
+export function walkNode(
+  ix: DefinitionIndex,
+  rec: Recorder,
+  node: Record<string, unknown>,
+  path: string,
+  ancestors: readonly string[],
+  depth: number,
+  nearestId: string | null,
+): void {
+  if (rec.stopped()) return;
+  const v = visitNode(ix, rec, node, path, ancestors, depth, nearestId);
+  if (!v) return;
+  const content = node['content'];
+  if (content === undefined) return;
+  const children: readonly unknown[] = Array.isArray(content) ? content : [];
+  const paragraphs = () => children.filter((c) => isObject(c) && c['type'] === 'paragraph').length;
+  if (!checkContent(rec, v, path, Array.isArray(content), paragraphs)) return;
+  const next = [...ancestors, v.type];
+  let malformed = 0;
+  for (let i = 0; i < children.length && !rec.stopped(); i++) {
+    const child = children[i];
+    if (isObject(child))
+      walkNode(ix, rec, child, `${path}/content/${i}`, next, depth + 1, v.nodeId);
+    else {
+      rec.add('malformed', `${path}/content/${i}`, v.nodeId, 'child is not a node object');
+      // The array is wrong already (I1); a hostile one is not reported item by item.
+      if (++malformed >= MAX_MALFORMED_CHILDREN) break;
+    }
+  }
+  if (rec.stopped()) return;
+  afterChildren(rec, v, path, () => children);
+}
+
+/**
+ * Whether the JSON text of a value is longer than `limit` bytes, without writing it. It counts a
+ * lower bound (a number, a boolean or null as one byte, a UTF-16 code unit as one byte) and stops
+ * as soon as the bound passes the limit, so the work and the memory are bounded by the limit and
+ * not by the input. No recursion.
+ */
+export function jsonSizeOver(value: unknown, limit: number): boolean {
+  if (typeof value !== 'object' || value === null)
+    return typeof value === 'string' && value.length + 2 > limit;
+  let n = 0;
+  const stack: object[] = [value];
+  const count = (v: unknown): void => {
+    if (typeof v === 'string') n += v.length + 2;
+    else if (typeof v === 'object' && v !== null) stack.push(v);
+    else if (v !== undefined) n += 1;
+  };
+  while (stack.length) {
+    const v = stack.pop()!;
+    if (Array.isArray(v)) {
+      // The brackets and the commas between the items, then each item.
+      n += v.length ? v.length + 1 : 2;
+      if (n > limit) return true;
+      for (let i = 0; i < v.length; i++) {
+        count(v[i]);
+        if (n > limit) return true;
+      }
+    } else {
+      n += 2;
+      for (const key of Object.keys(v)) {
+        // The quotes and the colon, then the value. (The comma is not counted: one fewer than keys.)
+        n += key.length + 3;
+        count((v as Record<string, unknown>)[key]);
+        if (n > limit) return true;
+      }
+    }
+  }
+  return n > limit;
 }
 
 /** The problems of one attribute value, each under the invariant its attribute names. */
@@ -366,6 +470,11 @@ function checkAttrs(
       else
         rec.add('attribute_missing', `${path}/${name}`, nodeId, `${ownerName}.${name} is required`);
       continue;
+    }
+    // A value that alone is over the size limit is I7; its grammar is not walked item by item.
+    if (present && jsonSizeOver(value, LIMITS.canonicalBytes)) {
+      rec.oversize(`${path}/${name}`, nodeId);
+      break;
     }
     // Field values (`reportAs` I15) are checked whole, by kind, by the field invariants.
     if (present && a.reportAs?.['*'] !== 'I15')

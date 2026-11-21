@@ -9,6 +9,10 @@
  * alone. The context supplies what they need: attached assets (I4), region identifiers removed
  * earlier (I3), the identifier changes of the commit (I2), the math gate (I8). Whatever a caller
  * leaves out is reported as not checked, never as passed.
+ *
+ * The checks of one node are in node-checks.ts and what resolves is in references.ts. The
+ * incremental validation of a commit (incremental.ts) runs the same code on the nodes the commit
+ * changed.
  */
 import type { Node as PMNode } from 'prosemirror-model';
 import { canonicalize } from '../canonical/jcs.ts';
@@ -18,27 +22,23 @@ import {
   type JsonNode,
 } from '../canonical/canonical-form.ts';
 import { utf8 } from '../conventions/platform.ts';
-import {
-  BLOCK_FORMAT_ATTRIBUTES,
-  BUILT_IN_STYLES,
-  CDM1,
-  FIELD_TARGET_PATTERN,
-  SUGGESTION_HOSTS,
-} from '../definition/cdm1.ts';
-import type {
-  AttrDef,
-  Grammar,
-  InvariantId,
-  JsonValue,
-  MarkDef,
-  NodeDef,
-  RefTarget,
-} from '../definition/grammar.ts';
+import { CDM1 } from '../definition/cdm1.ts';
 import { indexDefinition, type DefinitionIndex } from '../definition/index.ts';
 import { cdmSchema } from '../prosemirror/index.ts';
 import { BUILT_IN_CHECKS, MODEL_CODES } from './built-in.ts';
 import { VIOLATION_CODES, type BuiltInCode } from './codes.ts';
-import { grammarProblems, show } from './grammar-check.ts';
+import {
+  LIMITS,
+  isObject,
+  walkNode,
+  type FieldTargetUse,
+  type NumberingUse,
+  type ParagraphInfo,
+  type Recorder,
+  type RefUse,
+  type StyleInfo,
+} from './node-checks.ts';
+import { levelProblem, refProblem, targetProblem } from './references.ts';
 import { registeredInvariants } from './registry.ts';
 import type {
   DocumentView,
@@ -57,50 +57,7 @@ export type {
   ValidationResult,
   Violation,
 } from './types.ts';
-
-export const LIMITS = {
-  canonicalBytes: 16 * 1024 * 1024,
-  regions: 500,
-  tableColumns: 63,
-  depth: 12,
-  basedOnDepth: 10,
-  fields: 2000,
-  rules: 500,
-  fieldValueBytes: 4096,
-  footnoteParagraphs: 1,
-} as const;
-
-/** The code a grammar problem of an attribute gets, by the invariant the attribute names. */
-const GRAMMAR_CODES: Partial<Record<InvariantId, BuiltInCode>> = {
-  I7: 'limit_exceeded',
-  I9: 'link_scheme',
-  I11: 'attribute_invalid',
-  I12: 'extension_envelope',
-};
-
-interface RefUse {
-  to: RefTarget;
-  value: string;
-  path: string;
-  nodeId: string | null;
-  /** For style_def.basedOn: the kind of the style that refers. */
-  fromStyleKind?: string;
-}
-
-interface StyleInfo {
-  kind: string;
-  basedOn: string | null;
-  builtIn: boolean;
-  path: string;
-  outlineLevel: boolean;
-  numbered: boolean;
-}
-
-interface ParagraphInfo {
-  style: string | null;
-  numbered: boolean;
-  caption: boolean;
-}
+export { LIMITS } from './node-checks.ts';
 
 interface State {
   ix: DefinitionIndex;
@@ -111,7 +68,7 @@ interface State {
   styles: Map<string, StyleInfo>;
   defaultStyle: string | null;
   numberingLevels: Map<string, number>;
-  numberingUses: Array<{ numberingId: string; level: number; path: string; nodeId: string | null }>;
+  numberingUses: NumberingUse[];
   pageSetups: Set<string>;
   stories: Map<string, string>;
   sources: Set<string>;
@@ -119,7 +76,7 @@ interface State {
   anchors: Set<string>;
   eqLabels: Set<string>;
   paragraphs: Map<string, ParagraphInfo>;
-  fieldTargets: Array<{ value: string; kind: string; path: string; nodeId: string | null }>;
+  fieldTargets: FieldTargetUse[];
   refs: RefUse[];
   suggestionUsers: Map<string, { user: string; path: string }>;
   regions: number;
@@ -135,9 +92,6 @@ interface State {
   previousLatex: Set<string> | null;
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-
 function add(
   st: State,
   code: BuiltInCode,
@@ -148,10 +102,8 @@ function add(
   st.v.push({ invariant: VIOLATION_CODES[code].invariant, code, path, nodeId, message });
 }
 
-export function validate(envelope: unknown, ctx: ValidationContext = {}): ValidationResult {
-  const def = ctx.def ?? CDM1;
-  const ix = indexDefinition(def);
-  const v: Violation[] = [];
+/** What the context did not let a validation check, in the words of `notChecked` (CDM-013). */
+function contextGaps(ctx: ValidationContext): string[] {
   const notChecked: string[] = [];
   if (!ctx.attachedAssets) notChecked.push('I4 (asset references: no attached-asset list given)');
   if (!ctx.mathGate) notChecked.push('I8 (no math gate given)');
@@ -160,6 +112,19 @@ export function validate(envelope: unknown, ctx: ValidationContext = {}): Valida
   // the commit's steps made, not only its result.
   if (!ctx.identifierChanges)
     notChecked.push('I2 (a non-null id never changes: no identifier changes given)');
+  return notChecked;
+}
+
+/** The checks a validation runs through the registration interface, in the order they run. */
+export function checksOf(ctx: ValidationContext): InvariantCheck[] {
+  return [...BUILT_IN_CHECKS, ...registeredInvariants(), ...(ctx.invariants ?? [])];
+}
+
+export function validate(envelope: unknown, ctx: ValidationContext = {}): ValidationResult {
+  const def = ctx.def ?? CDM1;
+  const ix = indexDefinition(def);
+  const v: Violation[] = [];
+  const notChecked = contextGaps(ctx);
 
   const st: State = {
     ix,
@@ -238,7 +203,7 @@ export function validate(envelope: unknown, ctx: ValidationContext = {}): Valida
 
   // A document whose nodes and text alone are over the size limit is refused before the walk.
   if (nodesOverLimit(doc)) spend(st, LIMITS.canonicalBytes + 1, '', null);
-  else walk(st, doc, '/doc', [], 1, null);
+  else walkNode(ix, recorder(st), doc, '/doc', [], 1, null);
   if (st.tooLarge) {
     // The walk stopped where the size passed the limit, so the checks that need the whole
     // document cannot run. They are listed as not checked, never as passed.
@@ -283,8 +248,6 @@ export function validateDoc(
 
 /** `{"type":""}`: what a node adds to the canonical form besides its name. */
 const MIN_NODE_BYTES = 11;
-/** Children that are not node objects reported per content array before the walk gives up. */
-const MAX_MALFORMED_CHILDREN = 16;
 
 /**
  * Counts bytes the canonical form is sure to have, and reports I7 once when they pass the limit.
@@ -339,781 +302,100 @@ function nodesOverLimit(doc: Record<string, unknown>): boolean {
 }
 
 /**
- * Whether the JSON text of a value is longer than `limit` bytes, without writing it. It counts a
- * lower bound (a number, a boolean or null as one byte, a UTF-16 code unit as one byte) and stops
- * as soon as the bound passes the limit, so the work and the memory are bounded by the limit and
- * not by the input. No recursion.
+ * Where the checks of one node (node-checks.ts) put what they find: the state of the walk. What
+ * depends on the rest of the document is decided here in walk order (identifiers, suggestion users,
+ * bookmark names and equation labels, features, retired regions, the math gate, the nesting limit),
+ * or collected for the document-wide checks that follow the walk.
  */
-function jsonSizeOver(value: unknown, limit: number): boolean {
-  if (typeof value !== 'object' || value === null)
-    return typeof value === 'string' && value.length + 2 > limit;
-  let n = 0;
-  const stack: object[] = [value];
-  const count = (v: unknown): void => {
-    if (typeof v === 'string') n += v.length + 2;
-    else if (typeof v === 'object' && v !== null) stack.push(v);
-    else if (v !== undefined) n += 1;
-  };
-  while (stack.length) {
-    const v = stack.pop()!;
-    if (Array.isArray(v)) {
-      // The brackets and the commas between the items, then each item.
-      n += v.length ? v.length + 1 : 2;
-      if (n > limit) return true;
-      for (let i = 0; i < v.length; i++) {
-        count(v[i]);
-        if (n > limit) return true;
-      }
-    } else {
-      n += 2;
-      for (const key of Object.keys(v)) {
-        // The quotes and the colon, then the value. (The comma is not counted: one fewer than keys.)
-        n += key.length + 3;
-        count((v as Record<string, unknown>)[key]);
-        if (n > limit) return true;
-      }
-    }
-  }
-  return n > limit;
-}
-
-const ALLOWED_KEYS = new Set(['type', 'attrs', 'content', 'marks']);
-const TEXT_KEYS = new Set(['type', 'text', 'marks']);
-
-function walk(
-  st: State,
-  node: Record<string, unknown>,
-  path: string,
-  ancestors: string[],
-  depth: number,
-  nearestId: string | null,
-): void {
-  const { ix } = st;
-  if (st.tooLarge) return;
-  const type = node['type'];
-  if (typeof type !== 'string')
-    return add(st, 'unknown_node_type', path, nearestId, 'node without a type');
-  const nd = ix.nodes.get(type);
-  if (!nd) {
-    if (ix.projectionNodes.has(type))
-      return add(
-        st,
-        'projection_only_node',
-        path,
-        nearestId,
-        `"${type}" exists only in a reader's projection and is never stored (ADR 0019)`,
-      );
-    return add(st, 'unknown_node_type', path, nearestId, `unknown node type "${type}"`);
-  }
-  if (depth > LIMITS.depth) {
-    // Report once and stop descending, so that hostile nesting costs no unbounded recursion.
-    if (!st.tooDeep)
-      add(st, 'nesting_too_deep', path, nearestId, `nesting deeper than ${LIMITS.depth}`);
-    st.tooDeep = true;
-    return;
-  }
-  const allowed = type === 'text' ? TEXT_KEYS : ALLOWED_KEYS;
-  for (const key of Object.keys(node))
-    if (!allowed.has(key))
-      add(st, 'unknown_member', `${path}/${key}`, nearestId, `unknown member "${key}" on ${type}`);
-  if (nd.feature && !st.requires.has(nd.feature))
-    add(
-      st,
-      'feature_missing',
-      path,
-      nearestId,
-      `"${type}" belongs to feature "${nd.feature}", which requires does not list`,
-    );
-
-  if (type === 'text') {
-    if (typeof node['text'] !== 'string' || node['text'] === '')
-      add(st, 'empty_text', `${path}/text`, nearestId, 'text nodes need non-empty text');
-    checkMarks(st, node['marks'], `${path}/marks`, nearestId);
-    return;
-  }
-
-  const attrs = checkAttrs(st, nd, node['attrs'], `${path}/attrs`, type, nearestId);
-  const own = st.ix.idNodes.has(type) && typeof attrs['id'] === 'string' ? attrs['id'] : null;
-  const nodeId = own ?? nearestId;
-  const entry: IndexedNode = { type, attrs, path, ancestors, nodeId, node };
-  st.nodes.push(entry);
-  st.byPath.set(path, entry);
-  let list = st.byType.get(type);
-  if (!list) st.byType.set(type, (list = []));
-  list.push(entry);
-
-  // I3: regions and section breaks are direct children of the body; regions do not nest.
-  if (type === 'region' || type === 'section_break') {
-    const parent = ancestors[ancestors.length - 1];
-    if (parent !== 'body') {
-      if (type === 'region' && ancestors.includes('region'))
-        add(st, 'nested_region', path, nodeId, 'regions do not nest');
-      else
+function recorder(st: State): Recorder {
+  return {
+    add: (code, path, nodeId, message) => add(st, code, path, nodeId, message),
+    missing: (feature) => !st.requires.has(feature),
+    feature: (_feature, path, nodeId, message) => add(st, 'feature_missing', path, nodeId, message),
+    deep(path, nodeId) {
+      // Reported once, so that hostile nesting costs one violation.
+      if (!st.tooDeep)
+        add(st, 'nesting_too_deep', path, nodeId, `nesting deeper than ${LIMITS.depth}`);
+      st.tooDeep = true;
+    },
+    oversize: (path, nodeId) => void spend(st, LIMITS.canonicalBytes + 1, path, nodeId),
+    stopped: () => st.tooLarge,
+    id(id, path) {
+      const first = st.ids.get(id);
+      if (first !== undefined)
+        add(st, 'duplicate_id', path, id, `identifier "${id}" is also used at ${first}`);
+      else st.ids.set(id, path);
+    },
+    suggestion(sid, user, path, nodeId) {
+      const first = st.suggestionUsers.get(sid);
+      if (!first) st.suggestionUsers.set(sid, { user, path });
+      else if (first.user !== user)
         add(
           st,
-          'misplaced_container',
+          'suggestion_user',
           path,
           nodeId,
-          `a ${type} must be a direct child of the body, not of ${parent ?? 'nothing'}`,
+          `suggestion "${sid}" belongs to "${first.user}" (${first.path}), not to "${user}"`,
         );
-    }
-  }
-  // Inline atoms carry marks as text does, formatting and suggestions alike (spike S11, change 1).
-  // A block carries no marks: its suggestions are in the `suggest` attribute (03 §5; owner decision 92).
-  if (node['marks'] !== undefined) {
-    if (nd.inline) checkMarks(st, node['marks'], `${path}/marks`, nodeId);
-    else if (!Array.isArray(node['marks']))
-      add(st, 'malformed', `${path}/marks`, nodeId, 'marks must be an array');
-    else if (node['marks'].length)
-      add(
-        st,
-        'node_mark_host',
-        `${path}/marks`,
-        nodeId,
-        `a ${type} carries no marks; block suggestions are in its \`suggest\` attribute`,
-      );
-  }
-  const suggest = attrs['suggest'];
-  if (SUGGESTION_HOSTS.includes(type) && Array.isArray(suggest))
-    suggest.forEach((e, i) => {
-      if (!isObject(e) || typeof e['type'] !== 'string' || !isObject(e['attrs'])) return;
-      checkSuggestion(
-        st,
-        e['type'],
-        e['attrs'] as Record<string, JsonValue>,
-        `${path}/attrs/suggest/${i}/attrs`,
-        type,
-        nodeId,
-      );
-    });
-  collect(st, type, attrs, path, ancestors, nodeId);
-
-  const content = node['content'];
-  if (content !== undefined) {
-    if (!Array.isArray(content))
-      add(st, 'malformed', `${path}/content`, nodeId, 'content must be an array');
-    else {
-      if (!nd.content)
-        add(st, 'content_on_leaf', `${path}/content`, nodeId, `${type} has no content`);
-      if (type === 'footnote') {
-        const paragraphs = content.filter((c) => isObject(c) && c['type'] === 'paragraph').length;
-        if (paragraphs > LIMITS.footnoteParagraphs)
-          add(
-            st,
-            'footnote_paragraphs',
-            `${path}/content`,
-            nodeId,
-            `a footnote holds one paragraph in version 1, not ${paragraphs} (CDM-001)`,
-          );
-      }
-      const next = [...ancestors, type];
-      let malformed = 0;
-      for (let i = 0; i < content.length && !st.tooLarge; i++) {
-        const child: unknown = content[i];
-        if (isObject(child)) walk(st, child, `${path}/content/${i}`, next, depth + 1, nodeId);
-        else {
-          add(st, 'malformed', `${path}/content/${i}`, nodeId, 'child is not a node object');
-          // The array is wrong already (I1); a hostile one is not reported item by item.
-          if (++malformed >= MAX_MALFORMED_CHILDREN) break;
-        }
-      }
-      if (st.tooLarge) return;
-      if (type === 'table') checkTableGeometry(st, attrs, content, path, nodeId);
-      if (type === 'paragraph' && typeof own === 'string') {
-        const info = st.paragraphs.get(own);
-        if (info)
-          info.caption = content.some(
-            (c) =>
-              isObject(c) &&
-              c['type'] === 'field' &&
-              isObject(c['attrs']) &&
-              c['attrs']['kind'] === 'seq',
-          );
-      }
-    }
-  }
-}
-
-/** The problems of one attribute value, each under the invariant its attribute names. */
-function grammarViolations(
-  st: State,
-  a: AttrDef,
-  value: unknown,
-  path: string,
-  nodeId: string | null,
-): void {
-  for (const p of grammarProblems(a.grammar, value, path)) {
-    const inv = a.reportAs?.[p.kind] ?? a.reportAs?.['*'] ?? 'I11';
-    add(st, GRAMMAR_CODES[inv] ?? 'attribute_invalid', p.path, nodeId, p.message);
-  }
-}
-
-/** Checks the attributes of a node or mark; returns the effective values (defaults filled in). */
-function checkAttrs(
-  st: State,
-  owner: NodeDef | MarkDef,
-  given: unknown,
-  path: string,
-  ownerName: string,
-  nodeId: string | null,
-): Record<string, JsonValue> {
-  const spec = owner.attrs;
-  const out: Record<string, JsonValue> = {};
-  if (given !== undefined && !isObject(given)) {
-    add(st, 'malformed', path, nodeId, 'attrs must be an object');
-    given = undefined;
-  }
-  const rec = (given ?? {}) as Record<string, unknown>;
-  for (const key of Object.keys(rec))
-    if (!Object.hasOwn(spec, key))
-      add(
-        st,
-        'unknown_attribute',
-        `${path}/${key}`,
-        nodeId,
-        `unknown attribute "${key}" on ${ownerName}`,
-      );
-  for (const [name, a] of Object.entries(spec)) {
-    const present = Object.hasOwn(rec, name);
-    const value = (present ? rec[name] : a.default) as JsonValue;
-    out[name] = value;
-    // A required attribute must be given: its default only lets ProseMirror create the node.
-    if (a.presence === 'required' && (!present || value === null || value === undefined)) {
-      const own = name === 'id' && st.ix.idNodes.has(ownerName);
-      if (own) add(st, 'missing_id', `${path}/${name}`, nodeId, `${ownerName} has no identifier`);
-      else if (a.reportAs?.['*'] === 'I12')
+    },
+    name(kind, name, path, nodeId) {
+      // Bookmark names and equation labels are reference targets, so they are unique (CDM-002,
+      // ADR 0018).
+      const names = kind === 'anchor' ? st.anchors : st.eqLabels;
+      if (names.has(name))
         add(
           st,
-          'extension_envelope',
-          `${path}/${name}`,
+          'duplicate_target_name',
+          path,
           nodeId,
-          `${ownerName}.${name} is required`,
+          `${kind === 'anchor' ? 'bookmark name' : 'equation label'} "${name}" is used twice; references to it would be ambiguous`,
         );
-      else
-        add(st, 'attribute_missing', `${path}/${name}`, nodeId, `${ownerName}.${name} is required`);
-      continue;
-    }
-    // A value that alone is over the size limit is I7; its grammar is not walked item by item.
-    if (present && jsonSizeOver(value, LIMITS.canonicalBytes)) {
-      spend(st, LIMITS.canonicalBytes + 1, `${path}/${name}`, nodeId);
-      break;
-    }
-    // Field values (`reportAs` I15) are checked whole, by kind, by the field invariants.
-    if (present && a.reportAs?.['*'] !== 'I15')
-      grammarViolations(st, a, value, `${path}/${name}`, nodeId);
-    if (a.feature && value !== null && !st.requires.has(a.feature))
-      add(
-        st,
-        'feature_missing',
-        `${path}/${name}`,
-        nodeId,
-        `${ownerName}.${name} belongs to feature "${a.feature}", which requires does not list`,
-      );
-    if (a.valueFeatures && typeof value === 'string' && Object.hasOwn(a.valueFeatures, value)) {
-      const feature = a.valueFeatures[value]!;
-      if (!st.requires.has(feature))
-        add(
-          st,
-          'feature_missing',
-          `${path}/${name}`,
-          nodeId,
-          `${ownerName}.${name} "${value}" belongs to feature "${feature}", which requires does not list`,
-        );
-    }
-  }
-  return out;
-}
-
-const SUGGESTIONS = new Set(['ins', 'del', 'fmt']);
-
-function checkMarks(st: State, marks: unknown, path: string, nodeId: string | null): void {
-  const { ix } = st;
-  if (marks === undefined) return;
-  if (!Array.isArray(marks)) return add(st, 'malformed', path, nodeId, 'marks must be an array');
-  marks.forEach((m, i) => {
-    const p = `${path}/${i}`;
-    if (!isObject(m) || typeof m['type'] !== 'string')
-      return add(st, 'unknown_mark_type', p, nodeId, 'mark without a type');
-    for (const key of Object.keys(m))
-      if (key !== 'type' && key !== 'attrs')
-        add(st, 'unknown_member', `${p}/${key}`, nodeId, `unknown member "${key}" on a mark`);
-    const md = ix.marks.get(m['type']);
-    if (!md) return add(st, 'unknown_mark_type', p, nodeId, `unknown mark type "${m['type']}"`);
-
-    if (md.feature && !st.requires.has(md.feature))
-      add(
-        st,
-        'feature_missing',
-        p,
-        nodeId,
-        `mark "${md.name}" belongs to feature "${md.feature}", which requires does not list`,
-      );
-    const attrs = checkAttrs(st, md, m['attrs'], `${p}/attrs`, md.name, nodeId);
-    collectRefs(st, md.attrs, attrs, `${p}/attrs`, nodeId);
-    if (SUGGESTIONS.has(md.name)) checkSuggestion(st, md.name, attrs, `${p}/attrs`, null, nodeId);
-  });
-}
-
-/**
- * Suggestion marks (03 §5): an identifier belongs to one user (I2), and `fmt.before` has the shape
- * of CDM-002: `{ marks, attrs }`, the previous marks of text or the previous style, alignment or
- * list level of a block (CDM-040), each passing its own grammar.
- */
-function checkSuggestion(
-  st: State,
-  name: string,
-  attrs: Record<string, JsonValue>,
-  path: string,
-  blockHost: string | null,
-  nodeId: string | null,
-): void {
-  const sid = attrs['id'];
-  const user = attrs['user'];
-  if (typeof sid === 'string' && typeof user === 'string') {
-    const first = st.suggestionUsers.get(sid);
-    if (!first) st.suggestionUsers.set(sid, { user, path: `${path}/user` });
-    else if (first.user !== user)
-      add(
-        st,
-        'suggestion_user',
-        `${path}/user`,
-        nodeId,
-        `suggestion "${sid}" belongs to "${first.user}" (${first.path}), not to "${user}"`,
-      );
-  }
-  if (name !== 'fmt') return;
-  const before = attrs['before'];
-  if (before === null || before === undefined) return;
-  const bad = (at: string, why: string) => add(st, 'fmt_before', at, nodeId, `fmt.before: ${why}`);
-  const bp = `${path}/before`;
-  if (!isObject(before)) return bad(bp, 'must be an object with `marks` and `attrs`');
-  for (const key of Object.keys(before))
-    if (key !== 'marks' && key !== 'attrs') bad(`${bp}/${key}`, `unknown member "${key}"`);
-  const marks = before['marks'];
-  if (marks !== undefined) {
-    if (!Array.isArray(marks)) bad(`${bp}/marks`, 'marks must be an array');
-    else if (blockHost && marks.length)
-      bad(`${bp}/marks`, 'a block suggestion records attributes, not marks');
-    else
-      marks.forEach((m, i) => {
-        const mp = `${bp}/marks/${i}`;
-        const md =
-          isObject(m) && typeof m['type'] === 'string' ? st.ix.marks.get(m['type']) : undefined;
-        if (!isObject(m) || !md) return bad(mp, 'not a mark of the definition');
-        if (SUGGESTIONS.has(md.name)) return bad(mp, 'a suggestion mark cannot be a previous mark');
-        for (const key of Object.keys(m))
-          if (key !== 'type' && key !== 'attrs') bad(`${mp}/${key}`, `unknown member "${key}"`);
-        const ma = m['attrs'] ?? {};
-        if (!isObject(ma)) return bad(`${mp}/attrs`, 'attrs must be an object');
-        for (const [k, value] of Object.entries(ma)) {
-          if (!Object.hasOwn(md.attrs, k))
-            bad(`${mp}/attrs/${k}`, `unknown attribute of ${md.name}`);
-          else
-            for (const p of grammarProblems(md.attrs[k]!.grammar, value, `${mp}/attrs/${k}`))
-              bad(p.path, p.message);
-        }
-      });
-  }
-  const prev = before['attrs'];
-  if (prev !== undefined) {
-    if (!isObject(prev)) return bad(`${bp}/attrs`, 'attrs must be an object');
-    const host = blockHost ? st.ix.nodes.get(blockHost) : undefined;
-    for (const [k, value] of Object.entries(prev)) {
-      const ap = `${bp}/attrs/${k}`;
-      if (!host) bad(ap, 'text has no attributes to record');
-      else if (!BLOCK_FORMAT_ATTRIBUTES.includes(k) || !Object.hasOwn(host.attrs, k))
-        bad(
-          ap,
-          `a block suggestion records only ${BLOCK_FORMAT_ATTRIBUTES.join(', ')} of a ${blockHost}`,
-        );
-      else
-        for (const p of grammarProblems(host.attrs[k]!.grammar, value, ap)) bad(p.path, p.message);
-    }
-  }
-}
-
-function collectRefs(
-  st: State,
-  spec: Readonly<Record<string, AttrDef>>,
-  attrs: Record<string, JsonValue>,
-  path: string,
-  nodeId: string | null,
-  fromStyleKind?: string,
-): void {
-  for (const [name, a] of Object.entries(spec)) {
-    const value = attrs[name];
-    if (value === null || value === undefined) continue;
-    refsIn(
-      st,
-      a.grammar,
-      value,
-      `${path}/${name}`,
-      nodeId,
-      name === 'basedOn' ? fromStyleKind : undefined,
-    );
-  }
-}
-
-function refsIn(
-  st: State,
-  g: Grammar,
-  value: JsonValue,
-  path: string,
-  nodeId: string | null,
-  fromStyleKind?: string,
-): void {
-  if (value === null) return;
-  if (g.kind === 'ref' && typeof value === 'string') {
-    // A value that is not an identifier of its kind is I11 already; it names nothing to resolve.
-    if (grammarProblems(g, value, path).length) return;
-    const use: RefUse = { to: g.to, value, path, nodeId };
-    if (fromStyleKind) use.fromStyleKind = fromStyleKind;
-    st.refs.push(use);
-  } else if (g.kind === 'object' && isObject(value)) {
-    for (const [k, sub] of Object.entries(g.properties)) {
-      if (!Object.hasOwn(value, k)) continue;
-      const inner = (value as Record<string, JsonValue>)[k];
-      if (inner !== undefined) refsIn(st, sub, inner, `${path}/${k}`, nodeId);
-    }
-  } else if (g.kind === 'array' && Array.isArray(value)) {
-    const n = Math.min(value.length, g.maxItems);
-    for (let i = 0; i < n; i++) refsIn(st, g.items, value[i]!, `${path}/${i}`, nodeId);
-  } else if (g.kind === 'elementTree' && isObject(value) && typeof value['ref'] === 'string') {
-    // A shared preserved tree (spike S11): it must resolve to a preserved_def (I4).
-    if (grammarProblems(g, value, path).length) return;
-    st.refs.push({ to: 'preservedDef', value: value['ref'], path: `${path}/ref`, nodeId });
-  }
-}
-
-const targetRe = new RegExp(FIELD_TARGET_PATTERN);
-
-/** `kind` of a field and the target forms and names it takes (CDM-002; ADR 0018). */
-const TARGET_FORMS: Readonly<Record<string, readonly string[]>> = {
-  ref: ['bookmark', 'node', 'eq'],
-  styleRef: ['style'],
-  formValue: ['field'],
-};
-
-function collect(
-  st: State,
-  type: string,
-  attrs: Record<string, JsonValue>,
-  path: string,
-  ancestors: string[],
-  nodeId: string | null,
-): void {
-  const { ix, ctx } = st;
-  const nd = ix.nodes.get(type)!;
-  const ap = `${path}/attrs`;
-  const id = attrs['id'];
-  if (ix.idNodes.has(type) && typeof id === 'string') {
-    const first = st.ids.get(id);
-    if (first !== undefined)
-      add(st, 'duplicate_id', `${ap}/id`, id, `identifier "${id}" is also used at ${first}`);
-    else st.ids.set(id, `${ap}/id`);
-  }
-  collectRefs(
-    st,
-    nd.attrs,
-    attrs,
-    ap,
-    nodeId,
-    type === 'style_def' ? show(attrs['kind']) : undefined,
-  );
-
-  switch (type) {
-    case 'settings':
-      st.defaultStyle =
-        typeof attrs['defaultParagraphStyle'] === 'string' ? attrs['defaultParagraphStyle'] : null;
-      break;
-    case 'style_def': {
-      if (typeof id !== 'string') break;
-      const kind = show(attrs['kind']);
-      const builtIn = attrs['builtIn'] === true;
-      st.styles.set(id, {
-        kind,
-        basedOn: typeof attrs['basedOn'] === 'string' ? attrs['basedOn'] : null,
-        builtIn,
-        path: ap,
-        outlineLevel: typeof attrs['outlineLevel'] === 'number',
-        numbered: isObject(attrs['numbering']),
-      });
-      const reserved = Object.hasOwn(BUILT_IN_STYLES, id) ? BUILT_IN_STYLES[id] : undefined;
-      if (reserved && (!builtIn || reserved !== kind))
-        add(
-          st,
-          'reserved_style_id',
-          `${ap}/id`,
-          nodeId,
-          `"${id}" is reserved for the built-in ${reserved} style`,
-        );
-      if (!reserved && builtIn)
-        add(
-          st,
-          'reserved_style_id',
-          `${ap}/builtIn`,
-          nodeId,
-          `"${id}" is not a built-in style identifier`,
-        );
-      // Table properties belong to table styles only (03 §4.5; CDM-017).
-      if (kind !== 'table') {
-        for (const p of ['cellMargins', 'headerRowShading', 'bandedRows'])
-          if (attrs[p] !== null && attrs[p] !== undefined)
-            add(
-              st,
-              'table_property',
-              `${ap}/${p}`,
-              nodeId,
-              `${p} is a table property; "${id}" is a ${kind} style`,
-            );
-        const borders = attrs['borders'];
-        if (isObject(borders))
-          for (const side of ['insideH', 'insideV'])
-            if (borders[side] !== null && borders[side] !== undefined)
-              add(
-                st,
-                'table_property',
-                `${ap}/borders/${side}`,
-                nodeId,
-                `${side} borders are table properties; "${id}" is a ${kind} style`,
-              );
-      }
-      if (isObject(attrs['numbering']))
-        numberingUse(st, attrs['numbering'], `${ap}/numbering`, nodeId);
-      break;
-    }
-    case 'numbering_def':
-      if (typeof id === 'string')
-        st.numberingLevels.set(id, Array.isArray(attrs['levels']) ? attrs['levels'].length : 0);
-      break;
-    case 'page_setup':
-      if (typeof id === 'string') st.pageSetups.add(id);
-      break;
-    case 'preserved_def':
-      if (typeof id === 'string') st.preservedDefs.add(id);
-      break;
-    case 'preserved_inline':
-      if (attrs['fragment'] === null && attrs['tree'] === null)
-        add(
-          st,
-          'preserved_without_payload',
-          ap,
-          nodeId,
-          'preserved inline content needs its fragment asset or, for a small marker, its tree',
-        );
-      break;
-    case 'source_def':
-      if (typeof id === 'string') st.sources.add(id);
-      break;
-    case 'story':
-      if (typeof id === 'string') st.stories.set(id, show(attrs['kind']));
-      break;
-    case 'region':
+      names.add(name);
+    },
+    region(id, path, nodeId) {
       st.regions++;
-      if (typeof id === 'string' && ctx.retiredRegionIds?.has(id))
+      if (typeof id === 'string' && st.ctx.retiredRegionIds?.has(id))
         add(
           st,
           'region_id_reused',
-          `${ap}/id`,
+          path,
           nodeId,
           `region identifier "${id}" was removed from this document before and cannot be reused`,
         );
-      break;
-    case 'paragraph':
-      if (typeof id === 'string')
-        st.paragraphs.set(id, {
-          style: typeof attrs['style'] === 'string' ? attrs['style'] : null,
-          numbered: isObject(attrs['numbering']),
-          caption: false,
-        });
-      if (isObject(attrs['numbering']))
-        numberingUse(st, attrs['numbering'], `${ap}/numbering`, nodeId);
-      break;
-    case 'table':
-      if (ancestors.includes('story') || ancestors.includes('footnote'))
-        add(
-          st,
-          'table_in_story_or_footnote',
-          path,
-          nodeId,
-          'tables are not allowed in headers, footers or footnotes',
-        );
-      break;
-    case 'footnote':
-      if (ancestors.includes('footnote'))
-        add(
-          st,
-          'footnote_in_footnote',
-          path,
-          nodeId,
-          'a footnote is not allowed inside a footnote',
-        );
-      else if (ancestors.includes('caption'))
-        add(st, 'footnote_in_caption', path, nodeId, 'a footnote is not allowed inside a caption');
-      break;
-    case 'anchor':
-      // Bookmark names are reference targets, so they are unique (CDM-002, ADR 0018).
-      if (typeof attrs['name'] === 'string') {
-        if (st.anchors.has(attrs['name']))
-          add(
-            st,
-            'duplicate_target_name',
-            `${ap}/name`,
-            nodeId,
-            `bookmark name "${attrs['name']}" is used twice; references to it would be ambiguous`,
-          );
-        st.anchors.add(attrs['name']);
-      }
-      break;
-    case 'equation_block':
-      if (typeof attrs['label'] === 'string') {
-        if (st.eqLabels.has(attrs['label']))
-          add(
-            st,
-            'duplicate_target_name',
-            `${ap}/label`,
-            nodeId,
-            `equation label "${attrs['label']}" is used twice; references to it would be ambiguous`,
-          );
-        st.eqLabels.add(attrs['label']);
-      }
-      checkMath(st, attrs['latex'], true, `${ap}/latex`, nodeId);
-      break;
-    case 'equation':
-      checkMath(st, attrs['latex'], false, `${ap}/latex`, nodeId);
-      break;
-    case 'figure':
-      if (attrs['placement'] === 'float' && ancestors.includes('table_cell'))
-        add(
-          st,
-          'float_in_cell',
-          `${ap}/placement`,
-          nodeId,
-          'a floating figure is not allowed in a table cell',
-        );
-      break;
-    case 'toc':
-      if (
-        typeof attrs['minLevel'] === 'number' &&
-        typeof attrs['maxLevel'] === 'number' &&
-        attrs['minLevel'] > attrs['maxLevel']
-      )
-        add(
-          st,
-          'toc_levels',
-          `${ap}/minLevel`,
-          nodeId,
-          `minLevel ${attrs['minLevel']} is above maxLevel ${attrs['maxLevel']}`,
-        );
-      break;
-    case 'break':
-      if (
-        (attrs['kind'] === 'page' || attrs['kind'] === 'column') &&
-        ancestors.some((a) => a === 'table_cell' || a === 'caption' || a === 'footnote')
-      )
-        add(
-          st,
-          'break_in_container',
-          `${ap}/kind`,
-          nodeId,
-          `a ${show(attrs['kind'])} break is not allowed in cells, captions or footnotes`,
-        );
-      break;
-    case 'field':
-      checkFieldNode(st, attrs, ap, nodeId);
-      break;
-    case 'form_field':
-      if (ancestors.includes('story') || ancestors.includes('footnote'))
-        add(
-          st,
-          'form_field_placement',
-          path,
-          nodeId,
-          'form fields are not allowed in headers, footers or footnotes (12 §3.2)',
-        );
-      break;
-    case 'extension_block':
-      if (attrs['fallbackAsset'] === null && attrs['fallbackText'] === null)
-        add(
-          st,
-          'extension_fallback',
-          ap,
-          nodeId,
-          'an extension block needs a fallback picture or a fallback text (13 §7.3)',
-        );
-      break;
-    case 'extension_inline':
-      if (attrs['fallbackText'] === null)
-        add(
-          st,
-          'extension_fallback',
-          `${ap}/fallbackText`,
-          nodeId,
-          'an inline extension needs a fallback text (13 §7.3)',
-        );
-      break;
-  }
-}
-
-function numberingUse(
-  st: State,
-  n: Record<string, unknown>,
-  path: string,
-  nodeId: string | null,
-): void {
-  if (typeof n['numberingId'] === 'string' && typeof n['level'] === 'number')
-    st.numberingUses.push({
-      numberingId: n['numberingId'],
-      level: n['level'],
-      path: `${path}/level`,
-      nodeId,
-    });
-}
-
-/** The `field` node: the target form and name its kind takes (CDM-002), collected for I4. */
-function checkFieldNode(
-  st: State,
-  attrs: Record<string, JsonValue>,
-  ap: string,
-  nodeId: string | null,
-): void {
-  const kind = show(attrs['kind']);
-  const target = attrs['target'];
-  const forms = Object.hasOwn(TARGET_FORMS, kind) ? TARGET_FORMS[kind]! : [];
-  // A target outside its grammar is I11 already and names nothing.
-  if (typeof target === 'string' && !targetRe.test(target)) return;
-  if (typeof target === 'string') {
-    const scheme = target.split(':')[0] ?? '';
-    if (!forms.includes(scheme))
-      add(
-        st,
-        'field_target_form',
-        `${ap}/target`,
-        nodeId,
-        forms.length
-          ? `a ${kind} field targets ${forms.map((f) => `${f}:`).join(', ')}, not ${scheme}:`
-          : `a ${kind} field takes no target`,
-      );
-    else st.fieldTargets.push({ value: target, kind, path: `${ap}/target`, nodeId });
-  } else if (forms.length && target === null)
-    add(st, 'field_target_form', `${ap}/target`, nodeId, `a ${kind} field needs a target`);
-  // A `seq` field without a name is allowed: it counts in no sequence and shows nothing (CDM-042).
-  if (kind !== 'seq' && attrs['name'] !== null && attrs['name'] !== undefined)
-    add(st, 'field_target_form', `${ap}/name`, nodeId, `a ${kind} field takes no sequence name`);
-}
-
-function checkMath(
-  st: State,
-  latex: JsonValue | undefined,
-  display: boolean,
-  path: string,
-  nodeId: string | null,
-): void {
-  if (!st.ctx.mathGate || typeof latex !== 'string' || latex === '') return;
-  // A formula the previous document already held passed the gate when it was set (09 §6.3).
-  if (st.previousLatex?.has(`${display}:${latex}`)) return;
-  const reason = st.ctx.mathGate(latex, display);
-  if (reason) add(st, 'math_refused', path, nodeId, `math gate: ${reason}`);
+    },
+    math(latex, display, path, nodeId) {
+      if (!st.ctx.mathGate) return;
+      // A formula the previous document already held passed the gate when it was set (09 §6.3).
+      if (st.previousLatex?.has(`${display}:${latex}`)) return;
+      const reason = st.ctx.mathGate(latex, display);
+      if (reason) add(st, 'math_refused', path, nodeId, `math gate: ${reason}`);
+    },
+    ref: (use) => void st.refs.push(use),
+    target: (use) => void st.fieldTargets.push(use),
+    numbering: (use) => void st.numberingUses.push(use),
+    settings(defaultStyle) {
+      st.defaultStyle = defaultStyle;
+    },
+    style: (id, info) => void st.styles.set(id, info),
+    numberingDef: (id, levels) => void st.numberingLevels.set(id, levels),
+    pageSetup: (id) => void st.pageSetups.add(id),
+    preservedDef: (id) => void st.preservedDefs.add(id),
+    source: (id) => void st.sources.add(id),
+    story: (id, kind) => void st.stories.set(id, kind),
+    paragraph: (id, style, numbered) =>
+      void st.paragraphs.set(id, { style, numbered, caption: false }),
+    caption(id, caption) {
+      const info = st.paragraphs.get(id);
+      if (info) info.caption = caption;
+    },
+    node(entry) {
+      st.nodes.push(entry);
+      st.byPath.set(entry.path, entry);
+      let list = st.byType.get(entry.type);
+      if (!list) st.byType.set(entry.type, (list = []));
+      list.push(entry);
+    },
+  };
 }
 
 /** Every `display:latex` of a previous document, read without recursion and with a bound. */
@@ -1139,185 +421,14 @@ function latexOf(previous: unknown): Set<string> {
   return out;
 }
 
-/**
- * I6: in every row, the column spans of its cells plus the columns covered by cells spanning down
- * from earlier rows add up to the length of `grid`, without overlap; row spans do not run past the
- * last row; `headerRows` is at most the number of rows. (03 §8 states the rule without row spans;
- * ADR 0018 records this reading.)
- */
-function checkTableGeometry(
-  st: State,
-  tableAttrs: Record<string, JsonValue>,
-  rows: unknown[],
-  tablePath: string,
-  nodeId: string | null,
-): void {
-  const headerRows = tableAttrs['headerRows'];
-  if (typeof headerRows === 'number' && headerRows > rows.length)
-    add(
-      st,
-      'header_rows',
-      `${tablePath}/attrs/headerRows`,
-      nodeId,
-      `headerRows ${headerRows} is more than the ${rows.length} rows of the table`,
-    );
-  const grid = tableAttrs['grid'];
-  if (!Array.isArray(grid) || grid.length > LIMITS.tableColumns) return;
-  const columns = grid.length;
-  let carry = new Array<number>(columns).fill(0);
-  rows.forEach((row, r) => {
-    if (!isObject(row) || !Array.isArray(row['content'])) return;
-    const occupied = carry.map((c) => c > 0);
-    const next = carry.map((c) => Math.max(0, c - 1));
-    let col = 0;
-    let overflow = false;
-    for (const cell of row['content'] as unknown[]) {
-      if (!isObject(cell)) continue;
-      while (col < columns && occupied[col]) col++;
-      const attrs = isObject(cell['attrs']) ? cell['attrs'] : {};
-      const colspan = typeof attrs['colspan'] === 'number' ? attrs['colspan'] : 1;
-      const rowspan = typeof attrs['rowspan'] === 'number' ? attrs['rowspan'] : 1;
-      if (r + rowspan > rows.length)
-        add(
-          st,
-          'row_span_past_end',
-          `${tablePath}/content/${r}`,
-          nodeId,
-          `a cell spans ${rowspan} rows, past the last row`,
-        );
-      if (col + colspan > columns) {
-        overflow = true;
-        break;
-      }
-      for (let k = 0; k < colspan; k++) {
-        occupied[col + k] = true;
-        next[col + k] = rowspan - 1;
-      }
-      col += colspan;
-    }
-    if (overflow || occupied.some((o) => !o))
-      add(
-        st,
-        'row_columns',
-        `${tablePath}/content/${r}`,
-        nodeId,
-        `row ${r} does not cover exactly the ${columns} columns of the grid`,
-      );
-    carry = next;
-  });
-}
-
-/** Whether a paragraph style, through its `basedOn` chain, has a property. */
-function chainHas(st: State, style: string | null, pick: (s: StyleInfo) => boolean): boolean {
-  let cur = style;
-  for (let i = 0; cur && i <= LIMITS.basedOnDepth; i++) {
-    const s = st.styles.get(cur);
-    if (!s) return false;
-    if (pick(s)) return true;
-    cur = s.basedOn;
-  }
-  return false;
-}
-
+/** I4: every reference and every field target the walk collected resolves (references.ts). */
 function resolveReferences(st: State): void {
-  const { ctx } = st;
   for (const r of st.refs) {
-    const fail = (code: BuiltInCode, why: string) => add(st, code, r.path, r.nodeId, why);
-    switch (r.to) {
-      case 'paragraphStyle':
-      case 'characterStyle':
-      case 'tableStyle': {
-        const s = st.styles.get(r.value);
-        const want =
-          r.to === 'paragraphStyle'
-            ? 'paragraph'
-            : r.to === 'characterStyle'
-              ? 'character'
-              : 'table';
-        if (!s) fail('unresolved_reference', `style "${r.value}" does not exist`);
-        else if (s.kind !== want)
-          fail(
-            'wrong_reference_kind',
-            `style "${r.value}" is a ${s.kind} style, not a ${want} style`,
-          );
-        break;
-      }
-      case 'anyStyle': {
-        const s = st.styles.get(r.value);
-        if (!s) fail('unresolved_reference', `style "${r.value}" does not exist`);
-        else if (r.fromStyleKind && s.kind !== r.fromStyleKind)
-          fail(
-            'wrong_reference_kind',
-            `basedOn "${r.value}" is a ${s.kind} style; a ${r.fromStyleKind} style must be based on one of its own kind`,
-          );
-        break;
-      }
-      case 'numbering':
-        if (!st.numberingLevels.has(r.value))
-          fail('unresolved_reference', `numbering definition "${r.value}" does not exist`);
-        break;
-      case 'pageSetup':
-        if (!st.pageSetups.has(r.value))
-          fail('unresolved_reference', `page setup "${r.value}" does not exist`);
-        break;
-      case 'headerStory':
-      case 'footerStory': {
-        const kind = st.stories.get(r.value);
-        const want = r.to === 'headerStory' ? 'header' : 'footer';
-        if (!kind) fail('unresolved_reference', `story "${r.value}" does not exist`);
-        else if (kind !== want)
-          fail('wrong_reference_kind', `story "${r.value}" is a ${kind}, not a ${want}`);
-        break;
-      }
-      case 'source':
-        if (!st.sources.has(r.value))
-          fail('unresolved_reference', `source "${r.value}" does not exist`);
-        break;
-      case 'preservedDef':
-        if (!st.preservedDefs.has(r.value))
-          fail(
-            'unresolved_reference',
-            'preserved tree ' + JSON.stringify(r.value) + ' does not exist',
-          );
-        break;
-      case 'role':
-        // Roles are I13, checked by the field invariants (src/fields/invariants.ts).
-        break;
-      case 'asset':
-        if (ctx.attachedAssets && !ctx.attachedAssets.has(r.value))
-          fail('asset_not_attached', `asset "${r.value}" is not attached to this document`);
-        break;
-    }
+    const problem = refProblem(st, r, st.ctx.attachedAssets);
+    if (problem) add(st, problem.code, r.path, r.nodeId, problem.why);
   }
   for (const t of st.fieldTargets) {
-    const colon = t.value.indexOf(':');
-    const scheme = t.value.slice(0, colon);
-    const target = t.value.slice(colon + 1);
-    let why: string | null = null;
-    switch (scheme) {
-      case 'bookmark':
-        if (!st.anchors.has(target)) why = 'names no bookmark';
-        break;
-      case 'node': {
-        const p = st.paragraphs.get(target);
-        if (!p) why = 'names no paragraph';
-        else {
-          const style = p.style ?? st.defaultStyle;
-          const heading = chainHas(st, style, (s) => s.outlineLevel);
-          const numbered = p.numbered || chainHas(st, style, (s) => s.numbered);
-          if (!heading && !numbered && !p.caption)
-            why = 'names a paragraph that is not a heading, a numbered paragraph or a caption';
-        }
-        break;
-      }
-      case 'eq':
-        if (!st.eqLabels.has(target)) why = 'names no equation label';
-        break;
-      case 'style':
-        if (!st.styles.has(target)) why = 'names no style';
-        break;
-      // `field:` targets are I14, checked by the field invariants.
-    }
+    const why = targetProblem(st, t.value);
     if (why)
       add(st, 'field_target_unresolved', t.path, t.nodeId, `field target "${t.value}" ${why}`);
   }
@@ -1360,15 +471,8 @@ function checkStyleChains(st: State): void {
 /** I4: a numbering level exists in its definition (CDM-019, CDM-026). */
 function checkNumberingLevels(st: State): void {
   for (const u of st.numberingUses) {
-    const levels = st.numberingLevels.get(u.numberingId);
-    if (levels !== undefined && u.level >= levels)
-      add(
-        st,
-        'numbering_level_missing',
-        u.path,
-        u.nodeId,
-        `level ${u.level} is not defined: "${u.numberingId}" has ${levels} level${levels === 1 ? '' : 's'}`,
-      );
+    const why = levelProblem(st, u);
+    if (why) add(st, 'numbering_level_missing', u.path, u.nodeId, why);
   }
 }
 
@@ -1418,12 +522,7 @@ function runChecks(st: State, envelope: Record<string, unknown>, notChecked: str
     nodes: st.nodes,
     ofType: (type) => st.byType.get(type) ?? [],
   };
-  const checks: InvariantCheck[] = [
-    ...BUILT_IN_CHECKS,
-    ...registeredInvariants(),
-    ...(st.ctx.invariants ?? []),
-  ];
-  for (const check of checks) {
+  for (const check of checksOf(st.ctx)) {
     const report = (r: ViolationReport) => {
       const own = Object.hasOwn(check.codes, r.code) ? check.codes[r.code] : undefined;
       const known = own ?? (Object.hasOwn(MODEL_CODES, r.code) ? MODEL_CODES[r.code] : undefined);

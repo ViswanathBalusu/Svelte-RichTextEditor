@@ -3,6 +3,7 @@
  * point, attribute grammars (I11), the reader (CDM-009) and the field checks of FRW.
  */
 export { validate, validateDoc, LIMITS } from './validate.ts';
+export { CommitValidator, type CommitContext, type CommitValidation } from './incremental.ts';
 export type {
   CodeDoc,
   DocumentView,
