@@ -23,7 +23,14 @@
  * memory, so a restart forgets it), and the delivery of an alert, which is the caller's.
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { checkSealRequest, selectSealingKey, type SealingConfig } from '@docedit/authority';
+import {
+  checkSealRequest,
+  planAppearances,
+  selectSealingKey,
+  validateLayout,
+  type AppearanceDiagnostic,
+  type SealingConfig,
+} from '@docedit/authority';
 import type { AuditEntry, AuditEvent, AuditSink } from './audit.ts';
 import {
   buildCms,
@@ -33,7 +40,14 @@ import {
   type TimestampSource,
 } from './cms.ts';
 import type { KeyService } from './keyservice.ts';
-import { extendPdf, sealPdf, type PadesProfile, type ValidationData } from './pades.ts';
+import {
+  extendPdf,
+  sealPdf,
+  type AppearanceItem,
+  type PadesProfile,
+  type ValidationData,
+} from './pades.ts';
+import { PdfDocument } from './pdf.ts';
 import { FixedWindowLimiter, type RateLimit } from './rate-limit.ts';
 
 /** The key services of the deployment, by key identifier. */
@@ -84,6 +98,28 @@ export interface SealCommand {
   readonly pdf: Uint8Array;
   /** The workflow's `finalisation.seal`: `pades-b-lt` or `pades-b-lta`. Absent means B-LT. */
   readonly seal?: string | undefined;
+  /** Visible appearances at the signature and initials fields (FRW-057). Absent: none are drawn. */
+  readonly appearances?: AppearanceRequest | undefined;
+}
+
+/**
+ * What to draw at the fields (FRW-057). The layout is the `fields` member of `layout.json`: field
+ * identifier to page and rectangle, in twentieths of a point from the top-left corner of the page.
+ */
+export interface AppearanceRequest {
+  readonly layout: Readonly<Record<string, unknown>>;
+  readonly targets: readonly {
+    readonly id: string;
+    readonly key: string;
+    readonly kind: string;
+    readonly lines: readonly string[];
+  }[];
+}
+
+/** What was drawn, and what was not and why (FRW-057 criterion 6). */
+export interface AppearanceReport {
+  readonly drawn: readonly string[];
+  readonly diagnostics: readonly AppearanceDiagnostic[];
 }
 
 export type SealFailureCode =
@@ -114,6 +150,8 @@ export type SealOutcome =
       readonly sealedAt: Date;
       readonly keyId: string;
       readonly keyOwner: 'operator' | 'tenant';
+      /** Present when appearances were asked for. */
+      readonly appearances?: AppearanceReport;
     }
   | {
       readonly ok: false;
@@ -141,6 +179,81 @@ export function profileOf(seal: string | undefined): PadesProfile | null {
   return null;
 }
 
+/**
+ * The appearances to draw in `pdf` (FRW-057): the layout's `fields` are checked (`validateLayout`),
+ * converted from twips from the top-left to points from the lower-left of each page's box, and
+ * planned against the page sizes (`planAppearances`), so that a rectangle outside its page is not
+ * used. Never throws: a PDF whose pages cannot be read gives a diagnostic for every target, and the
+ * seal goes on without appearances.
+ */
+export function planFieldAppearances(
+  pdf: Uint8Array,
+  req: AppearanceRequest,
+): { items: AppearanceItem[]; report: AppearanceReport } {
+  const wanted = req.targets.map((t) => ({ id: t.id, key: t.key, kind: t.kind }));
+  let pages: ReturnType<PdfDocument['pageList']>;
+  try {
+    pages = new PdfDocument(pdf).pageList();
+  } catch {
+    const plan = planAppearances(null, wanted, []);
+    return { items: [], report: { drawn: [], diagnostics: plan.diagnostics } };
+  }
+  const checked = validateLayout({ fields: req.layout });
+  const converted: Record<string, { page: number; rect: [number, number, number, number] }> = {};
+  const origin = new Map<number, [number, number]>();
+  if (checked.ok)
+    for (const [id, e] of checked.fields) {
+      const box = pages[e.page - 1]?.mediaBox ?? null;
+      if (box === null) {
+        // No such page: leave the entry as it is so that the plan reports the page.
+        converted[id] = { page: e.page, rect: [e.rect[0], e.rect[1], e.rect[2], e.rect[3]] };
+        continue;
+      }
+      const height = box[3] - box[1];
+      origin.set(e.page, [box[0], box[1]]);
+      converted[id] = {
+        page: e.page,
+        rect: [e.rect[0] / 20, height - e.rect[3] / 20, e.rect[2] / 20, height - e.rect[1] / 20],
+      };
+    }
+  const bounds = pages.map((p, i) => ({
+    page: i + 1,
+    width: p.mediaBox === null ? 0 : p.mediaBox[2] - p.mediaBox[0],
+    height: p.mediaBox === null ? 0 : p.mediaBox[3] - p.mediaBox[1],
+  }));
+  const plan = planAppearances(
+    checked.ok ? { fields: converted } : { fields: req.layout },
+    wanted,
+    bounds,
+  );
+  // A layout the file's own validator accepted may still hold an entry the plan drops: report it.
+  const lines = new Map(req.targets.map((t) => [t.id, t.lines]));
+  const items = plan.appearances.map((a): AppearanceItem => {
+    const [ox, oy] = origin.get(a.page) ?? [0, 0];
+    return {
+      page: a.page,
+      rect: [a.rect[0] + ox, a.rect[1] + oy, a.rect[2] + ox, a.rect[3] + oy],
+      lines: lines.get(a.id) ?? [],
+      label: `Signature field ${a.key}`,
+    };
+  });
+  // The entries `validateLayout` dropped are reported too: the plan saw only the ones it kept.
+  const dropped: AppearanceDiagnostic[] = checked.ok
+    ? checked.problems.map((p) => ({
+        id: p.id,
+        key: '',
+        code: 'entry_invalid' as const,
+        reason: `layout entry not used: ${p.reason}`,
+      }))
+    : [];
+  return {
+    items,
+    report: {
+      drawn: plan.appearances.map((a) => a.id),
+      diagnostics: [...dropped, ...plan.diagnostics],
+    },
+  };
+}
 /** Marks a failure of the key service, so that it is not mistaken for a failure of the file. */
 class KeyServiceFailure extends Error {}
 /** Marks a failure of the time-stamp authority. */
@@ -272,7 +385,9 @@ export class SigningService {
       const chain = await this.#cfg.certificates.chainFor(key.keyId).catch((e: unknown) => {
         throw new KeyServiceFailure(String(e));
       });
+      const drawing = cmd.appearances ? planFieldAppearances(cmd.pdf, cmd.appearances) : null;
       const result = await sealPdf(cmd.pdf, {
+        ...(drawing && drawing.items.length > 0 ? { appearances: drawing.items } : {}),
         keyService: {
           keyLabel: keyService.keyLabel,
           publicKey: () => keyService.publicKey(),
@@ -318,6 +433,7 @@ export class SigningService {
         sealedAt,
         keyId: key.keyId,
         keyOwner: key.owner,
+        ...(drawing ? { appearances: drawing.report } : {}),
       };
     } catch (e) {
       if (e instanceof TimestampFailure) return fail('tsa_unreachable');

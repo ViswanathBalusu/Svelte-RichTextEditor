@@ -29,6 +29,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type {
   AnchorCommand,
+  AppearanceRequest,
   ExtendCommand,
   SealCommand,
   SealFailureCode,
@@ -85,6 +86,31 @@ function bearer(req: IncomingMessage): string | null {
   return m?.[1] ?? null;
 }
 
+/** The appearance request of a seal, or null when it is not of the shape. */
+function parseAppearances(raw: unknown): AppearanceRequest | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  const layout = o['layout'];
+  const targets = o['targets'];
+  if (typeof layout !== 'object' || layout === null || Array.isArray(layout)) return null;
+  if (!Array.isArray(targets)) return null;
+  const list: AppearanceRequest['targets'][number][] = [];
+  for (const t of targets) {
+    if (typeof t !== 'object' || t === null) return null;
+    const x = t as Record<string, unknown>;
+    if (
+      typeof x['id'] !== 'string' ||
+      typeof x['key'] !== 'string' ||
+      typeof x['kind'] !== 'string' ||
+      !Array.isArray(x['lines']) ||
+      !x['lines'].every((l) => typeof l === 'string')
+    )
+      return null;
+    list.push({ id: x['id'], key: x['key'], kind: x['kind'], lines: x['lines'] as string[] });
+  }
+  return { layout: layout as Record<string, unknown>, targets: list };
+}
+
 function parseCommand(raw: unknown): SealCommand | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const o = raw as Record<string, unknown>;
@@ -102,7 +128,11 @@ function parseCommand(raw: unknown): SealCommand | null {
     (o['seal'] !== undefined && typeof o['seal'] !== 'string')
   )
     return null;
+  const appearances =
+    o['appearances'] === undefined ? undefined : parseAppearances(o['appearances']);
+  if (appearances === null) return null;
   return {
+    ...(appearances !== undefined ? { appearances } : {}),
     tenant: o['tenant'],
     documentId: o['documentId'],
     seq: o['seq'],
@@ -277,6 +307,7 @@ export function createSigningServer(service: SigningService, opts: HttpOptions):
         sealedAt: out.sealedAt.toISOString(),
         keyId: out.keyId,
         keyOwner: out.keyOwner,
+        ...(out.appearances ? { appearances: out.appearances } : {}),
       });
     })().catch(() => {
       if (!res.headersSent) send(res, 500, { ok: false, code: 'seal_failed', retryable: false });

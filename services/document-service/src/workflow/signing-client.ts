@@ -20,6 +20,33 @@ export interface SigningJob {
   readonly compileSha256: readonly [string, string];
   /** The workflow's `finalisation.seal` (`pades-b-lt` or `pades-b-lta`); absent means B-LT. */
   readonly seal?: string | undefined;
+  /** Visible appearances to draw at the signature and initials fields (FRW-057). */
+  readonly appearances?: AppearanceRequest | undefined;
+}
+
+/**
+ * What to draw at the fields: the `fields` of `layout.json` (page and rectangle in twentieths of
+ * a point from the top-left corner) and, for each signature or initials field, its lines of text.
+ */
+export interface AppearanceRequest {
+  readonly layout: Readonly<Record<string, unknown>>;
+  readonly targets: readonly {
+    readonly id: string;
+    readonly key: string;
+    readonly kind: string;
+    readonly lines: readonly string[];
+  }[];
+}
+
+/** What the signing service drew and what it did not, with the reason (FRW-057 criterion 6). */
+export interface AppearanceReport {
+  readonly drawn: readonly string[];
+  readonly diagnostics: readonly {
+    readonly id: string;
+    readonly key: string;
+    readonly code: string;
+    readonly reason: string;
+  }[];
 }
 
 /** Why a seal was not made, in the words of `finaliseWorkflow` (@docedit/authority). */
@@ -35,6 +62,8 @@ export type SigningAttempt =
       /** The time of the seal's time-stamp token (`genTime`), from the authority's clock. */
       readonly timestampTime: Date;
       readonly profile: 'B-LT' | 'B-LTA';
+      /** Present when appearances were asked for. */
+      readonly appearances?: AppearanceReport;
     }
   | {
       readonly ok: false;
@@ -133,6 +162,26 @@ interface Wire {
   profile?: unknown;
   timestamped?: unknown;
   timestampTime?: unknown;
+  appearances?: unknown;
+}
+
+/** The appearance report of an answer, or null when it has none or is not of the shape. */
+function reportOf(v: unknown): AppearanceReport | null {
+  if (typeof v !== 'object' || v === null) return null;
+  const o = v as { drawn?: unknown; diagnostics?: unknown };
+  if (!Array.isArray(o.drawn) || !o.drawn.every((x) => typeof x === 'string')) return null;
+  if (!Array.isArray(o.diagnostics)) return null;
+  const diagnostics: AppearanceReport['diagnostics'][number][] = [];
+  for (const d of o.diagnostics as Array<Record<string, unknown>>) {
+    if (typeof d['id'] !== 'string' || typeof d['code'] !== 'string') return null;
+    diagnostics.push({
+      id: d['id'],
+      key: typeof d['key'] === 'string' ? d['key'] : '',
+      code: d['code'],
+      reason: typeof d['reason'] === 'string' ? d['reason'] : '',
+    });
+  }
+  return { drawn: o.drawn as string[], diagnostics };
 }
 
 export class HttpSigningClient implements SigningClient {
@@ -169,6 +218,7 @@ export class HttpSigningClient implements SigningClient {
           pdfSha256: sha256Hex(job.pdf),
           compileSha256: job.compileSha256,
           ...(job.seal !== undefined ? { seal: job.seal } : {}),
+          ...(job.appearances !== undefined ? { appearances: job.appearances } : {}),
           pdf: Buffer.from(job.pdf).toString('base64'),
         }),
         signal: AbortSignal.timeout(this.#o.timeoutMs),
@@ -215,6 +265,7 @@ export class HttpSigningClient implements SigningClient {
       timestamped: true,
       timestampTime: when,
       profile: wire.profile,
+      ...(reportOf(wire.appearances) ? { appearances: reportOf(wire.appearances)! } : {}),
     };
   }
 
