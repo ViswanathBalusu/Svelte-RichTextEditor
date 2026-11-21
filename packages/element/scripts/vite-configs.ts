@@ -137,6 +137,19 @@ function base(outDir: string): InlineConfig {
   };
 }
 
+/**
+ * How the library's chunks are minified (FE-002; 13 §9). For an ES library Vite 8 minifies names
+ * and syntax and keeps the whitespace (`codegen: false`), because it expects a consumer's bundler
+ * to minify the result. This distributable is also what a host loads by URL, and its first
+ * interactive set has a size budget, so the whitespace is removed too. The `@__PURE__` annotations
+ * stay in the output either way, so a host's bundler can still drop what it does not use.
+ */
+export const LIBRARY_MINIFY = {
+  compress: true,
+  mangle: true,
+  codegen: { removeWhitespace: true },
+} as const;
+
 export function libraryConfig(): InlineConfig {
   const config = base(libDir);
   return {
@@ -157,6 +170,7 @@ export function libraryConfig(): InlineConfig {
         output: {
           chunkFileNames: libraryChunkName,
           assetFileNames: 'assets/[name]-[hash][extname]',
+          minify: LIBRARY_MINIFY,
         },
       },
     },

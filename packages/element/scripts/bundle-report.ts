@@ -147,6 +147,140 @@ export function wasmViolations(
   return out;
 }
 
+/**
+ * The shape of the library build that FE-002 criterion 1 asks for (02 §2; ADR 0039 §2 and §3; owner
+ * decision 18 for the stylesheet), read from the build output. `violations` is empty when the build
+ * has it; the build fails otherwise.
+ */
+export interface Structure {
+  /** The entry files. One ES module, `doc-editor.js`. */
+  entries: string[];
+  /** Each pane of the shell that is in the build, with the lazy chunk that holds it and no other pane. */
+  panes: Array<{ pane: string; file: string }>;
+  /** The PDF viewer: the chunk of its controller and the files of its frame's page, without the worker. */
+  pdfViewer: string[];
+  /** The PDF viewer's worker, a file of its own that only the viewer's frame loads. */
+  pdfWorker: string[];
+  /** The math editor: the chunks that hold MathLive and the module that mounts its field. */
+  mathEditor: string[];
+  /** Stylesheet files the library build emitted for the component. None (ADR 0039 §3). */
+  stylesheetFiles: string[];
+  /** The chunks that carry the component's CSS as a string; all are in the first interactive set. */
+  cssChunks: string[];
+  violations: string[];
+}
+
+const PANE_MODULE = /\/packages\/ui\/src\/panes\/([A-Za-z0-9]+)\.svelte(\?.*)?$/;
+const COMPONENT_CSS = /\/packages\/(element|ui)\/src\/styles\/[^/]+\.css\?inline$/;
+const MATHLIVE = /\/node_modules\/mathlive\//;
+const MATH_FIELD = /\/packages\/element\/src\/math-field\.ts$/;
+const VIEWER_CONTROLLER = /\/packages\/element\/src\/pdf\/viewer-frame\.ts$/;
+const PDFJS = /\/node_modules\/pdfjs-dist\//;
+const PROTOCOL_DEFINITION = /\/packages\/protocol\/src\/definition\//;
+
+/**
+ * Reads the shape of the build. `first` is the first interactive set of a host backend (the entry,
+ * the editor chunk and their static imports); `viewerFiles` are the files of the viewer frame's
+ * page, as `viewer/<path>`.
+ */
+export function structureOf(
+  chunks: readonly ChunkInfo[],
+  first: ReadonlySet<string>,
+  viewerFiles: readonly string[],
+  assets: readonly AssetInfo[] = [],
+): Structure {
+  const violations: string[] = [];
+  const idsOf = (chunk: ChunkInfo) => chunk.moduleIds.map((id) => id.replaceAll('\\', '/'));
+  const holding = (test: RegExp) => chunks.filter((c) => idsOf(c).some((id) => test.test(id)));
+  const names = (list: readonly ChunkInfo[]) => list.map((c) => c.fileName).sort();
+  /** A part that must load on demand: none of its chunks may be needed for the first editor. */
+  const lazyOnly = (part: string, list: readonly ChunkInfo[]) => {
+    for (const c of list)
+      if (first.has(c.fileName))
+        violations.push(`${part}: ${c.fileName} is needed for the first interactive editor`);
+  };
+
+  const entries = chunks.filter((c) => c.isEntry).map((c) => c.fileName);
+  if (entries.length !== 1 || entries[0] !== 'doc-editor.js')
+    violations.push(
+      `the build must have one entry, doc-editor.js; it has ${entries.length === 0 ? 'none' : entries.join(', ')}`,
+    );
+
+  const panes: Structure['panes'] = [];
+  for (const c of chunks) {
+    const inChunk = idsOf(c).flatMap((id) => PANE_MODULE.exec(id)?.[1] ?? []);
+    if (inChunk.length === 0) continue;
+    if (inChunk.length > 1)
+      violations.push(`panes: ${c.fileName} holds more than one pane (${inChunk.join(', ')})`);
+    if (first.has(c.fileName))
+      violations.push(
+        `panes: ${c.fileName} holds ${inChunk.join(', ')} and is needed for the first interactive editor`,
+      );
+    else if (!c.isDynamicEntry)
+      violations.push(
+        `panes: ${c.fileName} holds ${inChunk.join(', ')} and is not loaded on demand`,
+      );
+    for (const pane of inChunk) panes.push({ pane, file: c.fileName });
+  }
+  panes.sort((a, b) => a.pane.localeCompare(b.pane));
+  if (panes.length === 0) violations.push('panes: the build has no pane chunk');
+
+  const mathEditor = [...new Set([...holding(MATHLIVE), ...holding(MATH_FIELD)])];
+  lazyOnly('math editor', mathEditor);
+  if (holding(MATHLIVE).length === 0)
+    violations.push('math editor: the build has no chunk with MathLive');
+
+  const controller = holding(VIEWER_CONTROLLER);
+  lazyOnly('pdf viewer', [...controller, ...holding(PDFJS)]);
+  if (controller.length === 0)
+    violations.push('pdf viewer: the build has no chunk with the viewer frame’s controller');
+  const pdfWorker = viewerFiles.filter((f) => /pdf\.worker/.test(f)).sort();
+  const page = viewerFiles.filter((f) => !/pdf\.worker/.test(f)).sort();
+  if (!page.some((f) => f.endsWith('.html')) || !page.some((f) => /\.m?js$/.test(f)))
+    violations.push('pdf viewer: the page of the viewer frame and its script are missing');
+  if (pdfWorker.length === 0)
+    violations.push('pdf worker: the viewer has no worker file of its own');
+
+  // The component's CSS is a string in the editor's chunks, adopted into one constructable sheet
+  // (ADR 0039 §3; owner decision 18). The viewer frame's page has its own stylesheet file; that is
+  // the frame document's, not the component's, and is listed with the viewer.
+  const stylesheetFiles = assets
+    .map((a) => a.fileName)
+    .filter((f) => /\.css$/.test(f))
+    .sort();
+  for (const f of stylesheetFiles)
+    violations.push(
+      `stylesheet: the library build emitted ${f}; the component CSS ships as a string`,
+    );
+  const css = holding(COMPONENT_CSS);
+  if (css.length === 0)
+    violations.push('stylesheet: no chunk carries the component CSS as a string');
+  for (const c of css)
+    if (!first.has(c.fileName))
+      violations.push(
+        `stylesheet: ${c.fileName} carries the component CSS and does not load with the editor`,
+      );
+
+  // The protocol definition as data is read by the DEP client only. A host that passes its own
+  // backend must not pay for it (13 §9); the element repeats the few names it needs.
+  for (const c of holding(PROTOCOL_DEFINITION))
+    if (first.has(c.fileName))
+      violations.push(
+        `first interactive editor: ${c.fileName} holds the protocol definition, which only the DEP client reads`,
+      );
+
+  return {
+    entries,
+    panes,
+    pdfViewer: [...names(controller), ...page],
+    pdfWorker,
+    mathEditor: names(mathEditor),
+    stylesheetFiles,
+    cssChunks: names(css),
+    violations,
+  };
+}
+
 export function sizeOf(data: string | Buffer): Size {
   const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
   return {
@@ -269,6 +403,8 @@ export interface Report {
   wasmViolations: string[];
   /** Empty, or the lazy modules over their own budget (WASM-012 criterion 1). */
   moduleBudgetViolations: string[];
+  /** The shape of the build (FE-002 criterion 1); its `violations` fail the build. */
+  structure: Structure;
   withinBudget: boolean;
 }
 
@@ -320,6 +456,7 @@ export function bundleReport(
     lazyByFeature: [],
     wasmViolations: wasmViolations(chunks, withDep ?? first),
     moduleBudgetViolations: [],
+    structure: structureOf(chunks, first, [], assets),
     withinBudget: Math.max(size.gzip, withDep ? total(withDep).gzip : 0) <= BUDGET_GZIP_BYTES,
   };
   if (viewerDir) {
@@ -341,6 +478,12 @@ export function bundleReport(
       report.viewer.push(entryOf);
       report.lazy.push({ ...entryOf, feature: lazyFeatureOf(entryOf.file) });
     }
+    report.structure = structureOf(
+      chunks,
+      first,
+      report.viewer.map((v) => v.file),
+      assets,
+    );
   }
   for (const c of chunks)
     if (!first.has(c.fileName))
@@ -401,6 +544,14 @@ export function printReport(report: Report): void {
     console.log(
       `${f.feature.padEnd(46)}${`${f.files} files`.padEnd(19)}${kb(f.size.raw).padStart(10)}${kb(f.size.gzip).padStart(11)}${kb(f.size.brotli).padStart(11)}`,
     );
+  const s = report.structure;
+  console.log(
+    `shape (FE-002): ${s.entries.length} entry, ${s.panes.length} pane chunks, ` +
+      `${s.mathEditor.length} math editor chunks, ${s.pdfViewer.length} viewer files, ` +
+      `${s.pdfWorker.length} worker files, ${s.stylesheetFiles.length} stylesheet files, ` +
+      `CSS as a string in ${s.cssChunks.join(', ') || 'no chunk'}`,
+  );
+  for (const v of s.violations) console.log(`Shape: ${v}`);
   for (const v of report.wasmViolations) console.log(`WebAssembly: ${v}`);
   for (const v of report.moduleBudgetViolations) console.log(`Module budget: ${v}`);
   console.log(
