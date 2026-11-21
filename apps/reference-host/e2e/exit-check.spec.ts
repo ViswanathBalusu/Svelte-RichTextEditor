@@ -17,6 +17,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import {
   editor,
   eventsOf,
+  exportToPdfPane,
   hostToken,
   openDocument,
   PEOPLE,
@@ -323,27 +324,12 @@ test('5b. an export job compiles the document with LuaLaTeX in the sandbox into 
 });
 
 test('5c. the PDF shows in the PDF panel of the editor', async () => {
-  // The element opens its PDF panel from an export through its own interface: a command of the
-  // shell (UX-019) or `requestExport` (05 §8.1; PRO-086), then the sandboxed viewer (FE-071).
-  const command = editor(op).locator('[data-command-id*="pdf" i], [data-command-id*="export" i]');
-  const hasApi = await op.evaluate(
-    () =>
-      typeof (document.querySelector('doc-editor') as { requestExport?: unknown } | null)
-        ?.requestExport === 'function',
-  );
-  test.fail(
-    (await command.count()) === 0 && !hasApi,
-    'Expected to fail: the element offers no way to open its PDF panel on an export yet: no export command in the shell (UX-019) and no requestExport (PRO-086); packets B2 (element) and C/U (shell).',
-  );
-  if ((await command.count()) > 0) await command.first().click();
-  else
-    await op.evaluate(async () => {
-      const el = document.querySelector('doc-editor') as unknown as {
-        requestExport(o: { target: string }): Promise<unknown>;
-      };
-      await el.requestExport({ target: 'pdf' });
-    });
-  const frame = editor(op).locator('iframe.de-pdf-frame');
-  await expect(frame).toBeVisible({ timeout: 240_000 });
+  test.setTimeout(420_000);
+  // The author exports from the shell's export dialog (UX-101) and shows the finished PDF in the
+  // PDF preview pane (EXP-001), where the sandboxed viewer draws it (FE-071).
+  const pane = await exportToPdfPane(op);
+  const frame = pane.locator('iframe.de-pdf-frame');
+  await expect(frame).toBeVisible({ timeout: 60_000 });
   await expect(frame).toHaveAttribute('sandbox', /allow-scripts/);
+  await expect(pane.locator('[data-pdf="pages"]')).toBeVisible({ timeout: 60_000 });
 });

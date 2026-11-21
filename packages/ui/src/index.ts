@@ -45,6 +45,7 @@ export type {
   OutlineItem,
   PaneName,
   PanelInfo,
+  PdfViewService,
   PeerCaret,
   PresencePeer,
   ReviewItem,
