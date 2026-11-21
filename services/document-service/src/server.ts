@@ -40,6 +40,7 @@ import { PgNodeLeases } from './data-plane/pg/leases.ts';
 import { PgOutbox } from './data-plane/pg/outbox.ts';
 import { keyedViewToken } from './data-plane/view.ts';
 import { checkConfig, type ServiceConfig } from './config.ts';
+import { listenOn } from './listen.ts';
 import { MemoryAssetRegistry, type AssetRegistry } from './control-plane/assets.ts';
 import { PgAssetRegistry } from './control-plane/assets-pg.ts';
 import { ContentReader } from './control-plane/content.ts';
@@ -859,11 +860,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
   }
 
   const server = createServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(config.port, config.host, () => resolve());
-  });
-  const address = server.address() as AddressInfo;
+  // With port 0 the system chooses, and a port that fetch refuses is not kept (listen.ts).
+  const address: AddressInfo = await listenOn(server, config.port, config.host);
   const listening = `http://${address.family === 'IPv6' ? `[${address.address}]` : address.address}:${address.port}`;
   const publicUrl = (config.publicUrl ?? listening).replace(/\/$/, '');
   const serviceId = config.serviceId ?? publicUrl;
