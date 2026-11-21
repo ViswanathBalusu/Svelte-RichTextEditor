@@ -7,14 +7,24 @@
  * (HIS-006). `empty` lists nothing; `slow` holds the first list until `window.__historyRelease()` is
  * called, so the loading message can be read (HIS-009 criterion 7). Only `full` and `refusing` offer `createVersion`; a version named in `full` is added to
  * the list and the pane is told that it changed.
+ *
+ * `restore` and `restore-region` (HIS-021) are `versions` with a host that offers the dry run and
+ * the restore: in `restore` the user may restore the whole document and the region Terms, in
+ * `restore-region` only that region. The harness records every dry run and every restore asked
+ * for, and a restore adds a group of origin `restore` to the list, as the service's history would.
  */
 import type {
+  HistoryChange,
   HistoryChoices,
   HistoryPaneItem,
   HistoryPaneQuery,
   HistoryPaneResult,
   HistoryCompareResult,
   HistoryPort,
+  HistoryRestorePreviewResult,
+  HistoryRestoreRefusal,
+  HistoryRestoreRequest,
+  HistoryRestoreResult,
   HistoryVersionOpen,
   HistoryWhoQuery,
   HistoryWhoResult,
@@ -22,7 +32,16 @@ import type {
 } from '../../src/core-api.ts';
 
 export type HistoryHarnessMode =
-  'full' | 'named' | 'failing' | 'refusing' | 'empty' | 'slow' | 'versions' | 'assisted';
+  | 'full'
+  | 'named'
+  | 'failing'
+  | 'refusing'
+  | 'empty'
+  | 'slow'
+  | 'versions'
+  | 'assisted'
+  | 'restore'
+  | 'restore-region';
 
 /** What the harness records of the versions the pane opens (HIS-010). */
 export interface VersionLog {
@@ -43,6 +62,55 @@ export interface VersionLog {
   asked?: { seq: number; region: string | null; blocks: string[] | null }[];
   selected?: string[];
   whoOutcome?: 'forbidden' | 'not_found' | 'failed' | 'empty';
+  /**
+   * HIS-021: the dry runs and the restores asked for, how many changes each drawing was given (0:
+   * the marks were removed), and the next outcomes (`unchanged`: a dry run that finds no change).
+   */
+  previews?: { toSeq: number; region: string | null }[];
+  restores?: { toSeq: number; region: string | null; headSeq: number }[];
+  drawnChanges?: number[];
+  previewOutcome?: HistoryRestoreRefusal | 'unchanged';
+  restoreOutcome?: HistoryRestoreRefusal;
+}
+
+/** The head of the harness document; a dry run compares it with the commit a restore would add. */
+const HEAD_SEQ = 30;
+
+/** What a restore would change: text and a removed block in the region Terms, and a field outside. */
+const RESTORE_CHANGES: readonly HistoryChange[] = [
+  {
+    kind: 'modified',
+    blockId: 'pA',
+    region: 'r1',
+    user: 'u1',
+    seq: 5,
+    spans: [{ op: 'insert', at: 0, text: 'Old', user: 'u1', seq: 5 }],
+  },
+  { kind: 'removed', blockId: 'pD', region: 'r1', user: 'u2', seq: 26 },
+  { kind: 'field', fieldId: 'f1', blockId: 'pB', user: 'u2', seq: 7 },
+];
+
+/** The dry run of a restore: no log entry but the request, and nothing changes in the list. */
+function previewRestore(request: HistoryRestoreRequest): Promise<HistoryRestorePreviewResult> {
+  const log = versionLog();
+  (log.previews ??= []).push({ toSeq: request.toSeq, region: request.region });
+  const outcome = log.previewOutcome;
+  if (outcome !== undefined && outcome !== 'unchanged')
+    return Promise.resolve({ ok: false, reason: outcome });
+  const changes =
+    outcome === 'unchanged'
+      ? []
+      : RESTORE_CHANGES.filter((c) => request.region === null || c.region === request.region);
+  return Promise.resolve({
+    ok: true,
+    preview: {
+      headSeq: HEAD_SEQ,
+      unchanged: changes.length === 0,
+      comparison: { fromSeq: HEAD_SEQ, toSeq: HEAD_SEQ + 1, changes },
+      // A region restore here needs a style the document no longer has (HIS-020).
+      ...(request.region !== null && changes.length > 0 ? { recreated: ['LegalQuote'] } : {}),
+    },
+  });
 }
 
 /** The `assisted` mode (HIS-017): the data has text an assistant wrote for a person. */
@@ -88,8 +156,9 @@ function openVersion(
         };
       },
       selectedBlocks: () => [...(log.selected ?? [])],
-      showComparison() {
+      showComparison(changes) {
         log.drawn = (log.drawn ?? 0) + 1;
+        (log.drawnChanges ??= []).push(changes.length);
       },
       showDeletions(on) {
         (log.deletions ??= []).push(on);
@@ -250,7 +319,8 @@ const CHOICES: HistoryChoices = {
 export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers): HistoryPort {
   const named = mode === 'named';
   assisted = mode === 'assisted';
-  const versioned = mode === 'versions' || mode === 'assisted';
+  const restorable = mode === 'restore' || mode === 'restore-region';
+  const versioned = mode === 'versions' || mode === 'assisted' || restorable;
   let released = false;
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
@@ -287,10 +357,42 @@ export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers
           return Promise.resolve({ ok: true });
         }
       : undefined;
+  /** The real restore: recorded, and the list gains the group the service's history would show. */
+  const restore = (
+    request: HistoryRestoreRequest & { readonly headSeq: number },
+  ): Promise<HistoryRestoreResult> => {
+    const log = versionLog();
+    (log.restores ??= []).push({
+      toSeq: request.toSeq,
+      region: request.region,
+      headSeq: request.headSeq,
+    });
+    if (log.restoreOutcome !== undefined)
+      return Promise.resolve({ ok: false, reason: log.restoreOutcome });
+    items.unshift({
+      kind: 'group',
+      id: `restore-${items.length}`,
+      day: '2026-11-14',
+      from: '2026-11-14T09:00:00Z',
+      to: '2026-11-14T09:00:00Z',
+      authors: ['u1'],
+      changes: 1,
+      origins: ['restore'],
+      toSeq: HEAD_SEQ + 1,
+    });
+    return Promise.resolve({ ok: true, seq: HEAD_SEQ + 1 });
+  };
   return {
     resolveUsers,
     ...(createVersion ? { createVersion } : {}),
     ...(versioned || mode === 'named' ? { openVersion, compare, whoWrote } : {}),
+    ...(restorable
+      ? {
+          previewRestore,
+          restore,
+          restoreScopes: () => Promise.resolve({ document: mode === 'restore', regions: ['r1'] }),
+        }
+      : {}),
     onChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

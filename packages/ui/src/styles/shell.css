@@ -1585,16 +1585,28 @@
 
 /* The filter lists of the comments and history panes: at least 24 CSS pixels high (UX-068; WCAG 2.2, 2.5.8). */
 .de-comments-filters select,
-.de-history-filters select {
+.de-history-filters select,
+.de-history-restore select {
   font: inherit;
   min-block-size: 24px;
 }
 
 /* Focus is as visible on the filter lists as on every other control (HIS-009 criterion 5). */
 .de-comments-filters select:focus-visible,
-.de-history-filters select:focus-visible {
+.de-history-filters select:focus-visible,
+.de-history-restore select:focus-visible {
   outline: 2px solid var(--_de-focus);
   outline-offset: 1px;
+}
+
+/* The restore of the history pane (HIS-021): its status line takes no room while it says nothing. */
+.de-history-restore [data-restore-status] {
+  margin: 0;
+}
+.de-history-restore [data-restore-status='previewing'],
+.de-history-restore [data-restore-status='preview'],
+.de-history-restore [data-restore-status='restoring'] {
+  margin-block: 0.5rem;
 }
 
 /* The assistant pane (UX-045): the answer is content, shown as written. */
