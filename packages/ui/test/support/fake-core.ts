@@ -1070,6 +1070,11 @@ export class FakeCore implements CoreApi {
     return Promise.resolve(true);
   }
 
+  /** The finding with this identifier, as the core looks one up for a context click (UX-008). */
+  proofingFinding(id: string): ProofingFindingView | null {
+    return this.proofingFindings.find((f) => f.id === id) ?? null;
+  }
+
   refuse(reason: string, scopes: readonly string[] = [], count?: number): void {
     const n = (this.refusal?.get()?.n ?? 0) + 1;
     this.refusal?.set({

@@ -189,6 +189,20 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/mini-toolbar.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-008 closed (2026-11-20): the menu in the element with the real core (at the
+  // caret, and on a word a proofing port flagged), the shell's menu in a browser run, and the rule
+  // that picks its commands.
+  [
+    'context-menu',
+    [
+      { path: 'packages/element/e2e/ux-008-caret-menu.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-008-proofing-menu.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-008-context-menu.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-008-context-targets.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-008-finding-click.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/context-menu.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-062 closed (2026-11-18): the light, dark and high-contrast themes and forced colours.
   [
     'themes',

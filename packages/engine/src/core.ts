@@ -262,6 +262,7 @@ import {
   NO_PROOFING,
   type ProofingClock,
   ProofingController,
+  type ProofingFindingInfo,
   type ProofingPort,
   type ProofingInfo,
 } from './proofing.ts';
@@ -1380,6 +1381,15 @@ export class DocumentCore implements DocumentApi {
   /** The identifier of the finding the last navigation chose, while it is shown. */
   proofingCurrentId(): string | null {
     return this.#proofing?.currentId() ?? null;
+  }
+
+  /**
+   * The finding with this identifier, as the interface reads it; null when it is not shown now. The
+   * context menu asks for the finding whose mark was clicked (UX-008 criterion 5): a context click
+   * inside a selection moves no caret, so the caret cannot say which finding was meant.
+   */
+  proofingFinding(id: string): ProofingFindingInfo | null {
+    return this.#proofing?.infoOf(id) ?? null;
   }
 
   /**
