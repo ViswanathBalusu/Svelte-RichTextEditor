@@ -985,6 +985,14 @@ export class DocumentCore implements DocumentApi {
     state: () => this.#state,
     roles: () => this.#accessValue?.fill?.roles ?? [],
   });
+  /** The last list `fillFields()` made under rules, with the entries and rule states it was made from. */
+  #fillList: {
+    readonly status: readonly FieldStatus[];
+    readonly rules: ReadonlyMap<string, FieldRuleState>;
+    readonly out: readonly FieldStatus[];
+  } | null = null;
+  /** The item `fillFields()` gave for an entry's status under a rule state. */
+  readonly #fillItems = new WeakMap<FieldStatus, { rule: FieldRuleState; item: FieldStatus }>();
   /** The form field whose control last took focus (FRW-073). */
   #activeField: string | null = null;
   #readOnly = false;
@@ -2207,22 +2215,34 @@ export class DocumentCore implements DocumentApi {
    * Every form field in document order with the state of its entry and its role, and no value:
    * what the guided bar and the summary of fill mode count (12 §11; FRW-076, FRW-078).
    */
-  fillFields(): FieldStatus[] {
+  fillFields(): readonly FieldStatus[] {
     const status = this.#fieldEntries.status();
     const rules = this.#fieldRules.states();
     if (rules.size === 0) return status;
+    // The same entries under the same rule states give the list made before: the guided bar, the
+    // fill pane and the progress event each read it after a change, and only the first pays.
+    const made = this.#fillList;
+    if (made !== null && made.status === status && made.rules === rules) return made.out;
     // The rules change what counts (FRW-023 criteria 1 and 2): a hidden field is not required and
     // has no problem; a field a rule requires is required; a failing `validate` is a problem.
-    return status.map((f) => {
+    const out = status.map((f) => {
       const rule = rules.get(f.id);
       if (!rule) return f;
-      if (!rule.visible) return { ...f, required: false, invalid: null };
-      return {
-        ...f,
-        required: rule.required,
-        invalid: f.invalid ?? (rule.messages.length > 0 ? ('other' as const) : null),
-      };
+      // A field whose entry and rule state are as they were keeps its item (FRW-023 criterion 6).
+      const known = this.#fillItems.get(f);
+      if (known !== undefined && known.rule === rule) return known.item;
+      const item: FieldStatus = !rule.visible
+        ? { ...f, required: false, invalid: null }
+        : {
+            ...f,
+            required: rule.required,
+            invalid: f.invalid ?? (rule.messages.length > 0 ? ('other' as const) : null),
+          };
+      this.#fillItems.set(f, { rule, item });
+      return item;
     });
+    this.#fillList = { status, rules, out };
+    return out;
   }
 
   /**
