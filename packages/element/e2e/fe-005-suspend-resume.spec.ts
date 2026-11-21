@@ -152,6 +152,52 @@ const held = (page: Page) =>
     };
   });
 
+/**
+ * What the PDF viewer's frame shows: the label of its page canvas (`Page 1 of 1`), or null when
+ * the page has no viewer frame with a document, or the frame has drawn nothing.
+ */
+async function viewerShows(page: Page): Promise<string | null> {
+  const frame = page.frames().find((f) => f.url().includes('/lib/viewer/pdf-viewer.html'));
+  if (!frame) return null;
+  return frame
+    .evaluate(() => document.querySelector('canvas.page')?.getAttribute('aria-label') ?? null)
+    .catch(() => null);
+}
+
+/**
+ * What a framework's keyed list does: the element goes out of the document and back in, into the
+ * other container, in one task. Reports whether the frame `frameSelector` names is the same element.
+ */
+function moveInOneTask(
+  page: Page,
+  name: string,
+  frameSelector: string,
+): Promise<{ suspended: boolean; graceScheduled: boolean; sameFrame: boolean; frames: number }> {
+  return page.evaluate(
+    async ({ sel, frameSelector }) => {
+      const e = (window as unknown as { __embed: Hooks }).__embed;
+      const el = document.querySelector(sel) as HTMLElement;
+      const root = e.internals(el).root;
+      const frameBefore = root.querySelector(frameSelector);
+      const other = document.getElementById(
+        el.parentElement?.id === 'mount-2' ? 'mount' : 'mount-2',
+      )!;
+      el.remove();
+      other.append(el);
+      const frameAfter = root.querySelector(frameSelector);
+      await new Promise((r) => setTimeout(r, 50));
+      const i = e.internals(el);
+      return {
+        suspended: i.suspended,
+        graceScheduled: i.graceScheduled,
+        sameFrame: frameBefore !== null && frameAfter === frameBefore,
+        frames: root.querySelectorAll(frameSelector).length,
+      };
+    },
+    { sel: editor(name), frameSelector },
+  );
+}
+
 test.describe('FE-005 suspend and resume', () => {
   test('a suspended element holds nothing of its own on the page, and keeps its core and journal', async ({
     page,
@@ -544,7 +590,7 @@ test.describe('FE-005 the read view', () => {
     await expect.poll(async () => (await readState(page, 'owned')).exportRequests).toBe(2);
   });
 
-  test('a move in one task keeps the read view and draws its PDF again in a new frame', async ({
+  test('a move in one task keeps the read view, and its viewer draws the PDF again', async ({
     page,
   }, info) => {
     test.skip(
@@ -562,108 +608,170 @@ test.describe('FE-005 the read view', () => {
       .toBe(1);
     await expect.poll(async () => (await readState(page, 'read')).status).toBe('');
     await expect.poll(() => pdfRequests.length).toBe(1);
+    await expect.poll(() => viewerShows(page)).toBe('Page 1 of 1');
 
-    const moved = await page.evaluate(async () => {
-      const el = document.querySelector('doc-editor[data-test="read"]') as HTMLElement;
-      const root = (window as unknown as { __embed: Hooks }).__embed.internals(el).root;
-      const frameBefore = root.querySelector('.de-read-pages iframe');
-      // What a framework's keyed list does: out and back in, in one task.
-      const other = document.getElementById('mount-2')!;
-      el.remove();
-      other.append(el);
-      const frameAfter = root.querySelector('.de-read-pages iframe');
-      await new Promise((r) => setTimeout(r, 50));
-      const i = (window as unknown as { __embed: Hooks }).__embed.internals(el);
-      return {
-        suspended: i.suspended,
-        graceScheduled: i.graceScheduled,
-        newFrame: frameAfter !== null && frameAfter !== frameBefore,
-        frames: root.querySelectorAll('.de-read-pages iframe').length,
-        views: root.querySelectorAll('.de-read-view').length,
-      };
-    });
-    expect(moved).toEqual({
-      suspended: false,
-      graceScheduled: false,
-      newFrame: true,
-      frames: 1,
-      views: 1,
-    });
-    // The new frame fetched the same signed URL and drew it: no new export was needed.
+    const moved = await moveInOneTask(page, 'read', '.de-read-pages iframe');
+    expect(moved).toEqual({ suspended: false, graceScheduled: false, sameFrame: true, frames: 1 });
+    expect((await readState(page, 'read')).views).toBe(1);
+    // The browser loaded the frame's page afresh. The viewer connected again, fetched the same
+    // signed URL and drew it: no new export was needed.
     await expect.poll(() => pdfRequests.length, { timeout: 30_000 }).toBe(2);
+    await expect.poll(() => viewerShows(page), { timeout: 30_000 }).toBe('Page 1 of 1');
     const after = await readState(page, 'read');
     expect(after.exportRequests).toBe(1);
     expect(after.status).toBe('');
-    expect(
-      await page.evaluate(() => {
-        const el = document.querySelector('doc-editor[data-test="read"]')!;
-        const root = (window as unknown as { __embed: Hooks }).__embed.internals(el).root;
-        return (
-          (root.querySelector('.de-read-pages iframe') as HTMLIFrameElement).contentWindow !== null
-        );
-      }),
-    ).toBe(true);
   });
 
-  test('a move in one task while the PDF is still opening ends with the PDF drawn in the new frame', async ({
+  test('a move in one task while the PDF is still opening ends with the PDF drawn', async ({
     page,
   }, info) => {
     test.skip(
       FILTERED_BROWSERS.has(info.project.name),
       'PDF responses are filtered for this browser on this machine (spike S2 §2)',
     );
-    // The PDF is held at the network, so the first frame cannot finish opening it before the move.
+    // The PDF is held at the network, so the viewer cannot finish opening it before the move.
     let release: () => void = () => {};
     const held = new Promise<void>((resolve) => (release = resolve));
     let pdfRequests = 0;
     await page.route('**/exports/sample.pdf', async (route) => {
       pdfRequests++;
       await held;
-      // The first frame is gone by then; its request has nothing left to answer.
+      // The first page of the frame is gone by then; its request has nothing left to answer.
       await route.continue().catch(() => {});
     });
     await openEmbed(page);
     await mountRead(page, 'read');
-    // The export is complete and the first frame has asked for the PDF.
+    // The export is complete and the viewer has asked for the PDF.
     await expect.poll(() => pdfRequests, { timeout: 30_000 }).toBe(1);
     const opening = await readState(page, 'read');
     expect(opening).toMatchObject({ frames: 1, exportRequests: 1 });
     expect(opening.status).not.toBe('');
 
-    const moved = await page.evaluate(() => {
-      const el = document.querySelector('doc-editor[data-test="read"]') as HTMLElement;
-      const root = (window as unknown as { __embed: Hooks }).__embed.internals(el).root;
-      const frameBefore = root.querySelector('.de-read-pages iframe');
-      el.remove();
-      document.getElementById('mount-2')!.append(el);
-      const frameAfter = root.querySelector('.de-read-pages iframe');
-      return {
-        newFrame: frameAfter !== null && frameAfter !== frameBefore,
-        frames: root.querySelectorAll('.de-read-pages iframe').length,
-        views: root.querySelectorAll('.de-read-view').length,
-      };
-    });
-    expect(moved).toEqual({ newFrame: true, frames: 1, views: 1 });
-    // The new frame asks for the same signed URL. Nothing is drawn while the PDF is held, and the
-    // view does not report a failure for the frame the browser unloaded.
+    const moved = await moveInOneTask(page, 'read', '.de-read-pages iframe');
+    expect(moved).toMatchObject({ suspended: false, sameFrame: true, frames: 1 });
+    // The page that was loaded again asks for the same signed URL. Nothing is drawn while the PDF
+    // is held, and the view reports no failure for the page the browser unloaded.
     await expect.poll(() => pdfRequests, { timeout: 30_000 }).toBe(2);
     expect((await readState(page, 'read')).status).not.toContain('could not be made');
 
     release();
-    // The export's outcome follows the new frame: the status line is cleared only when it is shown.
+    // The first `open` is answered by the page that was loaded again: the status line is cleared
+    // only when the export's outcome is "shown".
     await expect
       .poll(async () => (await readState(page, 'read')).status, { timeout: 30_000 })
       .toBe('');
+    await expect.poll(() => viewerShows(page), { timeout: 30_000 }).toBe('Page 1 of 1');
     const after = await readState(page, 'read');
     expect(after).toMatchObject({ views: 1, frames: 1, exportRequests: 1, suspended: false });
-    expect(
-      await page.evaluate(() => {
-        const el = document.querySelector('doc-editor[data-test="read"]')!;
-        const root = (window as unknown as { __embed: Hooks }).__embed.internals(el).root;
-        return (
-          (root.querySelector('.de-read-pages iframe') as HTMLIFrameElement).contentWindow !== null
-        );
-      }),
-    ).toBe(true);
+  });
+});
+
+/**
+ * Mounts an editor whose backend has an exports port that reports its jobs through `onProgress`
+ * (as e2e/exp-001-pdf-pane.spec.ts does), with the viewer on another origin, and opens the PDF pane.
+ */
+async function mountWithPdfPane(page: Page, name: string): Promise<void> {
+  await page.evaluate(
+    async ({ name, viewer, pdf }) => {
+      const e = (window as unknown as { __embed: Hooks }).__embed;
+      const backend = e.backend('ada', 'editor') as {
+        features: ReadonlySet<string>;
+        connect(): Promise<void>;
+        exports?: unknown;
+      };
+      const connect = backend.connect.bind(backend);
+      backend.connect = async () => {
+        await connect();
+        backend.features = new Set([...backend.features, 'exports']);
+      };
+      const job = (id: string, state: string) => ({
+        id,
+        doc: e.docId,
+        target: 'pdf',
+        seq: 1,
+        state,
+        progress: state === 'completed' ? 100 : null,
+        result:
+          state === 'completed'
+            ? { url: pdf, expiresAt: '2099-01-01T00:00:00Z', pages: 1, layout: null }
+            : null,
+        diagnostics: [],
+        createdAt: '2026-11-20T10:00:00Z',
+        updatedAt: '2026-11-20T10:00:00Z',
+      });
+      let n = 0;
+      backend.exports = {
+        request: async (
+          _doc: string,
+          _body: unknown,
+          o?: { onProgress?: (j: unknown) => void },
+        ) => {
+          const id = `job-${++n}`;
+          o?.onProgress?.(job(id, 'queued'));
+          setTimeout(() => o?.onProgress?.(job(id, 'completed')), 50);
+          return job(id, 'queued');
+        },
+        get: async (id: string) => job(id, 'completed'),
+        cancel: async () => {},
+      };
+      const el = document.createElement('doc-editor') as HTMLElement & Record<string, unknown>;
+      el.dataset['test'] = name;
+      el['config'] = { pdfViewerUrl: viewer };
+      el.setAttribute('doc-id', e.docId);
+      const ready = new Promise((r) => el.addEventListener('de-ready', r, { once: true }));
+      el['backend'] = backend;
+      document.getElementById('mount')!.append(el);
+      await ready;
+      const editor = e.internals(el).editor as unknown as {
+        openPane(id: string): Promise<boolean>;
+      };
+      if (!(await editor.openPane('pdf'))) throw new Error('the PDF pane was not offered');
+    },
+    {
+      name,
+      viewer: `http://localhost:${new URL(page.url()).port}/lib/viewer/pdf-viewer.html`,
+      // A signed URL of another origin than the viewer's, as an object store's is.
+      pdf: `http://127.0.0.1:${new URL(page.url()).port}/exports/sample.pdf?sig=test-signature`,
+    },
+  );
+}
+
+test.describe('FE-005 a PDF viewer in an editing session', () => {
+  test('the PDF pane draws its PDF again after a move in one task, and after a suspension', async ({
+    page,
+  }, info) => {
+    test.skip(
+      FILTERED_BROWSERS.has(info.project.name),
+      'PDF responses are filtered for this browser on this machine (spike S2 §2)',
+    );
+    let pdfRequests = 0;
+    page.on('request', (r) => {
+      if (new URL(r.url()).pathname === '/exports/sample.pdf') pdfRequests++;
+    });
+    await openEmbed(page);
+    await mountWithPdfPane(page, 'one');
+    const pane = page.locator(`${editor('one')} [data-pane="pdf"]`);
+    await expect(pane.locator('[data-pdf="pages"]')).toHaveText('1 page', { timeout: 30_000 });
+    await expect.poll(() => viewerShows(page)).toBe('Page 1 of 1');
+    expect(pdfRequests).toBe(1);
+
+    // A framework moves the element in one task: the pane and its frame are the same ones, and the
+    // viewer draws the PDF again in the page the browser loaded afresh.
+    const moved = await moveInOneTask(page, 'one', 'iframe.de-pdf-frame');
+    expect(moved).toEqual({ suspended: false, graceScheduled: false, sameFrame: true, frames: 1 });
+    await expect.poll(() => pdfRequests, { timeout: 30_000 }).toBe(2);
+    await expect.poll(() => viewerShows(page), { timeout: 30_000 }).toBe('Page 1 of 1');
+    await expect(pane.locator('[data-pdf="pages"]')).toHaveText('1 page');
+    await expect(pane.locator('[data-pdf="view-failed"]')).toHaveCount(0);
+
+    // A suspension: while the element is away the frame has no document, and it draws again after.
+    await detach(page, 'one');
+    expect((await held(page)).suspended).toBe(true);
+    expect(await viewerShows(page)).toBeNull();
+    await reattach(page);
+    await expect.poll(async () => (await held(page)).connection).toBe('online');
+    await expect.poll(() => pdfRequests, { timeout: 30_000 }).toBe(3);
+    await expect.poll(() => viewerShows(page), { timeout: 30_000 }).toBe('Page 1 of 1');
+    await expect(pane.locator('[data-pdf="pages"]')).toHaveText('1 page');
   });
 });

@@ -81,4 +81,66 @@ test.describe('FE-018 criterion 5: ::part() styles each documented region', () =
     }, editor);
     expect(bogus).toBe(false);
   });
+
+  test('the sidebar part styles an open pane and the dialog part an open dialog (lane w1)', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mountEditor(page, { name: 'one', sub: 'ada' });
+    // The embed page shows neither until one is opened: a pane, as a command of the shell opens it
+    // (the element's test hook), and the language dialog, through the element's own `exec`.
+    await page.locator(`${editor} .de-editing-surface p`).first().click();
+    const opened = await page.evaluate(async (s) => {
+      const el = document.querySelector(s) as HTMLElement & {
+        exec(name: string): { ok: boolean; reason?: string };
+      };
+      const hooks = (
+        globalThis as unknown as {
+          __embed: {
+            internals(e: Element): { editor: { openPane(id: string): Promise<boolean> } };
+          };
+        }
+      ).__embed;
+      const pane = await hooks.internals(el).editor.openPane('outline');
+      const dialog = el.exec('format.language');
+      return { pane, dialog: dialog.ok };
+    }, editor);
+    expect(opened).toEqual({ pane: true, dialog: true });
+    await expect(page.locator(`${editor} [part~="sidebar"]`).first()).toBeVisible();
+    await expect(page.locator(`${editor} [part~="dialog"]`)).toBeVisible();
+    const shown = await partsPresent(page);
+    expect(shown).toEqual(expect.arrayContaining(['dialog', 'sidebar']));
+
+    const rules = PARTS.map((p) => `doc-editor::part(${p}) { outline: 3px solid ${COLOUR[p]}; }`);
+    await page.addStyleTag({ content: rules.join('\n') });
+    const outlines = await page.evaluate(
+      ({ s, parts }) => {
+        const root = document.querySelector(s)!.shadowRoot!;
+        return Object.fromEntries(
+          parts.map((p) => [
+            p,
+            // Every element that carries the part takes the host's rule, not only the first.
+            [...root.querySelectorAll(`[part~="${p}"]`)].map((el) => {
+              const style = getComputedStyle(el);
+              return `${style.outlineStyle} ${style.outlineColor}`;
+            }),
+          ]),
+        );
+      },
+      { s: editor, parts: ['sidebar', 'dialog'] },
+    );
+    expect(outlines['sidebar']!.length).toBeGreaterThan(0);
+    for (const outline of outlines['sidebar']!) expect(outline).toBe(`solid ${COLOUR['sidebar']}`);
+    expect(outlines['dialog']).toEqual([`solid ${COLOUR['dialog']}`]);
+    // The parts are the regions themselves: the pane's own container and the dialog element.
+    const kinds = await page.evaluate((s) => {
+      const root = document.querySelector(s)!.shadowRoot!;
+      return {
+        sidebar: [...root.querySelectorAll('[part~="sidebar"]')].map((el) => el.localName),
+        dialog: [...root.querySelectorAll('[part~="dialog"]')].map((el) => el.localName),
+      };
+    }, editor);
+    expect(kinds.sidebar.every((n) => n === 'aside')).toBe(true);
+    expect(kinds.dialog).toEqual(['dialog']);
+  });
 });

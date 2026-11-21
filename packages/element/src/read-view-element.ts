@@ -42,15 +42,6 @@ export interface ReadViewElementOptions {
 export interface MountedReadView {
   /** Resolves with the outcome of the export; never rejects. */
   readonly outcome: Promise<ReadViewOutcome>;
-  /**
-   * The element left the document and came back in the same task (FE-005). A browser unloads a frame
-   * that leaves the document and loads its page afresh when it returns, so the viewer's frame is
-   * made again for the PDF that was shown, or that was being opened: the export's outcome then
-   * follows the new frame. Nothing happens while the export job still runs (no frame exists yet), or
-   * when no PDF is shown or being opened. Resolves when the pages are drawn again, or the failure is
-   * shown.
-   */
-  reconnected(): Promise<void>;
   /** Removes the view, the viewer frame and, when owned, the backend. Safe to call twice. */
   close(): void;
 }
@@ -81,36 +72,8 @@ export function mountReadView(options: ReadViewElementOptions): MountedReadView 
   options.root.append(section);
 
   let viewer: PdfViewerFrame | null = null;
-  /** The signed URL of the PDF the viewer was asked to draw: being opened, or shown. */
-  let wantedUrl: string | null = null;
-  /** The open of the newest frame. An older frame's open follows it (see `draw`). */
-  let drawing: Promise<void> | null = null;
-  /** True once the export's outcome is written to the status line; a later failure is `reconnected`'s to show. */
-  let settled = false;
   let closed = false;
   let checking = false;
-
-  /**
-   * Opens `url` in a new frame, in place of the frame there is. The frame it replaces may still be
-   * opening its PDF (the element was moved meanwhile): removing it rejects that open, and the
-   * rejection is answered with the outcome of the new frame, so whoever waited on the old frame gets
-   * the result of the one that is in the page.
-   */
-  const draw = (url: string): Promise<void> => {
-    viewer?.destroy();
-    const fresh = new PdfViewerFrame(pages, { url: options.viewerUrl });
-    viewer = fresh;
-    const attempt: Promise<void> = fresh.open({ url }).then(
-      () => undefined,
-      (e: unknown) => {
-        const newer = drawing;
-        if (!closed && viewer !== fresh && newer !== null && newer !== attempt) return newer;
-        throw e;
-      },
-    );
-    drawing = attempt;
-    return attempt;
-  };
 
   /** Selecting a diagnostic: the editor opens at its block only if the user may edit. */
   const openBlock = async (blockId: string): Promise<void> => {
@@ -160,8 +123,10 @@ export function mountReadView(options: ReadViewElementOptions): MountedReadView 
       source: { docId: options.docId, backend: options.backend, access: null },
       openPdf: async (url) => {
         if (closed) throw new Error('the read view was closed');
-        wantedUrl = url;
-        await draw(url);
+        // A frame that is unloaded by a move of the element and loaded again opens this URL again by
+        // itself (FE-005; pdf/viewer-frame.ts), also while this first open is still under way.
+        viewer = new PdfViewerFrame(pages, { url: options.viewerUrl });
+        await viewer.open({ url });
       },
       onDiagnostics: (list) => {
         if (!closed) showDiagnostics(list);
@@ -175,9 +140,6 @@ export function mountReadView(options: ReadViewElementOptions): MountedReadView 
     });
     // The diagnostics were listed by onDiagnostics; this sets what the status says at the end.
     if (closed) return result;
-    settled = true;
-    // A PDF that could not be drawn is not asked for again when the element moves.
-    if (result.status !== 'shown') wantedUrl = null;
     status.textContent =
       result.status === 'shown' ? '' : `${READ_VIEW_STRINGS.failed}: ${result.message}`;
     return result;
@@ -185,25 +147,6 @@ export function mountReadView(options: ReadViewElementOptions): MountedReadView 
 
   return {
     outcome,
-    async reconnected(): Promise<void> {
-      const url = wantedUrl;
-      if (closed || url === null) return;
-      // The old frame's page is gone and its port with it: a new frame opens the same PDF. While
-      // the export's outcome is still awaited, it follows this frame and writes the status itself.
-      const shown = settled;
-      let attempt: Promise<void> | null = null;
-      try {
-        attempt = draw(url);
-        if (shown) status.textContent = '';
-        await attempt;
-      } catch (e) {
-        // Nothing to say when the outcome will say it, when a newer frame has taken over (`draw`
-        // answers with it), or when the view is closed.
-        if (!shown || closed || (attempt !== null && drawing !== attempt)) return;
-        const message = e instanceof Error ? e.message : String(e);
-        status.textContent = `${READ_VIEW_STRINGS.failed}: ${message}`;
-      }
-    },
     close(): void {
       if (closed) return;
       closed = true;

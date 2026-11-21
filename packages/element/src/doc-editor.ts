@@ -390,13 +390,12 @@ export class DocEditorElement extends Base {
     const refocus = this.#focusWithin;
     // Resuming keeps the session, its core and its shell, and reopens the channel with a resume
     // (FE-005). A change made while disconnected is picked up by the same reconciliation.
+    // A move in one task suspends nothing. The browser still unloads a PDF viewer's frame with the
+    // removal and loads its page afresh; the viewer connects again and shows its PDF by itself
+    // (pdf/viewer-frame.ts), in the read view and in a pane alike.
     if (this.#suspended) {
       this.#session?.resume();
       this.#pageView?.resume();
-    } else {
-      // A move in one task suspended nothing, but the browser has unloaded the read view's frame
-      // with the removal: the viewer is made again for the same PDF (FE-005).
-      void this.#readView?.reconnected();
     }
     this.#suspended = false;
     this.#scheduleLoad();
