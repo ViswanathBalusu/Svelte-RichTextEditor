@@ -240,6 +240,10 @@ jobs:
         shell: pwsh
         env:
           DOCEDIT_REQUIRE_SANDBOX: '1'
+          # The tests default to the tag :s4; infra/test-env.ps1 builds the image under the tag of
+          # DOCEDIT_EXPORT_IMAGE in infra/containers/.env.example. The two must name the same image,
+          # or the compile tests find no image and fail (or skip) with "not built".
+          DOCEDIT_EXPORT_IMAGE: localhost/docedit-export-worker:test
         run: pwsh -NoProfile -File infra/test-env.ps1 run pnpm exec vitest run --project node services/export-worker packages/export-latex
 
   fuzz:
