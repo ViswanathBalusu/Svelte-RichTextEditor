@@ -123,6 +123,8 @@ export function mountReadView(options: ReadViewElementOptions): MountedReadView 
       source: { docId: options.docId, backend: options.backend, access: null },
       openPdf: async (url) => {
         if (closed) throw new Error('the read view was closed');
+        // A frame that is unloaded by a move of the element and loaded again opens this URL again by
+        // itself (FE-005; pdf/viewer-frame.ts), also while this first open is still under way.
         viewer = new PdfViewerFrame(pages, { url: options.viewerUrl });
         await viewer.open({ url });
       },

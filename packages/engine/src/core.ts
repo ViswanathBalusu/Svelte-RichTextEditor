@@ -518,6 +518,12 @@ export interface ViewBridge {
    * criterion 3). `selectionScope()` reports the scope of that position.
    */
   focusedPosition?(): number | null;
+  /**
+   * The element is suspended (`true`) or back (`false`) (FE-005; 02 §2.1): the view takes the
+   * listeners it put on the page's `window` and `document` off, and puts them back. The view stays
+   * mounted with its state. A view registered during a suspension is told at once.
+   */
+  suspended?(on: boolean): void;
 }
 
 const EMPTY_SUMMARY: SelectionSummary = {
@@ -1569,7 +1575,18 @@ export class DocumentCore implements DocumentApi {
   /** Registers a view; returns the function that removes it. */
   protected addView(bridge: ViewBridge): () => void {
     this.#bridges.add(bridge);
+    // A view that mounts while the element is suspended starts without its page listeners (FE-005).
+    if (this.#viewsSuspended) bridge.suspended?.(true);
     return () => this.#bridges.delete(bridge);
+  }
+
+  /** Whether the views were told that the element is suspended (FE-005). */
+  #viewsSuspended = false;
+
+  #suspendViews(on: boolean): void {
+    if (this.#viewsSuspended === on) return;
+    this.#viewsSuspended = on;
+    for (const b of [...this.#bridges]) b.suspended?.(on);
   }
 
   /** What the queries read, at the last publication: a change of any of them is a new revision. */
@@ -4916,14 +4933,20 @@ one or original. It is a
 
   /**
    * Closes the channel and opens none until `resumeSync` (FE-005; 02 §2.1): the element calls it when
-   * it suspends. The document, the unconfirmed work and the journal stay.
+   * it suspends. The mounted views are told, so that they take their listeners off the page's
+   * `window` and `document`. The document, the unconfirmed work, the journal and the views stay.
    */
   suspendSync(): void {
     this.#session?.suspend();
+    this.#suspendViews(true);
   }
 
-  /** Opens a channel again with a resume (04 §9) after `suspendSync`. */
+  /**
+   * Opens a channel again with a resume (04 §9) after `suspendSync`, and tells the views to listen
+   * again.
+   */
   resumeSync(): void {
+    this.#suspendViews(false);
     this.#session?.resume();
   }
 

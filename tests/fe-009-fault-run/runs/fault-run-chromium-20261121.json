@@ -1,0 +1,1172 @@
+{
+  "story": "FE-009 criterion 7",
+  "browser": "chromium",
+  "minutes": 60,
+  "seed": 20261121,
+  "outage": "postgres",
+  "startedAt": "2026-11-21T06:59:26.516Z",
+  "endedAt": "2026-11-21T07:59:06.557Z",
+  "passed": true,
+  "result": {
+    "seq": 7015,
+    "faults": {
+      "drop": 49,
+      "kill": 25,
+      "database": 35,
+      "tab": 22
+    },
+    "stuck": [],
+    "missing": [],
+    "appliedTwice": [],
+    "keptAsRecovered": [
+      "F00718",
+      "F00717"
+    ],
+    "forbiddenTyped": 93,
+    "forbiddenInRegion": [],
+    "people": {
+      "ada": {
+        "typed": 1828,
+        "notShown": [],
+        "astray": [],
+        "forbidden": 0,
+        "skippedTurns": 0,
+        "misplacedClicks": 0,
+        "opens": 6,
+        "loadsOfLastTab": 1,
+        "authRequired": 0,
+        "errors": [],
+        "connection": "online",
+        "sync": "saved",
+        "recoveredCount": 0,
+        "pageErrors": [],
+        "seq": 7015,
+        "identical": true,
+        "sameText": true,
+        "sameFields": true,
+        "journalCommits": 0,
+        "journalHoldsWork": false
+      },
+      "grace": {
+        "typed": 1672,
+        "notShown": [],
+        "astray": [],
+        "forbidden": 93,
+        "skippedTurns": 0,
+        "misplacedClicks": 0,
+        "opens": 11,
+        "loadsOfLastTab": 1,
+        "authRequired": 0,
+        "errors": [],
+        "connection": "online",
+        "sync": "saved",
+        "recoveredCount": 0,
+        "pageErrors": [],
+        "seq": 7015,
+        "identical": true,
+        "sameText": true,
+        "sameFields": true,
+        "journalCommits": 0,
+        "journalHoldsWork": false
+      },
+      "fill": {
+        "typed": 718,
+        "notShown": [],
+        "astray": [],
+        "forbidden": 0,
+        "skippedTurns": 0,
+        "misplacedClicks": 0,
+        "opens": 8,
+        "loadsOfLastTab": 1,
+        "authRequired": 0,
+        "errors": [],
+        "connection": "online",
+        "sync": "saved",
+        "recoveredCount": 36,
+        "pageErrors": [],
+        "seq": 7015,
+        "identical": true,
+        "sameText": true,
+        "sameFields": true,
+        "journalCommits": 0,
+        "journalHoldsWork": false
+      }
+    },
+    "serviceStarts": 26,
+    "sockets": 291,
+    "socketsDropped": 212
+  },
+  "schedule": [
+    {
+      "atS": 28,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 48,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "G00024",
+          "G00025"
+        ],
+        "journalled": true,
+        "journalMs": 2
+      }
+    },
+    {
+      "atS": 82,
+      "kind": "kill",
+      "detail": {
+        "downMs": 2192
+      }
+    },
+    {
+      "atS": 117,
+      "kind": "database",
+      "detail": {
+        "ms": 5220
+      }
+    },
+    {
+      "atS": 156,
+      "kind": "kill",
+      "detail": {
+        "downMs": 2632
+      }
+    },
+    {
+      "atS": 176,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "closed",
+        "unconfirmed": [
+          "G00088",
+          "G00089"
+        ],
+        "journalled": true,
+        "journalMs": 3
+      }
+    },
+    {
+      "atS": 210,
+      "kind": "database",
+      "detail": {
+        "ms": 6231
+      }
+    },
+    {
+      "atS": 234,
+      "kind": "kill",
+      "detail": {
+        "downMs": 4107
+      }
+    },
+    {
+      "atS": 274,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 306,
+      "kind": "tab",
+      "detail": {
+        "tab": "ada",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "A00163",
+          "A00164"
+        ],
+        "journalled": true,
+        "journalMs": 14
+      }
+    },
+    {
+      "atS": 333,
+      "kind": "kill",
+      "detail": {
+        "downMs": 1852
+      }
+    },
+    {
+      "atS": 353,
+      "kind": "database",
+      "detail": {
+        "ms": 8943
+      }
+    },
+    {
+      "atS": 394,
+      "kind": "database",
+      "detail": {
+        "ms": 6194
+      }
+    },
+    {
+      "atS": 425,
+      "kind": "kill",
+      "detail": {
+        "downMs": 5827
+      }
+    },
+    {
+      "atS": 448,
+      "kind": "kill",
+      "detail": {
+        "downMs": 2015
+      }
+    },
+    {
+      "atS": 471,
+      "kind": "database",
+      "detail": {
+        "ms": 5277
+      }
+    },
+    {
+      "atS": 504,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 520,
+      "kind": "kill",
+      "detail": {
+        "downMs": 5502
+      }
+    },
+    {
+      "atS": 560,
+      "kind": "kill",
+      "detail": {
+        "downMs": 1348
+      }
+    },
+    {
+      "atS": 578,
+      "kind": "kill",
+      "detail": {
+        "downMs": 5044
+      }
+    },
+    {
+      "atS": 601,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 626,
+      "kind": "kill",
+      "detail": {
+        "downMs": 5260
+      }
+    },
+    {
+      "atS": 666,
+      "kind": "database",
+      "detail": {
+        "ms": 6109
+      }
+    },
+    {
+      "atS": 704,
+      "kind": "database",
+      "detail": {
+        "ms": 7340
+      }
+    },
+    {
+      "atS": 725,
+      "kind": "tab",
+      "detail": {
+        "tab": "fill",
+        "how": "closed",
+        "unconfirmed": [
+          "F00143",
+          "F00144"
+        ],
+        "journalled": true,
+        "journalMs": 8
+      }
+    },
+    {
+      "atS": 746,
+      "kind": "kill",
+      "detail": {
+        "downMs": 1141
+      }
+    },
+    {
+      "atS": 777,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 798,
+      "kind": "database",
+      "detail": {
+        "ms": 8566
+      }
+    },
+    {
+      "atS": 839,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 863,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 880,
+      "kind": "tab",
+      "detail": {
+        "tab": "ada",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "A00460",
+          "A00461"
+        ],
+        "journalled": true,
+        "journalMs": 7
+      }
+    },
+    {
+      "atS": 899,
+      "kind": "database",
+      "detail": {
+        "ms": 7882
+      }
+    },
+    {
+      "atS": 937,
+      "kind": "kill",
+      "detail": {
+        "downMs": 2506
+      }
+    },
+    {
+      "atS": 966,
+      "kind": "database",
+      "detail": {
+        "ms": 5672
+      }
+    },
+    {
+      "atS": 995,
+      "kind": "tab",
+      "detail": {
+        "tab": "ada",
+        "how": "closed",
+        "unconfirmed": [
+          "A00521",
+          "A00522"
+        ],
+        "journalled": true,
+        "journalMs": 12
+      }
+    },
+    {
+      "atS": 1025,
+      "kind": "kill",
+      "detail": {
+        "downMs": 4719
+      }
+    },
+    {
+      "atS": 1066,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1090,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1111,
+      "kind": "database",
+      "detail": {
+        "ms": 4111
+      }
+    },
+    {
+      "atS": 1129,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "G00567",
+          "G00568"
+        ],
+        "journalled": true,
+        "journalMs": 3
+      }
+    },
+    {
+      "atS": 1169,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "closed",
+        "unconfirmed": [
+          "G00584",
+          "G00585"
+        ],
+        "journalled": true,
+        "journalMs": 3
+      }
+    },
+    {
+      "atS": 1204,
+      "kind": "tab",
+      "detail": {
+        "tab": "ada",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "A00632",
+          "A00633"
+        ],
+        "journalled": true,
+        "journalMs": 4
+      }
+    },
+    {
+      "atS": 1241,
+      "kind": "kill",
+      "detail": {
+        "downMs": 2921
+      }
+    },
+    {
+      "atS": 1269,
+      "kind": "database",
+      "detail": {
+        "ms": 7559
+      }
+    },
+    {
+      "atS": 1310,
+      "kind": "kill",
+      "detail": {
+        "downMs": 4563
+      }
+    },
+    {
+      "atS": 1344,
+      "kind": "database",
+      "detail": {
+        "ms": 5393
+      }
+    },
+    {
+      "atS": 1382,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "closed",
+        "unconfirmed": [
+          "G00690",
+          "G00691"
+        ],
+        "journalled": true,
+        "journalMs": 3
+      }
+    },
+    {
+      "atS": 1408,
+      "kind": "database",
+      "detail": {
+        "ms": 8981
+      }
+    },
+    {
+      "atS": 1450,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1478,
+      "kind": "database",
+      "detail": {
+        "ms": 7669
+      }
+    },
+    {
+      "atS": 1518,
+      "kind": "database",
+      "detail": {
+        "ms": 5596
+      }
+    },
+    {
+      "atS": 1544,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1563,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1586,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "G00794",
+          "G00795"
+        ],
+        "journalled": true,
+        "journalMs": 4
+      }
+    },
+    {
+      "atS": 1612,
+      "kind": "kill",
+      "detail": {
+        "downMs": 3240
+      }
+    },
+    {
+      "atS": 1637,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1669,
+      "kind": "kill",
+      "detail": {
+        "downMs": 2053
+      }
+    },
+    {
+      "atS": 1707,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1731,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1765,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1777,
+      "kind": "database",
+      "detail": {
+        "ms": 3454
+      }
+    },
+    {
+      "atS": 1815,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1842,
+      "kind": "database",
+      "detail": {
+        "ms": 3013
+      }
+    },
+    {
+      "atS": 1876,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1903,
+      "kind": "database",
+      "detail": {
+        "ms": 3902
+      }
+    },
+    {
+      "atS": 1935,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 1966,
+      "kind": "tab",
+      "detail": {
+        "tab": "fill",
+        "how": "closed",
+        "unconfirmed": [
+          "F00394",
+          "F00393"
+        ],
+        "journalled": true,
+        "journalMs": 6
+      }
+    },
+    {
+      "atS": 1986,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "G00991",
+          "G00992"
+        ],
+        "journalled": true,
+        "journalMs": 4
+      }
+    },
+    {
+      "atS": 2008,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2040,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2067,
+      "kind": "database",
+      "detail": {
+        "ms": 4122
+      }
+    },
+    {
+      "atS": 2093,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2110,
+      "kind": "database",
+      "detail": {
+        "ms": 4008
+      }
+    },
+    {
+      "atS": 2133,
+      "kind": "kill",
+      "detail": {
+        "downMs": 2887
+      }
+    },
+    {
+      "atS": 2152,
+      "kind": "kill",
+      "detail": {
+        "downMs": 2829
+      }
+    },
+    {
+      "atS": 2187,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2219,
+      "kind": "database",
+      "detail": {
+        "ms": 5870
+      }
+    },
+    {
+      "atS": 2248,
+      "kind": "database",
+      "detail": {
+        "ms": 8086
+      }
+    },
+    {
+      "atS": 2275,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2287,
+      "kind": "database",
+      "detail": {
+        "ms": 4116
+      }
+    },
+    {
+      "atS": 2304,
+      "kind": "kill",
+      "detail": {
+        "downMs": 1558
+      }
+    },
+    {
+      "atS": 2326,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2350,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2364,
+      "kind": "tab",
+      "detail": {
+        "tab": "fill",
+        "how": "closed",
+        "unconfirmed": [
+          "F00476",
+          "F00477"
+        ],
+        "journalled": true,
+        "journalMs": 17
+      }
+    },
+    {
+      "atS": 2382,
+      "kind": "tab",
+      "detail": {
+        "tab": "ada",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "A01234",
+          "A01235"
+        ],
+        "journalled": true,
+        "journalMs": 9
+      }
+    },
+    {
+      "atS": 2418,
+      "kind": "kill",
+      "detail": {
+        "downMs": 2926
+      }
+    },
+    {
+      "atS": 2458,
+      "kind": "database",
+      "detail": {
+        "ms": 5377
+      }
+    },
+    {
+      "atS": 2481,
+      "kind": "kill",
+      "detail": {
+        "downMs": 4729
+      }
+    },
+    {
+      "atS": 2523,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2555,
+      "kind": "kill",
+      "detail": {
+        "downMs": 4125
+      }
+    },
+    {
+      "atS": 2582,
+      "kind": "drop",
+      "detail": {
+        "sockets": 2
+      }
+    },
+    {
+      "atS": 2596,
+      "kind": "database",
+      "detail": {
+        "ms": 5017
+      }
+    },
+    {
+      "atS": 2621,
+      "kind": "tab",
+      "detail": {
+        "tab": "fill",
+        "how": "closed",
+        "unconfirmed": [
+          "F00529",
+          "F00530"
+        ],
+        "journalled": true,
+        "journalMs": 13
+      }
+    },
+    {
+      "atS": 2639,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2662,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2692,
+      "kind": "database",
+      "detail": {
+        "ms": 5682
+      }
+    },
+    {
+      "atS": 2709,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2737,
+      "kind": "database",
+      "detail": {
+        "ms": 5833
+      }
+    },
+    {
+      "atS": 2767,
+      "kind": "tab",
+      "detail": {
+        "tab": "fill",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "F00557",
+          "F00558"
+        ],
+        "journalled": true,
+        "journalMs": 10
+      }
+    },
+    {
+      "atS": 2796,
+      "kind": "database",
+      "detail": {
+        "ms": 3907
+      }
+    },
+    {
+      "atS": 2822,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2836,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2851,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2874,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2898,
+      "kind": "kill",
+      "detail": {
+        "downMs": 1781
+      }
+    },
+    {
+      "atS": 2929,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 2957,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "closed",
+        "unconfirmed": [
+          "G01471",
+          "G01472"
+        ],
+        "journalled": true,
+        "journalMs": 5
+      }
+    },
+    {
+      "atS": 2988,
+      "kind": "database",
+      "detail": {
+        "ms": 7709
+      }
+    },
+    {
+      "atS": 3010,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3037,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "G01508",
+          "G01509"
+        ],
+        "journalled": true,
+        "journalMs": 3
+      }
+    },
+    {
+      "atS": 3059,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3084,
+      "kind": "database",
+      "detail": {
+        "ms": 5140
+      }
+    },
+    {
+      "atS": 3103,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3116,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3139,
+      "kind": "database",
+      "detail": {
+        "ms": 3238
+      }
+    },
+    {
+      "atS": 3168,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3186,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3200,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3215,
+      "kind": "database",
+      "detail": {
+        "ms": 5723
+      }
+    },
+    {
+      "atS": 3241,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3269,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3298,
+      "kind": "tab",
+      "detail": {
+        "tab": "fill",
+        "how": "closed",
+        "unconfirmed": [
+          "F00664",
+          "F00663"
+        ],
+        "journalled": true,
+        "journalMs": 7
+      }
+    },
+    {
+      "atS": 3313,
+      "kind": "database",
+      "detail": {
+        "ms": 8634
+      }
+    },
+    {
+      "atS": 3346,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3370,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3401,
+      "kind": "tab",
+      "detail": {
+        "tab": "grace",
+        "how": "renderer crashed",
+        "unconfirmed": [
+          "G01687",
+          "G01688"
+        ],
+        "journalled": true,
+        "journalMs": 5
+      }
+    },
+    {
+      "atS": 3439,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3455,
+      "kind": "database",
+      "detail": {
+        "ms": 5626
+      }
+    },
+    {
+      "atS": 3494,
+      "kind": "drop",
+      "detail": {
+        "sockets": 3
+      }
+    },
+    {
+      "atS": 3519,
+      "kind": "kill",
+      "detail": {
+        "downMs": 5955
+      }
+    },
+    {
+      "atS": 3559,
+      "kind": "tab",
+      "detail": {
+        "tab": "fill",
+        "how": "closed",
+        "unconfirmed": [
+          "F00718",
+          "F00717"
+        ],
+        "journalled": true,
+        "journalMs": 8
+      }
+    }
+  ]
+}

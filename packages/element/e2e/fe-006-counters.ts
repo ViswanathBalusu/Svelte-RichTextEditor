@@ -7,8 +7,13 @@
  * when it is released. `readCounters` lists what is still held. The wrappers change no behaviour.
  *
  * A listener counts only when its target outlives the editor: the window, the document, the root
- * and body elements, media query lists, the visual viewport, and elements outside the editor. A
- * listener on a node inside the editor's own tree goes with the tree and is not a leak.
+ * and body elements, media query lists, the visual viewport, the page's font set, and elements
+ * outside the editor. A listener on a node inside the editor's own tree goes with the tree and is not
+ * a leak.
+ *
+ * `readListeners` gives the same listeners one by one, with a number for each listener function, so
+ * that a test can tell one function registered for many event types (a framework's event
+ * delegation) from the others (FE-005).
  */
 import type { Page } from '@playwright/test';
 
@@ -278,6 +283,7 @@ export function readCounters(page: Page): Promise<Held> {
       if (t === document.body) return 'body';
       if (t instanceof MediaQueryList) return 'mediaQueryList';
       if (window.visualViewport && t === window.visualViewport) return 'visualViewport';
+      if (t === (document.fonts as unknown as EventTarget)) return 'fonts';
       if (t instanceof Node && t.isConnected && !(t.getRootNode() instanceof ShadowRoot))
         return `element ${(t as Element).localName ?? t.nodeName}`;
       return null;
@@ -298,5 +304,49 @@ export function readCounters(page: Page): Promise<Held> {
       channels: [...rel.channels.values()],
       acquired: { ...rel.acquired },
     };
+  });
+}
+
+/** One listener on a target that outlives the editor. */
+export interface HeldListener {
+  /** `window`, `document`, `html`, `body`, `mediaQueryList`, `visualViewport` or `fonts`. */
+  target: string;
+  type: string;
+  capture: boolean;
+  /** A number that is the same for the same listener function, whatever it is registered for. */
+  fn: number;
+}
+
+/** The listeners on the page's own long-lived targets, one by one (not those on other elements). */
+export function readListeners(page: Page): Promise<HeldListener[]> {
+  return page.evaluate((): HeldListener[] => {
+    const rel = (window as unknown as Record<string, unknown>)['__held'] as {
+      listeners: Map<EventTarget, Map<string, number>>;
+    };
+    const kindOf = (t: EventTarget): string | null => {
+      if (t === window) return 'window';
+      if (t === document) return 'document';
+      if (t === document.documentElement) return 'html';
+      if (t === document.body) return 'body';
+      if (t instanceof MediaQueryList) return 'mediaQueryList';
+      if (window.visualViewport && t === window.visualViewport) return 'visualViewport';
+      if (t === (document.fonts as unknown as EventTarget)) return 'fonts';
+      return null;
+    };
+    const out: HeldListener[] = [];
+    for (const [target, held] of rel.listeners) {
+      const kind = kindOf(target);
+      if (kind === null) continue;
+      for (const key of held.keys()) {
+        // `type:capture:id`; a type may itself hold a colon, so the last two parts are taken.
+        const parts = key.split(':');
+        const fn = Number(parts.pop());
+        const capture = parts.pop() === 'true';
+        out.push({ target: kind, type: parts.join(':'), capture, fn });
+      }
+    }
+    return out.sort(
+      (a, b) => `${a.target}:${a.type}`.localeCompare(`${b.target}:${b.type}`) || a.fn - b.fn,
+    );
   });
 }

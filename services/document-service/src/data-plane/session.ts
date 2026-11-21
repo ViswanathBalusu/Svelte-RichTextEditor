@@ -515,7 +515,12 @@ export class Session {
     if (this.#isClosed()) return;
     if (identity.expiresAt <= this.#deps.now())
       return this.#fatal('token_expired', 'the token has expired', m.id);
-    if (!(await this.#originAllowed(identity.tenant)))
+    const origin = await this.#originAllowed(identity.tenant);
+    // The list could not be read (the database is away): no session is opened, and the answer is the
+    // retryable `unavailable`, not a verdict that the origin is forbidden (06 §8; 05 §5.8).
+    if (origin === 'unknown')
+      return this.#fatal('unavailable', 'the origin could not be checked', m.id);
+    if (origin === 'no')
       return this.#fatal('forbidden', 'the origin is not allowed for this tenant', m.id);
     if (this.#isClosed()) return;
     // BE-091: the tenant's current quota values are read first (a store may answer later), then
@@ -589,14 +594,15 @@ export class Session {
    * The `Origin` header against the tenant's allowed origins (05 §4; 10 §3.2). A client that sends
    * none is not a browser and is accepted (ADR 0035).
    */
-  async #originAllowed(tenant: string): Promise<boolean> {
+  /** Whether the tenant allows the connection's origin; `unknown` when the list could not be read. */
+  async #originAllowed(tenant: string): Promise<'yes' | 'no' | 'unknown'> {
     const lookup = this.#deps.allowedOrigins;
-    if (!lookup || this.#origin === undefined) return true;
+    if (!lookup || this.#origin === undefined) return 'yes';
     try {
-      return (await lookup(tenant)).includes(this.#origin);
+      return (await lookup(tenant)).includes(this.#origin) ? 'yes' : 'no';
     } catch (e) {
       this.#report(e, 'origins');
-      return false;
+      return 'unknown';
     }
   }
 
@@ -667,8 +673,11 @@ export class Session {
     try {
       identity = await this.#deps.verify(m.d.token);
     } catch (e) {
-      const code = socketCodeOf(e) ?? 'unauthenticated';
-      return this.#error(code, 'the token was refused', m.id, m.ch);
+      // As at `hello`: without a registry code the token was not judged (the database is away).
+      const code = socketCodeOf(e);
+      if (code) return this.#error(code, 'the token was refused', m.id, m.ch);
+      this.#report(e, 'verify');
+      return this.#error('unavailable', 'the token could not be checked', m.id, m.ch);
     }
     const before = channel ? channel.identity : this.#identity!;
     // A refreshed token MUST carry the same tid and sub as the session (05 §3.1; BE-029).
@@ -1172,11 +1181,17 @@ export class Session {
     this.#close(close, reply.d.message);
   }
 
-  /** Verification failed: the registry code of the error, or `unauthenticated` (fail closed). */
+  /**
+   * Verification failed. An error with a registry code is the verdict on the token. Anything else
+   * is a failure of the service's own (its database is away, 06 §8): the token was not judged, so
+   * the answer is the retryable `unavailable`, which a client backs off from (05 §5.8), and not
+   * `unauthenticated`, which would make it give up. Either way no session is opened (fail closed).
+   */
   #refused(e: unknown, re: string): void {
     const code = socketCodeOf(e);
-    if (!code) this.#report(e, 'verify');
-    this.#fatal(code ?? 'unauthenticated', 'the token was refused', re);
+    if (code) return this.#fatal(code, 'the token was refused', re);
+    this.#report(e, 'verify');
+    this.#fatal('unavailable', 'the token could not be checked', re);
   }
 
   #close(code: number, reason: string): void {

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FE-009 fault run</title>
+    <style>
+      body {
+        margin: 16px;
+        font:
+          16px system-ui,
+          sans-serif;
+        background: #ffffff;
+        color: #1a1a1a;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="mount"></main>
+    <script type="module">
+      // The library build, used as a host uses it, against a real document service (FE-009
+      // criterion 7; tests/fe-009-fault-run). The run sets `window.__run` before the page loads
+      // (endpoint, document, user, mode) and exposes `window.__token`, which answers with a token
+      // the host signed. The page keeps what the element's events said in `window.__state`, and
+      // does what a host does when a token is needed: it asks for the document again.
+      const cfg = window.__run;
+      const state = (window.__state = {
+        status: 'loading',
+        error: '',
+        ready: 0,
+        connection: 'offline',
+        sync: 'saved',
+        recovered: 0,
+        authRequired: 0,
+        errors: [],
+      });
+      try {
+        await import('/lib/doc-editor.js');
+        const el = document.createElement('doc-editor');
+        el.dataset.test = cfg.sub;
+        el.setAttribute('endpoint', cfg.endpoint);
+        if (cfg.mode) el.setAttribute('mode', cfg.mode);
+        el.setAttribute('doc-id', cfg.docId);
+        el.getToken = () => window.__token(cfg.sub);
+        el.addEventListener('de-ready', () => {
+          state.status = 'ready';
+          state.ready++;
+        });
+        el.addEventListener('de-status', (ev) => {
+          state.connection = ev.detail.connection;
+          state.sync = ev.detail.sync;
+        });
+        el.addEventListener('de-recovered-edits', (ev) => {
+          state.recovered = ev.detail.count;
+        });
+        el.addEventListener('de-error', (ev) => {
+          state.errors.push({ code: ev.detail.code, fatal: ev.detail.fatal });
+          if (ev.detail.fatal) state.status = 'failed';
+        });
+        el.addEventListener('de-auth-required', () => {
+          state.authRequired++;
+          // 13 §11.1: the host gets a new token and loads the document again.
+          setTimeout(() => el.load(), 1000);
+        });
+        document.getElementById('mount').append(el);
+      } catch (e) {
+        state.status = 'failed';
+        state.error = String(e);
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Type check of the fault run (FE-009 criterion 7): pnpm exec tsc -p tests/fe-009-fault-run/tsconfig.json. The spec runs in Node.js and passes functions to the page, so both libraries are listed.",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["*.ts"]
+}

@@ -178,8 +178,18 @@ directive is S2's (section 6); the load itself is measured in `e2e/wasm-002-kern
 ## Global side effects visible to the host page
 
 Everything below changes the host page. The module adds no rule to the host's stylesheets. The
-element's own code adds two listeners to the page's `document` (listed first below); the PDF
-viewer's listeners are in its own frame's document. The editing library adds one more:
+element's own code adds listeners to the page's `document`, `window`, visual viewport and font set
+(listed first below); the PDF viewer's listeners are in its own frame's document. The editing
+library and the UI framework add listeners to `document` too.
+
+While the element is out of the document it is suspended (02 §2.1; FE-005): every listener of the
+first group below is removed, the shell's observers stop, the layout worker stops and the channel
+closes, and all of it returns when the element is connected again. Two kinds of listener stay on
+`document` until the editor is destroyed: the editing library's `selectionchange` listener and the
+UI framework's delegated-event handlers (owner decision 181). Measured in Chromium, Edge, Firefox
+and WebKit by `packages/element/e2e/fe-005-suspend-resume.spec.ts` (lane w1, 2026-11-20).
+
+The element's own, removed while it is suspended:
 
 - A `pointerdown` listener on the page's `document`, in the capture phase, added when the element
   connects or resumes and removed when it suspends or is removed (`packages/element/src/doc-editor.ts`).
@@ -187,9 +197,26 @@ viewer's listeners are in its own frame's document. The editing library adds one
 - A `visibilitychange` listener on the page's `document`, added once the editor is watched and
   removed when the session closes (`packages/element/src/session.ts`). When the page is hidden it
   starts the journal flush (FE-011).
-- An origin-wide IndexedDB database named `docedit-journal` (`JOURNAL_DB_NAME` in
-  `packages/element/src/journal-idb.ts`), opened by the session for the local journal. It is shared by
-  every page of the same origin that uses the element; it is not removed when the element is.
+- A `resize` listener on the page's `window`, added by the web view when it is mounted and removed
+  when it is destroyed (`packages/engine/src/view/web.ts`). It measures the carets of other people
+  again (SYN-036).
+- A `resize` listener on the page's visual viewport (`window.visualViewport`), added when the
+  editor is mounted (`packages/element/src/keyboard-inset.ts`). On a touch device it keeps the caret
+  above the on-screen keyboard (FE-114); elsewhere it does nothing.
+- A `loadingdone` listener on the page's font set (`document.fonts`), held only while the page
+  view (`view="print"`) is shown (`packages/element/src/page-view/page-view.ts`). A face that
+  arrives lays the pages out again.
+- The shell follows `prefers-color-scheme` through a `MediaQueryList` change listener
+  (`packages/ui/src/shell/theme.ts`). This is not a listener on `document` or `window`.
+- A `pagehide` listener on the page's `window`, only when the element is given `endpoint`: the DEP
+  client it then makes holds the listener from `connect()` to `close()`
+  (`packages/backend-dep/src/platform.ts`; PRO-019). A suspension closes that client, so the
+  listener goes with its socket. A backend the host passes is the host's: the element does not close
+  it when it suspends, so whatever that backend holds stays. Measured with a real socket by
+  `tests/V-FE-113-128/fe-122-two-tabs.spec.ts`.
+
+Kept until the editor is destroyed:
+
 - A `selectionchange` listener on the page's `document`. ProseMirror (prosemirror-view 1.42.9,
   `connectSelection`) listens on `view.dom.ownerDocument`, which is the page's document even though
   the view sits in the element's shadow root. It is added when the view is mounted and removed when
@@ -197,8 +224,17 @@ viewer's listeners are in its own frame's document. The editing library adds one
   selected), it adds a second, short-lived `selectionchange` listener on the same document, which
   removes itself once the selection moves.
   A host that listens for `selectionchange` itself also sees the events the editor causes.
-- The shell follows `prefers-color-scheme` through a `MediaQueryList` change listener
-  (`packages/ui/src/shell/theme.ts`). This is not a listener on `document` or `window`.
+- The delegated-event handlers of the UI framework. Svelte adds one passive listener to the page's
+  `document` for each event type the shell delegates (`click`, `focusin`, `input`, `keydown`,
+  `mousedown` and `pointermove` in the build of 2026-11-20) when the shell is mounted, and removes
+  them when it is unmounted. The handler looks for the shell's handlers on the elements an event
+  passed through; for an event from elsewhere on the page it finds none.
+
+Storage:
+
+- An origin-wide IndexedDB database named `docedit-journal` (`JOURNAL_DB_NAME` in
+  `packages/element/src/journal-idb.ts`), opened by the session for the local journal. It is shared by
+  every page of the same origin that uses the element; it is not removed when the element is.
 
 The other global changes:
 

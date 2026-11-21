@@ -11,7 +11,10 @@
  *   they were set; it starts once for one document and source (FE-003; PRO-075);
  * - a later connection resumes; `connectedMoveCallback` does nothing;
  * - `disconnectedCallback` waits one microtask, then suspends, and destroys after the grace period
- *   (default 30 seconds) unless `keep-alive` is present (FE-004, FE-006);
+ *   (default 30 seconds) unless `keep-alive` is present (FE-004, FE-005, FE-006). Suspended, the
+ *   element holds no listener of its own on `document`, `window`, the visual viewport or the font
+ *   set, no running observer of the shell, no worker and no open channel; the editing core, its
+ *   views and the journal stay. The read view has no core: it is closed and shown again on return;
  * - `destroy()` releases everything and nothing more is raised (PRO-076).
  *
  * The module reads no browser global when there is no DOM, so importing it on a server is safe
@@ -387,7 +390,13 @@ export class DocEditorElement extends Base {
     const refocus = this.#focusWithin;
     // Resuming keeps the session, its core and its shell, and reopens the channel with a resume
     // (FE-005). A change made while disconnected is picked up by the same reconciliation.
-    if (this.#suspended) this.#session?.resume();
+    // A move in one task suspends nothing. The browser still unloads a PDF viewer's frame with the
+    // removal and loads its page afresh; the viewer connects again and shows its PDF by itself
+    // (pdf/viewer-frame.ts), in the read view and in a pane alike.
+    if (this.#suspended) {
+      this.#session?.resume();
+      this.#pageView?.resume();
+    }
     this.#suspended = false;
     this.#scheduleLoad();
     if (refocus && !this.#root.activeElement) this.focus();
@@ -539,10 +548,18 @@ export class DocEditorElement extends Base {
     // The layout worker stops with the element; the first use after a resume creates it again (WASM-004).
     this.#suspends++;
     this.#kernel?.stop();
-    if (!this.#session || this.#suspended) return;
+    if (this.#suspended) return;
+    // An element that shows nothing yet (no document, or no token source) has nothing to suspend.
+    if (!this.#session && this.#readViewOf === null) return;
     this.#suspended = true;
+    // The read view has no editing core to keep. It is closed: its viewer frame goes, and with it
+    // the PDF.js worker, and a backend the element opened for it closes its socket. When the
+    // element returns, the reconciliation shows the read view again with a new export, as the
+    // document may have changed meanwhile.
+    this.#closeReadView();
     // Listeners on the page, observers and the channel go; the core and the journal stay (FE-005).
-    this.#session.suspend();
+    this.#pageView?.suspend();
+    this.#session?.suspend();
     if (!this.hasAttribute('keep-alive')) this.#startGrace();
   }
 
@@ -855,6 +872,8 @@ export class DocEditorElement extends Base {
           onError: (error) => this.#pageViewFailed(error),
         });
         this.#pageView = view;
+        // The element left the document while the chunk loaded: the view starts suspended (FE-005).
+        if (this.#suspended) view.suspend();
         body.style.setProperty('display', 'none', 'important');
         frame.closest<HTMLElement>('.de-page')?.setAttribute('data-view', 'print');
         this.#showWebLabel();
