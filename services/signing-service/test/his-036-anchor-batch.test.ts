@@ -38,6 +38,7 @@ import {
   WORKER_SECRET,
   type World,
 } from './support/service-world.ts';
+import { listenOnFetchablePort } from './support/ports.ts';
 import { startTestTsa, type TestTsa } from './support/tsa.ts';
 import { cmsParts, verifyDetached } from './support/verify.ts';
 import { flipByte, InProcessKeyService } from './support/world.ts';
@@ -279,7 +280,7 @@ describe.skipIf(!opensslAvailable())(
     it('is served at POST /v1/anchor-batch with the same refusals', async () => {
       down = false;
       const server = createSigningServer(world.service, { maxBodyBytes: 100_000 });
-      await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+      await listenOnFetchablePort(server);
       const addr = server.address();
       if (!addr || typeof addr === 'string') throw new Error('no address');
       const url = `http://127.0.0.1:${addr.port}/v1/anchor-batch`;

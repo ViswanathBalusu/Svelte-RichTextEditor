@@ -7,6 +7,7 @@
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer } from 'ws';
+import { listenOnFetchablePort } from './ports.ts';
 import type { MemoryServer, ServerSocket } from './memory-network.ts';
 
 export interface Listening {
@@ -88,7 +89,7 @@ export async function listen(make: (origin: string) => MemoryServer): Promise<Li
       });
     });
   });
-  await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve));
+  await listenOnFetchablePort(http);
   origin = `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
   server = make(origin);
   return {

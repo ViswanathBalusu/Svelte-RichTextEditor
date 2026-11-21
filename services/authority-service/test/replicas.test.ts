@@ -10,6 +10,7 @@ import { configFromEnv } from '../src/config.ts';
 import { type RunningServer, listen } from '../src/http.ts';
 import { AuthorityService, type OpenRequest } from '../src/service.ts';
 import { httpStateLoader } from '../src/storage.ts';
+import { listenOnFetchablePort } from './ports.ts';
 import { buildLog, envelopeOf, openRequest } from './log.ts';
 
 /** The caller's storage: serves `GET /states/{stateId}` from a map and counts the reads. */
@@ -30,7 +31,7 @@ async function storage(states: Map<string, OpenRequest>, override?: () => number
     }
     res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(found));
   });
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  await listenOnFetchablePort(server);
   const { port } = server.address() as AddressInfo;
   return {
     url: `http://127.0.0.1:${port}`,
