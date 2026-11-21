@@ -18,6 +18,8 @@ export {
   type TransactionInfo,
 } from './core.ts';
 export { REMOTE } from './meta.ts';
+export { ATOM_CHAR } from './page-input.ts';
+export type { BlockPoint, BlockSelection, PageViewHandle, PageViewHooks } from './page-input.ts';
 export {
   VersionDocument,
   openVersion,

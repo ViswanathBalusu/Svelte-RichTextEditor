@@ -40,7 +40,7 @@ import {
   type ThreadAction,
 } from '@docedit/authority';
 import type { JsonNode } from '@docedit/model';
-import { uuid7 } from '@docedit/model';
+import { formatTimestamp, uuid7 } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import type { StoredComment, StoredTarget, StoredThread } from '../storage/thread-store.ts';
 import type { DocRef } from '../storage/types.ts';
@@ -77,7 +77,16 @@ function threadBody(t: StoredThread, at?: { range: { from: number; to: number };
           },
         }
       : { block: t.target.block };
-  return { id: t.id, state: t.state, assignee: t.assignee, target };
+  return {
+    id: t.id,
+    state: t.state,
+    assignee: t.assignee,
+    target,
+    createdBy: `user:${t.createdBy}`,
+    createdAt: formatTimestamp(t.createdAt),
+    etag: threadTag(t),
+    comments: t.comments.map(commentBody),
+  };
 }
 
 /** The scopes a thread covers: one, or several for a range (`StoredThread.scope`). */
@@ -92,9 +101,39 @@ function parseRange(raw: unknown): { from: number; to: number; baseSeq: number }
   return { from, to, baseSeq };
 }
 
-/** The comment as the REST surface shows it (05 section 6.2 `Comment`, a placeholder shape). */
+/** The comment as the REST surface shows it (05 section 6.2 `Comment`; ADR 0417). */
 function commentBody(c: StoredComment) {
-  return { id: c.id, body: c.body };
+  return {
+    id: c.id,
+    author: `user:${c.author}`,
+    createdAt: formatTimestamp(c.createdAt),
+    editedAt: c.editedAt === null ? null : formatTimestamp(c.editedAt),
+    etag: commentTag(c),
+    body: c.body,
+  };
+}
+
+/**
+ * The parts of a `CommentInput` (ADR 0417): `{ body: [{ type: 'text', text } | { type: 'mention',
+ * principal }] }`, at least one part. The stored body is the list of parts.
+ */
+function parseCommentInput(raw: unknown, path: string): unknown[] {
+  const bad = (rule: string): ApiError =>
+    new ApiError('validation_failed', 'the comment body is a list of text and mention parts', {
+      violations: [{ path, rule }],
+    });
+  const parts = (raw as { body?: unknown } | null)?.body;
+  if (!Array.isArray(parts) || parts.length === 0) throw bad('a non-empty list of parts');
+  for (const part of parts) {
+    const p = part as { type?: unknown; text?: unknown; principal?: unknown } | null;
+    const text = p?.type === 'text' && typeof p.text === 'string' && p.text !== '';
+    const mention =
+      p?.type === 'mention' &&
+      typeof p.principal === 'string' &&
+      /^(user|group):\S+$/.test(p.principal);
+    if (!text && !mention) throw bad('text with a text, or a mention of user:<id> or group:<id>');
+  }
+  return parts;
 }
 
 const threadTag = (t: StoredThread): string =>
@@ -322,6 +361,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     const conn = connectionOn(ctx.caller, doc);
     if (!conn) throw new ApiError('forbidden', 'a thread has an author; a user starts it');
     const body = (await ctx.body()) as CreateThreadBody;
+    const firstComment = parseCommentInput(body.comment, '/comment');
     const record = await liveDocument(ctx, doc);
     const ref = refOf(ctx, doc);
     const head = await d.logs.head(ref);
@@ -347,13 +387,13 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       comment: {
         id: uuid7(now),
         author: conn.sub,
-        body: body.comment,
+        body: firstComment,
         createdAt: now,
         editedAt: null,
       },
     });
     emit(ctx, 'dep.thread.created', doc, { thread: thread.id, seq: head.seq });
-    raiseMentions(ctx, doc, thread.comments[0]?.id ?? '', thread.id, body.comment, head.seq);
+    raiseMentions(ctx, doc, thread.comments[0]?.id ?? '', thread.id, firstComment, head.seq);
     const told = await eventOf(ctx.caller.tenant, thread);
     k.notify()?.(
       ref,
@@ -552,11 +592,12 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     const conn = connectionOn(ctx.caller, t.docId);
     if (!conn) throw new ApiError('forbidden', 'a comment has an author; a user writes it');
     await decide(ctx, t, 'reply');
+    const parts = parseCommentInput(await ctx.body(), '/body');
     const now = d.now();
     const comment: StoredComment = {
       id: uuid7(now),
       author: conn.sub,
-      body: await ctx.body(),
+      body: parts,
       createdAt: now,
       editedAt: null,
     };
@@ -582,7 +623,8 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     await mustSee(ctx, t, 'comment');
     checkIfMatch(ctx.req, commentTag(c));
     await decideComment(ctx, t, c, 'edit');
-    const updated = await store().editComment(ctx.caller.tenant, c.id, await ctx.body(), d.now());
+    const parts = parseCommentInput(await ctx.body(), '/body');
+    const updated = await store().editComment(ctx.caller.tenant, c.id, parts, d.now());
     if (!updated) throw new ApiError('not_found', 'no such comment');
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },

@@ -33,8 +33,36 @@ export const PAINT_TEXT_PINS = {
   fontVariantLigatures: 'normal',
 } as const;
 
+/**
+ * One run of a line in one face (FE-101). A source that gives runs paints each line as a series of
+ * spans, so a heading, bold text or a coloured word shows as the layout measured it. The text of the
+ * runs, joined, is the text of the line.
+ */
+export interface PaintRun {
+  readonly text: string;
+  readonly fontFamily: string;
+  readonly fontSizePt: number;
+  readonly bold: boolean;
+  readonly italic: boolean;
+  readonly underline: boolean;
+  readonly strike: boolean;
+  /** A CSS colour, or null for the text colour of the page. */
+  readonly color: string | null;
+  readonly vertAlign: 'super' | 'sub' | null;
+}
+
 /** What the painter needs that the layout tree does not hold. */
 export interface PaintSource {
+  /**
+   * The runs of the line [from, to) of a block, each in its own face (FE-101). When this is given,
+   * the line is painted from the runs and `fontFamily` and `fontSizePt` are only the fallback for a
+   * line that carries its own text (a page-number field). Return null to paint the line from
+   * lineText in the one face.
+   */
+  runs?(blockId: string, from: number, to: number): readonly PaintRun[] | null;
+  /** The advance in points of the line [from, to) of a block, with each run in its own face; used to justify when 
+uns is given. */
+  measureRange?(blockId: string, from: number, to: number): number;
   /** The text of the CDM range `[from, to)` of a block, with no line break in it. */
   lineText(blockId: string, from: number, to: number): string;
   /** The CSS font family the text is set in: the face the measurer measured. */
@@ -76,6 +104,48 @@ function isBlank(ch: string): boolean {
   return ch === ' ' || ch === ' ' || ch === '\t';
 }
 
+/** Appends the runs of a line to `span`; the trailing blanks of the line are left out of the word spacing (FE-091). */
+function paintRuns(
+  doc: Document,
+  span: HTMLElement,
+  runs: readonly PaintRun[],
+  wordSpacing: number,
+): void {
+  if (wordSpacing > 0) span.style.wordSpacing = `${wordSpacing}pt`;
+  const last = runs.length - 1;
+  runs.forEach((run, i) => {
+    let body = run.text;
+    let tail = '';
+    if (wordSpacing > 0 && i === last) {
+      let end = body.length;
+      while (end > 0 && isBlank(body.charAt(end - 1))) end--;
+      tail = body.slice(end);
+      body = body.slice(0, end);
+    }
+    const piece = (text: string, reset: boolean): void => {
+      if (text === '') return;
+      const el = doc.createElement('span');
+      el.className = 'de-run';
+      const s = el.style;
+      s.fontFamily = run.fontFamily;
+      s.fontSize = `${run.fontSizePt}pt`;
+      if (run.bold) s.fontWeight = 'bold';
+      if (run.italic) s.fontStyle = 'italic';
+      const decoration = [run.underline ? 'underline' : '', run.strike ? 'line-through' : '']
+        .filter((d) => d !== '')
+        .join(' ');
+      if (decoration !== '') s.textDecoration = decoration;
+      if (run.color !== null) s.color = run.color;
+      if (run.vertAlign !== null) s.verticalAlign = run.vertAlign;
+      if (reset) s.wordSpacing = '0pt';
+      el.textContent = text;
+      span.appendChild(el);
+    };
+    piece(body, false);
+    piece(tail, true);
+  });
+}
+
 /**
  * Paints a layout tree into `root` (an element or a shadow root). The previous content of `root` is
  * kept; the caller clears it when it repaints.
@@ -104,7 +174,13 @@ export function paintTree(
     const y = f.y + line.y;
     // A line that carries its own text (a field's value, FE-087) shows it; any other line shows the
     // CDM text of its range.
-    const text = line.text ?? source.lineText(f.blockId, line.from, line.to);
+    // With runs (FE-101) the line is painted in the faces the layout measured; a line that carries
+    // its own text is painted in the one face.
+    const runs =
+      line.text === undefined ? (source.runs?.(f.blockId, line.from, line.to) ?? null) : null;
+    const text = runs
+      ? runs.map((r) => r.text).join('')
+      : (line.text ?? source.lineText(f.blockId, line.from, line.to));
     const el = doc.createElement('div');
     el.className = 'de-line';
     el.dataset['block'] = f.blockId;
@@ -120,8 +196,8 @@ export function paintTree(
     style.overflow = 'visible';
     style.margin = '0';
     style.padding = '0';
-    style.fontFamily = source.fontFamily;
-    style.fontSize = `${source.fontSizePt}pt`;
+    style.fontFamily = runs?.[0]?.fontFamily ?? source.fontFamily;
+    style.fontSize = `${runs?.[0]?.fontSizePt ?? source.fontSizePt}pt`;
     // Kerning and ligatures follow the canvas defaults the measurer measures with
     // (`PAINT_TEXT_PINS`; FE-090 criterion 4, spec 02 §9.3).
     style.fontKerning = PAINT_TEXT_PINS.fontKerning;
@@ -131,10 +207,21 @@ export function paintTree(
     const span = doc.createElement('span');
     span.className = 'de-text';
     const justified =
-      source.measure !== undefined &&
+      (runs ? source.measureRange !== undefined : source.measure !== undefined) &&
       options.justify?.(f.blockId) === true &&
       index < f.lines.length - 1;
-    if (justified && source.measure) {
+    if (runs) {
+      let spacing = 0;
+      if (justified && source.measureRange) {
+        const target = f.x + f.width - x;
+        spacing = justifyLine(
+          text,
+          source.measureRange(f.blockId, line.from, line.to),
+          target,
+        ).wordSpacing;
+      }
+      paintRuns(doc, span, runs, spacing);
+    } else if (justified && source.measure) {
       const target = f.x + f.width - x;
       const { wordSpacing } = justifyLine(text, source.measure(text), target);
       if (wordSpacing > 0) {

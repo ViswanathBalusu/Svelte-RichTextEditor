@@ -1,0 +1,67 @@
+# The signing service as a container of its own (12 §8.2 step 3; FRW-052 criterion 1). Build from
+# the repository root with Podman (DOCEDIT_CONTAINER_CLI overrides the command in the scripts):
+#
+#   node services/signing-service/scripts/build-image.ts
+#
+# which runs
+#
+#   podman build -f services/signing-service/Containerfile \
+#     --ignorefile services/signing-service/Containerfile.dockerignore \
+#     -t localhost/docedit-signing-service:dev .
+#
+# The image is the trust boundary of the sealing key. It holds the service and the packages it
+# reads, with their production dependencies, and nothing else: no other service, no export or
+# LaTeX worker, no test, no key, no certificate, no credential. The compile workers run in other
+# images and have no route to this one; only the document service holds a credential for it.
+#
+# What the deployment supplies when the container starts (owner decisions 221 to 223 leave the
+# production choices open, so no default exists and the image makes none):
+#
+#   DOCEDIT_SIGNING_CONFIG  the path of a module, mounted read-only, whose default export returns
+#                           the key service adapter, the certificate source, the time-stamp client,
+#                           the validation data, the callers (SHA-256 hashes of their secrets), the
+#                           rate limit, the audit sink and the address to listen on
+#                           (src/main.ts, `DeploymentConfig`).
+#
+# Without it the service stops with a message and exit code 2; it never seals with a stand-in. The
+# key stays in the key service (a hardware module or a cloud key service in production, the SoftHSM2
+# emulator of keyservice/Containerfile in development); the service holds only the key's name and
+# sends it 32-byte digests.
+#
+# Run it with a read-only root file system, no capabilities and a private network that the document
+# service can reach and the compile workers cannot:
+#
+#   podman run --rm --read-only --cap-drop=all --security-opt=no-new-privileges \
+#     --network docedit-signing -v ./signing-config.mjs:/etc/docedit/signing-config.mjs:ro \
+#     -e DOCEDIT_SIGNING_CONFIG=/etc/docedit/signing-config.mjs \
+#     localhost/docedit-signing-service:dev
+#
+# Node.js 22.18.0 on Debian 12, pinned by its multi-arch index digest (as the authority service).
+FROM docker.io/library/node:22.18.0-bookworm-slim@sha256:752ea8a2f758c34002a0461bd9f1cee4f9a3c36d48494586f60ffce1fc708e0e
+
+ENV CI=true NODE_ENV=production
+WORKDIR /app
+# The pnpm of the workspace (package.json `packageManager`); corepack of Node.js 22.18 cannot run it.
+RUN npm install --global pnpm@12.18.0
+
+# The workspace manifests first, so that the dependency layer is cached.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY services/signing-service/package.json services/signing-service/
+COPY packages/authority/package.json packages/authority/
+COPY packages/model/package.json packages/model/
+COPY packages/rules/package.json packages/rules/
+COPY packages/corpus/package.json packages/corpus/
+RUN pnpm install --frozen-lockfile --prod --filter "@docedit/signing-service..."
+
+COPY services/signing-service/src services/signing-service/src
+COPY packages/authority/src packages/authority/src
+COPY packages/authority/fixtures packages/authority/fixtures
+COPY packages/model/src packages/model/src
+COPY packages/model/fixtures packages/model/fixtures
+COPY packages/rules/src packages/rules/src
+COPY packages/corpus/src packages/corpus/src
+# The published definitions that the model reads (SYN-002).
+COPY spec spec
+
+USER node
+ENTRYPOINT ["node", "services/signing-service/src/main.ts"]

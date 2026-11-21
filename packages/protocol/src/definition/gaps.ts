@@ -521,6 +521,8 @@ export const GAPS: readonly Gap[] = [
     section: '05 §6.2; 07 §6; 13 §5',
     kind: 'missing',
     text: 'Threads and comments: the thread and comment resources, how mentions are represented, the type of `assignee`, and what `GET threads?seq=N` returns.',
+    resolved:
+      'ADR 0417 (proposed, 2026-11-18): a comment is `{ id, author, createdAt, editedAt, body }` with a body of text and mention parts; a thread carries its comments, its creator and its time; `assignee` is a principal; the list at `seq` maps each range to that seq. Pending the owner.',
   },
   {
     id: 'G72',

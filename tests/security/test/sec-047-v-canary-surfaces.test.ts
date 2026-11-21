@@ -96,12 +96,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const editor = await h.mintToken(h.a, 'edna-v47', { [doc]: 'editor' });
         const thread = await h.call('POST', `/v1/documents/${doc}/threads`, {
           token: owner,
-          body: { target: { block: 'pIntro0000000001' }, comment: { body: CANARY.comment } },
+          body: {
+            target: { block: 'pIntro0000000001' },
+            comment: { body: [{ type: 'text', text: CANARY.comment }] },
+          },
         });
         expect(thread.status, thread.text).toBe(201);
         const reply = await h.call('POST', `/v1/threads/${thread.json.id as string}/comments`, {
           token: editor,
-          body: { body: CANARY.reply },
+          body: { body: [{ type: 'text', text: CANARY.reply }] },
         });
         expect(reply.status, reply.text).toBe(201);
 

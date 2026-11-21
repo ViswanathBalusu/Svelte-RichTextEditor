@@ -65,7 +65,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const doc = await h.createDocument({ content: documentWithRegions() });
         const token = () => h.userToken({ [doc]: 'editor' }, { sub: 'ed-1' });
         const path = `/v1/documents/${doc}/threads`;
-        const body = { target: { block: BLOCK }, comment: { text: 'Is this right?' } };
+        const body = {
+          target: { block: BLOCK },
+          comment: { body: [{ type: 'text', text: 'Is this right?' }] },
+        };
         const headers = key();
         const first = await h.call('POST', path, { token: token(), body, headers });
         expect(first.status, first.text).toBe(201);
@@ -78,7 +81,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
         const tid: string = first.json.id;
         const commentPath = `/v1/threads/${tid}/comments`;
-        const commentBody = { text: 'A reply.' };
+        const commentBody = { body: [{ type: 'text', text: 'A reply.' }] };
         const commentHeaders = key();
         const c1 = await h.call('POST', commentPath, {
           token: token(),

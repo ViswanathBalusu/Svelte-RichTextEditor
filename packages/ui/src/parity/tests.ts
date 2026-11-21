@@ -189,6 +189,32 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/mini-toolbar.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-013 closed (2026-11-20): every key of the shortcut table pressed in a browser run,
+  // the alternatives bound, the reference built from the registry, and the published table.
+  [
+    'keyboard-shortcuts',
+    [
+      { path: 'packages/ui/e2e/ux-013-w3-table-keys.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/commands.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/shortcut-alternatives.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/shortcut-reference.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/ux-013-published-table.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when UX-008 closed (2026-11-20): the menu in the element with the real core (at the
+  // caret, and on a word a proofing port flagged), the shell's menu in a browser run, and the rule
+  // that picks its commands.
+  [
+    'context-menu',
+    [
+      { path: 'packages/element/e2e/ux-008-caret-menu.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-008-proofing-menu.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-008-context-menu.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-008-context-targets.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-008-finding-click.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/context-menu.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-062 closed (2026-11-18): the light, dark and high-contrast themes and forced colours.
   [
     'themes',
@@ -343,6 +369,22 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
         path: 'apps/reference-host/e2e-gallery/ux-100-template-gallery.spec.ts',
         kind: 'playwright',
       },
+    ],
+  ],
+  // Shipped when UX-037 closed (lane w3, 2026-11-18); entry added by the batch 1 integrator of
+  // 2026-11-20. Suggesting while typing, the review tools and the review pane in the real element,
+  // the shell's review tools, and the resolve commit and the bulk accept and reject in Node.js.
+  [
+    'suggestions',
+    [
+      { path: 'packages/element/e2e/fe-042-composition-suggest.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-036-review-tools.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-037-review-pane.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-037-review-time.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-036-review.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/fe-047-resolve-commit.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/ux-036-review.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/ux-036-037-review-bulk-live.test.ts', kind: 'unit' },
     ],
   ],
 ];

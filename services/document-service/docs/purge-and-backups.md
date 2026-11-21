@@ -10,7 +10,7 @@ For the operator. Spec: 08 §13; story HIS-039; owner decision 30 (30 days by de
 
 ## What the purge removes
 
-- the commits and their metadata, the checkpoints and their index, grants, versions, threads and comments, read markers, workflow state and evidence, jobs, and the document row;
+- the commits and their metadata, the checkpoints and their index, grants, versions, threads and comments, read markers, session records (the user agent family and client version of each session, HIS-003), workflow state and evidence, jobs, and the document row;
 - every object under the document's prefix (checkpoints, cold segments, set-aside checkpoints), the files of its export jobs, and the sealed PDF once its retention has ended;
 - the assets uploaded for the document that no other document references, and their objects unless another asset has the same bytes;
 - the document's search entries.

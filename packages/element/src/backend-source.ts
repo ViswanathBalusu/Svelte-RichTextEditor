@@ -31,9 +31,12 @@ const depBackend: EndpointBackendFactory = async (options) => {
     endpoint: options.endpoint,
     getToken: options.getToken,
     docId: options.docId,
-    // `exports` and `assets` are asked for because the element uses both ports (`requestExport`,
-    // pasted pictures); they are negotiated only where the server announces them (SEC-007).
-    features: [...new Set([...DEFAULT_FEATURES, 'exports', 'assets', ...capabilities().features])],
+    // `exports`, `assets` and `leases` are asked for because the element uses the ports (`requestExport`,
+    // pasted pictures, the check-out control of the permissions pane); they are negotiated only
+    // where the server announces them (SEC-007; PRM-043).
+    features: [
+      ...new Set([...DEFAULT_FEATURES, 'exports', 'assets', 'leases', ...capabilities().features]),
+    ],
   });
 };
 

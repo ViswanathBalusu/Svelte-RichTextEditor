@@ -32,6 +32,7 @@ import {
   Icons,
   type IconOverrides,
   createCommandRegistry,
+  eventKey,
   headerMode,
   themeMode,
   toolbarMode,
@@ -40,6 +41,7 @@ import {
   type DocumentStats,
   type EditorMode,
   type ExportService,
+  type LeasesService,
   type ResolveUsers,
   type ReviewItem,
   type ShellSettings,
@@ -55,6 +57,7 @@ import type { NormalConfig } from './config.ts';
 import { attachWithSwitches, shellWithSwitches, switchedModes } from './feature-switches.ts';
 import type { Connection, StatusDetail } from './events.ts';
 import { fillActionsService } from './fill-actions.ts';
+import { threadsService, type ThreadsSource } from './threads.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
 import type { PdfViewerFrame } from './pdf/viewer-frame.ts';
@@ -103,10 +106,21 @@ export interface MountOptions {
    */
   exports?: ExportService;
   /**
+   * Check-out of regions (PRM-043), when the backend has the leases port and announced `leases`.
+   * Without it the permissions pane shows no check-out control.
+   */
+  leases?: LeasesService;
+  /**
    * The session's workflow port and document, when the backend has the workflow port (FRW-028).
    * Without it the shell offers no "send for completion" command. Null while no session is current.
    */
   workflow?: () => WorkflowSendSource | null;
+  /**
+   * The backend's comments port and the document, when the backend offers threads and announced the
+   * feature (UX-028 to UX-032; ADR 0417). Without it the shell has no `threads` service and offers
+   * no comment command.
+   */
+  threads?: ThreadsSource;
   /**
    * The ports of the adoption and signing step (FRW-045, FRW-046): the assets port for the image and
    * the fields port for the sign request. Absent: a signature field is not offered for signing.
@@ -202,6 +216,12 @@ export interface MountedEditor extends EditorHandle {
   text(key: string, params: Readonly<Record<string, string | number>>): string | null;
   /** Brings the host's extensions in line with the list the element holds (UX-050). */
   setExtensions(list: readonly unknown[]): void;
+  /**
+   * Runs the registry command bound to a key event, as the shell's own listener does, for the page
+   * view's input bridge, which is a text field that listener leaves alone (FE-098 criterion 6). True
+   * when the key is bound to an offered command, whether or not it could run.
+   */
+  pageShortcut(event: KeyboardEvent): boolean;
 }
 
 export { SettingsStore };
@@ -222,7 +242,10 @@ const CAPABILITIES: readonly Capability[] = [
 ];
 
 /** A suggestion of the core as the shell's review tools take it (UX-036): the capabilities typed. */
-function reviewItem(s: ReturnType<EditorCore['suggestionItems']>[number]): ReviewItem {
+function reviewItem(
+  s: ReturnType<EditorCore['suggestionItems']>[number],
+  committedAt: string | null,
+): ReviewItem {
   return {
     id: s.id,
     kind: s.kind,
@@ -234,6 +257,7 @@ function reviewItem(s: ReturnType<EditorCore['suggestionItems']>[number]): Revie
     caps: s.caps.filter((c): c is Capability => (CAPABILITIES as readonly string[]).includes(c)),
     canResolve: s.canResolve,
     region: s.region,
+    committedAt,
   };
 }
 
@@ -274,6 +298,47 @@ export function settingsFrom(attrs: {
   if (attrs.locale) out.locale = attrs.locale;
   if (attrs.theme !== null) out.theme = themeMode(attrs.theme);
   return out;
+}
+
+/**
+ * The server times of the commits that introduced suggestions (UX-037 criterion 1), asked of the
+ * history port once for each suggestion. `moved` counts the answers, so that the review pane reads
+ * its list again when one arrives. A suggestion the port cannot answer for has no time.
+ */
+function suggestionTimeCache(ask: (id: string) => Promise<string | null>): {
+  get(id: string): string | null;
+  ask(ids: readonly string[]): void;
+  readonly moved: ReadView<number>;
+} {
+  const times = new Map<string, string>();
+  const asking = new Set<string>();
+  const listeners = new Set<() => void>();
+  let moves = 0;
+  return {
+    get: (id) => times.get(id) ?? null,
+    ask(ids) {
+      for (const id of ids) {
+        if (times.has(id) || asking.has(id)) continue;
+        asking.add(id);
+        void ask(id).then((time) => {
+          asking.delete(id);
+          if (time === null) return;
+          times.set(id, time);
+          moves++;
+          for (const listener of [...listeners]) listener();
+        });
+      }
+    },
+    moved: {
+      get: () => moves,
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    },
+  };
 }
 
 /** A read view derived from others, notifying when any of them does. */
@@ -348,6 +413,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
     : null;
   // The guided bar follows `wf.changed` through the same status (FRW-035 criterion 6).
   const fill = fillView(core, fillActions?.status);
+  const suggestionTimes = suggestionTimeCache((id) => core.suggestionTime(id));
+  // The thread service (UX-028 to UX-032): the comments port, with the core's placement of each thread.
+  const threads = options.threads ? threadsService(core, options.threads) : null;
   const port = options.permissions ?? null;
   const viewers = new Set<PdfViewerFrame>();
   let destroyed = false;
@@ -414,10 +482,15 @@ export function mountEditor(options: MountOptions): MountedEditor {
         core.selectFindMatch(match.index, { blockId: match.blockId || null, text: match.text }),
       // Where a menu asked for from the keyboard opens (UX-008 criterion 1).
       caretRect: () => core.caretRect(),
+      // The context menu has the browser's selection read before it is built (UX-008).
+      syncSelection: () => core.syncSelection(),
       mountBody: (target) => timeBodyAttach(() => core.mountBody(target)),
       mountPanel: (target) => core.mountPanel(target),
       access: core.access,
-      revision: core.revision,
+      revision: derived(
+        [core.revision, suggestionTimes.moved],
+        () => core.revision.get() + suggestionTimes.moved.get(),
+      ),
       direction: core.direction,
       // The mode the switcher shows: the effective one, which the core enforces (the most restrictive
       // the access allows). The modes the switcher offers are the three this element supports (UX-015;
@@ -578,6 +651,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
       ignoreFinding: (id, everywhere) => core.ignoreFinding(id, everywhere),
       addFindingToDictionary: (id) => core.addFindingToDictionary(id),
+      proofingFinding: (id) => core.proofingFinding(id),
       // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
       // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).
       refusal: core.refusal,
@@ -610,6 +684,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(options.exports ? { exports: options.exports } : {}),
       // The send dialog (FRW-028): the pre-send checks and the send action.
       ...(workflowSend ? { workflowSend } : {}),
+      ...(threads ? { threads } : {}),
       ...(signing ? { signing } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
       ...(fillActions
@@ -621,10 +696,16 @@ export function mountEditor(options: MountOptions): MountedEditor {
       setSuggestionLabel: (label) => core.setSuggestionLabel(label),
       setSuggestionCard: (format) => core.setSuggestionCard(format),
       // The review tools (UX-036): the list, next and previous, accept and reject.
-      suggestionItems: () => core.suggestionItems().map(reviewItem),
+      // Each item carries the server time of the commit that introduced it, once the history port
+      // has answered (UX-037 criterion 1; the pane reads the list again when a time arrives).
+      suggestionItems: () => {
+        const items = core.suggestionItems();
+        suggestionTimes.ask(items.map((i) => i.id));
+        return items.map((i) => reviewItem(i, suggestionTimes.get(i.id)));
+      },
       stepSuggestion: (direction) => {
         const found = core.stepSuggestion(direction);
-        return found === null ? null : reviewItem(found);
+        return found === null ? null : reviewItem(found, suggestionTimes.get(found.id));
       },
       revealSuggestion: (id) => core.revealSuggestion(id),
       resolveAtSelection: (action) => core.resolveAtSelection(action),
@@ -652,6 +733,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
             ),
           }
         : {}),
+      // Check-out (PRM-043): the leases port, when the backend announced the feature.
+      ...(options.leases ? { leases: options.leases } : {}),
     },
     config.features,
   );
@@ -807,6 +890,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     setExtensions(list: readonly unknown[]) {
       app.setExtensions(list);
+    },
+    pageShortcut(event: KeyboardEvent) {
+      const key = eventKey(event);
+      if (key === null) return false;
+      const id = registry.commandForKey(key);
+      if (!id || !registry.state(id).offered) return false;
+      registry.exec(id);
+      return true;
     },
     restoreShareFocus() {
       return app.restoreFocus();

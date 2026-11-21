@@ -5,16 +5,19 @@
   "browsers": {
     "chrome": {
       "url": "https://support.google.com/chrome/answer/157179",
-      "read": "2026-11-06"
+      "read": "2026-11-20"
     },
     "edge": {
-      "url": "https://support.microsoft.com/en-gb/microsoft-edge/keyboard-shortcuts-in-microsoft-edge-50d3edab-30d9-c7e4-21ce-37fe2713cfad",
-      "read": "2026-11-06"
+      "url": "https://support.microsoft.com/en-gb/edge/keyboard-shortcuts-in-microsoft-edge",
+      "read": "2026-11-20"
     },
-    "firefox": null,
+    "firefox": {
+      "url": "https://support.mozilla.org/en-US/kb/keyboard-shortcuts-perform-firefox-tasks-quickly",
+      "read": "2026-11-20"
+    },
     "safari": {
       "url": "https://support.apple.com/en-gb/guide/safari/cpsh003/mac",
-      "read": "2026-11-06"
+      "read": "2026-11-20"
     }
   },
   "rows": [
@@ -38,7 +41,7 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
+          "status": "none-listed",
           "conflicts": []
         },
         "safari": {
@@ -68,7 +71,10 @@
               "platform": "macos",
               "key": "Mod-y",
               "meaning": "Open the History page in a new tab",
-              "resolution": "alternative"
+              "resolution": "alternative",
+              "use": [
+                "Shift-Mod-z"
+              ]
             }
           ]
         },
@@ -80,12 +86,15 @@
               "platform": "macos",
               "key": "Mod-y",
               "meaning": "Open History",
-              "resolution": "alternative"
+              "resolution": "alternative",
+              "use": [
+                "Shift-Mod-z"
+              ]
             }
           ]
         },
         "firefox": {
-          "status": "not-checked",
+          "status": "none-listed",
           "conflicts": []
         },
         "safari": {
@@ -114,7 +123,7 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
+          "status": "none-listed",
           "conflicts": []
         },
         "safari": {
@@ -143,8 +152,23 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "firefox",
+              "platform": "windows-linux",
+              "key": "Mod-b",
+              "meaning": "Bookmarks sidebar",
+              "resolution": "inside-editor"
+            },
+            {
+              "browser": "firefox",
+              "platform": "macos",
+              "key": "Mod-b",
+              "meaning": "Bookmarks sidebar",
+              "resolution": "inside-editor"
+            }
+          ]
         },
         "safari": {
           "status": "none-listed",
@@ -172,8 +196,23 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "firefox",
+              "platform": "windows-linux",
+              "key": "Mod-i",
+              "meaning": "Page Info",
+              "resolution": "inside-editor"
+            },
+            {
+              "browser": "firefox",
+              "platform": "macos",
+              "key": "Mod-i",
+              "meaning": "Page Info",
+              "resolution": "inside-editor"
+            }
+          ]
         },
         "safari": {
           "status": "none-listed",
@@ -206,13 +245,27 @@
               "platform": "macos",
               "key": "Shift-Mod-c",
               "meaning": "Open Developer tools",
-              "resolution": "alternative"
+              "resolution": "alternative",
+              "use": [
+                "Alt-Shift-Mod-c"
+              ]
             }
           ]
         },
         "firefox": {
-          "status": "not-checked",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "firefox",
+              "platform": "windows-linux",
+              "key": "Shift-Mod-c",
+              "meaning": "Inspector",
+              "resolution": "alternative",
+              "use": [
+                "Alt-Shift-Mod-c"
+              ]
+            }
+          ]
         },
         "safari": {
           "status": "none-listed",
@@ -240,7 +293,7 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
+          "status": "none-listed",
           "conflicts": []
         },
         "safari": {
@@ -267,7 +320,7 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
+          "status": "none-listed",
           "conflicts": []
         },
         "safari": {
@@ -296,7 +349,7 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
+          "status": "none-listed",
           "conflicts": []
         },
         "safari": {
@@ -325,6 +378,13 @@
               "key": "Mod-f",
               "meaning": "Open the Find Bar to search the current page",
               "resolution": "inside-editor"
+            },
+            {
+              "browser": "chrome",
+              "platform": "macos",
+              "key": "Mod-f",
+              "meaning": "Open the Find Bar to search the current page",
+              "resolution": "inside-editor"
             }
           ]
         },
@@ -337,12 +397,34 @@
               "key": "Mod-f",
               "meaning": "Open find on page",
               "resolution": "inside-editor"
+            },
+            {
+              "browser": "edge",
+              "platform": "macos",
+              "key": "Mod-f",
+              "meaning": "Open find on page",
+              "resolution": "inside-editor"
             }
           ]
         },
         "firefox": {
-          "status": "not-checked",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "firefox",
+              "platform": "windows-linux",
+              "key": "Mod-f",
+              "meaning": "Find in This Page",
+              "resolution": "inside-editor"
+            },
+            {
+              "browser": "firefox",
+              "platform": "macos",
+              "key": "Mod-f",
+              "meaning": "Find in This Page",
+              "resolution": "inside-editor"
+            }
+          ]
         },
         "safari": {
           "status": "conflict",
@@ -379,7 +461,10 @@
               "platform": "windows-linux",
               "key": "Ctrl-F6",
               "meaning": "Skip to web contents",
-              "resolution": "alternative"
+              "resolution": "alternative",
+              "use": [
+                "Alt-F6"
+              ]
             }
           ]
         },
@@ -391,12 +476,15 @@
               "platform": "windows-linux",
               "key": "Ctrl-F6",
               "meaning": "Move focus to the web content pane",
-              "resolution": "alternative"
+              "resolution": "alternative",
+              "use": [
+                "Alt-F6"
+              ]
             }
           ]
         },
         "firefox": {
-          "status": "not-checked",
+          "status": "none-listed",
           "conflicts": []
         },
         "safari": {
@@ -427,7 +515,7 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
+          "status": "none-listed",
           "conflicts": []
         },
         "safari": {
@@ -466,8 +554,16 @@
           ]
         },
         "firefox": {
-          "status": "not-checked",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "firefox",
+              "platform": "windows-linux",
+              "key": "Shift-F10",
+              "meaning": "Toggle Context Menu",
+              "resolution": "inside-editor"
+            }
+          ]
         },
         "safari": {
           "status": "none-listed",
@@ -493,7 +589,7 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
+          "status": "none-listed",
           "conflicts": []
         },
         "safari": {
@@ -520,8 +616,23 @@
           "conflicts": []
         },
         "firefox": {
-          "status": "not-checked",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "firefox",
+              "platform": "windows-linux",
+              "key": "Enter",
+              "meaning": "Open Focused Bookmark or Link in Current Tab",
+              "resolution": "inside-editor"
+            },
+            {
+              "browser": "firefox",
+              "platform": "macos",
+              "key": "Enter",
+              "meaning": "Open Focused Bookmark or Link in Current Tab",
+              "resolution": "inside-editor"
+            }
+          ]
         },
         "safari": {
           "status": "none-listed",
@@ -539,20 +650,73 @@
       "alternative": [],
       "browsers": {
         "chrome": {
-          "status": "none-listed",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "chrome",
+              "platform": "windows-linux",
+              "key": "Escape",
+              "meaning": "Stop the page loading",
+              "resolution": "inside-editor"
+            },
+            {
+              "browser": "chrome",
+              "platform": "macos",
+              "key": "Escape",
+              "meaning": "Stop the page loading",
+              "resolution": "inside-editor"
+            }
+          ]
         },
         "edge": {
-          "status": "none-listed",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "edge",
+              "platform": "windows-linux",
+              "key": "Escape",
+              "meaning": "Stop loading page; close dialog or pop-up",
+              "resolution": "inside-editor"
+            },
+            {
+              "browser": "edge",
+              "platform": "macos",
+              "key": "Escape",
+              "meaning": "Exit full-screen mode; Stop loading page; close dialog or pop-up",
+              "resolution": "inside-editor"
+            }
+          ]
         },
         "firefox": {
-          "status": "not-checked",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "firefox",
+              "platform": "windows-linux",
+              "key": "Escape",
+              "meaning": "Stop; Stop Autoscroll Mode; Cancel Drag-and-Drop Operation",
+              "resolution": "inside-editor"
+            },
+            {
+              "browser": "firefox",
+              "platform": "macos",
+              "key": "Escape",
+              "meaning": "Stop; Stop Autoscroll Mode; Cancel Drag-and-Drop Operation",
+              "resolution": "inside-editor"
+            }
+          ]
         },
         "safari": {
-          "status": "none-listed",
-          "conflicts": []
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "safari",
+              "platform": "macos",
+              "key": "Escape",
+              "meaning": "Exit full-screen view; Close Reader",
+              "resolution": "inside-editor"
+            }
+          ]
         }
       }
     }

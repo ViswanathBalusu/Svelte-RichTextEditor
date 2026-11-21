@@ -170,6 +170,12 @@ export function exportHooks(opts: {
    * stays `completed`. Absent: no entry.
    */
   audit?: Pick<AuditStore, 'record'>;
+  /**
+   * Called when the final export of a workflow has completed (a job whose payload has
+   * `finalisation`), so that the seal step can start at once (FRW-053). Absent: the scheduled
+   * seal step finds the job later.
+   */
+  finalExportCompleted?: (job: JobRecord) => void;
 }): JobHooks {
   const isExport = (j: JobRecord) => (EXPORT_KINDS as readonly string[]).includes(j.kind);
   const tell = (job: JobRecord, type: string, data: Record<string, unknown>) => {
@@ -218,6 +224,7 @@ export function exportHooks(opts: {
         });
         if (job.kind === EXPORT_KIND && typeof job.payload['seq'] === 'number' && opts.versions)
           recordExportVersion(job, job.payload['seq'], job.doc);
+        if (job.payload['finalisation'] !== undefined) opts.finalExportCompleted?.(job);
       } else if (outcome.state === 'failed' && !outcome.retried) {
         tell(job, 'export.failed', { state: 'failed', code: outcome.error.code });
         const fin = job.payload['finalisation'] as { workflow?: unknown } | undefined;

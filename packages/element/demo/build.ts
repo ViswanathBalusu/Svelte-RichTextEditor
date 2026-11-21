@@ -22,6 +22,8 @@ await build(svelteHostConfig());
 await build(ssrHostClientConfig());
 await build(ssrHostServerConfig());
 await prerenderSsrHost();
-const withinBudget = await buildLibrary();
-if (!withinBudget) console.warn('demo build: the library is over its size budget (see above)');
+// The demo is still served when the library's own checks fail (size, shape, WebAssembly), so that
+// the suites can run and say what is wrong; `node scripts/build.ts` is the build that fails.
+const passed = await buildLibrary();
+if (!passed) console.warn('demo build: the library build failed one of its checks (see above)');
 console.log(`demo build: done in ${((Date.now() - started) / 1000).toFixed(1)} s`);

@@ -11,16 +11,41 @@
  *
  * No DOM and no Node.js API: this runs in Node.js tests.
  */
-import {
-  DEP1_WIRE_NOTIFICATION_TYPES,
-  type Notification,
-  type Unsubscribe,
-} from '@docedit/protocol';
+import type { Notification, Unsubscribe } from '@docedit/protocol';
 
 export type NotificationHandler = (notification: Notification) => void;
 
-/** The notification types of the protocol definition this build knows (DEP1 and its extensions, read from the run-time part of the definition). */
-export const KNOWN_NOTIFICATION_TYPES: ReadonlySet<string> = new Set(DEP1_WIRE_NOTIFICATION_TYPES);
+/**
+ * The notification types of DEP 1.0 with the additions of 12 §10 (05 §5.6), in the order of the
+ * protocol definition. The names are repeated here and not read from the definition: this module is
+ * part of the element's entry, which a host with its own backend loads too, and the definition as
+ * data (`DEP1_WIRE` and the modules it is built from) is needed by the DEP client only (FE-002;
+ * 13 §9). `test/pro-035-notifications.test.ts` fails when this list and the definition differ.
+ */
+export const NOTIFICATION_TYPES = [
+  'thread.created',
+  'thread.updated',
+  'thread.resolved',
+  'thread.reopened',
+  'thread.deleted',
+  'comment.created',
+  'comment.updated',
+  'comment.deleted',
+  'version.created',
+  'version.restored',
+  'export.progress',
+  'export.completed',
+  'export.failed',
+  'export.cancelled',
+  'import.completed',
+  'import.failed',
+  'asset.ready',
+  'asset.failed',
+  'document.updated',
+] as const;
+
+/** The notification types this build knows (DEP1 and its extensions). */
+export const KNOWN_NOTIFICATION_TYPES: ReadonlySet<string> = new Set(NOTIFICATION_TYPES);
 
 export class NotificationDispatcher {
   readonly #handlers = new Map<string, Set<NotificationHandler>>();

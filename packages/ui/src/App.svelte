@@ -29,9 +29,14 @@
   import type { CommandRegistry } from './commands/registry.ts';
   import { bindShortcuts } from './commands/shortcuts.ts';
   import type { CommandEntry, ContextTarget } from './commands/types.ts';
-  import Carets from './components/Carets.svelte';
+  // The parts that only show something (the mini toolbar, the full toolbar, the bars of a fill, a
+  // workflow and a role preview, the carets, the access-key tips) are `{#await import()}` blocks in
+  // the markup below, so that their code is not in the first interactive load (FND-008; owner
+  // decision 32). The command search and the context menu are not: each takes the keyboard as it
+  // opens (Alt+Q and then the name; Shift+F10 and then the arrows or Enter), and while a chunk
+  // loaded those keys went to the text (packages/ui/e2e/ux-011-command-search.spec.ts).
   import CommandSearch from './components/CommandSearch.svelte';
-  import AccessKeyTips from './components/AccessKeyTips.svelte';
+  import ContextMenu from './components/ContextMenu.svelte';
   import { pressAccessKey } from './commands/access-keys.ts';
   import {
     AccessKeyGesture,
@@ -39,12 +44,6 @@
     type AccessKeyTip,
     type ShownAccessKey,
   } from './shell/access-key-mode.ts';
-  import MiniToolbar from './components/MiniToolbar.svelte';
-  import ContextMenu from './components/ContextMenu.svelte';
-  import FillBar from './components/FillBar.svelte';
-  import RolePreviewBar from './components/RolePreviewBar.svelte';
-  import WorkflowBanner from './components/WorkflowBanner.svelte';
-  import FullToolbar from './components/FullToolbar.svelte';
   import Header from './components/Header.svelte';
   import StatusBar from './components/StatusBar.svelte';
   import Toolbar from './components/Toolbar.svelte';
@@ -1295,9 +1294,25 @@
     if (selection.current.empty) miniDismissed = false;
   });
 
-  function menuFor(point: { x: number; y: number }): boolean {
+  /**
+   * The proofing finding a menu opens on (UX-008 criterion 5). From the keyboard (`clicked` not
+   * given) it is the one at the caret. A context click names the finding whose mark it landed on, or
+   * null when it landed elsewhere: a click inside a selection moves no caret, so the caret cannot
+   * say which word was meant. A core that cannot look a finding up is asked for the one at the caret.
+   */
+  function findingFor(clicked: string | null | undefined): ProofingFindingView | null {
+    if (clicked === undefined || !core.proofingFinding)
+      return core.proofing?.get().atCaret ?? null;
+    return clicked === null ? null : core.proofingFinding(clicked);
+  }
+
+  function menuFor(point: { x: number; y: number }, clicked?: string | null): boolean {
+    // The browser may tell the core of a caret key or a click after the event that asks for the
+    // menu, so the core reads the browser's selection first: the targets and the finding are then
+    // those of the place the menu opens on.
+    core.syncSelection?.();
     const targets = contextTargets(core.selection.get().contexts);
-    const finding = core.proofing?.get().atCaret ?? null;
+    const finding = findingFor(clicked);
     if (finding === null && contextMenuGroups(registry.view.get().commands, targets).length === 0)
       return false;
     menu = { point, targets, finding };
@@ -1322,17 +1337,24 @@
   function onContextMenu(event: MouseEvent): void {
     // Shift with the context click leaves the browser's own menu (ADR 0052).
     if (event.shiftKey) return;
+    // The caret moved with the click, and the core may not have heard of it yet.
+    core.syncSelection?.();
     const targets = contextTargets(core.selection.get().contexts);
-    // A click on a proofing finding opens the menu even where no command is listed (UX-042).
-    const onFinding = event
+    // A click on a proofing finding opens the menu even where no command is listed (UX-042). The
+    // editing surface marks a finding's text with its identifier.
+    const mark = event
       .composedPath()
-      .some((n) => n instanceof HTMLElement && n.dataset['deFinding'] !== undefined);
-    if (!onFinding && contextMenuGroups(registry.view.get().commands, targets).length === 0) return;
+      .find(
+        (n): n is HTMLElement => n instanceof HTMLElement && n.dataset['deFinding'] !== undefined,
+      );
+    if (!mark && contextMenuGroups(registry.view.get().commands, targets).length === 0) return;
     event.preventDefault();
     const fromKeyboard = event.clientX === 0 && event.clientY === 0;
     const point = fromKeyboard ? caretPoint() : { x: event.clientX, y: event.clientY };
-    // The caret moves with the click; the core publishes the new selection in the next frame.
-    requestAnimationFrame(() => menuFor(point));
+    // From the keyboard the finding is the one at the caret; a click names the one it landed on.
+    const clicked = fromKeyboard ? undefined : (mark?.dataset['deFinding'] ?? null);
+    // The core publishes the selection of the click (a selected picture, say) by the next frame.
+    requestAnimationFrame(() => menuFor(point, clicked));
   }
 
   /** The page surface: clicks outside the text, the context menu, the painter's pointer gesture. */
@@ -1551,18 +1573,26 @@
     <Header title={props.title} />
   {/if}
   {#if mode.toolbar === 'full'}
-    <FullToolbar onEscape={() => core.focus()} />
+    {#await import('./components/FullToolbar.svelte') then { default: FullToolbar }}
+      <FullToolbar onEscape={() => core.focus()} />
+    {/await}
   {:else if mode.toolbar !== 'none'}
     <Toolbar onEscape={() => core.focus()} />
   {/if}
   {#if core.workflowSend}
-    <WorkflowBanner service={core.workflowSend} />
+    {#await import('./components/WorkflowBanner.svelte') then { default: WorkflowBanner }}
+      <WorkflowBanner service={core.workflowSend} />
+    {/await}
   {/if}
   {#if core.rolePreview}
-    <RolePreviewBar preview={core.rolePreview} onLeave={() => core.endRolePreview?.()} />
+    {#await import('./components/RolePreviewBar.svelte') then { default: RolePreviewBar }}
+      <RolePreviewBar preview={core.rolePreview} onLeave={() => core.endRolePreview?.()} />
+    {/await}
   {/if}
   {#if core.fill}
-    <FillBar fill={core.fill} onFinish={finishFill} />
+    {#await import('./components/FillBar.svelte') then { default: FillBar }}
+      <FillBar fill={core.fill} onFinish={finishFill} />
+    {/await}
   {/if}
   <div class="de-workspace">
     <div
@@ -1582,7 +1612,9 @@
           {@attach (node) => core.mountBody(node)}
         ></div>
         {#if core.carets}
-          <Carets carets={core.carets} />
+          {#await import('./components/Carets.svelte') then { default: Carets }}
+            <Carets carets={core.carets} />
+          {/await}
         {/if}
       </div>
       <!-- Where focus waits after Escape leaves the editing surface (FE-103): the next Tab goes on from here. -->
@@ -1680,10 +1712,14 @@
     <CommandSearch onClose={closeCommandSearch} />
   {/if}
   {#if accessMode}
-    <AccessKeyTips tips={accessTips} />
+    {#await import('./components/AccessKeyTips.svelte') then { default: AccessKeyTips }}
+      <AccessKeyTips tips={accessTips} />
+    {/await}
   {/if}
   {#if miniShown && miniAnchor}
-    <MiniToolbar anchor={miniAnchor} />
+    {#await import('./components/MiniToolbar.svelte') then { default: MiniToolbar }}
+      <MiniToolbar anchor={miniAnchor} />
+    {/await}
   {/if}
   {#if dialogs}
     {@const {

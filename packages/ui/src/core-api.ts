@@ -631,16 +631,40 @@ export interface ExportService {
   /**
    * The warnings of the preflight shared with the converter (09 §1; EXP-003), for the document as
    * the core holds it now, before any job is created. Empty when nothing was found. Absent when
-   * the core has no preflight; the dialog then creates the job at once.
+   * the core has no preflight; the dialog then creates the job at once. `options` are the ones the
+   * job would be asked for, so that a finding has the severity the job would give it.
    */
   preflight?(
     target: ExportTarget,
+    options?: ExportOptions,
   ): readonly ExportDiagnostic[] | Promise<readonly ExportDiagnostic[]>;
   /** Starts a job; resolves with its identifier, or rejects with an error that has a `code`. */
   request(target: ExportTarget, options: ExportOptions): Promise<{ jobId: string }>;
   /** The job as `export.*` events report it; null for an unknown job. */
   job(jobId: string): ReadView<ExportJobView | null>;
   cancel(jobId: string): Promise<void>;
+  /**
+   * The newest job of target `pdf` that this service started, as its reports arrive; null before
+   * the first. The PDF pane shows it (EXP-001). Absent: the core does not follow one, and the pane
+   * is not offered.
+   */
+  readonly latestPdf?: ReadView<ExportJobView | null>;
+}
+
+/**
+ * The viewer of a typeset PDF (FE-071; 09 §9.3 rule 7): the core puts a sandboxed frame of another
+ * origin into `container` and opens the PDF in it. The shell never fetches or parses the file.
+ */
+export interface PdfViewService {
+  /**
+   * Opens the PDF at a signed URL in a new frame inside `container`; resolves with the page count
+   * once the first page is drawn, and rejects when the viewer or the file cannot be loaded.
+   * `destroy()` removes the frame.
+   */
+  open(
+    container: Element,
+    source: { readonly url: string },
+  ): Promise<{ readonly viewer: { destroy(): void }; readonly pages: number }>;
 }
 
 /** Roles a region grant may give (07 §2). */
@@ -669,6 +693,37 @@ export interface GrantsService {
    * `precondition_failed` when someone changed the grants first; nothing is overwritten.
    */
   save(grants: readonly RegionGrant[], etag: string): Promise<GrantsSnapshot>;
+}
+
+/** A region lease this session holds (05 §6.2 `Lease`; 07 §10). */
+export interface HeldLease {
+  readonly region: string;
+  /** The holder: the host's user identifier. */
+  readonly holder: string;
+  /** When the lease ends unless it is extended (RFC 3339). */
+  readonly expiresAt: string;
+}
+
+/**
+ * Check-out of a region through the backend's leases port (PRM-043): the user holds a region
+ * alone for a short time. The lease is kept alive until it is released (the port sends the
+ * heartbeats, 07 §10). Absent when the backend does not announce `leases` (05 §8.3), and then the
+ * shell offers no check-out.
+ */
+export interface LeasesService {
+  /**
+   * The leases this session took and has not released, as a view. A lease that lapsed or that
+   * someone broke stays here until the next `acquire` or `release` of its region; the shell compares
+   * its holder with the region list (`RegionEditors.leasedTo`) before it says the user holds it.
+   */
+  readonly held: ReadView<readonly HeldLease[]>;
+  /**
+   * `POST /documents/{id}/regions/{rid}/lease`. Rejects with an error whose `code` is `forbidden`
+   * (no `edit` in the region, or an approved region) or `conflict` (another user holds it).
+   */
+  acquire(region: string): Promise<HeldLease>;
+  /** `DELETE /documents/{id}/regions/{rid}/lease`: the holder gives the region back. */
+  release(region: string): Promise<void>;
 }
 
 /** A field of the document as fill mode shows it (FRW-076, FRW-077, FRW-078). */
@@ -874,6 +929,12 @@ export interface CoreApi {
   ignoreFinding?(id: string, everywhere?: boolean): boolean;
   /** Adds the finding's text to the port's custom dictionary. */
   addFindingToDictionary?(id: string): Promise<boolean>;
+  /**
+   * The finding with this identifier, while it is shown; null otherwise. The editing surface marks a
+   * finding's text with `data-de-finding`, and a context click on the mark asks for that finding
+   * (UX-008 criterion 5). Absent: the menu uses the finding at the caret.
+   */
+  proofingFinding?(id: string): ProofingFindingView | null;
 
   /** Word and page counts (UX-018). */
   readonly stats?: ReadView<DocumentStats>;
@@ -917,9 +978,17 @@ export interface CoreApi {
   selectMatch?(match: SearchMatch): boolean;
   /** The caret's rectangle in viewport coordinates, for menus opened from the keyboard. */
   caretRect?(): ShellRect | null;
+  /**
+   * Has the core read the browser's selection now, where it would otherwise follow it on a later
+   * event. The context menu calls it before it reads `selection`, so that the menu is built for the
+   * place that was clicked (UX-008). Absent: the views are taken as current.
+   */
+  syncSelection?(): void;
 
   /** Export jobs (UX-101), when the backend announces `exports`. */
   readonly exports?: ExportService;
+  /** The viewer of the typeset PDF, for the PDF pane (EXP-001; FE-071). Absent: no PDF pane. */
+  readonly pdf?: PdfViewService;
   /**
    * The document as this reader holds it (the engine's `getContent()`, a CDM envelope), for the
    * client export filters of extensions (UX-055; 13 §7.1). Never hidden content (ADR 0019).
@@ -934,6 +1003,11 @@ export interface CoreApi {
   extensionApi?(options: ExtensionApiOptions): ExtensionDocumentApi;
   /** Region grants (PRM-035), when the backend announces `regions`. */
   readonly grants?: GrantsService;
+  /**
+   * Check-out of regions (PRM-043), when the backend announces `leases`. Absent: the permissions
+   * pane shows no check-out control.
+   */
+  readonly leases?: LeasesService;
   /** Fill mode for this participant (FRW-076), or null outside fill mode. */
   readonly fill?: ReadView<FillSummary | null>;
   /** Moves focus to a field and scrolls it into view (FRW-078); false when it is gone. */
@@ -1418,6 +1492,7 @@ export interface HistoryVersionView {
   /**
    * Draws the changes of a comparison whose newer version this is (HIS-013): insertions and formatting
    * with the marks of suggestions, a change bar on each changed block. Absent when the host cannot draw one.
+   * An empty list removes the marks (the pane sends one when a restore preview is cancelled, HIS-021).
    */
   showComparison?(changes: readonly HistoryChange[]): void;
   /** Shows or hides deleted text; hidden, the layout does not move. */
@@ -1531,6 +1606,48 @@ export interface HistoryChoices {
   readonly people: readonly HistoryChoice[];
 }
 
+/** What a restore from the history pane asks for (`POST /restore`; 08 §8). */
+export interface HistoryRestoreRequest {
+  /** The state to return to. */
+  readonly toSeq: number;
+  /** One region (HIS-018), or null for the whole document (HIS-019). */
+  readonly region: string | null;
+}
+
+/** Why the service refuses a restore or its dry run (05 §6.2; 07 §13; 12 §10). */
+export type HistoryRestoreRefusal =
+  'forbidden' | 'not_found' | 'conflict' | 'workflow_active' | 'too_large' | 'failed';
+
+/** The dry run of a restore (HIS-021): what it would change. Nothing is committed for it. */
+export interface HistoryRestorePreview {
+  /** The head the dry run was computed against. */
+  readonly headSeq: number;
+  /** True when the restore would change nothing. */
+  readonly unchanged: boolean;
+  /** The comparison between the current content and the result, as `GET /diff` gives one. */
+  readonly comparison: HistoryComparison;
+  /** Definitions the restore would bring back, a style for example (HIS-020). */
+  readonly recreated?: readonly string[];
+  /** Definitions it cannot bring back for this user; the restored text takes the default instead. */
+  readonly replaced?: readonly string[];
+}
+
+export type HistoryRestorePreviewResult =
+  | { readonly ok: true; readonly preview: HistoryRestorePreview }
+  | { readonly ok: false; readonly reason: HistoryRestoreRefusal };
+
+export type HistoryRestoreResult =
+  | { readonly ok: true; readonly seq: number }
+  | { readonly ok: false; readonly reason: HistoryRestoreRefusal };
+
+/** What this user may restore (07 §13): the pane offers nothing else. */
+export interface HistoryRestoreScopes {
+  /** The whole document, which needs `manage`. */
+  readonly document: boolean;
+  /** The regions the user holds `edit` in. */
+  readonly regions: readonly string[];
+}
+
 /**
  * The host's history port. The element adapts the document service's `/history` and `/versions`
  * routes to this shape; the pane itself never calls the network.
@@ -1563,6 +1680,27 @@ export interface HistoryPort {
    * joined; HIS-015). The service limits the answer by the user's gate and projection.
    */
   whoWrote?(query: HistoryWhoQuery): Promise<HistoryWhoResult>;
+  /**
+   * The dry run of a restore (`POST /restore` with `dryRun`; HIS-021): the comparison between the
+   * current content and what the restore would leave. It commits nothing, and the service asks for
+   * the same permission and visibility as for the restore itself. The pane offers a restore only
+   * when the host gives this method, `restore` and `openVersion`.
+   */
+  previewRestore?(request: HistoryRestoreRequest): Promise<HistoryRestorePreviewResult>;
+  /**
+   * Restores the whole document or one region to the state at `toSeq` (`POST /restore`; HIS-018,
+   * HIS-019). The pane calls it only after the user has seen the dry run of the same request and
+   * confirmed. `headSeq` is the head that dry run was computed against, so a host that knows the
+   * document has moved since can answer `conflict`, and the pane then asks for a new preview.
+   */
+  restore?(
+    request: HistoryRestoreRequest & { readonly headSeq: number },
+  ): Promise<HistoryRestoreResult>;
+  /**
+   * What this user may restore (07 §13). Absent: the pane offers the whole document and every
+   * region of `choices()`, and shows the service's refusal when it comes.
+   */
+  restoreScopes?(): Promise<HistoryRestoreScopes>;
   /**
    * Called by the host when the list may have changed (a version was named, for instance); the
    * pane then asks again. Returns the function that stops the calls.

@@ -1,6 +1,6 @@
 # ADR 0018: CDM attribute grammars, defaults, references and canonical-form rules
 
-**Status:** proposed, 2026-11-06. Records the decisions of stories CDM-002 and CDM-003 as a maintainer's proposal; the project owner has not reviewed them. The values live in one place, the definition in `packages/model/src/definition/cdm1.ts`. The generated table `spec/cdm/cdm-1.attributes.md` gives every attribute's type, range, length, pattern and default.
+**Status:** accepted. Proposed on 2026-11-06 as a maintainer's record of the decisions of stories CDM-002 and CDM-003; the project owner accepted it as proposed on 2026-11-15 (decision 7 of [docs/owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)), and said two things with it: a document that lacks a built-in style is not an I1 violation, and `model.validate()` enforces which nodes may carry suggestions. Decision 92 of the same file then moved block suggestions from node marks to an attribute (the amendment below). 03 states these decisions since 2026-11-20: §2 (units, and the canonical form as seven numbered rules with its subtree form and its version), §4.1 (built-in styles), §4.8 (grammars, defaults and reference forms), §9 (identifiers) and §11.2 (`ext`). The values live in one place, the definition in `packages/model/src/definition/cdm1.ts`. The generated table `spec/cdm/cdm-1.attributes.md` gives every attribute's type, range, length, pattern and default.
 
 ## Context
 
@@ -72,8 +72,10 @@ With row spans, positions covered from above have no cell. Each row's column spa
 
 ## Open questions
 
-- `settings.footnoteRestart` keeps the two values written in 03 §4.1, `continuous` and `perPageSection`. The second looks like two values run together (`perPage`, `perSection`); the spec should say.
-- Lossless DOCX import (A2, ADR 0017): Word's numbering level text can contain words ("Article %1"), which the template grammar of 03 §4.1 refuses. The grammar must widen before import, with typed emitters keeping LaTeX safe. Spike S11 decides.
-- Tab stops cannot clear an inherited stop, which Word files use and which the cascade needs (S11).
-- `caption` has no `id` (principle 6), and the `title` field has no data source in the CDM. Both are unchanged here.
-- The footnote content model stays `inline*`, as drafted, minus footnotes and form fields, until CDM-001 records the S1 evidence.
+Two of the five questions asked here on 2026-11-06 have since been answered; the other three are still open and are listed in 03 §13.
+
+- Answered: `settings.footnoteRestart` keeps the two values written in 03 §4.1, `continuous` and `perPageSection`. The second looked like two values run together (`perPage`, `perSection`). ADR 0032 section 2 reads it as one value, "per page section": numbering restarts at every section break (accepted by owner decision 10).
+- Open: lossless DOCX import (A2, ADR 0017): Word's numbering level text can contain words ("Article %1"), which the template grammar of 03 §4.1 refuses. The grammar must widen before import, with typed emitters keeping LaTeX safe (review SR-M22).
+- Open: tab stops cannot clear one inherited stop, which Word files use. A list of stops replaces the inherited list as a whole (ADR 0032 section 1).
+- Open: `caption` has no `id` (principle 6), and the `title` field has no data source in the CDM (ADR 0031, open questions). Both are unchanged here.
+- Answered: the footnote content model was `inline*`, as drafted, until CDM-001 recorded the S1 evidence. It is now `paragraph+`, one paragraph in version 1 (ADR 0031 section 3; 03 §4.4).

@@ -32,3 +32,5 @@ Batch 6 added 14.8 kB to the host-backend configuration (8.6 kB below the budget
 ## Decision
 
 None. The gate stays at 300,000 bytes and the build fails until the owner chooses.
+
+Update (2026-11-18, lane w2): the owner chose option 1 in decision 32 (320 kB), and the gate is 320,000 bytes. The size work that followed is in FND-008 Notes.

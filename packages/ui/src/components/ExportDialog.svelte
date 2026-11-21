@@ -179,7 +179,7 @@
     if (exports.preflight) {
       let warnings: readonly ExportDiagnostic[];
       try {
-        warnings = await exports.preflight(chosen);
+        warnings = await exports.preflight(chosen, options);
       } catch {
         warnings = [];
       }
@@ -212,6 +212,16 @@
 
   function cancel(): void {
     if (job) void exports?.cancel(job.id);
+  }
+
+  // The PDF preview pane exists when the core has a viewer and follows the newest PDF (EXP-001).
+  // svelte-ignore state_referenced_locally
+  const canPreview = shell.core.pdf !== undefined && exports?.latestPdf !== undefined;
+
+  /** Closes this dialog and shows the finished PDF in the PDF preview pane (EXP-001). */
+  function showInPane(): void {
+    onClose();
+    if (!shell.panes.isOpen('pdf')) shell.panes.toggle('pdf');
   }
 
   function severityKey(d: ExportDiagnostic): StringKey {
@@ -438,6 +448,13 @@
             >{tr.t('export.open')}</a
           >
         </p>
+        {#if job.target === 'pdf' && canPreview}
+          <p>
+            <button type="button" class="de-button" data-export="show-in-pane" onclick={showInPane}
+              >{tr.t('export.showInPane')}</button
+            >
+          </p>
+        {/if}
         {#if job.result.pages !== null}
           <p data-export="pages">{tr.t('export.pages', { count: job.result.pages })}</p>
         {/if}

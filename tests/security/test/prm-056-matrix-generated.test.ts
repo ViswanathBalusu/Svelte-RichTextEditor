@@ -112,7 +112,10 @@ interface Case {
   succeeds?: true;
 }
 
-const THREAD = { target: { block: 'pIntro0000000001' }, comment: { body: 'PRM-056.' } };
+const THREAD = {
+  target: { block: 'pIntro0000000001' },
+  comment: { body: [{ type: 'text', text: 'PRM-056.' }] },
+};
 const OPEN_REGION = 'rOpen00000000001';
 
 const ROWS: readonly Case[] = [

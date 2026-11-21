@@ -714,3 +714,57 @@ table.de-suggest-gone {
 .de-suggestion-card[hidden] {
   display: none;
 }
+
+/* The page view (FE-101): painted pages on a desk, and the input bridge. The shell's .de-page is the
+   sheet of the web view; in the page view the sheet is the desk and each painted page is its own
+   sheet, so the shell's padding, border and flex rules are reset for the pages inside it. */
+.de-page[data-view='print'] {
+  flex: 1 1 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.de-page-view {
+  position: relative;
+}
+.de-page-scroller {
+  /* The host sets the height it wants; the default is three quarters of the viewport. */
+  height: var(--de-page-view-height, 75vh);
+  overflow: auto;
+  background: var(--de-desk, #d8dce1);
+  overscroll-behavior: contain;
+}
+.de-page-view .de-window .de-page {
+  flex: none;
+  padding: 0;
+  border: 0;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  cursor: text;
+}
+.de-page-view .de-line {
+  tab-size: 36pt;
+}
+/* The bridge is a real text field, kept at the caret and invisible: input methods and assistive
+   technology find it, and the painted pages are what the eye sees (ADR 0380). */
+.de-page-bridge {
+  position: absolute;
+  z-index: 2;
+  inline-size: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  opacity: 0;
+  white-space: pre;
+  font: 11pt serif;
+  line-height: 1;
+  caret-color: transparent;
+}
+.de-page-view:focus-within .de-page-scroller {
+  outline: 2px solid var(--de-focus, #0969da);
+  outline-offset: -2px;
+}

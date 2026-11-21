@@ -38,14 +38,14 @@ async function threadOf(ctx: ScenarioContext) {
   const made = await ctx.service.as(token, 'POST', `/documents/${doc}/threads`, {
     body: {
       target: { range: { from, to: from + 1, baseSeq: content.seq } },
-      comment: { body: 'kit' },
+      comment: { body: [{ type: 'text', text: 'kit' }] },
     },
   });
   equal(made.status, 201, 'POST /documents/{id}/threads as a commenter');
   const tid = (made.json as { id?: unknown }).id;
   check(typeof tid === 'string', 'the created thread has an id', 'a string', made.json);
   const added = await ctx.service.as(token, 'POST', `/threads/${tid}/comments`, {
-    body: { body: 'a second comment' },
+    body: { body: [{ type: 'text', text: 'a second comment' }] },
   });
   equal(added.status, 201, 'POST /threads/{tid}/comments as a commenter');
   const cid = (added.json as { id?: unknown }).id;
@@ -86,8 +86,16 @@ export const COMMENTS: ProfileDef = {
           [
             ['GET', `/threads/${t.tid}`, {}],
             ['PATCH', `/threads/${t.tid}`, { body: { state: 'resolved' }, headers: any }],
-            ['POST', `/threads/${t.tid}/comments`, { body: { body: 'from another document' } }],
-            ['PATCH', `/comments/${t.cid}`, { body: { body: 'changed' }, headers: any }],
+            [
+              'POST',
+              `/threads/${t.tid}/comments`,
+              { body: { body: [{ type: 'text', text: 'from another document' }] } },
+            ],
+            [
+              'PATCH',
+              `/comments/${t.cid}`,
+              { body: { body: [{ type: 'text', text: 'changed' }] }, headers: any },
+            ],
             ['DELETE', `/comments/${t.cid}`, {}],
             ['DELETE', `/threads/${t.tid}`, {}],
           ];
@@ -115,7 +123,10 @@ export const COMMENTS: ProfileDef = {
         const from = posIn(content.doc, IDS.intro, 2);
         const to = from + 3;
         const made = await ctx.service.as(token, 'POST', `/documents/${doc}/threads`, {
-          body: { target: { range: { from, to, baseSeq: content.seq } }, comment: { body: 'kit' } },
+          body: {
+            target: { range: { from, to, baseSeq: content.seq } },
+            comment: { body: [{ type: 'text', text: 'kit' }] },
+          },
         });
         expectStatus(made, 201, 'a thread on a range');
         const tid = (made.json as { id: string }).id;
@@ -163,7 +174,12 @@ export const COMMENTS: ProfileDef = {
         const doc = await ctx.document();
         const { token: viewer } = await ctx.token('viewer', { [doc]: 'viewer' });
         const { token: commenter } = await ctx.token('commenter', { [doc]: 'commenter' });
-        const req = { body: { target: { block: IDS.intro }, comment: { body: 'kit' } } };
+        const req = {
+          body: {
+            target: { block: IDS.intro },
+            comment: { body: [{ type: 'text', text: 'kit' }] },
+          },
+        };
         const refused = await ctx.service.as(viewer, 'POST', `/documents/${doc}/threads`, req);
         equal(
           problemOf(refused, 'a thread by a viewer').code,
@@ -220,7 +236,7 @@ export const COMMENTS: ProfileDef = {
         // Row 4: a viewer has no `comment`, so it may not reply to a thread or change its state.
         refused(
           await ctx.service.as(viewer, 'POST', `/threads/${tid}/comments`, {
-            body: { body: 'from a viewer' },
+            body: { body: [{ type: 'text', text: 'from a viewer' }] },
           }),
           'a reply by a viewer',
         );
@@ -236,7 +252,7 @@ export const COMMENTS: ProfileDef = {
         expectStatus(await patch(author, { state: 'open' }), 200, 'a reopen by a commenter');
         expectStatus(
           await ctx.service.as(other, 'POST', `/threads/${tid}/comments`, {
-            body: { body: 'from another commenter' },
+            body: { body: [{ type: 'text', text: 'from another commenter' }] },
           }),
           201,
           'a reply by a commenter',
@@ -279,7 +295,7 @@ export const COMMENTS: ProfileDef = {
             .seq;
         const range = (baseSeq: number) => ({
           target: { range: { from: at, to: at + 1, baseSeq } },
-          comment: { body: 'kit' },
+          comment: { body: [{ type: 'text', text: 'kit' }] },
         });
         const outside = await ctx.service.as(token, 'POST', `/documents/${doc}/threads`, {
           body: range(head - window - 1),
@@ -346,21 +362,26 @@ export const COMMENTS: ProfileDef = {
 
         let from = listener.wire.mark();
         const made = await as('POST', `/documents/${doc}/threads`, {
-          body: { target: { block: IDS.intro }, comment: { body: 'first' } },
+          body: {
+            target: { block: IDS.intro },
+            comment: { body: [{ type: 'text', text: 'first' }] },
+          },
         });
         expectStatus(made, 201, 'a thread');
         const tid = (made.json as { id: string }).id;
         await hear('thread.created', `/threads/${tid}`, from);
 
         from = listener.wire.mark();
-        const added = await as('POST', `/threads/${tid}/comments`, { body: { body: 'second' } });
+        const added = await as('POST', `/threads/${tid}/comments`, {
+          body: { body: [{ type: 'text', text: 'second' }] },
+        });
         expectStatus(added, 201, 'a comment');
         const cid = (added.json as { id: string }).id;
         await hear('comment.created', `/comments/${cid}`, from);
 
         from = listener.wire.mark();
         const edited = await as('PATCH', `/comments/${cid}`, {
-          body: { body: 'edited' },
+          body: { body: [{ type: 'text', text: 'edited' }] },
           headers: { 'if-match': etag(added) },
         });
         expectStatus(edited, 200, 'an edited comment');

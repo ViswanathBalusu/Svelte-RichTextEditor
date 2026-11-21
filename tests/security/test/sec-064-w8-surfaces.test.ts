@@ -234,7 +234,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           const created = await h.call('POST', `/v1/documents/${doc}/threads`, {
             token: ann,
             headers: { 'Idempotency-Key': randomUUID() },
-            body: { target: { block: CONF_PARA }, comment: { text: CANARY.comment } },
+            body: {
+              target: { block: CONF_PARA },
+              comment: { body: [{ type: 'text', text: CANARY.comment }] },
+            },
           });
           expect(created.status, created.text).toBe(201);
           thread = created.json.id as string;
