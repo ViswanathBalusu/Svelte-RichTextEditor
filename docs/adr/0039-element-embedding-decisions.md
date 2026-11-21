@@ -1,6 +1,6 @@
 # ADR 0039: Element and embedding API decisions the specification leaves open
 
-**Status:** proposed, 2026-11-06. Written while building the production `<doc-editor>` element (`packages/element`; PLAN-1a packet B2: FE-001 to FE-004, FE-007, FE-013, FE-014, FE-016, FE-018, FE-021, FE-022, FE-025, FE-071, FE-122; PRO-074 to PRO-076, PRO-080, PRO-087, PRO-088). Not reviewed by the project owner. Where 02 §2, §3 and 05 §8 are silent, the code follows the readings below; none is an owner decision.
+**Status:** proposed, 2026-11-06. Written while building the production `<doc-editor>` element (`packages/element`; PLAN-1a packet B2: FE-001 to FE-004, FE-007, FE-013, FE-014, FE-016, FE-018, FE-021, FE-022, FE-025, FE-071, FE-122; PRO-074 to PRO-076, PRO-080, PRO-087, PRO-088). Where 02 §2, §3 and 05 §8 are silent, the code follows the readings below. Accepted, 2026-11-15: decision 18 of [owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md) settles §3 (the CSS stays a string in the editor's chunks and no stylesheet file is built), and decision 220 accepts ADRs 0030 to 0052 as proposed. The budget of §2 is 320,000 bytes since decision 32.
 
 ## Context
 
@@ -22,7 +22,7 @@
 
 ### 3. The stylesheet (FE-002, FE-014)
 
-The element's CSS and the shell's (`@docedit/ui/styles/shell.css`) are bundled as one string, loaded once into one constructable sheet that every instance adopts. That is the path spike S2 verified under a strict policy: no request, so no `connect-src` or `style-src` entry. The build therefore emits no separate CSS file, and FE-002's "component CSS as a separate stylesheet file" stays open: a file would need a `fetch` (and `connect-src` for the module's origin) or CSS module scripts, which not every supported browser has. Revisit if a separate file is wanted for caching or auditing.
+The element's CSS and the shell's (`@docedit/ui/styles/shell.css`) are bundled as one string, loaded once into one constructable sheet that every instance adopts. That is the path spike S2 verified under a strict policy: no request, so no `connect-src` or `style-src` entry. The build therefore emits no separate CSS file: a file would need a `fetch` (and `connect-src` for the module's origin) or CSS module scripts, which not every supported browser has. The owner settled this on 2026-11-15 (decision 18): the CSS stays a string, FE-002's first criterion and 02 §2 are reworded, and the library build fails if it emits a stylesheet file for the component (`structureOf` in `packages/element/scripts/bundle-report.ts`). In the build the string is in `chunks/styles-<hash>.js`, which the editor chunk imports statically, so it loads with the first document. Revisit if a separate file is wanted for caching or auditing.
 
 ### 4. Loading and the token source (FE-003; PRO-074, PRO-075)
 
@@ -71,5 +71,5 @@ The embedding contract of 05 §8.1 is the element's whole public surface, plus `
 
 ## Open questions
 
-- Whether the build should also ship the CSS as a separate file (decision 3).
+- Settled: the build does not ship the CSS as a separate file (decision 3; owner decision 18).
 - Whether `destroy()` should leave a backend the host passed open; PRO-090 says close it.

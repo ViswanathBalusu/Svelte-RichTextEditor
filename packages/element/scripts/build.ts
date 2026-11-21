@@ -2,8 +2,10 @@
  * Builds the distributable (FE-002): `node scripts/build.ts` (the package's `build` script).
  * 1. The library, Vite library mode: dist/lib/doc-editor.js and its lazy chunks.
  * 2. The PDF viewer's page for its sandboxed frame: dist/lib/viewer/ (FE-071).
- * 3. The size report, dist/lib/bundle-report.json; the build fails above the budget (13 §9), and
- *    when a WebAssembly module is in the first interactive set or inlined as base64 (FND-008).
+ * 3. The size report, dist/lib/bundle-report.json; the build fails above the budget (13 §9), when
+ *    a WebAssembly module is in the first interactive set or inlined as base64 (FND-008), and when
+ *    the build does not have the shape of 02 §2: one entry, the PDF viewer, its worker, the math
+ *    editor and each pane as lazy files of their own, and no stylesheet file (FE-002 criterion 1).
  */
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +56,8 @@ export async function buildLibrary(): Promise<boolean> {
   writeReport(report, join(libDir, 'bundle-report.json'));
   printReport(report);
   console.log(`library build: done in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+  for (const violation of report.structure.violations)
+    console.error(`The build does not have the shape 02 §2 asks for (FE-002): ${violation}`);
   for (const violation of report.wasmViolations)
     console.error(`WebAssembly must load lazily, as a file of its own (FND-008): ${violation}`);
   for (const violation of report.moduleBudgetViolations)
@@ -62,6 +66,7 @@ export async function buildLibrary(): Promise<boolean> {
     console.error('The first interactive editor is over its size budget (13 §9; FE-002).');
   return (
     report.withinBudget &&
+    report.structure.violations.length === 0 &&
     report.wasmViolations.length === 0 &&
     report.moduleBudgetViolations.length === 0
   );
