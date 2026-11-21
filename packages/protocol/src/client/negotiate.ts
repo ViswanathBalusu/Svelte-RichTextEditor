@@ -2,7 +2,7 @@
  * Version and feature negotiation (05 §1 rules 1, 2, 4 and 5, §2; PRO-005, PRO-006), shared by
  * every DEP client so that they all choose the same way.
  */
-import { DEP1_WIRE, type WireDefinition } from '../definition/wire.ts';
+import { DEP1_WIRE_BASE, type WireDefinition } from '../definition/wire.ts';
 import { PROTOCOL_VERSION } from '../definition/common.ts';
 import type { CdmRange, Discovery, ErrorCode } from '../generated/types.ts';
 
@@ -66,7 +66,7 @@ export interface ClientCapabilities {
 }
 
 /** The client capabilities of this package: DEP 1.0, the engines and the CDM range of the definition. */
-export function clientCapabilities(def: WireDefinition = DEP1_WIRE): ClientCapabilities {
+export function clientCapabilities(def: WireDefinition = DEP1_WIRE_BASE): ClientCapabilities {
   return { versions: [def.version], engines: [...def.engines], cdm: { ...def.cdm } };
 }
 
@@ -78,7 +78,7 @@ export function clientCapabilities(def: WireDefinition = DEP1_WIRE): ClientCapab
  */
 export function relayForbiddenAnnounced(
   d: Pick<Discovery, 'features'> & { mode?: Discovery['mode'] },
-  def: WireDefinition = DEP1_WIRE,
+  def: WireDefinition = DEP1_WIRE_BASE,
 ): string[] {
   if (d.mode !== 'relay') return [];
   const forbidden = new Set(def.features.filter((f) => f.relayForbidden).map((f) => f.name));
@@ -95,7 +95,7 @@ export function relayForbiddenAnnounced(
 export function checkDiscovery(
   d: Discovery,
   client: ClientCapabilities = clientCapabilities(),
-  def: WireDefinition = DEP1_WIRE,
+  def: WireDefinition = DEP1_WIRE_BASE,
 ): { code: ErrorCode; message: string } | null {
   if (chooseVersion(client.versions, d.versions) === null)
     return {

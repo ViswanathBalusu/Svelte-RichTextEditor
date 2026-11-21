@@ -91,8 +91,10 @@ export const PATH_PARAMS: Readonly<Record<string, Prop>> = {
 const PRO = 'PRO';
 const BOTH: readonly Credential[] = ['user', 'service'];
 const SERVICE: readonly Credential[] = ['service'];
+/* @__NO_SIDE_EFFECTS__ */
 const placeholder = (doc: string, gaps: string[], props: Record<string, Prop> = {}): Shape =>
   obj(props, { doc: `${doc} Placeholder: not defined by the prose.`, gaps, decisions: ['D26'] });
+/* @__NO_SIDE_EFFECTS__ */
 const named = (name: string, shape: Shape, owner = PRO): NamedShape => ({ name, shape, owner });
 
 const DOCUMENT_STATES = ['active', 'locked', 'archived'];
@@ -1216,21 +1218,26 @@ export const REST_SHAPES: readonly NamedShape[] = [
 
 // Success statuses (decision D61): 200 with a body, 201 when a resource is created, 202 when a
 // job is started, 204 without a body.
+/* @__NO_SIDE_EFFECTS__ */
 const list = (body: Shape, extra: Partial<SuccessDef> = {}): SuccessDef => ({
   status: '200',
   body,
   list: true,
   ...extra,
 });
+/* @__NO_SIDE_EFFECTS__ */
 const ok = (body?: Shape, extra: Partial<SuccessDef> = {}): SuccessDef =>
   body ? { status: '200', body, ...extra } : { status: '204', ...extra };
+/* @__NO_SIDE_EFFECTS__ */
 const created = (body: Shape, extra: Partial<SuccessDef> = {}): SuccessDef => ({
   status: '201',
   body,
   ...extra,
 });
+/* @__NO_SIDE_EFFECTS__ */
 const accepted = (body?: Shape): SuccessDef => (body ? { status: '202', body } : { status: '202' });
 
+/* @__NO_SIDE_EFFECTS__ */
 const op = (o: OperationDef): OperationDef => o;
 
 export const OPERATIONS: readonly OperationDef[] = [

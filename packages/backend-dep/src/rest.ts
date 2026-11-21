@@ -7,16 +7,18 @@
  * (05 §1 rule 3; PRO-005).
  */
 import {
-  DEP1_WIRE,
+  DEP1_WIRE_BASE,
   PortError,
   ShapeValidator,
-  definition,
+  ERROR_CODES,
+  loadWireMoreShapes,
   type ErrorCode,
 } from '@docedit/protocol';
 import type { Platform, ResponseLike } from './platform.ts';
 
-const validator = new ShapeValidator(DEP1_WIRE);
-const CODES: ReadonlySet<string> = new Set(definition.ERROR_CODES);
+// The shapes of the control plane's resources load with the first response that names one (FND-008).
+const validator = new ShapeValidator(DEP1_WIRE_BASE, { more: loadWireMoreShapes });
+const CODES: ReadonlySet<string> = new Set(ERROR_CODES);
 const AUTH: ReadonlySet<string> = new Set(['unauthenticated', 'token_expired', 'revoked']);
 
 export interface RestResult<T> {
@@ -163,6 +165,7 @@ export class RestClient {
       throw new PortError('internal', `${path}: the response is not JSON`);
     }
     if (req.shape) {
+      await validator.ensure(req.shape);
       const items =
         req.list && value && typeof value === 'object' && 'items' in value
           ? (value as { items: unknown }).items

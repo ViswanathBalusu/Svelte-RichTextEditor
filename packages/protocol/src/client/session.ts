@@ -19,7 +19,7 @@
 import { uuid7 } from '@docedit/model';
 import { Reassembler, chunkMessage } from '../codec/chunk.ts';
 import { depCodec, utf8Length, type FrameCodec } from '../codec/frame.ts';
-import { DEP1_WIRE } from '../definition/wire.ts';
+import { DEP1_WIRE_BASE } from '../definition/wire.ts';
 import type {
   CdmRange,
   Chunk,
@@ -93,7 +93,7 @@ export class ClientSession {
 
   constructor(opts: SessionOptions) {
     this.codec = opts.codec ?? depCodec();
-    this.offered = [...(opts.versions ?? [DEP1_WIRE.version])];
+    this.offered = [...(opts.versions ?? [DEP1_WIRE_BASE.version])];
     this.requested = negotiateFeatures(opts.features, opts.features);
     this.chunkIds = opts.chunkIds ?? uuid7;
     this.lastSent = opts.now;
@@ -103,8 +103,8 @@ export class ClientSession {
       versions: [...this.offered],
       token: opts.token,
       client: { name: opts.client.name, version: opts.client.version },
-      engines: [...(opts.engines ?? DEP1_WIRE.engines)],
-      cdm: { ...(opts.cdm ?? DEP1_WIRE.cdm) },
+      engines: [...(opts.engines ?? DEP1_WIRE_BASE.engines)],
+      cdm: { ...(opts.cdm ?? DEP1_WIRE_BASE.cdm) },
       features: [...this.requested],
     };
     if (opts.traceparent !== undefined) d.traceparent = opts.traceparent;

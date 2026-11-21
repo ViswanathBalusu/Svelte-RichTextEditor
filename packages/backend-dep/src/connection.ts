@@ -5,7 +5,7 @@
  */
 import {
   PortError,
-  definition,
+  SUBPROTOCOL,
   type ClientMessage,
   type ErrorPayload,
   type ServerMessage,
@@ -75,7 +75,7 @@ export class Connection {
     }, answerTimeoutMs);
     let socket: WebSocketLike;
     try {
-      socket = new this.p.WebSocket(url, [definition.SUBPROTOCOL]);
+      socket = new this.p.WebSocket(url, [SUBPROTOCOL]);
     } catch (e) {
       this.fail(new PortError('unavailable', `cannot open ${url}: ${messageOf(e)}`));
       return;
@@ -115,11 +115,11 @@ export class Connection {
 
   private onOpen(hello: HelloSettings): void {
     if (this.phase !== 'opening' || !this.socket) return;
-    if (this.socket.protocol !== definition.SUBPROTOCOL) {
+    if (this.socket.protocol !== SUBPROTOCOL) {
       this.fail(
         new PortError(
           'unsupported_version',
-          `the server selected the subprotocol "${this.socket.protocol}", not ${definition.SUBPROTOCOL} (05 §4)`,
+          `the server selected the subprotocol "${this.socket.protocol}", not ${SUBPROTOCOL} (05 §4)`,
         ),
       );
       return;

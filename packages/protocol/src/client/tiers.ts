@@ -14,7 +14,7 @@
  * relay-safe (the kit's `RELAY_SAFE`: presence, comments, webhooks, leases). The table is a proposal;
  * 05 §10 names the calls but not which feature uses which.
  */
-import { DEP1_WIRE, type WireDefinition } from '../definition/wire.ts';
+import { DEP1_WIRE_BASE, type WireDefinition } from '../definition/wire.ts';
 import type { Discovery } from '../generated/types.ts';
 
 export type BackendTier = 'native' | 'sidecar' | 'relay';
@@ -55,7 +55,7 @@ export const AUTHORITY_SERVICE_NEEDS: Readonly<Record<string, readonly NeededCal
 /** The features a backend with these authority service calls can announce. */
 export function featuresSupportedBy(
   calls: readonly string[],
-  def: WireDefinition = DEP1_WIRE,
+  def: WireDefinition = DEP1_WIRE_BASE,
 ): string[] {
   const have = new Set(calls);
   return def.features
@@ -89,7 +89,10 @@ export interface TierInput {
  * limits. Names that the definition does not list are not judged here (see
  * `featureNamespaceProblems`).
  */
-export function tierProblems(input: TierInput, def: WireDefinition = DEP1_WIRE): TierProblem[] {
+export function tierProblems(
+  input: TierInput,
+  def: WireDefinition = DEP1_WIRE_BASE,
+): TierProblem[] {
   const { tier, discovery } = input;
   const announced = [...new Set(discovery.features)];
   if (tier === 'native') return [];

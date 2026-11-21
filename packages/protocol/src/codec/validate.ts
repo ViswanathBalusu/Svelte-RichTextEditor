@@ -14,7 +14,13 @@ import {
   isTimestamp,
 } from '@docedit/model';
 import type { WireDefinition } from '../definition/wire.ts';
-import { SAFE_MAX, type Prop, type Shape, type StringShape } from '../definition/shapes.ts';
+import {
+  SAFE_MAX,
+  type NamedShape,
+  type Prop,
+  type Shape,
+  type StringShape,
+} from '../definition/shapes.ts';
 import { NAME_PATTERN, SCOPE_PATTERN, VERSION_PATTERN } from '../generate/json-schema.ts';
 
 export interface Violation {
@@ -45,13 +51,42 @@ function jsonEqual(a: unknown, b: unknown): boolean {
 }
 
 export class ShapeValidator {
-  private readonly named: ReadonlyMap<string, Shape>;
+  private readonly named: Map<string, Shape>;
   private readonly patterns = new Map<string, RegExp>();
   private readonly limit: number;
+  private readonly more: (() => Promise<readonly NamedShape[]>) | undefined;
+  private loading: Promise<void> | undefined;
 
-  constructor(def: Pick<WireDefinition, 'shapes'>, opts: { maxViolations?: number } = {}) {
+  /**
+   * `more` gives the shapes `def` leaves out (`loadWireMoreShapes`): `ensure` calls it once, with
+   * the first name the validator does not have, and keeps what it returns (FND-008).
+   */
+  constructor(
+    def: Pick<WireDefinition, 'shapes'>,
+    opts: { maxViolations?: number; more?: () => Promise<readonly NamedShape[]> } = {},
+  ) {
     this.named = new Map(def.shapes.map((s) => [s.name, s.shape]));
     this.limit = opts.maxViolations ?? 16;
+    this.more = opts.more;
+  }
+
+  /**
+   * Makes sure the validator has the named shape: when it has not, loads the shapes `more` gives,
+   * once. A name `more` does not give stays unknown (`checkNamed` reports it). Call it before
+   * `checkNamed` where the shape may be one of the shapes left out.
+   */
+  async ensure(name: string): Promise<void> {
+    if (this.named.has(name) || this.more === undefined) return;
+    this.loading ??= this.more().then(
+      (shapes) => {
+        for (const s of shapes) if (!this.named.has(s.name)) this.named.set(s.name, s.shape);
+      },
+      (error: unknown) => {
+        this.loading = undefined;
+        throw error;
+      },
+    );
+    await this.loading;
   }
 
   /** Violations of `value` against `shape`; empty when valid. */

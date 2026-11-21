@@ -20,8 +20,17 @@ export {
   type DepDefinition,
   type DepExtension,
 } from './definition/index.ts';
-export { DEP1_WIRE, type WireDefinition } from './definition/wire.ts';
+export {
+  DEP1_WIRE,
+  DEP1_WIRE_BASE,
+  loadWireMoreShapes,
+  type WireDefinition,
+} from './definition/wire.ts';
 export { DEP1_WIRE_NOTIFICATION_TYPES } from './definition/notification-types.ts';
+// Two members of the definition a client reads, exported on their own so that taking them does not
+// take the whole definition with them (FND-008).
+export { SUBPROTOCOL } from './definition/common.ts';
+export { ERROR_CODES } from './definition/errors.ts';
 export * from './codec/index.ts';
 export type {
   Body,

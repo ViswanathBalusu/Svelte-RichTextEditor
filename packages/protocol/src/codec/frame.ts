@@ -11,7 +11,7 @@
  * - an unknown type: ignored, and answered with `error` `unknown_type`, `fatal: false`, when it had
  *   an `id` (05 §1 rule 3).
  */
-import { DEP1_WIRE, type WireDefinition } from '../definition/wire.ts';
+import { DEP1_WIRE_BASE, type WireDefinition } from '../definition/wire.ts';
 import type { MessageDef } from '../definition/messages.ts';
 import type { DepMessage, ErrorMessage } from '../generated/types.ts';
 import { ShapeValidator, type Violation } from './validate.ts';
@@ -71,7 +71,7 @@ export class FrameCodec {
   private readonly validator: ShapeValidator;
   private readonly byType: ReadonlyMap<string, MessageDef>;
 
-  constructor(def: WireDefinition = DEP1_WIRE) {
+  constructor(def: WireDefinition = DEP1_WIRE_BASE) {
     this.def = def;
     this.validator = new ShapeValidator(def);
     this.byType = new Map(def.messages.map((m) => [m.t, m]));
@@ -218,6 +218,6 @@ let shared: FrameCodec | undefined;
 
 /** The codec of DEP 1.0 with the registered extensions. */
 export function depCodec(): FrameCodec {
-  shared ??= new FrameCodec(DEP1_WIRE);
+  shared ??= new FrameCodec(DEP1_WIRE_BASE);
   return shared;
 }

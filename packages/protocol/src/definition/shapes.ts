@@ -168,19 +168,25 @@ function withKind<K extends Shape['kind'], T extends object>(kind: K, o: T): { k
   return { kind, ...o };
 }
 
+/* @__NO_SIDE_EFFECTS__ */
 export const str = (o: Opts<StringShape> = {}): StringShape => withKind('string', o);
+/* @__NO_SIDE_EFFECTS__ */
 export const int = (o: Opts<IntegerShape> = {}): IntegerShape => withKind('integer', o);
+/* @__NO_SIDE_EFFECTS__ */
 export const bool = (o: Opts<BooleanShape> = {}): BooleanShape => withKind('boolean', o);
+/* @__NO_SIDE_EFFECTS__ */
 export const lit = (value: string | number | boolean, o: Annotated = {}): ConstShape => ({
   kind: 'const',
   value,
   ...o,
 });
+/* @__NO_SIDE_EFFECTS__ */
 export const arr = (items: Shape, o: Omit<Opts<ArrayShape>, 'items'> = {}): ArrayShape => ({
   kind: 'array',
   items,
   ...o,
 });
+/* @__NO_SIDE_EFFECTS__ */
 export const obj = (
   props: Record<string, Prop>,
   o: Annotated & { openMembers?: true } = {},
@@ -189,23 +195,29 @@ export const obj = (
   props,
   ...o,
 });
+/* @__NO_SIDE_EFFECTS__ */
 export const map = (values: Shape, o: Omit<Opts<MapShape>, 'values'> = {}): MapShape => ({
   kind: 'map',
   values,
   ...o,
 });
+/* @__NO_SIDE_EFFECTS__ */
 export const ref = (name: string, o: Annotated = {}): RefShape => ({ kind: 'ref', name, ...o });
+/* @__NO_SIDE_EFFECTS__ */
 export const anyOf = (of: readonly Shape[], o: Annotated = {}): AnyOfShape => ({
   kind: 'anyOf',
   of,
   ...o,
 });
+/* @__NO_SIDE_EFFECTS__ */
 export const nullable = (of: Shape, o: Annotated = {}): NullableShape => ({
   kind: 'nullable',
   of,
   ...o,
 });
+/* @__NO_SIDE_EFFECTS__ */
 export const any = (o: Annotated = {}): AnyShape => ({ kind: 'any', ...o });
+/* @__NO_SIDE_EFFECTS__ */
 export const external = (target: ExternalShape['target'], o: Annotated = {}): ExternalShape => ({
   kind: 'external',
   target,
@@ -213,18 +225,22 @@ export const external = (target: ExternalShape['target'], o: Annotated = {}): Ex
 });
 
 /** A closed enumeration. */
+/* @__NO_SIDE_EFFECTS__ */
 export const enm = (values: readonly string[], o: Opts<StringShape> = {}): StringShape =>
   str({ ...o, enum: values });
 
 /** A required member. */
+/* @__NO_SIDE_EFFECTS__ */
 export const req = (shape: Shape, doc?: string, o: Annotated = {}): Prop =>
   doc === undefined ? { shape, required: true, ...o } : { shape, required: true, doc, ...o };
 
 /** An optional member. */
+/* @__NO_SIDE_EFFECTS__ */
 export const opt = (shape: Shape, doc?: string, o: Annotated = {}): Prop =>
   doc === undefined ? { shape, required: false, ...o } : { shape, required: false, doc, ...o };
 
 /** A member required only when `prop` equals `equals`. */
+/* @__NO_SIDE_EFFECTS__ */
 export const reqIf = (
   shape: Shape,
   prop: string,
@@ -241,18 +257,26 @@ export const reqIf = (
 
 export const SAFE_MAX = 9007199254740991;
 
+/* @__NO_SIDE_EFFECTS__ */
 export const uuid7 = (o: Opts<StringShape> = {}): StringShape => str({ format: 'uuid7', ...o });
+/* @__NO_SIDE_EFFECTS__ */
 export const timestamp = (o: Opts<StringShape> = {}): StringShape =>
   str({ format: 'timestamp', ...o });
+/* @__NO_SIDE_EFFECTS__ */
 export const nodeId = (o: Opts<StringShape> = {}): StringShape => str({ format: 'nodeId', ...o });
+/* @__NO_SIDE_EFFECTS__ */
 export const scope = (o: Opts<StringShape> = {}): StringShape => str({ format: 'scope', ...o });
 /** A sequence number: 0 is the content before the first commit (04 §1). */
+/* @__NO_SIDE_EFFECTS__ */
 export const seq = (o: Opts<IntegerShape> = {}): IntegerShape =>
   int({ min: 0, max: SAFE_MAX, ...o });
 /** A non-negative duration in milliseconds. */
+/* @__NO_SIDE_EFFECTS__ */
 export const ms = (o: Opts<IntegerShape> = {}): IntegerShape =>
   int({ min: 0, max: SAFE_MAX, ...o });
 /** A non-negative count or size. */
+/* @__NO_SIDE_EFFECTS__ */
 export const count = (o: Opts<IntegerShape> = {}): IntegerShape =>
   int({ min: 0, max: SAFE_MAX, ...o });
+/* @__NO_SIDE_EFFECTS__ */
 export const text = (o: Opts<StringShape> = {}): StringShape => str(o);
