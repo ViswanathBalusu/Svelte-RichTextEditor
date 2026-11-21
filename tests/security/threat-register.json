@@ -96,20 +96,13 @@
         "html-sinks.test.ts",
         "injection-corpus.test.ts",
         "sec-005-every-position.test.ts",
+        "sec-005-entry-routes.test.ts",
         "packages/element/e2e/sec-005-canary.spec.ts"
       ],
       "open": [
         {
-          "criterion": 1,
-          "what": "the corpus at every position of the CDM leaves out the five node types that need a stored asset or a preserved fragment"
-        },
-        {
           "criterion": 2,
           "what": "the corpus rendered in display names, comment bodies, field labels and values, region titles, alt text and document titles in every supported browser"
-        },
-        {
-          "criterion": 4,
-          "what": "the corpus through PUT content, prefill, import and restore"
         }
       ],
       "boundaries": ["host-page-to-element"],
