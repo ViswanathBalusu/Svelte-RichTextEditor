@@ -131,7 +131,10 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'fieldSignable'
       | 'requestSign'
       | 'signRequest'
-      | 'clearSignRequest';
+      | 'clearSignRequest'
+      // PRM-026: the regions the user cannot edit, and the shell's words for their lock indicators.
+      | 'regionLocks'
+      | 'setRegionLabels';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed

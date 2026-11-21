@@ -7,7 +7,13 @@
  * Read restrictions (ADR 0019): a region the reader may not see arrives without a title and
  * without editors, and is described only as hidden; nothing names who can read or edit it.
  */
-import type { AccessObject, AccessSummary, RegionLabel, RegionSummary } from '../core-api.ts';
+import type {
+  AccessObject,
+  AccessSummary,
+  RegionLabel,
+  RegionLabelDefaults,
+  RegionSummary,
+} from '../core-api.ts';
 import type { StringKey } from '../i18n/en-GB.ts';
 import type { Translator } from '../i18n/strings.ts';
 
@@ -53,6 +59,19 @@ export function mayEditRegion(access: AccessObject | null | undefined, id: strin
 }
 
 /**
+ * The short, visible words of a lock indicator: "Read-only", or "Suggestions only" where the user
+ * may still suggest, since the region is then not read-only for them (07 §7, eighth bullet).
+ */
+export function regionIndicator(
+  access: AccessObject | null | undefined,
+  id: string,
+  tr: Translator,
+): string {
+  const caps = access?.scopes[`region:${id}`];
+  return tr.t(caps?.includes('suggest') ? 'region.indicator.suggest' : 'region.indicator');
+}
+
+/**
  * The words for the lock indicators of the regions the user cannot edit, by region identifier. A
  * region they can edit gets none, so the core draws no indicator there (PRM-026 criterion 1).
  */
@@ -66,13 +85,27 @@ export function regionLabels(
   for (const region of regions) {
     if (mayEditRegion(access, region.id)) continue;
     out[region.id] = {
-      indicator: tr.t('region.indicator'),
+      indicator: regionIndicator(access, region.id, tr),
       // An approved region says that an owner must change its state first (PRM-048 criterion 2).
       description:
         region.state === 'approved' ? tr.t('region.lock.approved') : whoCanEdit(region, tr, nameOf),
     };
   }
   return out;
+}
+
+/**
+ * The words of a locked region the list above does not name (PRM-026). The core decides from the
+ * access which regions are locked, so it may shade one the region list does not hold yet: a region
+ * the access does not list (05 §5.5; PRM-006), which says that its permissions have not arrived,
+ * or any region when the backend gives no region list, which says only that it is read-only.
+ */
+export function regionLabelDefaults(tr: Translator): RegionLabelDefaults {
+  const indicator = tr.t('region.indicator');
+  return {
+    locked: { indicator, description: '' },
+    unlisted: { indicator, description: tr.t('reason.access.unlisted') },
+  };
 }
 
 /**

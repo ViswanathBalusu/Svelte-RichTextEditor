@@ -50,6 +50,8 @@ import { picturePlaceholderView } from './picture-placeholder-view.ts';
 import type { ComparisonSpec } from '../comparison-markup.ts';
 import type { SuggestionLabel } from '../suggestion-markup.ts';
 import { comparisonDecorations } from './comparison-decorations.ts';
+import type { RegionLockDefaults, RegionLockLabel } from '../region-lock.ts';
+import { regionLockDecorations } from './region-lock-view.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
 import { sectionWarningPlugin } from './section-warning-view.ts';
@@ -214,6 +216,15 @@ export class EditorCore extends DocumentCore {
   /** Draws the suggestions again with the new words for assistive technology (UX-035 criterion 4). */
   override setSuggestionLabel(label: SuggestionLabel | null): void {
     super.setSuggestionLabel(label);
+    this.#view?.setProps({});
+  }
+
+  /** Draws the lock indicators again with the shell's new words (PRM-026 criterion 2). */
+  override setRegionLabels(
+    labels: Readonly<Record<string, RegionLockLabel>>,
+    defaults: RegionLockDefaults = {},
+  ): void {
+    super.setRegionLabels(labels, defaults);
     this.#view?.setProps({});
   }
 
@@ -556,9 +567,11 @@ export class EditorCore extends DocumentCore {
         },
         // The find highlights (FE-059): drawn from the document and the find state, never stored.
         // The suggestion marks are drawn in the markup view the reader chose, `all` first (FE-046
-        // criterion 4; FE-045 criterion 1; UX-035).
+        // criterion 4; FE-045 criterion 1; UX-035). The regions the user cannot edit are shaded and
+        // carry a lock indicator (PRM-026), read from the access in force.
         decorations: (state) => {
           const f = this.findState.get();
+          const locks = regionLockDecorations(state.doc, this.regionLocksIn(state.doc));
           return findDecorations(state.doc, {
             query: f.query,
             current: f.current,
@@ -582,6 +595,7 @@ export class EditorCore extends DocumentCore {
               ).find(),
             )
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
+            .add(state.doc, locks.find())
             .add(state.doc, comparisonDecorations(state.doc, this.#comparison).find())
             .add(
               state.doc,
@@ -661,9 +675,12 @@ export class EditorCore extends DocumentCore {
       },
       // `editable` is read again by setProps; the open sub-editor follows the same lock (FE-029).
       // The fields a person may fill depend on the access too, and the access arrives after the
-      // controls are drawn (FRW-076 criterion 1).
+      // controls are drawn (FRW-076 criterion 1). The shading of the regions the user cannot edit
+      // follows the access as well, with no new state and no reload (PRM-006 criterion 5).
       accessChanged: () => {
-        if (this.#view) this.#fieldViews.refresh(this.#view.state.doc);
+        if (!this.#view) return;
+        this.#view.setProps({});
+        this.#fieldViews.refresh(this.#view.state.doc);
       },
       lockChanged: () => {
         this.#view?.setProps({});

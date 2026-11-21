@@ -100,7 +100,7 @@
   import { START_TRACK, stepMode, type ModeTrack } from './shell/suggest-mode.ts';
   import { NoticeTracker, type Notice } from './shell/notices.ts';
   import { PaneRegistry, type PaneComponent } from './shell/panes.ts';
-  import { regionLabels, scopeAnnouncement } from './shell/regions.ts';
+  import { regionLabelDefaults, regionLabels, scopeAnnouncement } from './shell/regions.ts';
   import { DEFAULT_SETTINGS, type ShellSettings } from './shell/settings.ts';
   import { provideSuspension } from './shell/suspension.ts';
   import { resolveTheme, watchColourScheme } from './shell/theme.ts';
@@ -419,10 +419,15 @@
     return people.lookup(user).name ?? tr.t('people.fallback');
   }
 
+  // The core shades the regions the access does not let the user edit; these are the words of their
+  // indicators. Without a region list every locked region takes the default words.
   $effect(() => {
-    if (!core.setRegionLabels || !regions) return;
+    if (!core.setRegionLabels) return;
     void directory.current;
-    core.setRegionLabels(regionLabels(regions.current, permissions?.current, tr, nameOf));
+    core.setRegionLabels(
+      regions ? regionLabels(regions.current, permissions?.current, tr, nameOf) : {},
+      regionLabelDefaults(tr),
+    );
   });
 
   // Access at the selection (UX-004; PRM-026; UX-104): a permission change in the same scope, a
