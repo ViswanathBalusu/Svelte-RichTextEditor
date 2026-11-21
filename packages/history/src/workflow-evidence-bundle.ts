@@ -180,7 +180,7 @@ export async function verifyWorkflowEvidenceBundle(
     if (!item.ok)
       findings.push({ kind: 'evidence', ref: item.id, reason: item.problem ?? 'mismatch' });
   // The match of the evidence with the chain (FRW-055 criterion 2): each anchored item's commitment
-  // is the videnceHash of a control commit of the segment. The commit payloads are checked by the
+  // is the `evidenceHash` of a control commit of the segment. The commit payloads are checked by the
   // log verifier above, so a commitment read from one is the one the chain holds.
   const inChain: string[] = [];
   const unchecked: string[] = [];

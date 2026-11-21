@@ -21,6 +21,8 @@ export const PURGE_TABLES: readonly string[] = [
   'doc_assets',
   'versions',
   'read_markers',
+  // Session records are kept as long as the document's history and go with it (HIS-003; decision 24).
+  'doc_sessions',
   'region_grants',
   'region_states',
   'region_leases',

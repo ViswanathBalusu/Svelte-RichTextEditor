@@ -7,8 +7,8 @@
  * WebAssembly") recorded the fallback per engine: canvas measurement matches painted Latin text
  * within 0.08 px in Chromium, Edge and WebKit, so the page view measures with canvas there; in
  * Firefox canvas misses the half-pixel tolerance on most lines, so the element stays in the web view
- * and says why. The page view itself is FE-101's and is not built; this module is the decision and
- * the message, which it reads when it is.
+ * and says why. This module is the decision and the message; the page view itself is FE-101's
+ * (`./page-view/`), and the element reads the decision when it mounts it (`doc-editor.ts`).
  */
 import type { DiagnosticDetail } from './events.ts';
 

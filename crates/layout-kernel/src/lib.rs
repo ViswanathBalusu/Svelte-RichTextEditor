@@ -3,10 +3,11 @@
 //!
 //! WASM-001 is the toolchain: three calls that prove the build and the package end to end. WASM-005
 //! adds the font faces (`faces`), WASM-006 shaping and measurement with HarfRust (`shaping`) and
-//! WASM-008 first-fit line breaking (`linebreak`) and WASM-009 hyphenation with TeX patterns
-//! (`hyphenate`). The kernel reads no file, no clock and no system font: every input
-//! is a byte slice, a string or a number given by the caller, and fonts arrive only as the bytes of
-//! the files the manifest names, checked against the manifest's SHA-256.
+//! WASM-008 first-fit line breaking (`linebreak`), WASM-009 hyphenation with TeX patterns
+//! (`hyphenate`) and WASM-007 Unicode segmentation (`segment`: UAX #14 and UAX #29). The kernel
+//! reads no file, no clock and no system font: every input is a byte slice, a string or a number
+//! given by the caller, and fonts arrive only as the bytes of the files the manifest names, checked
+//! against the manifest's SHA-256.
 //!
 //! The crate forbids unsafe code. The glue that wasm-bindgen writes is not part of this crate.
 
@@ -23,6 +24,8 @@ pub mod bidi_data;
 pub mod faces;
 pub mod hyphenate;
 pub mod linebreak;
+pub mod segment;
+pub mod segment_data;
 pub mod sha256;
 pub mod shaping;
 
@@ -46,7 +49,7 @@ thread_local! {
 
 /// The version of the call interface. It changes when a call of the kernel changes its meaning, or
 /// when a call is added.
-pub const ABI_VERSION: u32 = 6;
+pub const ABI_VERSION: u32 = 7;
 
 /// The version of the crate, as `major.minor.patch`.
 #[wasm_bindgen]
@@ -539,6 +542,35 @@ pub fn bidi_visual_runs(
     Ok(out)
 }
 
+/// The line-break opportunities of a text by UAX #14 (WASM-007), as a flat list of pairs for each
+/// opportunity, ascending: the UTF-16 offset of the first unit after the break, and 1 when the
+/// break is mandatory (after a hard line break, and at the end of the text) or 0 when it is only
+/// allowed. The end of a non-empty text is always the last opportunity; an empty text has none.
+/// The Unicode version is `segment_unicode_versions`.
+#[wasm_bindgen]
+pub fn line_break_opportunities(text: &[u16]) -> Vec<u32> {
+    segment::line_breaks(text)
+}
+
+/// The extended grapheme cluster boundaries of a text by UAX #29 (WASM-007), ascending, as UTF-16
+/// offsets: the start, the start of every cluster after the first, and the end of the text.
+#[wasm_bindgen]
+pub fn grapheme_cluster_boundaries(text: &[u16]) -> Vec<u32> {
+    segment::grapheme_boundaries(text)
+}
+
+/// The Unicode versions of the segmentation data, six numbers: major, minor and update of the line
+/// breaking (UAX #14), then of the grapheme clusters (UAX #29). They differ when the two crates
+/// implement different versions of Unicode (`segment.rs`).
+#[wasm_bindgen]
+pub fn segment_unicode_versions() -> Vec<u32> {
+    let (a, b, c) = segment::LINE_BREAK_UNICODE;
+    let (d, e, f) = segment::GRAPHEME_UNICODE;
+    [u64::from(a), u64::from(b), u64::from(c), d, e, f]
+        .iter()
+        .map(|&v| u32::try_from(v).unwrap_or(u32::MAX))
+        .collect()
+}
 /// Holds a hyphenation language (WASM-009): the text of its TeX pattern file (one pattern a line),
 /// the text of its exception file (one word a line, hyphens marked; may be empty), and the minimum
 /// characters before and after a hyphen (`\lefthyphenmin` and `\righthyphenmin`, 1 to 8). A language
@@ -629,7 +661,7 @@ mod tests {
     #[test]
     fn reports_the_crate_version_and_the_interface_version() {
         assert_eq!(kernel_version(), env!("CARGO_PKG_VERSION"));
-        assert_eq!(abi_version(), 6);
+        assert_eq!(abi_version(), 7);
     }
 
     #[test]

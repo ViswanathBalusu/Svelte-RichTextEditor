@@ -1,5 +1,7 @@
 /**
- * The CDM canonical form (03 §2; CDM-003, CDM-010; proposed rules recorded in ADR 0018):
+ * The CDM canonical form (03 §2; CDM-003, CDM-010). The rules are those of ADR 0018, which the
+ * owner accepted (decision 7 of docs/owner-decisions-2026-11-15.md); 03 §2 lists them in this
+ * order, and prose-canonical.test.ts compares the two:
  *
  * 1. An attribute whose value equals its schema default is omitted. Defaults inside object-valued
  *    attributes are not stripped: the object is compared and kept as a whole.

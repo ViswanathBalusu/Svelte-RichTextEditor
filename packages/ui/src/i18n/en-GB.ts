@@ -1116,6 +1116,7 @@ export const EN_GB = {
 
   // Regions and permissions (PRM-026, PRM-033, PRM-035, PRM-036). Titles and names are content.
   'region.indicator': 'Read-only',
+  'region.indicator.suggest': 'Suggestions only',
   'region.editors.none': 'Nobody can edit it at the moment.',
   'region.editors.names': 'It can be edited by {names}.',
   'region.editors.namesAndRoles': 'It can be edited by {names}, and by document {roles}.',
@@ -1458,6 +1459,37 @@ export const EN_GB = {
   },
   'history.compare.fields': 'Field changes',
   'history.compare.field.row': '{field} was changed by {name}',
+
+  // Restoring a version (HIS-021; 08 §8): a preview first, then a confirmation.
+  'history.restore.title': 'Restore this version',
+  'history.restore.scope': 'What to restore',
+  'history.restore.scope.document': 'The whole document',
+  'history.restore.scope.region': 'Region: {name}',
+  'history.restore.preview.run': 'Preview the restore',
+  'history.restore.previewing': 'Working out what the restore would change.',
+  'history.restore.preview': {
+    one: 'Restoring would make {count} change. Nothing has been changed yet.',
+    other: 'Restoring would make {count} changes. Nothing has been changed yet.',
+  },
+  'history.restore.unchanged':
+    'Restoring would change nothing: the document already matches this version.',
+  'history.restore.target': 'To be restored: {what}',
+  'history.restore.recreated': 'These definitions would be brought back: {names}.',
+  'history.restore.replaced':
+    'These definitions no longer exist and you cannot bring them back, so the default is used instead: {names}.',
+  'history.restore.confirm': 'Restore now',
+  'history.restore.cancel': 'Cancel the restore',
+  'history.restore.restoring': 'Restoring.',
+  'history.restore.done':
+    'The document was restored. The state before the restore is kept in the history.',
+  'history.restore.refused.forbidden': 'You cannot restore this.',
+  'history.restore.refused.not-found': 'This version, or this region in it, no longer exists.',
+  'history.restore.refused.conflict':
+    'The restore does not fit the document as it is now: it has changed, or a region is approved or in use. Preview the restore again.',
+  'history.restore.refused.workflow': 'A workflow is active, so the document cannot be restored.',
+  'history.restore.refused.too-large': 'This restore is too large to apply.',
+  'history.restore.refused.preview-failed': 'The restore could not be previewed.',
+  'history.restore.refused.failed': 'The restore could not be applied.',
   // The catch-up pane (HIS-028; 08 §10).
   'catchUp.label': 'Catch up',
   'catchUp.unavailable': 'Catch up is not available for this document.',

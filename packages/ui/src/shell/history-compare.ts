@@ -3,8 +3,19 @@
  * offer, how a change is named for the live region ("n of m", its kind and its author), the summary
  * grouped by region, and the field changes. No Svelte import, so the rules are tested in Node.
  */
-import type { HistoryChange, HistoryPaneItem, HistoryPort } from '../core-api.ts';
+import type {
+  HistoryChange,
+  HistoryComparison,
+  HistoryPaneItem,
+  HistoryPort,
+} from '../core-api.ts';
 import { type HistoryController, openingOf } from './history-pane.ts';
+
+/**
+ * The key of the open version when it is the current document, opened as the newer end of a
+ * comparison. It is no list item, and nothing can be restored to it (HIS-021).
+ */
+export const CURRENT_KEY = 'current';
 
 /** A state the pickers offer: the list item it comes from, and the `seq` and time it stands for. */
 export interface CompareChoice {
@@ -168,9 +179,17 @@ export interface CompareController {
   subscribe(listener: () => void): () => void;
   /** Compares two choices (or one and the current document, `b` null). */
   run(a: CompareChoice, b: CompareChoice | null): Promise<boolean>;
+  /**
+   * Shows a comparison the caller already holds over the version that is open: the dry run of a
+   * restore (HIS-021), whose result is that version. It is drawn, navigated and summarised exactly
+   * as a comparison of two versions is. False when no version is open, or the user moved on.
+   */
+  show(comparison: HistoryComparison): Promise<boolean>;
   next(): boolean;
   previous(): boolean;
   setShowDeleted(on: boolean): void;
+  /** Removes the comparison and its marks; the version it was drawn over stays open. */
+  clear(): void;
   /** Closes the comparison and the version it was drawn over. */
   close(): void;
 }
@@ -268,7 +287,7 @@ export function createCompareController(
       if (mine !== latest) return true;
       // The newer version is the one drawn (08 §6): the current document or the later choice.
       const newer = ends.to ?? {
-        key: 'current',
+        key: CURRENT_KEY,
         seq: comparison.toSeq,
         time: new Date().toISOString(),
         name: null,
@@ -285,6 +304,34 @@ export function createCompareController(
         v?.showDeletions?.(current.showDeleted);
       }
       return true;
+    },
+    async show(comparison) {
+      const over = view();
+      if (over === null) return false;
+      const mine = ++latest;
+      set({
+        status: 'ready',
+        reason: null,
+        fromSeq: comparison.fromSeq,
+        toSeq: comparison.toSeq,
+        rows: changeRows(comparison.changes),
+        index: -1,
+      });
+      const missing = usersOf(comparison.changes).filter((id) => !current.names.has(id));
+      if (missing.length > 0) await resolve(missing);
+      // The user left the version, opened another, or asked for something else meanwhile.
+      if (mine !== latest || view() !== over) return false;
+      over.showComparison?.(comparison.changes);
+      over.showDeletions?.(current.showDeleted);
+      return true;
+    },
+    clear() {
+      latest++;
+      if (current.status === 'idle') return;
+      // The marks go; the version itself stays as the user opened it.
+      view()?.showComparison?.([]);
+      current = { ...IDLE, names: current.names, showDeleted: current.showDeleted };
+      for (const listener of [...listeners]) listener();
     },
     next() {
       return go(nextIndex(current.index, current.rows.length));

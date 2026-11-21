@@ -98,8 +98,14 @@ test.describe('FE-046 criterion 2: the author and the time of a suggestion', () 
     await page.keyboard.press('Escape');
     await expect(card(page)).toBeHidden();
 
-    // The pointer over the deletion shows the card for that suggestion, and leaving hides it.
-    await page.locator(`${HOST} .de-editing-surface del`).first().hover();
+    // The pointer over the deletion shows the card for that suggestion, and leaving hides it. The
+    // deletion is one full stop, a few pixels wide, and the first box the browser reports for it is
+    // a one-pixel strip above the glyph: a point inside the glyph is given, so that the hover does
+    // not depend on where the line falls on the pixel grid.
+    await page
+      .locator(`${HOST} .de-editing-surface del`)
+      .first()
+      .hover({ position: { x: 2, y: 10 } });
     await expect(card(page)).toBeVisible();
     await expect(card(page)).toHaveText(/^Host name of bob, .*2026/);
     await page.mouse.move(2, 2);

@@ -209,6 +209,8 @@ export class DocEditorElement extends Base {
   #kernelNotice: HTMLElement | null = null;
   /** The element's layout kernel: its worker runs while the page view is asked for (WASM-004). */
   #kernel: ElementKernel | null = null;
+  /** Counts the suspends, so that a kernel whose code loaded across one is not started (WASM-004). */
+  #suspends = 0;
   /** The block the editor moves to as soon as the web view is shown (FE-072 criterion 4). */
   #pendingBlock: string | null = null;
   /** The editable page view of `view="print"`, over the same core as the web view (FE-101). */
@@ -449,10 +451,11 @@ export class DocEditorElement extends Base {
   }
 
   /**
-   * The page view needs the layout kernel (WebAssembly; WASM-002), so asking for it loads the kernel,
-   * and nothing else does: a session that only uses the web or read view fetches no WebAssembly. The
-   * page view is not mounted yet (`pageViewAvailable` is false in `#viewChoice`), so the editor shows
-   * the web view meanwhile and the kernel waits for it. Touch devices never get the page view (FE-113).
+   * Asking for the page view loads the layout kernel (WebAssembly; WASM-002), and nothing else does:
+   * a session that only uses the web or read view fetches no WebAssembly. The page view is mounted
+   * by `#syncPageView` (FE-101) and measures with canvas for now, so it does not wait for the kernel
+   * and does not read it yet (ADR 0417, lane w1, item 4). Touch devices never get the page view
+   * (FE-113).
    */
   #prepareKernel(view: string | null): void {
     this.#kernelNotice?.remove();
@@ -464,18 +467,41 @@ export class DocEditorElement extends Base {
 
   /**
    * The kernel's request code loads here, with the page view, not with the first interactive editor
-   * (FND-008; owner decision 32).
+   * (FND-008; owner decision 32). Because it loads on demand, two things can happen while it does:
+   * `destroy()` may be called, and then nothing starts and nothing is raised (PRO-076); or the chunk
+   * may fail to load, which is reported as the kernel reports its own chunks (`chunk_failed`).
    */
   async #startKernel(): Promise<void> {
-    const { ElementKernel } = await import('./layout-kernel-request.ts');
+    const generation = this.#generation;
+    const suspends = this.#suspends;
+    const request = await import('./layout-kernel-request.ts').catch(() => null);
+    // destroy() in between: the element released its kernel, and must not get a new one.
+    if (generation !== this.#generation) return;
     // The view may have changed while the code loaded.
     if (this.getAttribute('view') !== 'print') return;
+    if (request === null) {
+      const failure: DocEditorEventMap['de-diagnostic'] = {
+        feature: 'layout-kernel',
+        kind: 'load-failed',
+        ms: null,
+        bytes: null,
+        streaming: null,
+        code: 'chunk_failed',
+        directive: null,
+        fallback: null,
+      };
+      this.#emit('de-diagnostic', failure);
+      this.#degradeKernel(failure);
+      return;
+    }
     // One kernel for each element: it owns the layout worker (WASM-004) and keeps its lifecycle.
-    this.#kernel ??= new ElementKernel((detail) => {
+    this.#kernel ??= new request.ElementKernel((detail) => {
       this.#emit('de-diagnostic', detail);
       if (detail.kind === 'load-failed') this.#degradeKernel(detail);
     });
-    void this.#kernel.start();
+    // A suspend in between stopped the worker before there was one: the kernel stays stopped, and
+    // its first use creates the worker, as after any suspend (WASM-004).
+    if (suspends === this.#suspends) void this.#kernel.start();
   }
 
   /**
@@ -511,6 +537,7 @@ export class DocEditorElement extends Base {
 
   #suspend(): void {
     // The layout worker stops with the element; the first use after a resume creates it again (WASM-004).
+    this.#suspends++;
     this.#kernel?.stop();
     if (!this.#session || this.#suspended) return;
     this.#suspended = true;
@@ -1224,8 +1251,9 @@ export class DocEditorElement extends Base {
   }
 
   /**
-   * The send dialog's source (FRW-028), when the session's backend has the workflow port and
-   * announced the feature; otherwise nothing, and the shell offers no "send for completion" command.
+   * The comment threads' source (UX-028 to UX-032; ADR 0417), when the session's backend has the
+   * comments port and announced the feature; otherwise nothing, and the shell has no thread service
+   * and offers no comment command.
    */
   #threadsSource(docId: string): { threads?: ThreadsSource } {
     const session = this.#session;
@@ -1243,6 +1271,10 @@ export class DocEditorElement extends Base {
     };
   }
 
+  /**
+   * The send dialog's source (FRW-028), when the session's backend has the workflow port and
+   * announced the feature; otherwise nothing, and the shell offers no "send for completion" command.
+   */
   #workflowSource(docId: string): { workflow?: () => WorkflowSendSource | null } {
     const session = this.#session;
     const backend = session?.docId === docId ? session.backend : undefined;

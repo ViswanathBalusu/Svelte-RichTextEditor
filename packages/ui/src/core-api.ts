@@ -537,6 +537,16 @@ export interface RegionLabel {
 }
 
 /**
+ * The words of a region the user cannot edit that has no label of its own (PRM-026): `unlisted` for
+ * a region the access in force does not list yet (05 §5.5), `locked` for any other, which is every
+ * locked region when the backend gives no region list.
+ */
+export interface RegionLabelDefaults {
+  readonly locked?: RegionLabel;
+  readonly unlisted?: RegionLabel;
+}
+
+/**
  * Another session's caret and selection (UX-027), in CSS pixels relative to the element the core's
  * body view is mounted in (`mountBody`'s target), so scrolling does not move them. The view holds
  * only peers this user may see, never inside hidden content (ADR 0019).
@@ -919,6 +929,12 @@ export interface CoreApi {
   ignoreFinding?(id: string, everywhere?: boolean): boolean;
   /** Adds the finding's text to the port's custom dictionary. */
   addFindingToDictionary?(id: string): Promise<boolean>;
+  /**
+   * The finding with this identifier, while it is shown; null otherwise. The editing surface marks a
+   * finding's text with `data-de-finding`, and a context click on the mark asks for that finding
+   * (UX-008 criterion 5). Absent: the menu uses the finding at the caret.
+   */
+  proofingFinding?(id: string): ProofingFindingView | null;
 
   /** Word and page counts (UX-018). */
   readonly stats?: ReadView<DocumentStats>;
@@ -935,8 +951,15 @@ export interface CoreApi {
   styleEdit?(op: StyleEditOp, id?: string): StyleEditCheck;
   /** The derived region list, as this reader may see it (PRM-032; ADR 0019). */
   readonly regions?: ReadView<readonly RegionSummary[]>;
-  /** The words for the lock indicators of regions the user cannot edit, by region id (PRM-026). */
-  setRegionLabels?(labels: Readonly<Record<string, RegionLabel>>): void;
+  /**
+   * The words for the lock indicators of regions the user cannot edit, by region id (PRM-026).
+   * The core decides from the access which regions are locked and shades them; `defaults` are the
+   * words of a locked region that `labels` does not name.
+   */
+  setRegionLabels?(
+    labels: Readonly<Record<string, RegionLabel>>,
+    defaults?: RegionLabelDefaults,
+  ): void;
   /** Other sessions' carets and selections, mapped through local steps (UX-027). */
   readonly carets?: ReadView<readonly PeerCaret[]>;
 
@@ -955,6 +978,12 @@ export interface CoreApi {
   selectMatch?(match: SearchMatch): boolean;
   /** The caret's rectangle in viewport coordinates, for menus opened from the keyboard. */
   caretRect?(): ShellRect | null;
+  /**
+   * Has the core read the browser's selection now, where it would otherwise follow it on a later
+   * event. The context menu calls it before it reads `selection`, so that the menu is built for the
+   * place that was clicked (UX-008). Absent: the views are taken as current.
+   */
+  syncSelection?(): void;
 
   /** Export jobs (UX-101), when the backend announces `exports`. */
   readonly exports?: ExportService;
@@ -1463,6 +1492,7 @@ export interface HistoryVersionView {
   /**
    * Draws the changes of a comparison whose newer version this is (HIS-013): insertions and formatting
    * with the marks of suggestions, a change bar on each changed block. Absent when the host cannot draw one.
+   * An empty list removes the marks (the pane sends one when a restore preview is cancelled, HIS-021).
    */
   showComparison?(changes: readonly HistoryChange[]): void;
   /** Shows or hides deleted text; hidden, the layout does not move. */
@@ -1576,6 +1606,48 @@ export interface HistoryChoices {
   readonly people: readonly HistoryChoice[];
 }
 
+/** What a restore from the history pane asks for (`POST /restore`; 08 §8). */
+export interface HistoryRestoreRequest {
+  /** The state to return to. */
+  readonly toSeq: number;
+  /** One region (HIS-018), or null for the whole document (HIS-019). */
+  readonly region: string | null;
+}
+
+/** Why the service refuses a restore or its dry run (05 §6.2; 07 §13; 12 §10). */
+export type HistoryRestoreRefusal =
+  'forbidden' | 'not_found' | 'conflict' | 'workflow_active' | 'too_large' | 'failed';
+
+/** The dry run of a restore (HIS-021): what it would change. Nothing is committed for it. */
+export interface HistoryRestorePreview {
+  /** The head the dry run was computed against. */
+  readonly headSeq: number;
+  /** True when the restore would change nothing. */
+  readonly unchanged: boolean;
+  /** The comparison between the current content and the result, as `GET /diff` gives one. */
+  readonly comparison: HistoryComparison;
+  /** Definitions the restore would bring back, a style for example (HIS-020). */
+  readonly recreated?: readonly string[];
+  /** Definitions it cannot bring back for this user; the restored text takes the default instead. */
+  readonly replaced?: readonly string[];
+}
+
+export type HistoryRestorePreviewResult =
+  | { readonly ok: true; readonly preview: HistoryRestorePreview }
+  | { readonly ok: false; readonly reason: HistoryRestoreRefusal };
+
+export type HistoryRestoreResult =
+  | { readonly ok: true; readonly seq: number }
+  | { readonly ok: false; readonly reason: HistoryRestoreRefusal };
+
+/** What this user may restore (07 §13): the pane offers nothing else. */
+export interface HistoryRestoreScopes {
+  /** The whole document, which needs `manage`. */
+  readonly document: boolean;
+  /** The regions the user holds `edit` in. */
+  readonly regions: readonly string[];
+}
+
 /**
  * The host's history port. The element adapts the document service's `/history` and `/versions`
  * routes to this shape; the pane itself never calls the network.
@@ -1608,6 +1680,27 @@ export interface HistoryPort {
    * joined; HIS-015). The service limits the answer by the user's gate and projection.
    */
   whoWrote?(query: HistoryWhoQuery): Promise<HistoryWhoResult>;
+  /**
+   * The dry run of a restore (`POST /restore` with `dryRun`; HIS-021): the comparison between the
+   * current content and what the restore would leave. It commits nothing, and the service asks for
+   * the same permission and visibility as for the restore itself. The pane offers a restore only
+   * when the host gives this method, `restore` and `openVersion`.
+   */
+  previewRestore?(request: HistoryRestoreRequest): Promise<HistoryRestorePreviewResult>;
+  /**
+   * Restores the whole document or one region to the state at `toSeq` (`POST /restore`; HIS-018,
+   * HIS-019). The pane calls it only after the user has seen the dry run of the same request and
+   * confirmed. `headSeq` is the head that dry run was computed against, so a host that knows the
+   * document has moved since can answer `conflict`, and the pane then asks for a new preview.
+   */
+  restore?(
+    request: HistoryRestoreRequest & { readonly headSeq: number },
+  ): Promise<HistoryRestoreResult>;
+  /**
+   * What this user may restore (07 §13). Absent: the pane offers the whole document and every
+   * region of `choices()`, and shows the service's refusal when it comes.
+   */
+  restoreScopes?(): Promise<HistoryRestoreScopes>;
   /**
    * Called by the host when the list may have changed (a version was named, for instance); the
    * pane then asks again. Returns the function that stops the calls.
