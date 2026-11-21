@@ -34,7 +34,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Cli = if ($env:DOCEDIT_CONTAINER_CLI) { $env:DOCEDIT_CONTAINER_CLI } else { 'podman' }
-$Image = 'docker.io/library/node:24.21.0-slim'
+$Image = 'docker.io/library/node:24.21.0-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20'
 # DOCEDIT_EGRESS_PREFIX renames the containers and networks (a lane gives its own, ending -w8).
 $Prefix = if ($env:DOCEDIT_EGRESS_PREFIX) { $env:DOCEDIT_EGRESS_PREFIX } else { 'docedit-v-be-043-056' }
 $IntNet = "$Prefix-int"
