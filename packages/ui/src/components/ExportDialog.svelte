@@ -179,7 +179,7 @@
     if (exports.preflight) {
       let warnings: readonly ExportDiagnostic[];
       try {
-        warnings = await exports.preflight(chosen);
+        warnings = await exports.preflight(chosen, options);
       } catch {
         warnings = [];
       }

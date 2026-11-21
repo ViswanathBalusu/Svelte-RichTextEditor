@@ -621,10 +621,12 @@ export interface ExportService {
   /**
    * The warnings of the preflight shared with the converter (09 §1; EXP-003), for the document as
    * the core holds it now, before any job is created. Empty when nothing was found. Absent when
-   * the core has no preflight; the dialog then creates the job at once.
+   * the core has no preflight; the dialog then creates the job at once. `options` are the ones the
+   * job would be asked for, so that a finding has the severity the job would give it.
    */
   preflight?(
     target: ExportTarget,
+    options?: ExportOptions,
   ): readonly ExportDiagnostic[] | Promise<readonly ExportDiagnostic[]>;
   /** Starts a job; resolves with its identifier, or rejects with an error that has a `code`. */
   request(target: ExportTarget, options: ExportOptions): Promise<{ jobId: string }>;

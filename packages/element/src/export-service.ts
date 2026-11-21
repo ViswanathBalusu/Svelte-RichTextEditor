@@ -18,7 +18,13 @@
  * No DOM: this runs in Node.js tests against a stand-in exports port.
  */
 import type { ExportJob } from '@docedit/protocol';
-import type { ExportJobView, ExportOptions, ExportService, ExportTarget } from '@docedit/ui';
+import type {
+  ExportDiagnostic,
+  ExportJobView,
+  ExportOptions,
+  ExportService,
+  ExportTarget,
+} from '@docedit/ui';
 import { startExport, type ExportRequest, type ExportSource } from './export.ts';
 
 /** The targets the dialog offers, in order: the PDF and the LaTeX bundle first (UX-101). */
@@ -79,6 +85,14 @@ export interface ExportServiceOptions {
   onJob?: (job: ExportJob) => void;
   /** The targets to offer; absent, those the backend announced, or `EXPORT_TARGETS`. */
   targets?: readonly ExportTarget[];
+  /**
+   * The preflight shared with the converter (EXP-003; `export-preflight.ts`), run on the document
+   * the editor holds before a job is created. Absent: the dialog creates the job at once.
+   */
+  preflight?: (
+    target: ExportTarget,
+    options: ExportOptions,
+  ) => Promise<readonly ExportDiagnostic[]>;
 }
 
 /** The export service of one editor; the element builds it when the backend has an exports port. */
@@ -123,8 +137,13 @@ export function exportService(options: ExportServiceOptions): ExportService {
     for (const listener of [...pdfListeners]) listener();
   };
 
+  const check = options.preflight;
   return {
     targets: { get: targetsNow, subscribe: () => () => {} },
+    // The dialog asks before it creates a job, and only when the element can run the check.
+    ...(check
+      ? { preflight: (target: ExportTarget, given?: ExportOptions) => check(target, given ?? {}) }
+      : {}),
     latestPdf: {
       get: () => latestPdf,
       subscribe(listener) {

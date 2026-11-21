@@ -1280,6 +1280,18 @@ export class DocEditorElement extends Base {
             ? { docId: session.docId, backend: session.backend, access: session.access }
             : null,
         onJob: (job) => this.#onExportJob(session, job),
+        // The preflight shared with the converter (EXP-003), on the document this editor holds and
+        // the font set the service publishes; its code loads with the first export.
+        preflight: async (target, options) => {
+          const mounted = this.#mounted;
+          if (this.#session !== session || !session || !mounted) return [];
+          const { exportPreflight } = await import('./export-preflight.ts');
+          const fonts = session.backend?.fonts;
+          return exportPreflight(target, options, {
+            content: () => mounted.core.getContent(),
+            ...(fonts ? { fonts: () => fonts.manifest() } : {}),
+          });
+        },
       }),
     };
   }
