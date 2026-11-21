@@ -198,6 +198,8 @@ export {
   DEFAULT_HISTORY_VISIBILITY,
   HISTORY_VISIBILITIES,
   editsSomewhere,
+  gateAsksWhoEdits,
+  gateReadsTimes,
   minVisibleSeq,
   minVisibleSeqAsync,
   rangeVisible,

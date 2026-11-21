@@ -3,7 +3,13 @@
 // every setting, so no endpoint needs a copy of the `since_access` search.
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { HISTORY_VISIBILITIES, minVisibleSeq, minVisibleSeqAsync } from '../src/room/gate.ts';
+import {
+  HISTORY_VISIBILITIES,
+  gateAsksWhoEdits,
+  gateReadsTimes,
+  minVisibleSeq,
+  minVisibleSeqAsync,
+} from '../src/room/gate.ts';
 
 describe('minVisibleSeqAsync is minVisibleSeq with awaited commit times', () => {
   it('gives the same gate for every setting, head, floor and access time', async () => {
@@ -53,5 +59,12 @@ describe('minVisibleSeqAsync is minVisibleSeq with awaited commit times', () => 
     });
     expect(gate).toBe(9);
     expect(asked).toBe(0);
+  });
+});
+
+describe('the questions a caller must answer before it asks the rule (PRM-041 criterion 1)', () => {
+  it('only ditors asks who edits, and only since_access reads commit times', () => {
+    expect(HISTORY_VISIBILITIES.filter(gateAsksWhoEdits)).toEqual(['editors']);
+    expect(HISTORY_VISIBILITIES.filter(gateReadsTimes)).toEqual(['since_access']);
   });
 });

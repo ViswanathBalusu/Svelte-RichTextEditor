@@ -5,6 +5,11 @@
  * `operations` and the client messages of `messages`) and compares what it finds with the table,
  * in both directions: a client-supplied sequence field that is not listed fails, and a listed
  * input that the definition no longer has fails too.
+ *
+ * A sequence number has no shape of its own in the definition (`seq()` is an integer, as a count
+ * is), so a member is recognised by its name: one of the names 07 §8 and 04 §5 use, or any name
+ * that ends in `Seq`. The walk covers the query, the body, the client's messages and the path
+ * (PRM-041 criterion 1: `templateSeq` and the `{seq}` of the tombstone route were not seen before).
  */
 import { DEP1, type definition } from '@docedit/protocol';
 import { describe, expect, it } from 'vitest';
@@ -24,6 +29,14 @@ const SEQ_NAMES: ReadonlySet<string> = new Set([
   'baseSeq',
   'base',
 ]);
+
+/**
+ * Whether a member, a query parameter or a path parameter of this name carries a sequence number:
+ * a name of the list above, or any name that ends in `Seq` (`templateSeq`, `sentSeq`).
+ */
+export function isSeqName(name: string): boolean {
+  return SEQ_NAMES.has(name) || /Seq$/.test(name);
+}
 
 /** The named shapes of a definition, for resolving `ref` shapes. */
 function namedOf(def: { readonly shapes: readonly definition.NamedShape[] }): Map<string, Shape> {
@@ -46,7 +59,7 @@ export function seqPathsOf(
     case 'object':
       for (const [name, prop] of Object.entries(shape.props)) {
         const p = path === '' ? name : `${path}.${name}`;
-        if (SEQ_NAMES.has(name)) out.push(p);
+        if (isSeqName(name)) out.push(p);
         seqPathsOf(prop.shape, named, p, stack, out);
       }
       return out;
@@ -83,8 +96,11 @@ export function clientSeqFieldsOf(def: {
   const found = new Set<string>();
   for (const op of def.operations) {
     const where = `${op.method} ${op.path}`;
+    // The path itself: `/documents/{id}/commits/{seq}/tombstone`.
+    for (const [, name] of op.path.matchAll(/\{([^}]+)\}/g))
+      if (isSeqName(name!)) found.add(`${where}|path.${name}`);
     for (const name of Object.keys(op.query ?? {}))
-      if (SEQ_NAMES.has(name)) found.add(`${where}|query.${name}`);
+      if (isSeqName(name)) found.add(`${where}|query.${name}`);
     if (op.body) for (const p of seqPathsOf(op.body, named)) found.add(`${where}|body.${p}`);
   }
   for (const m of def.messages) {
@@ -134,6 +150,40 @@ describe('the sequence inputs of the protocol are one table (HIS-024 criterion 4
     const probe = { ...DEP1, operations: [...DEP1.operations, extra] };
     const ungated = [...clientSeqFieldsOf(probe)].filter((k) => !listed().has(k));
     expect(ungated).toEqual(['GET /documents/{id}/his-024-probe|query.atSeq']);
+  });
+
+  it('finds a sequence member under any name that ends in Seq, and a sequence in a path (PRM-041 criterion 1)', () => {
+    const found = clientSeqFieldsOf(DEP1);
+    // `templateSeq` is none of the names of 07 §8, and the tombstone route takes its seq in the path.
+    for (const key of [
+      'POST /documents|body.templateSeq',
+      'POST /bulk-sends|body.templateSeq',
+      'PUT /documents/{id}/workflow|body.sentSeq',
+      'PUT /documents/{id}/workflow|body.participants.completedSeq',
+      'POST /documents/{id}/commits/{seq}/tombstone|path.seq',
+    ])
+      expect(found.has(key), key).toBe(true);
+    expect(['templateSeq', 'sentSeq', 'seq', 'after', 'base'].every(isSeqName)).toBe(true);
+    // Other whole numbers a client sends are not sequence numbers.
+    expect(['order', 'size', 'rev', 'version', 'sequel', 'i'].some(isSeqName)).toBe(false);
+
+    // A new route with a sequence in its path and one under a new name fails the walk on both.
+    const extra: OperationDef = {
+      ...DEP1.operations[0]!,
+      operationId: 'prm041.probe',
+      method: 'POST',
+      path: '/documents/{id}/prm-041-probe/{pinnedSeq}',
+      body: {
+        kind: 'object',
+        props: { sourceSeq: { shape: { kind: 'integer' }, required: false } },
+      },
+    };
+    const probe = { ...DEP1, operations: [...DEP1.operations, extra] };
+    const ungated = [...clientSeqFieldsOf(probe)].filter((k) => !listed().has(k));
+    expect(ungated).toEqual([
+      'POST /documents/{id}/prm-041-probe/{pinnedSeq}|path.pinnedSeq',
+      'POST /documents/{id}/prm-041-probe/{pinnedSeq}|body.sourceSeq',
+    ]);
   });
 
   it('a server message with a sequence number is not an input', () => {
