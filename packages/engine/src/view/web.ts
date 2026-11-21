@@ -444,6 +444,23 @@ export class EditorCore extends DocumentCore {
     }
   }
 
+  /**
+   * Reads the browser's selection into the state now (UX-008; ui `CoreApi.syncSelection`). The view
+   * follows the browser's selection on `selectionchange`, and a browser may deliver that event after
+   * the one that asks what is at the caret. A context click is the case: it moves the caret, the
+   * menu opens and takes focus, and the event that arrives then is no longer read, so the menu would
+   * be built for the place the caret was before the click. The view's own reader is called, so the
+   * selection is read exactly as it would be on the event. Nothing changes while the view has no
+   * focus, or when the state already holds the browser's selection.
+   */
+  syncSelection(): void {
+    const view = this.#sub?.view.hasFocus() ? this.#sub.view : this.#view;
+    if (!view) return;
+    // The view's types do not publish its DOM observer, so it is called only when present; without
+    // it the state follows on the event, as before.
+    (view as unknown as { domObserver?: { flush?: () => void } }).domObserver?.flush?.();
+  }
+
   /** Mounts the body web view on an element inside the shadow root. */
   mountBody(target: HTMLElement): () => void {
     if (this.#view) throw new Error('the body view is already mounted');

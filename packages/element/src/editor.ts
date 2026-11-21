@@ -482,6 +482,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
         core.selectFindMatch(match.index, { blockId: match.blockId || null, text: match.text }),
       // Where a menu asked for from the keyboard opens (UX-008 criterion 1).
       caretRect: () => core.caretRect(),
+      // The context menu has the browser's selection read before it is built (UX-008).
+      syncSelection: () => core.syncSelection(),
       mountBody: (target) => timeBodyAttach(() => core.mountBody(target)),
       mountPanel: (target) => core.mountPanel(target),
       access: core.access,
@@ -649,6 +651,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
       ignoreFinding: (id, everywhere) => core.ignoreFinding(id, everywhere),
       addFindingToDictionary: (id) => core.addFindingToDictionary(id),
+      proofingFinding: (id) => core.proofingFinding(id),
       // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
       // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).
       refusal: core.refusal,

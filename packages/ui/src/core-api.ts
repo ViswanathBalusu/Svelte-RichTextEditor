@@ -919,6 +919,12 @@ export interface CoreApi {
   ignoreFinding?(id: string, everywhere?: boolean): boolean;
   /** Adds the finding's text to the port's custom dictionary. */
   addFindingToDictionary?(id: string): Promise<boolean>;
+  /**
+   * The finding with this identifier, while it is shown; null otherwise. The editing surface marks a
+   * finding's text with `data-de-finding`, and a context click on the mark asks for that finding
+   * (UX-008 criterion 5). Absent: the menu uses the finding at the caret.
+   */
+  proofingFinding?(id: string): ProofingFindingView | null;
 
   /** Word and page counts (UX-018). */
   readonly stats?: ReadView<DocumentStats>;
@@ -955,6 +961,12 @@ export interface CoreApi {
   selectMatch?(match: SearchMatch): boolean;
   /** The caret's rectangle in viewport coordinates, for menus opened from the keyboard. */
   caretRect?(): ShellRect | null;
+  /**
+   * Has the core read the browser's selection now, where it would otherwise follow it on a later
+   * event. The context menu calls it before it reads `selection`, so that the menu is built for the
+   * place that was clicked (UX-008). Absent: the views are taken as current.
+   */
+  syncSelection?(): void;
 
   /** Export jobs (UX-101), when the backend announces `exports`. */
   readonly exports?: ExportService;
