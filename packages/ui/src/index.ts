@@ -68,6 +68,7 @@ export type {
   RegionEditors,
   RegionGrant,
   RegionLabel,
+  RegionLabelDefaults,
   RegionRole,
   RegionSummary,
   ResolveUsers,

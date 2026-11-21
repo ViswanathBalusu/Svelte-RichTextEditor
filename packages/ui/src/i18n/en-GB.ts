@@ -1116,6 +1116,7 @@ export const EN_GB = {
 
   // Regions and permissions (PRM-026, PRM-033, PRM-035, PRM-036). Titles and names are content.
   'region.indicator': 'Read-only',
+  'region.indicator.suggest': 'Suggestions only',
   'region.editors.none': 'Nobody can edit it at the moment.',
   'region.editors.names': 'It can be edited by {names}.',
   'region.editors.namesAndRoles': 'It can be edited by {names}, and by document {roles}.',

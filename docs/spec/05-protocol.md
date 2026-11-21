@@ -209,7 +209,7 @@ The server adds identity; clients cannot claim to be someone else. `state` is va
 
 - `rev` is the access revision of this connection. It increases whenever anything that feeds effective permissions changes: grants, region states, leases, the region list, the document's state, the workflow, a refreshed token.
 - `caps` are the document-level capabilities, including `structure` and `manage`.
-- `scopes` lists every region of the document. A region that is not listed, for example one created by a commit the client has just received, is not editable until an `access` with `asOfSeq` at or after that commit arrives.
+- `scopes` lists every region of the document. A region that is not listed, for example one created by a commit the client has just received, is not editable until an `access` with `asOfSeq` at or after that commit arrives. A client applies this by the listing alone: a region its current `access` does not list is not editable, and the client keeps no record of the commit that created a region to compare with `asOfSeq` (owner decision 104 of 2026-11-15, `docs/owner-decisions-2026-11-15.md`).
 - `perm.changed` (S to C) carries a complete new `access` object. The server enforces the new permissions from the moment it computes them, regardless of when the client receives the message.
 
 ### 5.6 Notifications

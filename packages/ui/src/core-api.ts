@@ -537,6 +537,16 @@ export interface RegionLabel {
 }
 
 /**
+ * The words of a region the user cannot edit that has no label of its own (PRM-026): `unlisted` for
+ * a region the access in force does not list yet (05 §5.5), `locked` for any other, which is every
+ * locked region when the backend gives no region list.
+ */
+export interface RegionLabelDefaults {
+  readonly locked?: RegionLabel;
+  readonly unlisted?: RegionLabel;
+}
+
+/**
  * Another session's caret and selection (UX-027), in CSS pixels relative to the element the core's
  * body view is mounted in (`mountBody`'s target), so scrolling does not move them. The view holds
  * only peers this user may see, never inside hidden content (ADR 0019).
@@ -941,8 +951,15 @@ export interface CoreApi {
   styleEdit?(op: StyleEditOp, id?: string): StyleEditCheck;
   /** The derived region list, as this reader may see it (PRM-032; ADR 0019). */
   readonly regions?: ReadView<readonly RegionSummary[]>;
-  /** The words for the lock indicators of regions the user cannot edit, by region id (PRM-026). */
-  setRegionLabels?(labels: Readonly<Record<string, RegionLabel>>): void;
+  /**
+   * The words for the lock indicators of regions the user cannot edit, by region id (PRM-026).
+   * The core decides from the access which regions are locked and shades them; `defaults` are the
+   * words of a locked region that `labels` does not name.
+   */
+  setRegionLabels?(
+    labels: Readonly<Record<string, RegionLabel>>,
+    defaults?: RegionLabelDefaults,
+  ): void;
   /** Other sessions' carets and selections, mapped through local steps (UX-027). */
   readonly carets?: ReadView<readonly PeerCaret[]>;
 

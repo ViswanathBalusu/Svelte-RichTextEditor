@@ -714,6 +714,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
       // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
       permissions: core.permissions,
+      // The lock indicators of the regions the user cannot edit (PRM-026): the core shades them from
+      // the access and draws the shell's words, which hold the names of the host's directory.
+      setRegionLabels: (labels, defaults) => core.setRegionLabels(labels, defaults),
       ...(port?.regions
         ? {
             regions: regionsView(port.regions.bind(port), options.docId, [
