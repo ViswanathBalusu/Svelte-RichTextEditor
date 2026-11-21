@@ -179,6 +179,7 @@ import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-ho
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
 import { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
 import { restrictedViews, type Views } from './control-plane/visibility.ts';
+import { serialisedInPool } from './control-plane/workers/checkpoint-store.ts';
 import { WorkerPool } from './control-plane/workers/pool.ts';
 import {
   Autoscaler,
@@ -1657,7 +1658,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
     documents: parts.documents,
     grants: parts.grants,
     logs,
-    checkpoints,
+    // The content at seq 0 of a new document is serialised in the pool (BE-001 criterion 3).
+    checkpoints: serialisedInPool(checkpoints, pool),
     assets,
     users: parts.users,
     ...(parts.audit ? { audit: parts.audit } : {}),

@@ -23,6 +23,11 @@ const COMMITS = 120;
 const CHUNK = 'lorem ipsum dolor sit amet '.repeat(80);
 /** Pinned reads, one after another: each is one replay from sequence number 0 in the pool. */
 const READS = 40;
+/**
+ * The other room pauses this long after each acknowledgement, so that it stays below the message
+ * rate a connection may keep up (BE-030: 200 a second by default) however fast the machine is.
+ */
+const PACE_MS = 5;
 
 describe('replays for content reads leave the main thread to other rooms (BE-001 criterion 3)', () => {
   let s: Service;
@@ -104,7 +109,9 @@ describe('replays for content reads leave the main thread to other rooms (BE-001
 
     // Meanwhile the other room takes commits, one at a time, until the reads are answered.
     const ackedAt: number[] = [];
+    const waited: number[] = [];
     for (let base = 0; finished === 0; base++) {
+      const sent = performance.now();
       const ack = await typist.submit(1, {
         base,
         steps: [insertText(at, 'x')],
@@ -112,6 +119,8 @@ describe('replays for content reads leave the main thread to other rooms (BE-001
       });
       expect(ack.t).toBe('sync.ack');
       ackedAt.push(performance.now());
+      waited.push(performance.now() - sent);
+      await new Promise((resolve) => setTimeout(resolve, PACE_MS));
     }
     const answers = await reads;
     loop.disable();
@@ -128,14 +137,13 @@ describe('replays for content reads leave the main thread to other rooms (BE-001
     // replays held the main thread, no acknowledgement could have been sent before they ended.
     const during = ackedAt.filter((t) => t < finished);
     expect(during.length).toBeGreaterThanOrEqual(10);
-    const gaps = during.map((t, i) => t - (i === 0 ? started : during[i - 1]!));
     const replayMs = finished - started;
     // The figures of this run, for the story's evidence (a measurement, not a target).
     console.info(
       `BE-001 replay and rooms: ${READS} replays of ${COMMITS} commits took ${replayMs.toFixed(0)} ms; ` +
-        `${during.length} commits of the other room acknowledged meanwhile, longest wait ` +
-        `${Math.max(...gaps).toFixed(1)} ms; event loop delay p99 ${(loop.percentile(99) / 1e6).toFixed(1)} ms, ` +
-        `max ${(loop.max / 1e6).toFixed(1)} ms`,
+        `${during.length} commits of the other room acknowledged meanwhile, longest wait for an ` +
+        `acknowledgement ${Math.max(...waited.slice(0, during.length)).toFixed(1)} ms; event loop ` +
+        `delay p99 ${(loop.percentile(99) / 1e6).toFixed(1)} ms, max ${(loop.max / 1e6).toFixed(1)} ms`,
     );
   }, 120_000);
 });
