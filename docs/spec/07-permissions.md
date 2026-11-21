@@ -124,7 +124,7 @@ These are requirements on the component's user experience. They are not security
 
 - Regions the user cannot edit are shaded and carry a lock indicator that says who can edit them. A command moves the caret to the next region the user can edit.
 - The region guard refuses local transactions in scopes without `edit`, `suggest` or `fill`, so the user normally never sees a rejection.
-- A region is isolating. Backspace at the start of its first paragraph and Delete at the end of its last do nothing. Enter at the end stays inside. Selections that start inside a region are clamped to it. There is always a body paragraph after a region (03, section 4.2).
+- A region is isolating. Backspace at the start of its first paragraph and Delete at the end of its last do nothing. Enter at the end stays inside. Selections that start inside a region are clamped to it. "Select all" is the exception: it selects the whole body wherever the caret is (02, section 5.2; owner decision 4 of 2026-11-15). There is always a body paragraph after a region (03, section 4.2).
 - A deletion across several scopes removes only the parts the user may edit and says so.
 - "Replace all" skips scopes the user cannot edit and reports how many matches it skipped. Where suggestion mode is on, each replacement is a suggestion: the match is marked deleted and the new text is inserted after it, marked inserted (owner decision 46).
 - A user who may edit only regions can apply existing styles there but cannot change definitions, page setup, headers or footers.
