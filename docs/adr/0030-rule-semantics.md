@@ -1,6 +1,6 @@
 # ADR 0030: Semantics of the rules language
 
-**Status:** proposed, 2026-11-06. Records the decisions of story FRW-014 as a maintainer's proposal; the project owner has not reviewed them. The implementation is `packages/rules`; the fixtures that pin it are published in `spec/rules/` under the rules version `rules/1` (draft).
+**Status:** proposed, 2026-11-06, as a maintainer's record of the decisions of story FRW-014. Accepted as proposed by the owner on 2026-11-15 (decision 220 of [owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md), which accepts ADRs 0030 to 0052); decision 187 settles open item 3. The implementation is `packages/rules`; the fixtures that pin it are published in `spec/rules/` under the rules version `rules/1` (draft).
 
 ## Context
 
@@ -145,6 +145,7 @@ Measured on 2026-11-06 on the development machine (Windows 11, Node.js 22.18; `s
 - The type of each kind's value is 12 §3.3, as in §1 above; a `text` or `formula` value is at most 4 KiB of UTF-8.
 - `required` refuses an empty value of a visible field (null, `""`, an unticked checkbox). A space is content.
 - `min` and `max` apply to `number` fields and compare as decimals. `minLength` and `maxLength` apply to `text` fields and count Unicode code points, as the CDM's string grammars do (ADR 0018). `pattern` and `preset` apply to `text` fields, match the whole value and are not applied to an empty value. A limit on a kind it does not apply to, or `min` above `max`, is a problem of the field's definition.
+- `message` is the author's message for `pattern` (owner decision 187 of 2026-11-15, which settles open item 3): an entry that does not match the pattern is reported with it, in the editor and when a participant completes. Without it the report carries this package's own wording. It speaks for the pattern alone; the details are in [ADR 0423](0423-w4-FRW-018-pattern-message.md) (proposed).
 - Presets, written in the subset and published with the fixtures (proposed for FRW-004): `email` is the WHATWG HTML definition of a valid e-mail address; `phone` is an optional `+` and `(`, then 4 to 20 digits with at most two of the separators space, `(`, `)`, `.`, `/`, `-` after each digit but the last; `postcode` is 2 to 10 letters, digits, spaces and hyphens, starting and ending with a letter or digit.
 
 ### 9. Bounds
@@ -157,7 +158,7 @@ Measured on 2026-11-06 on the development machine (Windows 11, Node.js 22.18; `s
 | A value | 4 KiB | 12 §3.3, target |
 | A pattern | 256 code points | the CDM grammar of `validation.pattern` |
 | A repetition count; a compiled pattern | 100; 1,000 instructions | proposed here, targets |
-| A `validate` message | 1 to 255 code points, no control characters | the CDM grammar of labels |
+| A `validate` message; a `validation.message` | 1 to 255 code points, no control characters | the CDM grammar of labels |
 | Decimal results | 20 fraction digits; magnitude below 10^40 | proposed here |
 
 ### 10. Version and fixtures
@@ -183,7 +184,7 @@ Bad:
 
 1. The time zone of `now` without a workflow (form mode, FRW-083): there is no workflow `timeZone`. Proposed: the caller passes UTC until FRW-083 and the protocol decide. Not decided here.
 2. The step budget of admission control (04 §12 names none) and whether the rule builder should refuse a rule set whose static step bound exceeds it.
-3. The CDM's `validation` object has no message member, so FRW-018's "the message the author gave" for `pattern` has nowhere to live. Either the CDM gains `validation.message` (CDM's decision) or authors use a `validate` rule.
+3. Settled by the owner on 2026-11-15 (decision 187, [owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)): the field definition carries an optional message, and the CDM gained `validation.message` (§8 above; ADR 0423). Before that, the CDM's `validation` object had no message member, so FRW-018's "the message the author gave" for `pattern` had nowhere to live.
 4. Read restrictions (ADR 0019): a rule that reads a value hidden from the evaluating reader sees the redacted empty value in that reader's editor, while the authority sees the real one. Whether rules may read hidden values at all is open.
 5. Localised `validate` messages; Unicode normalisation of strings before comparison; the final presets, which FRW-004 owns.
 6. Routing rules (FRW-037) reuse the expression language; the shape of `skipParticipant` is not given in 12.

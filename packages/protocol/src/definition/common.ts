@@ -670,7 +670,14 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
         ),
         violations: opt(
           arr(
-            obj({ path: req(text(), 'A JSON Pointer into the request body.'), rule: req(text()) }),
+            obj({
+              path: req(text(), 'A JSON Pointer into the request body.'),
+              rule: req(text()),
+              message: opt(
+                text(),
+                "For a field that does not pass when a participant completes (12 §5.3): the message the document's author gave for the pattern the value does not match (12 §3.2 `validation.message`). A text of the document's definitions, never a value.",
+              ),
+            }),
           ),
           'For `validation_failed`: where the body breaks which rule. Never the offending value (BE-088).',
           { decisions: ['D71'] },

@@ -49,6 +49,11 @@ export interface FieldValidation {
   minLength?: number;
   maxLength?: number;
   pattern?: string;
+  /**
+   * What the author tells a person whose entry does not match `pattern` (12 §3.2; owner decision
+   * 187 of 2026-11-15; ADR 0030 §8). It is the message of the pattern alone.
+   */
+  message?: string;
   preset?: PresetName;
 }
 
@@ -110,6 +115,13 @@ export interface EntryProblem {
   message: string;
   /** For `rule`: the rule whose `validate` effect applies. */
   rule?: string;
+  /**
+   * True when `message` is the author's own text for a static check: the `message` beside the
+   * `validation.pattern` of the field's definition. A caller shows it as it is. Every other message
+   * of a static check is this package's wording for a person, which a caller may replace by the
+   * code. (The message of a `rule` problem is the rule's, always.)
+   */
+  authored?: true;
 }
 
 /** What to tell the person who typed a value of the wrong type, by kind (FRW-004). */
@@ -201,8 +213,8 @@ export function presetPattern(name: PresetName): Pattern {
 
 /**
  * Checks a field's own definition: limits that do not apply to its kind, limits in the wrong
- * order, duplicate option identifiers, and a `pattern` outside the subset (FRW-018: refused when
- * the author saves it, with the construct named).
+ * order, duplicate option identifiers, a `message` with no `pattern` to speak for, and a `pattern`
+ * outside the subset (FRW-018: refused when the author saves it, with the construct named).
  */
 export function checkFieldDefinition(field: FieldInfo): DefinitionProblem[] {
   const out: DefinitionProblem[] = [];
@@ -217,8 +229,16 @@ export function checkFieldDefinition(field: FieldInfo): DefinitionProblem[] {
   };
   forKinds('min', ['number']);
   forKinds('max', ['number']);
-  for (const name of ['minLength', 'maxLength', 'pattern', 'preset'] as const)
+  for (const name of ['minLength', 'maxLength', 'pattern', 'message', 'preset'] as const)
     forKinds(name, ['text']);
+  // The message is the pattern's: without a pattern nothing would ever show it.
+  if (v.message !== undefined && v.pattern === undefined && field.kind === 'text')
+    out.push({
+      code: 'not_applicable',
+      path: '/validation/message',
+      message:
+        'message is shown when an entry does not match pattern, and the field has no pattern',
+    });
   if (v.min !== undefined && v.max !== undefined) {
     const lo = parseDecimal(v.min);
     const hi = parseDecimal(v.max);
@@ -266,7 +286,9 @@ export function checkFieldDefinition(field: FieldInfo): DefinitionProblem[] {
 /**
  * The static checks of one entry, apart from `required` (which also depends on the rules): the
  * value's type, then the limits of `validation`. An empty entry passes every limit; only
- * `required` refuses it. Lengths count Unicode code points (ADR 0018, ADR 0030 §8).
+ * `required` refuses it. Lengths count Unicode code points (ADR 0018, ADR 0030 §8). An entry that
+ * does not match `pattern` is reported with the author's `message` when the definition has one
+ * (FRW-018 criterion 4), and with this package's wording otherwise.
  */
 export function checkEntry(
   field: FieldInfo,
@@ -296,7 +318,12 @@ export function checkEntry(
       // A pattern outside the subset is a definition problem (checkFieldDefinition); it never
       // makes an entry invalid on its own.
       if (r.ok && !matchPattern(r.pattern, value).matched)
-        out.push({ code: 'pattern', message: 'the entry does not have the expected form' });
+        out.push(
+          // The author's message when the definition gives one (owner decision 187).
+          typeof v.message === 'string' && v.message !== ''
+            ? { code: 'pattern', message: v.message, authored: true }
+            : { code: 'pattern', message: 'the entry does not have the expected form' },
+        );
     }
     if (v.preset !== undefined && PRESET_NAMES.includes(v.preset)) {
       if (!matchPattern(presetPattern(v.preset), value).matched)

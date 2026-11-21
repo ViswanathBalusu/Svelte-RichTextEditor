@@ -44,6 +44,12 @@ export function statusOf(code: RestCode): number {
 export interface BodyViolation {
   path: string;
   rule: string;
+  /**
+   * Only for a field whose value does not match its pattern when a participant completes: the
+   * message the author gave in the field's definition (12 §3.2 `validation.message`; FRW-018
+   * criterion 4). A text of the document's definitions, never a value.
+   */
+  message?: string;
 }
 
 export interface ApiErrorOptions {

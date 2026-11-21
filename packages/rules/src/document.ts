@@ -52,6 +52,7 @@ export function fieldFrom(attrs: Record<string, JsonValue>): FieldInfo | null {
     if (typeof v['minLength'] === 'number') out.minLength = v['minLength'];
     if (typeof v['maxLength'] === 'number') out.maxLength = v['maxLength'];
     if (typeof v['pattern'] === 'string') out.pattern = v['pattern'];
+    if (typeof v['message'] === 'string') out.message = v['message'];
     if (v['preset'] === 'email' || v['preset'] === 'phone' || v['preset'] === 'postcode')
       out.preset = v['preset'];
     f.validation = out;

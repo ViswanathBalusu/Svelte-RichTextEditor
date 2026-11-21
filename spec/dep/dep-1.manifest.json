@@ -3,13 +3,13 @@
   "status": "draft",
   "subprotocol": "dep.v1",
   "generator": "packages/protocol/scripts/generate.ts",
-  "definitionHash": "c2919830d6920c0e92a44909686f014094cf8a398ab53629cf0b2ddea484030e",
+  "definitionHash": "77d41e20d07dc4eb643ca5f81d6b238567f8f2c8398d8d3ed9fba965ac877318",
   "cdm": {
     "min": 1,
     "max": 1,
     "schema": "spec/cdm/cdm-1.schema.json",
     "id": "urn:docedit:cdm:1:draft",
-    "sha256": "0345bc5ee75752eb9e032db3bb3edea70f90b038fce55c8a4c2c47a8dbfb15ad"
+    "sha256": "7ccb727398c75f90fa38766730c4853529bb424bc20b58efe75a4396a7fcd124"
   },
   "counts": {
     "messages": 28,
@@ -22,8 +22,8 @@
   },
   "files": {
     "spec/dep/dep-1.asyncapi.json": "7824ed66e63c28d0afb86b13b4ed0e3ee664bfac2219a62eafd1fdf50585d56e",
-    "spec/dep/dep-1.openapi.json": "e6f277daf38301e137b0a899d1dea545dc3b4efb8896c09e162ecfd542cc25d4",
-    "spec/dep/dep-1.schema.json": "285f44f904dd04c6c19835462998ae95fd07e8d2e68a9e70aa8e5d7ac358361f",
+    "spec/dep/dep-1.openapi.json": "f475fdeb733d64c060f1e3a9d0f215a6f8149254b1c9847598393267a7828950",
+    "spec/dep/dep-1.schema.json": "31a52d343a18eeac09531a1d35f6ebe732876ade1eac22dd4900cc94aef08b05",
     "spec/dep/webhooks/dep.document.created.v1.schema.json": "1e16a104e436cdf8f6213fc1f051a4d9a1ec58a4c2c5eeb25829ed86ae672c54",
     "spec/dep/webhooks/dep.document.deleted.v1.schema.json": "890c2efa8c1731ef2208fbf3c86629fa2eabf2b1eef70dd74e6e8eb52a53e404",
     "spec/dep/webhooks/dep.document.state_changed.v1.schema.json": "9cc6359f41bf28afce274afe4a664fbdd0cb18ac1bc118a80341fb83f32954fb",
@@ -61,6 +61,6 @@
     "spec/dep/webhooks/dep.workflow.finalised.v1.schema.json": "9152416acc7809df32797943418c7a08be2f0169dd5f581a6c712d938774b333",
     "spec/dep/dep-1.registry.json": "7eb833f98d4c74c97c822ebc6fc0c86c9ecece683303fd552ec7c6b3c9702872",
     "spec/dep/dep-1.gaps.json": "13f01607bcec08af7322852875b0f4034b5618ec22fd80b4806ad06abc5f0d54",
-    "packages/protocol/src/generated/types.ts": "4ddc535bb63d9f15a8e9292d4c9390cbf668bf507c0d6255739de5a5bbb4b2d1"
+    "packages/protocol/src/generated/types.ts": "028de86abd2b729c938907e2ae721f1de4eb63fa12e3f4383dd0261ad091ab86"
   }
 }

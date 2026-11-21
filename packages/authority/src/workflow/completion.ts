@@ -26,6 +26,12 @@ export interface CompletionProblem {
   message: string;
   /** For a `validate` effect: the rule whose message this is. */
   rule?: string;
+  /**
+   * True when `message` is the text the author gave beside the field's `validation.pattern`
+   * (12 §3.2; FRW-018 criterion 4): the service then sends it with the refusal. Every other
+   * message of a static check is the rules package's wording.
+   */
+  authored?: true;
 }
 
 export type CompletionVerdict = { ok: true } | { ok: false; problems: CompletionProblem[] };
@@ -89,6 +95,7 @@ export function completionCheck(
         message: p.message,
       };
       if (p.rule !== undefined) problem.rule = p.rule;
+      if (p.authored === true) problem.authored = true;
       problems.push(problem);
     }
   return problems.length === 0 ? { ok: true } : { ok: false, problems };

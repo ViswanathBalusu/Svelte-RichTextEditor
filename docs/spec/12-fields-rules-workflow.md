@@ -53,7 +53,7 @@ An inline atom. It may appear wherever inline content is allowed in the body, in
 | `default`, `placeholder` | |
 | `options` | For `choice`: a list of `{ id, label }` |
 | `format` | Display format: decimals, prefix, suffix, date pattern |
-| `validation` | `min`, `max`, `minLength`, `maxLength`, `pattern` (a restricted regular expression; section 5.2), `preset` (`email`, `phone`, `postcode`) |
+| `validation` | `min`, `max`, `minLength`, `maxLength`, `pattern` (a restricted regular expression; section 5.2), `message` (optional: what the author tells a person whose entry does not match `pattern`; owner decision 187 of 2026-11-15), `preset` (`email`, `phone`, `postcode`) |
 | `width` | Fixed width in the document's length unit. Fields have a fixed width by default so that filling them does not move line and page breaks. A field with no `width` takes the default width of its kind (`FIELD_DEFAULT_WIDTH`; proposed in ADR 0380, not chosen by the owner). A value never changes the width, and a value wider than the box does not grow it |
 | `sensitive` | When true, the value is readable only by its readers: participants who hold the field's assignee role, users with `manage`, and principals with a grant on the region that holds the field (ADR 0019; owner decisions 156 and 158 of 2026-11-15). Every other reader gets a redaction marker in place of `value` and `default`. How a participant is found to hold the role is proposed in ADR 0422 |
 

@@ -1159,8 +1159,8 @@ export interface FormFieldAttrs {
   options?: Array<{ id: string; label: string }> | null;
   /** Display format: decimals, prefix, suffix, date pattern. Default: null. */
   format?: { decimals?: number; prefix?: string; suffix?: string; datePattern?: string } | null;
-  /** Static validation: decimal bounds, length bounds in Unicode code points, a restricted pattern (12 §5.2) and a preset. Default: null. */
-  validation?: { min?: string; max?: string; minLength?: number; maxLength?: number; pattern?: string; preset?: "email" | "phone" | "postcode" } | null;
+  /** Static validation: decimal bounds, length bounds in Unicode code points, a restricted pattern (12 §5.2) with an optional message for an entry that does not match it, and a preset. Default: null. */
+  validation?: { min?: string; max?: string; minLength?: number; maxLength?: number; pattern?: string; message?: string; preset?: "email" | "phone" | "postcode" } | null;
   /** Fixed width in twips, so filling moves no line break. Default: null. */
   width?: number | null;
   /** When true, the value is readable only by the principals of the read rule (ADR 0019, proposed; FRW-088): every other reader gets the redaction marker in place of `value` and `default`. Default: false. */

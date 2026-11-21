@@ -102,6 +102,41 @@ export function patternDocument(pattern: string, input: string): JsonEnvelope {
   return env;
 }
 
+/** The key of the text field that holds the input in `patternFieldDocument`. */
+export const PATTERN_INPUT = 'input';
+
+/**
+ * A pattern and an input as a CDM document in which the input is what a person entered: the value
+ * of a text field, which the rule reads with `{ field }`. The rule shows the probe field when the
+ * value matches and hides it otherwise.
+ */
+export function patternFieldDocument(pattern: string, input: string): JsonEnvelope {
+  const env = baseEnvelope(['fields']);
+  const tree = env.doc as unknown as { content: Array<{ content: J[] }> };
+  tree.content[0]!.content.push({
+    type: 'rule_def',
+    attrs: {
+      id: 'r_pattern',
+      when: { matches: [{ field: PATTERN_INPUT }, pattern] },
+      then: [{ show: [PATTERN_PROBE] }],
+      else: [{ hide: [PATTERN_PROBE] }],
+    },
+  });
+  const field = (i: number, key: string, value: string | null) => ({
+    type: 'form_field',
+    attrs: { id: fieldId(i), key, kind: 'text', label: key, assignee: null, value },
+  });
+  const intro = tree.content[1]!.content[0]!;
+  intro['content'] = [
+    ...((intro['content'] as J[] | undefined) ?? []),
+    { type: 'text', text: ' ' },
+    field(0, PATTERN_PROBE, null),
+    { type: 'text', text: ' ' },
+    field(1, PATTERN_INPUT, input),
+  ];
+  return env;
+}
+
 /** What the service answered for one field or rule, as `evaluateRules` writes it on the wire. */
 export interface WireEvaluation {
   fields: Array<{
@@ -200,6 +235,8 @@ export interface ImageReport {
   cases: number;
   passed: number;
   failed: string[];
+  /** The cases that passed, counted by kind (`expression`, `pattern`, `rules`, `value`). */
+  passedByKind: Record<string, number>;
   /** The Node.js of the image, as `process.version` gives it. */
   node: string;
   /** The file `@docedit/rules` resolves to from the service's own directory in the image. */
@@ -280,11 +317,16 @@ const IMAGE_RUNNER = [
   "import { runCase, runFixtures } from '@docedit/rules';",
   "import { FIXTURES } from '@docedit/rules/fixtures';",
   'const report = runFixtures(FIXTURES, runCase);',
+  'const passed = new Set(report.passed);',
+  'const passedByKind = {};',
+  'for (const c of FIXTURES.cases)',
+  '  if (passed.has(c.id)) passedByKind[c.kind] = (passedByKind[c.kind] ?? 0) + 1;',
   'process.stdout.write(JSON.stringify({',
   '  rules: report.rules,',
   '  cases: FIXTURES.cases.length,',
   '  passed: report.passed.length,',
   '  failed: report.failed.map((f) => f.id),',
+  '  passedByKind,',
   '  node: process.version,',
   "  resolved: import.meta.resolve('@docedit/rules'),",
   '}));',

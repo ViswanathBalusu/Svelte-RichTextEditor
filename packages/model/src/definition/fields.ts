@@ -225,11 +225,14 @@ export const FORM_FIELD: NodeDef = {
           minLength: int(0, 4096),
           maxLength: int(0, 4096),
           pattern: str(256),
+          // What the author tells a person whose entry does not match `pattern` (owner decision 187
+          // of 2026-11-15; ADR 0030 item 3). The grammar of labels, as a `validate` message.
+          message: NAME,
           preset: oneOf(VALIDATION_PRESETS),
         }),
       ),
       null,
-      'Static validation: decimal bounds, length bounds in Unicode code points, a restricted pattern (12 §5.2) and a preset.',
+      'Static validation: decimal bounds, length bounds in Unicode code points, a restricted pattern (12 §5.2) with an optional message for an entry that does not match it, and a preset.',
     ),
     width: attr(nullable(ULENGTH), null, 'Fixed width in twips, so filling moves no line break.'),
     sensitive: attr(
