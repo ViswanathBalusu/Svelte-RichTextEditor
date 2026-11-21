@@ -23,7 +23,7 @@ import {
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { toRemoteCommit } from '@docedit/protocol/bridge';
 import type { RemoteCommit } from '@docedit/protocol';
-import { connectionOn, minVisibleSeqOf, regionInfosOfJson } from './gate.ts';
+import { minVisibleSeqOf, readerConnectionOn, regionInfosOfJson } from './gate.ts';
 import { pageLimit, seqParam } from './http.ts';
 import { json, type Kit } from './kit.ts';
 import { guard, type Handler } from './pipeline.ts';
@@ -98,7 +98,12 @@ export function commitRoutes(k: Kit): Record<string, Handler> {
           'forbidden',
           'after is below the history visibility of the caller (07 §8)',
         );
-      const reader = readerView(d.views, connectionOn(ctx.caller, doc), full.doc, perms);
+      const reader = readerView(
+        d.views,
+        await readerConnectionOn(d, ctx.caller, doc),
+        full.doc,
+        perms,
+      );
       view = reader.token;
       if (!reader.full) hidden = reader.hidden;
     }

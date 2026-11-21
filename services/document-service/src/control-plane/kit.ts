@@ -36,6 +36,7 @@ import {
   DocumentChangeDebounce,
 } from './event-throttle.ts';
 import type { ExportPolicy, NotifyFn } from './exports.ts';
+import { readerConnectionOn } from './gate.ts';
 import type { FontCatalogue } from './fonts.ts';
 import type { Cursors } from './http.ts';
 import type { WebhookDispatcher } from './webhook-dispatcher.ts';
@@ -370,8 +371,7 @@ export function createKit(d: HandlerDeps): Kit {
       // always comes from the primary.
       if (!reads || seq === undefined) return primaryRead(ctx, doc, seq);
       const session = d.readSessions?.find(sessionKey(ctx));
-      const identity = ctx.caller.identity;
-      const conn = identity ? { ...identity.connection, role: identity.docs[doc]! } : null;
+      const conn = await readerConnectionOn(d, ctx.caller, doc);
       const routed = await reads.read<ReadAs>(
         { kind: 'pinned', tenant: ctx.caller.tenant, doc, seq, ...(session ? { session } : {}) },
         async (s) => {
@@ -410,7 +410,8 @@ export function createKit(d: HandlerDeps): Kit {
         etag: `"${c.incarnation}.${c.seq}.${c.view}"`,
       };
     }
-    const conn = identity ? { ...identity.connection, role: identity.docs[doc]! } : null;
+    // What is hidden is asked of the connection as the document's workflow binds it (FRW-038).
+    const conn = await readerConnectionOn(d, ctx.caller, doc);
     const r = await d.content.read(refOf(ctx, doc), {
       ...(seq !== undefined ? { seq } : {}),
       conn,

@@ -17,6 +17,7 @@
  * criterion 3), the refresh that recomputes access and sends `perm.changed` (criterion 5), and the
  * connection that the token service builds from this result.
  */
+import type { Connection } from '../permissions/model.ts';
 import type { WorkflowParticipant, WorkflowRecord } from './lifecycle.ts';
 import { fillActive } from './order.ts';
 
@@ -48,4 +49,42 @@ export function bindParticipant(claims: ParticipantClaims, workflow: WorkflowRec
 export function tokenMayFill(claims: ParticipantClaims, workflow: WorkflowRecord): boolean {
   const bound = bindParticipant(claims, workflow);
   return bound.ok && fillActive(workflow, bound.participant.id);
+}
+
+/**
+ * The connection as a workflow sees it (FRW-035, FRW-038): what the room computes access from, and
+ * what decides which values and regions the connection may read (ADR 0019; owner decision 156).
+ *
+ * - A connection whose token carries `wfp` (`participantClaim`) is the participant it binds to in
+ *   `workflow`, with that participant's roles, and active exactly when the record says so. When it
+ *   binds to no one, or there is no workflow (`null`: none, or one still in `draft`), it holds no
+ *   role and is not active, whatever else its token claims.
+ * - A connection with a participant and no claim keeps its roles; only whether it is active follows
+ *   the record. A connection with neither is returned as it is.
+ *
+ * Pure: the same connection and record give the same result.
+ */
+export function connectionInWorkflow(
+  conn: Connection,
+  workflow: WorkflowRecord | null,
+): Connection {
+  const claim = conn.participantClaim;
+  if (claim !== undefined) {
+    const bound = workflow === null ? null : bindParticipant(claim, workflow);
+    if (workflow === null || bound === null || !bound.ok) {
+      const { participant: _unbound, ...rest } = conn;
+      return { ...rest, participantRoles: [], participantActive: false };
+    }
+    return {
+      ...conn,
+      participant: bound.participant.id,
+      participantRoles: bound.participant.roles,
+      participantActive: fillActive(workflow, bound.participant.id),
+    };
+  }
+  if (workflow === null || conn.participant === undefined) return conn;
+  const id = conn.participant;
+  if (!workflow.participants.some((p) => p.id === id)) return conn;
+  const active = fillActive(workflow, id);
+  return active === conn.participantActive ? conn : { ...conn, participantActive: active };
 }

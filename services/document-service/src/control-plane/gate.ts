@@ -16,6 +16,7 @@ import {
   type PermissionState,
   type RegionInfo,
   computeAccess,
+  connectionInWorkflow,
   editsSomewhere,
   minVisibleSeqAsync,
   regionPolicyOf,
@@ -24,6 +25,7 @@ import {
 import type { JsonNode } from '@docedit/model';
 import type { DocRef, DocumentRecord, LogStore } from '../storage/types.ts';
 import { stateAllowed } from '../data-plane/gate.ts';
+import { recordOf } from '../workflow/record.ts';
 import { regionsOfJson } from './content.ts';
 import type { HandlerDeps } from './kit.ts';
 import type { Caller } from './pipeline.ts';
@@ -41,6 +43,32 @@ export function connectionOn(caller: Caller, doc: string): Connection | null {
   if (role === undefined)
     throw new ApiError('forbidden', `the token does not cover document ${doc}`);
   return { ...caller.identity!.connection, role };
+}
+
+/**
+ * The caller's connection on `doc` for deciding what they may read (ADR 0019): the connection of
+ * `connectionOn`, as the document's workflow binds it when the token carries `wfp` (12 §7; FRW-038;
+ * owner decision 156). The participant then reads with the roles the workflow gives them, as on
+ * their channel, where the room binds the same claim to the same record. A token that binds to no
+ * one, or a workflow still in `draft`, reads with no role. Null for a service credential, which
+ * reads the full document.
+ *
+ * Only what is hidden is derived from this connection. The route guards and the history gate keep
+ * the connection of `connectionOn`, which holds no workflow role, so they grant nothing more.
+ */
+export async function readerConnectionOn(
+  d: Pick<HandlerDeps, 'workflows'>,
+  caller: Caller,
+  doc: string,
+): Promise<Connection | null> {
+  const conn = connectionOn(caller, doc);
+  const wfp = caller.identity?.asserted?.wfp;
+  if (!conn || wfp === undefined) return conn;
+  const row = d.workflows ? await d.workflows.read(caller.tenant, doc) : null;
+  return connectionInWorkflow(
+    { ...conn, participantClaim: { sub: caller.identity!.sub, wfp } },
+    row && row.state !== 'draft' ? recordOf(row) : null,
+  );
 }
 
 /** The caller's access on a document with its regions and the grants in storage (07 §4). */

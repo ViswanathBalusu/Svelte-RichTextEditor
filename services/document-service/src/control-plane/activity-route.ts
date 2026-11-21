@@ -98,7 +98,7 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
     const { ref, head, perms } = v;
     const min = v.gate.min;
     const marker = (await store.get(ref, ctx.caller.actor)) ?? 0;
-    const reader = readerView(d.views, v.conn, v.headDoc, perms);
+    const reader = readerView(d.views, v.reader, v.headDoc, perms);
     // Visible seqs are at or above `min` (authority rangeVisible); "since the marker" is above it.
     const floor = Math.max(marker, min - 1);
     const cursor = ctx.url.searchParams.get('cursor');

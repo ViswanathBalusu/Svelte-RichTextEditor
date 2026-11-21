@@ -59,8 +59,7 @@ import { Admission, type AdmissionConfig } from './admission.ts';
 import { featuresUsed } from './features.ts';
 import { DEFAULT_RULE_BUDGET, ruleGate } from './rules.ts';
 import type { WorkflowRecord } from '../workflow/lifecycle.ts';
-import { bindParticipant } from '../workflow/binding.ts';
-import { fillActive } from '../workflow/order.ts';
+import { connectionInWorkflow } from '../workflow/binding.ts';
 import { workflowStatus } from '../workflow/state-view.ts';
 import {
   type ThreadAnchor,
@@ -648,27 +647,18 @@ export class Room {
    * with no participant, or one the record does not list, is left as it is.
    */
   private withWorkflow(conn: Connection): Connection {
-    const claim = conn.participantClaim;
-    if (claim !== undefined) {
-      // FRW-038: a token with `wfp` fills only as the participant it binds to in this workflow, with
-      // that participant's roles, and while the workflow lets them. Anything else: no fill.
-      const bound = this.workflow === null ? null : bindParticipant(claim, this.workflow);
-      if (this.workflow === null || bound === null || !bound.ok) {
-        const { participant: _unbound, ...rest } = conn;
-        return { ...rest, participantRoles: [], participantActive: false };
-      }
-      return {
-        ...conn,
-        participant: bound.participant.id,
-        participantRoles: bound.participant.roles,
-        participantActive: fillActive(this.workflow, bound.participant.id),
-      };
-    }
-    if (this.workflow === null || conn.participant === undefined) return conn;
-    const id = conn.participant;
-    if (!this.workflow.participants.some((p) => p.id === id)) return conn;
-    const active = fillActive(this.workflow, id);
-    return active === conn.participantActive ? conn : { ...conn, participantActive: active };
+    // FRW-038: a token with `wfp` fills only as the participant it binds to in this workflow, with
+    // that participant's roles, and while the workflow lets them. Anything else: no fill.
+    return connectionInWorkflow(conn, this.workflow);
+  }
+
+  /**
+   * The connection as the room's workflow binds it: the one its access is computed from. What a
+   * connection may read is decided from the same connection (ADR 0019; owner decision 156), so the
+   * projection gateway and the content reads ask here before they ask what is hidden.
+   */
+  connectionInWorkflow(conn: Connection): Connection {
+    return this.withWorkflow(conn);
   }
 
   /**

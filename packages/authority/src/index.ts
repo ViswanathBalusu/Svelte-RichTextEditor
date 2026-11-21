@@ -526,6 +526,7 @@ export {
 } from './workflow/events.ts';
 export {
   bindParticipant,
+  connectionInWorkflow,
   tokenMayFill,
   type Binding,
   type ParticipantClaims,

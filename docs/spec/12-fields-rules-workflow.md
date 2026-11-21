@@ -55,7 +55,7 @@ An inline atom. It may appear wherever inline content is allowed in the body, in
 | `format` | Display format: decimals, prefix, suffix, date pattern |
 | `validation` | `min`, `max`, `minLength`, `maxLength`, `pattern` (a restricted regular expression; section 5.2), `preset` (`email`, `phone`, `postcode`) |
 | `width` | Fixed width in the document's length unit. Fields have a fixed width by default so that filling them does not move line and page breaks. A field with no `width` takes the default width of its kind (`FIELD_DEFAULT_WIDTH`; proposed in ADR 0380, not chosen by the owner). A value never changes the width, and a value wider than the box does not grow it |
-| `sensitive` | Reserved. It becomes the read restriction for values under ADR 0019 (proposed, 2026-11-06); until that is accepted every value is readable by everyone who can open the document |
+| `sensitive` | When true, the value is readable only by its readers: participants who hold the field's assignee role, users with `manage`, and principals with a grant on the region that holds the field (ADR 0019; owner decisions 156 and 158 of 2026-11-15). Every other reader gets a redaction marker in place of `value` and `default`. How a participant is found to hold the role is proposed in ADR 0422 |
 
 ```json
 { "type": "form_field", "attrs": {
@@ -79,7 +79,7 @@ An inline atom. It may appear wherever inline content is allowed in the body, in
 | `dateSigned` | ISO 8601 date in the workflow's time zone. Set only by the server |
 | `formula` | Decimal string or string. Set only by the server from its rule |
 
-Values live in the document tree, as the `value` attribute. They therefore get the same ordering, attribution, hash chain, comparison, time travel and export as all other content, and there is no second source of truth. The consequences are accepted: a whole-document restore reverts values (and is refused while a workflow is active), every participant can read every value (until the read restrictions of ADR 0019 apply), and a bulk send is one fork per recipient.
+Values live in the document tree, as the `value` attribute. They therefore get the same ordering, attribution, hash chain, comparison, time travel and export as all other content, and there is no second source of truth. The consequences are accepted: a whole-document restore reverts values (and is refused while a workflow is active), every participant can read every value that is not marked `sensitive` (3.2; ADR 0019), and a bulk send is one fork per recipient.
 
 ### 3.4 Mirrors and long answers
 

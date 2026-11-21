@@ -44,7 +44,13 @@ import { formatTimestamp, uuid7 } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import type { StoredComment, StoredTarget, StoredThread } from '../storage/thread-store.ts';
 import type { DocRef } from '../storage/types.ts';
-import { accessOf, connectionOn, refuseSeqBelowGate, regionInfosOfJson } from './gate.ts';
+import {
+  accessOf,
+  connectionOn,
+  readerConnectionOn,
+  refuseSeqBelowGate,
+  regionInfosOfJson,
+} from './gate.ts';
 import { checkIfMatch, pageLimit, seqParam } from './http.ts';
 import { json, type Kit } from './kit.ts';
 import { mentionsOf } from './mentions.ts';
@@ -206,7 +212,13 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     const full = await d.content.rebuild(ref, head.incarnation, head.seq);
     const perms = await d.grants.current(ref);
     // A thread on a region the reader may not see is not found (ADR 0019; PRO-060 criterion 1).
-    const view = readerView(d.views, conn, full.doc, perms);
+    // What is hidden is asked of the connection as the document's workflow binds it (FRW-038).
+    const view = readerView(
+      d.views,
+      await readerConnectionOn(d, ctx.caller, t.docId),
+      full.doc,
+      perms,
+    );
     const hidden = scopesOf(t).some(
       (s) => s.startsWith('region:') && view.hidden.regions.has(s.slice('region:'.length)),
     );
