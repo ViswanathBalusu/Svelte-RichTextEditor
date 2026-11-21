@@ -9,6 +9,7 @@
   changed, and the pane names that region. Style and region names are the document's content.
 -->
 <script lang="ts">
+  import '../i18n/late/stylesPane.ts';
   import { tick } from 'svelte';
   import { useShell } from '../context.ts';
   import type { StyleEditOp, StyleSummary } from '../core-api.ts';

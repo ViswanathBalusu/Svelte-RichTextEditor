@@ -11,6 +11,7 @@
 import type { RecoveredItem, RegionSummary } from '../core-api.ts';
 import type { Translator } from '../i18n/strings.ts';
 import type { NameOf } from './regions.ts';
+import '../i18n/late/recoveredPane.ts';
 
 /**
  * The part of the document a refused change was in, in words, or null when the scope names no part

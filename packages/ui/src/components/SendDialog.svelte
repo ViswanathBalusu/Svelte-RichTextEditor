@@ -9,6 +9,7 @@
   The rows come from `shell/send-checklist.ts`; the strings are the shell's external keys.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import { untrack } from 'svelte';
   import { useShell } from '../context.ts';
   import type { WorkflowSendService } from '../core-api.ts';

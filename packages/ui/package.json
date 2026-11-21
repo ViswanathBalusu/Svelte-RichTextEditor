@@ -4,7 +4,9 @@
   "private": true,
   "description": "Svelte 5 components of the shell (02 §4; 13 §3). Never imports prosemirror-* (ADR 0003).",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/i18n/late/*.ts"
+  ],
   "svelte": "./src/index.ts",
   "exports": {
     ".": {

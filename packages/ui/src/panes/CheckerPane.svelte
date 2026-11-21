@@ -7,6 +7,7 @@
   checker changes nothing (UX-066 criterion 6). Loaded on demand (UX-070).
 -->
 <script lang="ts">
+  import '../i18n/late/checkerPane.ts';
   import { onDestroy, untrack } from 'svelte';
   import { useShell } from '../context.ts';
   import type { CoreApi } from '../core-api.ts';

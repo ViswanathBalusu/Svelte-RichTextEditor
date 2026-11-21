@@ -8,7 +8,7 @@
 import { mount } from 'svelte';
 import RuleBuilderPanel from '../../src/components/RuleBuilderPanel.svelte';
 import type { RuleChangeResult, RuleItem, RulePartsView } from '../../src/core-api.ts';
-import { EN_GB } from '../../src/i18n/en-GB.ts';
+import { SOURCE_TABLE } from '../../src/i18n/source.ts';
 
 const params = new URLSearchParams(location.search);
 const KEYS = ['tenant.maritalStatus', 'tenant.spouseName', 'tenant.amount', 'lease.total'];
@@ -40,7 +40,7 @@ const shown: string[] = [];
 (window as unknown as { harness: unknown }).harness = { saves, removes, shown };
 
 function t(key: string, values?: Readonly<Record<string, string | number>>): string {
-  const raw = (EN_GB as Readonly<Record<string, unknown>>)[key];
+  const raw = (SOURCE_TABLE as Readonly<Record<string, unknown>>)[key];
   if (typeof raw !== 'string') return key;
   return raw.replace(/\{(\w+)\}/g, (match, name: string) => String(values?.[name] ?? match));
 }

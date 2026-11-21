@@ -11,6 +11,7 @@
   stays in the box and the reason is shown.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import { onDestroy, tick } from 'svelte';
   import { useShell } from '../context.ts';
   import type { CommentAnchor, ThreadOutcome, ThreadsService } from '../core-api.ts';

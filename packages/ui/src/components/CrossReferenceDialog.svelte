@@ -6,6 +6,7 @@
   it when content moves. The texts of the targets are the document's content.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import type { ReferenceTargetItem } from '../core-api.ts';
   import { useShell } from '../context.ts';
   import Dialog from './Dialog.svelte';

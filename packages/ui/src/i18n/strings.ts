@@ -3,8 +3,9 @@
  * translator through `view` (a ReadView, like the core's views), and the element sets the locale
  * from its `locale` attribute.
  *
- * - The source table (British English) is bundled; every other table loads on demand through a
- *   loader, which is a dynamic `import()` and therefore a separate chunk.
+ * - The core of the source table (British English) is bundled (`source.ts`); the strings that
+ *   only code loaded on demand shows load with that code (`late/*.ts`; FND-008). Every other table
+ *   loads on demand through a loader, which is a dynamic `import()` and therefore a separate chunk.
  * - A BCP 47 tag is matched exactly, then by its language and script, then by its language, then
  *   the default table is used. Keys a table lacks fall back to the default table and are reported
  *   once per locale through `onMissing` (development).
@@ -14,7 +15,8 @@
  * - Plurals use `Intl.PluralRules` and numbers `Intl.NumberFormat` for the table's locale.
  */
 import type { ReadView } from '../core-api.ts';
-import { EN_GB, type StringKey } from './en-GB.ts';
+import type { StringKey } from './en-GB.ts';
+import { SOURCE_TABLE, isSourceKey } from './source.ts';
 import type {
   LocaleTable,
   Message,
@@ -147,7 +149,7 @@ class TranslatorImpl implements Translator {
   }
 
   #message(key: string): Message | undefined {
-    return this.#overrides[key] ?? this.#table[key] ?? (EN_GB as StringTable)[key];
+    return this.#overrides[key] ?? this.#table[key] ?? SOURCE_TABLE[key];
   }
 
   has(key: string): boolean {
@@ -202,8 +204,8 @@ export class Strings {
   constructor(options: StringsOptions = {}) {
     this.#options = options;
     this.#loaders = { ...BUILT_IN_LOADERS, ...options.loaders };
-    this.#loaded.set(DEFAULT_LOCALE, { strings: EN_GB, dir: 'ltr' });
-    this.#loaded.set('en', { strings: EN_GB, dir: 'ltr' });
+    this.#loaded.set(DEFAULT_LOCALE, { strings: SOURCE_TABLE, dir: 'ltr' });
+    this.#loaded.set('en', { strings: SOURCE_TABLE, dir: 'ltr' });
     this.#setOverrides(options.overrides ?? {});
     this.#current = this.#translator(DEFAULT_LOCALE, DEFAULT_LOCALE);
     this.view = {
@@ -223,7 +225,7 @@ export class Strings {
 
   /** Whether the source table knows a key (the registry checks command labels with it). */
   has(key: string): boolean {
-    return Object.hasOwn(EN_GB, key) || Object.hasOwn(this.#overrides, key);
+    return Object.hasOwn(SOURCE_TABLE, key) || Object.hasOwn(this.#overrides, key);
   }
 
   /**
@@ -252,7 +254,7 @@ export class Strings {
     const accepted: Record<string, Message> = {};
     const unknown: string[] = [];
     for (const [key, message] of Object.entries(overrides)) {
-      if (!Object.hasOwn(EN_GB, key)) unknown.push(key);
+      if (!isSourceKey(key)) unknown.push(key);
       // A value that is not a message is ignored: a host string is only ever text.
       if (isMessage(message)) accepted[key] = message;
     }
@@ -283,7 +285,7 @@ export class Strings {
   #report(tag: string, table: LocaleTable): void {
     if (this.#reported.has(tag) || tag === DEFAULT_LOCALE || tag === 'en') return;
     this.#reported.add(tag);
-    const missing = Object.keys(EN_GB).filter((key) => !Object.hasOwn(table.strings, key));
+    const missing = Object.keys(SOURCE_TABLE).filter((key) => !Object.hasOwn(table.strings, key));
     if (missing.length) this.#options.onMissing?.(tag, missing);
   }
 
@@ -291,7 +293,7 @@ export class Strings {
   missing(tag: string): string[] {
     const table = this.#loaded.get(tag);
     if (!table) return [];
-    return Object.keys(EN_GB).filter((key) => !Object.hasOwn(table.strings, key));
+    return Object.keys(SOURCE_TABLE).filter((key) => !Object.hasOwn(table.strings, key));
   }
 
   #translator(requested: string, locale: string): Translator {
@@ -300,7 +302,7 @@ export class Strings {
       requested,
       locale,
       directionOf(locale, table),
-      table?.strings ?? EN_GB,
+      table?.strings ?? SOURCE_TABLE,
       this.#overrides,
     );
   }
@@ -313,5 +315,5 @@ export class Strings {
 
 /** A translator for the source table, for code that runs before a catalogue exists. */
 export function sourceTranslator(): Translator {
-  return new TranslatorImpl(DEFAULT_LOCALE, DEFAULT_LOCALE, 'ltr', EN_GB, {});
+  return new TranslatorImpl(DEFAULT_LOCALE, DEFAULT_LOCALE, 'ltr', SOURCE_TABLE, {});
 }

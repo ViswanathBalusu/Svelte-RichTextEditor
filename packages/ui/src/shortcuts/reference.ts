@@ -11,6 +11,7 @@
 import type { CommandView } from '../commands/types.ts';
 import type { StringKey } from '../i18n/en-GB.ts';
 import { SHORTCUT_TABLE, boundKeys } from './table.ts';
+import '../i18n/late/shortcutsPane.ts';
 
 /** The part of the interface's strings the reference needs. */
 export interface ReferenceStrings {

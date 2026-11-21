@@ -10,6 +10,7 @@
   native control, so the keyboard reaches all of them in order.
 -->
 <script lang="ts">
+  import '../i18n/late/rulesPane.ts';
   import type {
     RuleChangeResult,
     RuleEffectName,

@@ -5,6 +5,7 @@
   Applying runs the core's `setAltText` through the registry's guards, as typing is.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import { useShell } from '../context.ts';
   import Dialog from './Dialog.svelte';
 

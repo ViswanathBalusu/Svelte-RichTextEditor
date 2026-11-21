@@ -8,6 +8,7 @@
   or in progress). Field labels, keys and role names are the document's content.
 -->
 <script lang="ts">
+  import '../i18n/late/fieldsPane.ts';
   import FieldPropertiesPanel from '../components/FieldPropertiesPanel.svelte';
   import { useShell } from '../context.ts';
   import type { StringKey } from '../i18n/en-GB.ts';

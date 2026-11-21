@@ -7,7 +7,7 @@
  */
 import type { CoreApi } from '../core-api.ts';
 import { dispatchDocEvent } from '../de-event.ts';
-import { EN_GB } from '../i18n/en-GB.ts';
+import { SOURCE_TABLE } from '../i18n/source.ts';
 import { coreCommands } from './builtin.ts';
 import { coreQuerySource, fieldInsertSource, markRegionSource } from './queries.ts';
 import { CommandRegistry, type RegistryOptions } from './registry.ts';
@@ -74,7 +74,7 @@ export function createCommandRegistry(
   options: Omit<RegistryOptions, 'core'> = {},
 ): CommandRegistry {
   const registry = new CommandRegistry({
-    hasString: (key) => Object.hasOwn(EN_GB, key),
+    hasString: (key) => Object.hasOwn(SOURCE_TABLE, key),
     ...options,
     core,
     sources: [

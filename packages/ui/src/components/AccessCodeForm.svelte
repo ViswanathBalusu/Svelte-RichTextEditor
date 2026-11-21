@@ -14,6 +14,7 @@
     is cleared on success and never written to any attribute, log or event.
 -->
 <script lang="ts">
+  import '../i18n/late/fillBar.ts';
   import { onDestroy } from 'svelte';
   import { useShell } from '../context.ts';
   import type { AccessCodeOutcome, AccessCodeService } from '../core-api.ts';

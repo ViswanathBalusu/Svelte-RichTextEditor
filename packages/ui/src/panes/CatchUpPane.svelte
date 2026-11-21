@@ -7,6 +7,7 @@
   the catch-up the shell keeps; without the host's port it says so.
 -->
 <script lang="ts">
+  import '../i18n/late/catchUpPane.ts';
   import { onMount } from 'svelte';
   import { useShell } from '../context.ts';
   import type { CoreApi, HistoryChange } from '../core-api.ts';

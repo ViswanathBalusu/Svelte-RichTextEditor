@@ -7,6 +7,7 @@
   gets no control that changes a definition. Titles, names and excerpts are the document's content.
 -->
 <script lang="ts">
+  import '../i18n/late/sourcesPane.ts';
   import { useShell } from '../context.ts';
   import type { SourceChangeResult, SourceSummary } from '../core-api.ts';
   import type { StringKey } from '../i18n/en-GB.ts';

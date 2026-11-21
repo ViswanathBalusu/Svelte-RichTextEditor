@@ -8,6 +8,7 @@
   suggestion that arrives or is resolved appears or leaves without a reload.
 -->
 <script lang="ts">
+  import '../i18n/late/reviewPane.ts';
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
   import type { ReviewItem } from '../core-api.ts';

@@ -5,6 +5,7 @@
   permissions apply as for typing.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import { useShell } from '../context.ts';
   import Dialog from './Dialog.svelte';
 

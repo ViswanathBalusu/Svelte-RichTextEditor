@@ -8,6 +8,7 @@
   and field labels are the document's content.
 -->
 <script lang="ts">
+  import '../i18n/late/rolesPane.ts';
   import { useShell } from '../context.ts';
   import type { RoleChangeResult, RoleSummary } from '../core-api.ts';
   import type { StringKey } from '../i18n/en-GB.ts';

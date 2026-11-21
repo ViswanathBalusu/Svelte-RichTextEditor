@@ -10,6 +10,7 @@
   choose.
 -->
 <script lang="ts">
+  import '../i18n/late/outlinePane.ts';
   import { tick, untrack } from 'svelte';
   import { useShell } from '../context.ts';
   import type { PageThumbnails, PagesInfo } from '../core-api.ts';

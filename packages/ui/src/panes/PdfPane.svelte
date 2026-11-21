@@ -13,6 +13,7 @@
   the pane repeats it in words (09 §8).
 -->
 <script lang="ts">
+  import '../i18n/late/pdfPane.ts';
   import { onDestroy, onMount, untrack } from 'svelte';
   import type { ExportJobView } from '../core-api.ts';
   import { useShell } from '../context.ts';

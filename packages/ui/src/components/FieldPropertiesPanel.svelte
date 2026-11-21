@@ -8,6 +8,7 @@
   (`t`); a field's content is shown as text only.
 -->
 <script lang="ts">
+  import '../i18n/late/fieldsPane.ts';
   import { draftFromForm, formFromDraft, type FieldForm } from '../shell/field-form.ts';
   import {
     FIELD_KINDS,

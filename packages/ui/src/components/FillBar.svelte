@@ -6,6 +6,7 @@
   themselves are the core's node views (FRW-079); the core decides which are the participant's.
 -->
 <script lang="ts">
+  import '../i18n/late/fillBar.ts';
   import type { FillSummary, ReadView } from '../core-api.ts';
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';

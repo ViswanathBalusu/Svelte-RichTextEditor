@@ -7,6 +7,7 @@
   the author's own words.
 -->
 <script lang="ts">
+  import '../i18n/late/recoveredPane.ts';
   import { useShell } from '../context.ts';
   import type { RecoveredItem } from '../core-api.ts';
   import type { StringKey } from '../i18n/en-GB.ts';

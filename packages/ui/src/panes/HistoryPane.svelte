@@ -13,6 +13,7 @@
   asked for only by the confirmation that the preview shows.
 -->
 <script lang="ts">
+  import '../i18n/late/historyPane.ts';
   import { onMount, tick } from 'svelte';
   import AssistantMark from '../components/AssistantMark.svelte';
   import { useShell } from '../context.ts';

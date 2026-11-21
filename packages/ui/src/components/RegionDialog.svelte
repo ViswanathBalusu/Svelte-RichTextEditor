@@ -4,6 +4,7 @@
   may edit it is then set in the permissions pane (PRM-035). The title is the author's content.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import { useShell } from '../context.ts';
   import Dialog from './Dialog.svelte';
 

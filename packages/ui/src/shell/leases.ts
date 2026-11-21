@@ -10,6 +10,7 @@
 import type { AccessObject, HeldLease, RegionSummary } from '../core-api.ts';
 import type { StringKey } from '../i18n/en-GB.ts';
 import { mayEditRegion } from './regions.ts';
+import '../i18n/late/permissionsPane.ts';
 
 /** What the pane shows for one region. */
 export type CheckOut =

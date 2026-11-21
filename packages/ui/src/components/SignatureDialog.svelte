@@ -9,6 +9,7 @@
   document's text.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import { untrack } from 'svelte';
   import { useShell } from '../context.ts';
   import type {

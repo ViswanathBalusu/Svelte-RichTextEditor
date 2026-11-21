@@ -18,6 +18,7 @@ import type {
   RuleOperatorName,
   RulePartsView,
 } from '../core-api.ts';
+import '../i18n/late/rulesPane.ts';
 
 export const RULE_OPERATORS: readonly RuleOperatorName[] = ['==', '!=', '<', '<=', '>', '>='];
 export const RULE_EFFECTS: readonly RuleEffectName[] = [

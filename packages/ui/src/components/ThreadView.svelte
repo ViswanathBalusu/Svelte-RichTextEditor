@@ -12,6 +12,7 @@
   thread whose commented text was removed is marked and stays readable; nothing re-attaches it.
 -->
 <script lang="ts">
+  import '../i18n/late/commentsPane.ts';
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
   import { createAssigneeSearch, type AssigneeState } from '../shell/assignee-search.ts';

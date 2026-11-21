@@ -9,6 +9,7 @@
   components/Header.svelte; the thread view is components/ThreadView.svelte (UX-029).
 -->
 <script lang="ts">
+  import '../i18n/late/commentsPane.ts';
   import ThreadView from '../components/ThreadView.svelte';
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';

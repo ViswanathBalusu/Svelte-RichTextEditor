@@ -5,6 +5,7 @@
   failure are said in the dialog, which stays open so that nothing typed is lost.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import { useShell } from '../context.ts';
   import type { HistoryPort } from '../core-api.ts';
   import Dialog from './Dialog.svelte';

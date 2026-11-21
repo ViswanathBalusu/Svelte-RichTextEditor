@@ -13,6 +13,7 @@
   the document is unchanged.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import { onDestroy } from 'svelte';
   import type {
     ExportDiagnostic,

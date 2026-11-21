@@ -88,10 +88,14 @@ test.describe('FND-008 parts of the editing core load on first use', () => {
     const roles = await openPaneBySearch(page, 'one', 'Roles', 'roles');
     await expect(roles.locator('[data-roles="list"] > li')).toHaveCount(2);
     expect(await parts.seen()).toEqual({ rules: 0, authoring: 1 });
+    // The pane's words came with it: no key stands where a sentence belongs (the strings of a pane
+    // are a group that loads with the pane).
+    expect(await roles.innerText()).not.toMatch(/\broles\.[a-zA-Z]+/);
 
     // The rules pane loads the rules language, and lists the document's rules (none).
     const rules = await openPaneBySearch(page, 'one', 'Rules', 'rules');
     await expect(rules).toBeVisible();
+    expect(await rules.innerText()).not.toMatch(/\brule\.[a-zA-Z]+/);
     expect(await parts.seen()).toEqual({ rules: 1, authoring: 1 });
   });
 

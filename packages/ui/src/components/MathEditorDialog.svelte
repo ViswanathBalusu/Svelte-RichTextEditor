@@ -13,6 +13,7 @@
     and focus goes back to where it was, which is the equation's own editing surface.
 -->
 <script lang="ts">
+  import '../i18n/late/dialogs.ts';
   import { untrack } from 'svelte';
   import type { EquationOutcome, EquationRef, MathEditorService, MathFieldHandle } from '../core-api.ts';
   import { useShell } from '../context.ts';

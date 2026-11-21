@@ -8,7 +8,7 @@
  *
  * Placeholders such as `{count}` are kept unchanged, so parameters still work.
  */
-import { EN_GB } from './en-GB.ts';
+import { SOURCE_TABLE } from './source.ts';
 import type { LocaleTable, Message, StringTable } from './types.ts';
 
 const ACCENTS: Readonly<Record<string, string>> = {
@@ -104,23 +104,40 @@ export function bidiText(text: string): string {
   return `‮${text}‬`;
 }
 
-function mapTable(table: StringTable, f: (text: string) => string): StringTable {
-  const out: Record<string, Message> = {};
-  for (const [key, message] of Object.entries(table)) {
-    if (typeof message === 'string') out[key] = f(message);
-    else {
-      const forms: Record<string, string> = {};
-      for (const [category, text] of Object.entries(message)) forms[category] = f(text);
-      out[key] = { ...forms, other: f(message.other) };
-    }
-  }
-  return out;
+function mapMessage(message: Message, f: (text: string) => string): Message {
+  if (typeof message === 'string') return f(message);
+  const forms: Record<string, string> = {};
+  for (const [category, text] of Object.entries(message)) forms[category] = f(text);
+  return { ...forms, other: f(message.other) };
 }
 
-export function accented(source: StringTable = EN_GB): LocaleTable {
+/**
+ * The source table with each message mapped, read when it is asked for. The table is live (the groups
+ * that load on demand join it as they load; FND-008), so a snapshot would leave their strings in
+ * plain English and a pseudo-locale would no longer show a string that is not translated. Keys and
+ * membership are the source table's own.
+ */
+function mapTable(table: StringTable, f: (text: string) => string): StringTable {
+  const done = new Map<string, Message>();
+  return new Proxy(table, {
+    get(target, key) {
+      if (typeof key !== 'string') return undefined;
+      const message = target[key];
+      if (message === undefined || !Object.hasOwn(target, key)) return undefined;
+      let mapped = done.get(key);
+      if (mapped === undefined) {
+        mapped = mapMessage(message, f);
+        done.set(key, mapped);
+      }
+      return mapped;
+    },
+  });
+}
+
+export function accented(source: StringTable = SOURCE_TABLE): LocaleTable {
   return { strings: mapTable(source, accentText), dir: 'ltr' };
 }
 
-export function bidi(source: StringTable = EN_GB): LocaleTable {
+export function bidi(source: StringTable = SOURCE_TABLE): LocaleTable {
   return { strings: mapTable(source, bidiText), dir: 'rtl' };
 }

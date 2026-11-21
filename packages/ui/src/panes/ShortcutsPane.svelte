@@ -6,6 +6,7 @@
   platform (Ctrl or Command).
 -->
 <script lang="ts">
+  import '../i18n/late/shortcutsPane.ts';
   import { ariaShortcut, isApplePlatform } from '../commands/keys.ts';
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';

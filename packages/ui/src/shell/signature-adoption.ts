@@ -8,6 +8,7 @@
  * it is a picture of that text and is hidden from them.
  */
 import type { SignatureKind, SignatureMode } from '../core-api.ts';
+import '../i18n/late/dialogs.ts';
 
 /** The modes in the order they are offered; the first is the default and needs no pointer. */
 export const SIGNATURE_MODES: readonly SignatureMode[] = ['typed', 'drawn', 'uploaded'];

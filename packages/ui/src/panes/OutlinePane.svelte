@@ -11,6 +11,7 @@
   the pane is the headings alone.
 -->
 <script lang="ts">
+  import '../i18n/late/outlinePane.ts';
   import { onDestroy, tick, untrack } from 'svelte';
   import PageThumbnails from '../components/PageThumbnails.svelte';
   import { useShell } from '../context.ts';

@@ -10,6 +10,7 @@
   shown with a colour, a shape and their name. Titles and names are content.
 -->
 <script lang="ts">
+  import '../i18n/late/permissionsPane.ts';
   import { onMount } from 'svelte';
   import { useShell } from '../context.ts';
   import type {
