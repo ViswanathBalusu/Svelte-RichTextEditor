@@ -306,6 +306,8 @@ export class DocEditorElement extends Base {
   /** Names and avatars from the host's directory (PRO-080); read whenever the shell asks. */
   set resolveUsers(value: ResolveUsers | null) {
     this.#resolveUsers = typeof value === 'function' ? value : null;
+    // Names the shell asked for before the host had a directory are asked for again.
+    if (this.#resolveUsers !== null) this.#mounted?.resolveUsersChanged();
   }
 
   get searchPrincipals(): SearchPrincipals | null {

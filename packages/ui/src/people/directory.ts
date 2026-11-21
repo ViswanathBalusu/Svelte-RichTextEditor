@@ -8,10 +8,21 @@
  * - Until an answer arrives, or when the host has no `resolveUsers`, a person is shown with the
  *   name the service reported, and failing that with a neutral label. Nothing waits for the host.
  * - A rejected call is retried later, with a growing delay; the fallback stays meanwhile.
+ * - A host may set its `resolveUsers` after the editor has loaded (05 §8.1). While it has none, the
+ *   source answers null: that is not an answer of the host, so nothing is cached, and the
+ *   identifiers are asked again when the host has a directory (`refresh`).
  * - Names are plain strings (the shell renders them as text). An avatar address is kept only if it
  *   is `https:`, `http:`, `blob:` or a `data:image/` address; it is only ever an image's `src`.
  */
-import type { ReadView, ResolveUsers, UserInfo } from '../core-api.ts';
+import type { ReadView, UserInfo } from '../core-api.ts';
+
+/**
+ * The host's directory as the shell asks it: the host's `resolveUsers`, or a reader of the host's
+ * property that answers null while the host has set none.
+ */
+export type DirectorySource = (
+  ids: readonly string[],
+) => Promise<ReadonlyArray<UserInfo | null>> | null;
 
 export interface Person {
   readonly id: string;
@@ -23,7 +34,7 @@ export interface Person {
 }
 
 export interface DirectoryOptions {
-  resolveUsers?: ResolveUsers;
+  resolveUsers?: DirectorySource;
   /** Largest number of identifiers in one call. */
   batchSize?: number;
   /** Delays before retrying a failed call, in milliseconds; the last one repeats. */
@@ -75,7 +86,7 @@ interface Entry {
 }
 
 export class PeopleDirectory {
-  readonly #resolve: ResolveUsers | undefined;
+  readonly #resolve: DirectorySource | undefined;
   readonly #batchSize: number;
   readonly #retryDelays: readonly number[];
   readonly #setTimer: (callback: () => void, ms: number) => unknown;
@@ -84,6 +95,8 @@ export class PeopleDirectory {
   readonly #queued = new Set<string>();
   readonly #inFlight = new Set<string>();
   readonly #failed = new Set<string>();
+  /** Identifiers asked for while the host had no directory: asked again at `refresh`. */
+  readonly #waiting = new Set<string>();
   readonly #listeners = new Set<() => void>();
   #flushQueued = false;
   #attempt = 0;
@@ -136,6 +149,17 @@ export class PeopleDirectory {
     });
   }
 
+  /**
+   * The host's directory is there now, or was replaced (the element calls this when the host sets
+   * `resolveUsers`): what was asked for while there was none is asked again. Answers the host
+   * gave stay cached.
+   */
+  refresh(): void {
+    const again = [...this.#waiting];
+    this.#waiting.clear();
+    this.request(again);
+  }
+
   #flush(): void {
     const ids = [...this.#queued];
     this.#queued.clear();
@@ -146,13 +170,23 @@ export class PeopleDirectory {
   #call(ids: string[]): void {
     const resolve = this.#resolve;
     if (!resolve || ids.length === 0) return;
-    for (const id of ids) this.#inFlight.add(id);
-    let pending: Promise<ReadonlyArray<UserInfo | null>>;
+    let answer: ReturnType<DirectorySource> | undefined;
     try {
-      pending = Promise.resolve(resolve(ids));
+      answer = resolve(ids);
     } catch (error) {
-      pending = Promise.reject(error);
+      answer = Promise.reject(error);
     }
+    if (answer === null || answer === undefined) {
+      // The host has no directory now. Nothing was answered, so nothing is cached: a null kept as
+      // "unknown" would hide the name for the whole session once the host sets its callback.
+      for (const id of ids) this.#waiting.add(id);
+      return;
+    }
+    for (const id of ids) {
+      this.#inFlight.add(id);
+      this.#waiting.delete(id);
+    }
+    const pending = Promise.resolve(answer);
     pending.then(
       (answers) => {
         for (const id of ids) this.#inFlight.delete(id);

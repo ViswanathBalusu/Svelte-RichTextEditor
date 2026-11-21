@@ -37,6 +37,8 @@ interface Probe {
   asked: string[][];
   /** Lets the directory answer; until then its answers wait. */
   answer(): void;
+  /** Sets the element's `resolveUsers`, as a host does; at mount unless the test asked for `late`. */
+  setDirectory(): void;
 }
 
 declare global {
@@ -45,10 +47,13 @@ declare global {
   }
 }
 
-/** Creates the document and mounts Bob's editor on it. The directory answers at once unless `hold`. */
-async function mount(page: Page, opts: { hold?: boolean } = {}): Promise<void> {
+/**
+ * Creates the document and mounts Bob's editor on it. The directory answers at once unless `hold`.
+ * With `late`, the host sets `resolveUsers` only when the test calls the probe's `setDirectory`.
+ */
+async function mount(page: Page, opts: { hold?: boolean; late?: boolean } = {}): Promise<void> {
   await page.evaluate(
-    async ({ IDS, hold }) => {
+    async ({ IDS, hold, late }) => {
       const p = (id: string, text: string) => ({
         type: 'paragraph',
         attrs: { id },
@@ -111,8 +116,6 @@ async function mount(page: Page, opts: { hold?: boolean } = {}): Promise<void> {
       });
       let release: () => void = () => {};
       const gate = hold ? new Promise<void>((resolve) => (release = resolve)) : Promise.resolve();
-      const probe = { asked: [] as string[][], answer: () => release(), docId, region: {} };
-      window.__prm026 = probe;
       const names: Record<string, string> = { ada: 'Ada Lovelace', bob: 'Bob Hopper' };
       const el = document.createElement('doc-editor') as HTMLElement & {
         backend: unknown;
@@ -120,11 +123,22 @@ async function mount(page: Page, opts: { hold?: boolean } = {}): Promise<void> {
       };
       el.dataset['test'] = 'prm026';
       // The host's directory: identifiers in, names out. A group is never asked for here.
-      el.resolveUsers = async (ids: readonly string[]) => {
+      const directory = async (ids: readonly string[]) => {
         probe.asked.push([...ids]);
         await gate;
         return ids.map((id) => (names[id] ? { id, name: names[id] } : null));
       };
+      const probe = {
+        asked: [] as string[][],
+        answer: () => release(),
+        setDirectory: () => {
+          el.resolveUsers = directory;
+        },
+        docId,
+        region: {},
+      };
+      window.__prm026 = probe;
+      if (!late) probe.setDirectory();
       const ready = new Promise<void>((resolve, reject) => {
         el.addEventListener('de-ready', () => resolve(), { once: true });
         el.addEventListener(
@@ -138,7 +152,7 @@ async function mount(page: Page, opts: { hold?: boolean } = {}): Promise<void> {
       document.getElementById('mount')!.append(el);
       await ready;
     },
-    { IDS, hold: opts.hold === true },
+    { IDS, hold: opts.hold === true, late: opts.late === true },
   );
   await expect(page.locator(`${HOST} .de-editing-surface`)).toBeVisible();
 }
@@ -315,6 +329,24 @@ test.describe('PRM-026: regions the user cannot edit', () => {
     await expect(description).not.toContainText('ada');
     await page.evaluate(() => window.__prm026!.answer());
     await expect(description).toHaveText(WHO);
+  });
+
+  test('a host that sets resolveUsers after the editor has loaded gets its names on the indicator', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mount(page, { late: true });
+    const description = lock(page, 'Locked').locator('.de-region-lock-description');
+    // No directory yet: the indicator is drawn at once, with the neutral word.
+    await expect(description).toHaveText(
+      'It can be edited by Group and Collaborator, and by document owners.',
+    );
+    expect(await page.evaluate(() => window.__prm026!.asked)).toEqual([]);
+    // The host sets its callback (05 §8.1 lets it do so at any time): the name asked for before is
+    // asked for again, and is not held as unknown for the rest of the session.
+    await page.evaluate(() => window.__prm026!.setDirectory());
+    await expect(description).toHaveText(WHO);
+    expect(await page.evaluate(() => window.__prm026!.asked.flat())).toContain('ada');
   });
 
   test('the indicator has an icon and a text label as well as shading', async ({ page }) => {
