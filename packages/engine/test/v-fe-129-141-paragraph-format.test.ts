@@ -75,7 +75,8 @@ describe('setParagraphFormat (V-FE-129-141)', () => {
     expect(validParagraphFormat({ lineRule: 'double' })).toBe(false);
     // A patch from outside can carry a key the type does not list; a valid key beside it does not
     // make it acceptable. The variable (not a literal) is how such a value reaches the function.
-    const withUnknownKey = { align: 'center', tabs: [] };
+    // (`numbering` is a property of styles only, 03 §4.5; `tabs` is a key since UX-102.)
+    const withUnknownKey = { align: 'center', numbering: null };
     expect(validParagraphFormat(withUnknownKey)).toBe(false);
     expect(validParagraphFormat({})).toBe(false);
   });

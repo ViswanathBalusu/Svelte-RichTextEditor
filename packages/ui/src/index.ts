@@ -45,6 +45,8 @@ export type {
   OutlineItem,
   PageThumbnails,
   PagesInfo,
+  ParagraphFormatView,
+  TabStopView,
   PaneName,
   PanelInfo,
   PeerCaret,

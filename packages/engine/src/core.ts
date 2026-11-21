@@ -311,6 +311,7 @@ import { type AltRequest, setAltText } from './alt-text.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
 import { setParagraphFormat } from './paragraph-format.ts';
+import { paragraphFormatInfo, type ParagraphFormatInfo } from './paragraph-format-info.ts';
 import { DEFAULT_MAPPING_HISTORY, PresenceClient, toConfirmed } from './presence.ts';
 import { type SearchMatch, findMatches } from './search.ts';
 import { skippedPreservedAtoms } from './preserved-find.ts';
@@ -865,6 +866,11 @@ export class DocumentCore implements DocumentApi {
   readonly language: ReadValue<string | null>;
   /** The words in the body; null until the first count, which is made off the typing path (UX-018). */
   readonly words: ReadValue<number | null>;
+  /**
+   * The indents and tab stops of the paragraphs at the selection, for the ruler and the paragraph
+   * dialog (UX-102); null when the selection covers no paragraph.
+   */
+  readonly paragraphFormat: ReadValue<ParagraphFormatInfo | null>;
   readonly #words = new WordCounter(
     () => countBodyWords(this.#state.doc),
     (n) => this.words.set(n),
@@ -1063,6 +1069,7 @@ export class DocumentCore implements DocumentApi {
     this.direction = new ReadValue<'ltr' | 'rtl'>('ltr', Object.is, hub);
     this.language = new ReadValue<string | null>(null, Object.is, hub);
     this.words = new ReadValue<number | null>(null, Object.is, hub);
+    this.paragraphFormat = new ReadValue<ParagraphFormatInfo | null>(null, sameJson, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.altRequest = new ReadValue<AltRequest | null>(null, sameJson, hub);
     this.glyphNotice = new ReadValue<GlyphNotice | null>(null, sameJson, hub);
@@ -1617,6 +1624,14 @@ export class DocumentCore implements DocumentApi {
       const commands = {} as Record<CommandName, CommandState>;
       for (const name of COMMANDS) commands[name] = this.queryCommand(name);
       this.commands.set(commands);
+      // The indents and tab stops at the selection (UX-102), with whether they may be changed now:
+      // the answer the command itself gives for a patch, so the lock, the mode and the guard apply.
+      this.paragraphFormat.set(
+        paragraphFormatInfo(
+          state,
+          this.queryCommand('setParagraphFormat', { paragraphFormat: { indentLeft: 0 } }).enabled,
+        ),
+      );
       this.access.set(this.#accessSummary());
       if (last?.doc !== state.doc) this.#refreshFind();
       this.revision.set(this.revision.get() + 1);

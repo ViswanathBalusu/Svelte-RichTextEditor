@@ -20,6 +20,13 @@ export {
 export { REMOTE } from './meta.ts';
 export { ATOM_CHAR } from './page-input.ts';
 export type { BlockPoint, BlockSelection, PageViewHandle, PageViewHooks } from './page-input.ts';
+export type {
+  PageColumnInfo,
+  ParagraphFormatInfo,
+  TabAlign,
+  TabLeader,
+  TabStopInfo,
+} from './paragraph-format-info.ts';
 export {
   VersionDocument,
   openVersion,
