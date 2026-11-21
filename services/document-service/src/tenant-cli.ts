@@ -13,7 +13,7 @@
  *   tenant remove-origin <tenant> <origin>
  */
 import { createPool } from './storage/db.ts';
-import { PgTenantRegistry } from './control-plane/tenants.ts';
+import { PgTenantRegistry } from './control-plane/tenants-pg.ts';
 import { hashSecret } from './control-plane/tenants.ts';
 import { newApiKey } from './control-plane/tokens.ts';
 import { isAlgorithm } from './control-plane/jwt.ts';

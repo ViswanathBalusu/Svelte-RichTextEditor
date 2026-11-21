@@ -10,9 +10,9 @@ import { applySeed, parseSeed } from '../../src/control-plane/seed.ts';
 import {
   hashSecret,
   MemoryTenantRegistry,
-  PgTenantRegistry,
   type TenantRegistry,
 } from '../../src/control-plane/tenants.ts';
+import { PgTenantRegistry } from '../../src/control-plane/tenants-pg.ts';
 import { signingKey, TokenService } from '../../src/control-plane/tokens.ts';
 import {
   MemoryUserDirectory,

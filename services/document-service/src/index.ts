@@ -59,12 +59,12 @@ export {
 } from './control-plane/tokens.ts';
 export {
   MemoryTenantRegistry,
-  PgTenantRegistry,
   hashSecret,
   type TenantRegistry,
   type TenantKey,
   type KeyUse,
 } from './control-plane/tenants.ts';
+export { PgTenantRegistry } from './control-plane/tenants-pg.ts';
 export { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
 export { applySeed, parseSeed, type SeedFile, type TenantSeed } from './control-plane/seed.ts';
 export {
@@ -111,17 +111,14 @@ export {
 export { checkQueueProof, withQueueProof, QUEUE_PROOF_MEMBER } from './control-plane/job-proof.ts';
 export type { ClaimOptions, QueueDepth } from './control-plane/jobs/queue.ts';
 export type { JobHooks, JobOutcome } from './control-plane/jobs/runner.ts';
-export {
-  MemoryIdempotencyStore,
-  PgIdempotencyStore,
-  type IdempotencyStore,
-} from './control-plane/idempotency.ts';
+export { MemoryIdempotencyStore, type IdempotencyStore } from './control-plane/idempotency.ts';
+export { PgIdempotencyStore } from './control-plane/idempotency-pg.ts';
 export {
   MemoryAssetRegistry,
-  PgAssetRegistry,
   type AssetRecord,
   type AssetRegistry,
 } from './control-plane/assets.ts';
+export { PgAssetRegistry } from './control-plane/assets-pg.ts';
 export {
   Scheduler,
   SCHEDULE_KIND,

@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PgTenantRegistry } from '../../src/control-plane/tenants.ts';
+import { PgTenantRegistry } from '../../src/control-plane/tenants-pg.ts';
 import { inTenant } from '../../src/storage/db.ts';
 import { PgSuggestionIndexStore } from '../../src/storage/suggestion-index.ts';
 import { createTestDatabase, postgresUnavailable, type TestDatabase } from '../support/env.ts';

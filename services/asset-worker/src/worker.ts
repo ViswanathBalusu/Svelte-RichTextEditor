@@ -12,6 +12,7 @@
  */
 import { createHash } from 'node:crypto';
 import { assetKeys, isUuid } from './keys.ts';
+import { ASSET_JOB_KIND } from './kind.ts';
 import { ObjectStoreUnavailable, ObjectTooLarge, type AssetObjects } from './objects.ts';
 import type { Sandbox } from './sandbox-port.ts';
 import { registryCode, type FailureReason } from './sandbox/errors.ts';
@@ -21,8 +22,8 @@ import { checkDeclared } from './sandbox/process.ts';
 import { DOCX, normaliseMime, type AcceptedType, type OutputType } from './sandbox/types.ts';
 import { readReply } from './verify.ts';
 
-/** The job kind the control plane enqueues on `POST /assets/{aid}/complete`. */
-export const ASSET_JOB_KIND = 'asset';
+/** The job kind the control plane enqueues on `POST /assets/{aid}/complete` (`kind.ts`). */
+export { ASSET_JOB_KIND };
 
 /** What the control plane puts in the job's payload. Nothing else is read from it. */
 export interface AssetJobPayload {

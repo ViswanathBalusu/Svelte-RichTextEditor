@@ -23,14 +23,16 @@ import {
   type AssetUrlKeys,
   type Sandbox,
 } from '@docedit/asset-worker';
-import type { AssetRegistry, AssetUploads } from '../control-plane/assets.ts';
+import { settleAsset, type AssetRegistry, type AssetUploads } from '../control-plane/assets.ts';
 import type { NotifyFn } from '../control-plane/exports.ts';
 import { JobFailure, type JobHandler } from '../control-plane/jobs/runner.ts';
 import type { AssetStore } from '../storage/types.ts';
 import type { S3Settings } from './s3.ts';
 import { ObjectExistsError, type ObjectStore } from './store.ts';
 
-export { ASSET_JOB_KIND };
+// `settleAsset` is the control plane's (`control-plane/assets.ts`): the handlers settle a row
+// without loading this module, which joins the worker's functions and its S3 client to the service.
+export { ASSET_JOB_KIND, settleAsset };
 
 export interface AssetPipelineOptions {
   /** The store the service uses; quarantine and final objects live in it. */
@@ -123,54 +125,6 @@ export function workerObjects(store: ObjectStore): AssetObjects {
     },
     delete: (key) => store.delete(key),
   };
-}
-
-/**
- * Writes an outcome of the asset worker to the `assets` row and tells the uploader's channels
- * (05 §5.6 `asset.ready`, `asset.failed`). Used by the in-process handler and when a row is found
- * `processing` whose job finished in another process.
- */
-export async function settleAsset(
-  registry: AssetRegistry,
-  outcome: AssetOutcome,
-  now: number,
-  notify?: NotifyFn,
-): Promise<boolean> {
-  const before = await registry.get(outcome.tenant, outcome.asset);
-  if (!before) return false;
-  const changed = outcome.ok
-    ? await registry.settleReady(
-        outcome.tenant,
-        outcome.asset,
-        {
-          sha256: outcome.sha256,
-          bytes: outcome.bytes,
-          contentType: outcome.contentType,
-          objectKey: outcome.objectKey,
-          width: outcome.width,
-          height: outcome.height,
-          frames: outcome.frames,
-          renditions: outcome.renditions,
-        },
-        now,
-      )
-    : await registry.settleFailed(
-        outcome.tenant,
-        outcome.asset,
-        { code: outcome.code, reason: outcome.reason },
-        now,
-      );
-  if (changed)
-    notify?.(
-      { tenant: before.tenant, doc: before.doc },
-      {
-        type: outcome.ok ? 'asset.ready' : 'asset.failed',
-        resource: `/assets/${before.id}`,
-        data: outcome.ok ? { state: 'ready' } : { state: 'failed', code: outcome.code },
-      },
-      { user: before.createdBy },
-    );
-  return changed;
 }
 
 /**

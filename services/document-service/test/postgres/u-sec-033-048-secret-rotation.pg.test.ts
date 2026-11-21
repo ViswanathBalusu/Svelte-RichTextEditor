@@ -16,7 +16,8 @@ import {
   signDelivery,
   verifyDelivery,
 } from '../../src/control-plane/webhook-signing.ts';
-import { hashSecret, PgTenantRegistry } from '../../src/control-plane/tenants.ts';
+import { hashSecret } from '../../src/control-plane/tenants.ts';
+import { PgTenantRegistry } from '../../src/control-plane/tenants-pg.ts';
 import { newApiKey, signingKey, TokenService } from '../../src/control-plane/tokens.ts';
 import { MemoryUserDirectory } from '../../src/control-plane/users.ts';
 import { keyPair, signJws } from '../../../../tests/security/test/support/jws.ts';

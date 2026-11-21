@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { uuid7 } from '@docedit/model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { signJws } from '../../src/control-plane/jwt.ts';
-import { PgTenantRegistry } from '../../src/control-plane/tenants.ts';
+import { PgTenantRegistry } from '../../src/control-plane/tenants-pg.ts';
 import { signingKey, TokenService } from '../../src/control-plane/tokens.ts';
 import { PgUserDirectory } from '../../src/control-plane/users.ts';
 import { createTestDatabase, postgresUnavailable, type TestDatabase } from '../support/env.ts';

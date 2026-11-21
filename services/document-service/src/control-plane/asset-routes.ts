@@ -3,12 +3,13 @@
  */
 import { formatTimestamp, uuid7 } from '@docedit/model';
 import type { CreateAssetRequest } from '@docedit/protocol';
-import { ASSET_JOB_KIND } from '@docedit/asset-worker';
+// The job kind alone: the package's index would load the worker, its S3 client and its sandbox.
+import { ASSET_JOB_KIND } from '@docedit/asset-worker/kind';
 import type { AssetOutcome } from '@docedit/asset-worker';
-import { settleAsset } from '../objects/asset-pipeline.ts';
 import {
   assetReferences,
   checkResolveRequest,
+  settleAsset,
   type AssetRecord,
   type AssetRegistry,
 } from './assets.ts';

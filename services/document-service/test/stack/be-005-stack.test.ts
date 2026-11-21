@@ -22,7 +22,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { PgTenantRegistry } from '../../src/control-plane/tenants.ts';
+import { PgTenantRegistry } from '../../src/control-plane/tenants-pg.ts';
 import { createPool } from '../../src/storage/db.ts';
 import { documentWithRegions } from '../control-plane/support.ts';
 import { DepClient, insertText } from '../data-plane/client.ts';

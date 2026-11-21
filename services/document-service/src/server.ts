@@ -40,11 +40,8 @@ import { PgNodeLeases } from './data-plane/pg/leases.ts';
 import { PgOutbox } from './data-plane/pg/outbox.ts';
 import { keyedViewToken } from './data-plane/view.ts';
 import { checkConfig, type ServiceConfig } from './config.ts';
-import {
-  MemoryAssetRegistry,
-  PgAssetRegistry,
-  type AssetRegistry,
-} from './control-plane/assets.ts';
+import { MemoryAssetRegistry, type AssetRegistry } from './control-plane/assets.ts';
+import { PgAssetRegistry } from './control-plane/assets-pg.ts';
 import { ContentReader } from './control-plane/content.ts';
 import { Placement } from './control-plane/room-routing.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
@@ -138,11 +135,8 @@ import {
 } from './control-plane/search-indexer.ts';
 import { Workers } from './data-plane/workers.ts';
 import { Cursors } from './control-plane/http.ts';
-import {
-  MemoryIdempotencyStore,
-  PgIdempotencyStore,
-  type IdempotencyStore,
-} from './control-plane/idempotency.ts';
+import { MemoryIdempotencyStore, type IdempotencyStore } from './control-plane/idempotency.ts';
+import { PgIdempotencyStore } from './control-plane/idempotency-pg.ts';
 import { PgJobQueue } from './control-plane/jobs/pg.ts';
 import { MemoryJobQueue, type JobQueue, type JobRecord } from './control-plane/jobs/queue.ts';
 import { JobRunner, type JobHandler, type JobHooks } from './control-plane/jobs/runner.ts';
@@ -168,11 +162,8 @@ import {
 } from './control-plane/payload-thinning.ts';
 import { SCHEDULE_KIND, Scheduler, type ScheduledTask } from './control-plane/scheduler.ts';
 import { applySeed, parseSeed } from './control-plane/seed.ts';
-import {
-  MemoryTenantRegistry,
-  PgTenantRegistry,
-  type TenantRegistry,
-} from './control-plane/tenants.ts';
+import { MemoryTenantRegistry, type TenantRegistry } from './control-plane/tenants.ts';
+import { PgTenantRegistry } from './control-plane/tenants-pg.ts';
 import { registerProcessMetrics } from './control-plane/process-metrics.ts';
 import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-hooks.ts';
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
