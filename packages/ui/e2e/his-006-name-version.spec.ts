@@ -20,7 +20,31 @@ test.describe('naming a version (HIS-006)', () => {
     expect(await h.exec('history.nameVersion')).toMatchObject({ ran: true });
     const dialog = page.locator(DIALOG);
     await expect(dialog).toBeVisible();
-    expect(await axe(page)).toEqual([]);
+    // Firefox on Linux (Playwright 1.65; the hosted runner and the Playwright container) crashes its
+    // content process ("Page crashed", a segmentation fault in the process) when any of six axe
+    // rules that read attributes and sizes runs over the shell with the History pane and this dialog
+    // both open (found by running each rule alone: only these six crash, 64 others pass; the crash
+    // does not occur without the pane in the tree, and a segmentation fault is the browser's, not a
+    // markup error that axe reports). Only there, those six rules are left out of this one call; every
+    // other rule runs, and the six run in the other browsers and in the other axe calls.
+    const crashes = test.info().project.name === 'firefox' && process.platform === 'linux';
+    expect(
+      await axe(
+        page,
+        crashes
+          ? {
+              disableRules: [
+                'aria-allowed-attr',
+                'aria-conditional-attr',
+                'aria-prohibited-attr',
+                'label-content-name-mismatch',
+                'nested-interactive',
+                'target-size',
+              ],
+            }
+          : {},
+      ),
+    ).toEqual([]);
 
     // A name is required: an empty one is refused in the dialog, which stays open.
     await dialog.getByRole('button', { name: 'Name version' }).click();

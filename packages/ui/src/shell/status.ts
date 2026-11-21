@@ -28,13 +28,18 @@ const ENGLISH_DIALECTS: Readonly<Record<string, string>> = {
   'en-ca': 'Canadian English',
   'en-gb': 'British English',
   'en-us': 'American English',
+  'de-at': 'Austrian German',
+  'de-ch': 'Swiss High German',
   'es-419': 'Latin American Spanish',
   'es-es': 'European Spanish',
   'es-mx': 'Mexican Spanish',
   'fr-ca': 'Canadian French',
   'fr-ch': 'Swiss French',
+  'nl-be': 'Flemish',
   'pt-br': 'Brazilian Portuguese',
   'pt-pt': 'European Portuguese',
+  'zh-hans': 'Simplified Chinese',
+  'zh-hant': 'Traditional Chinese',
 };
 
 /** The name of a language tag in the language of the interface; the tag itself when it has none. */

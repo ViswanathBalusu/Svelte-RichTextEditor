@@ -98,10 +98,14 @@ export async function focusSurface(page: Page): Promise<void> {
 }
 
 /** Runs axe on the shell with the WCAG 2.2 AA rule sets; returns the violations, summarised. */
-export async function axe(page: Page): Promise<string[]> {
+export async function axe(
+  page: Page,
+  options: { disableRules?: string[] } = {},
+): Promise<string[]> {
   const result = await new AxeBuilder({ page })
     .include('#host')
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .disableRules(options.disableRules ?? [])
     .analyze();
   // UX-069: the conformance report draws on the axe results of the release's browser run.
   const record = process.env['DOCEDIT_AXE_RESULTS'];
