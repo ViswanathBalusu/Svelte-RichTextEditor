@@ -28,7 +28,19 @@ The Canonical Document Model is the stored and transferred form of a document. T
 - `requires` lists the optional features (section 11) this document uses. A reader that lacks one of them MUST refuse the document with a clear message; it MUST NOT open it and drop what it does not understand.
 - Title, owner, timestamps and other metadata are not part of the CDM; they belong to the document resource in the control plane.
 
-**Canonical form.** Wherever a hash of a document is taken, the input is the RFC 8785 serialisation of the envelope with these rules: an attribute whose value equals its schema default is omitted; marks on a text node are ordered by their position in the schema's mark list and then by the canonical serialisation of their attributes; adjacent text nodes with equal marks are merged. The conformance kit carries hash fixtures.
+**Canonical form.** Wherever a hash of a document is taken, the input is the RFC 8785 serialisation of the envelope with the rules below. They are those of [ADR 0018](../adr/0018-cdm-attribute-grammars.md), which the owner accepted on 2026-11-15 (decision 7 of the [owner's decisions](../owner-decisions-2026-11-15.md)).
+
+1. An attribute whose value equals its schema default is omitted. That includes an `ext` equal to `{}` and an `id` equal to null. An attribute whose value is an object or a list is compared with its default as a whole: a default inside it is not stripped.
+2. An empty `attrs`, `content` or `marks` is omitted, as the example of section 12 omits `content` on an empty paragraph.
+3. Marks are ordered by their position in the schema's mark list and then by the canonical serialisation of their attributes. The order of the mark list is part of the published schema and of its hash. The `suggest` list of a block (section 5) is an attribute, and the canonical form does not reorder it.
+4. Adjacent text nodes with equal marks are merged, and a text node without text is dropped.
+5. `requires` is sorted by UTF-16 code units and holds no value twice.
+6. Every number is an integer in the interoperable range of RFC 8785 (principle 7). A document that holds any other number has no canonical form: canonicalisation fails with an error and never writes a floating-point number.
+7. The bytes are the UTF-8 encoding of the RFC 8785 text, and a hash is the SHA-256 of those bytes.
+
+The canonical form of a subtree is the canonical form of that node alone, without the envelope, under the same rules. An approval hashes a region this way (07, section 11).
+
+The rules have a version of their own, the canonical form version. It is 1. Whatever stores a hash to compare later, such as a commit, a checkpoint or an approval, records the version beside the hash, so that an old hash can still be checked after the rules change. A change of the rules raises the version and is declared with the release; the expected bytes of an existing fixture never change under one version. The conformance kit carries the hash fixtures: for each rule, inputs with their canonical bytes and their SHA-256.
 
 **Units.** Lengths are integers in twentieths of a point (1/1440 inch), including font sizes. `lineSpacing` under the `multiple` rule is an integer in thousandths (1150 means 1.15 lines). Colours are `#RRGGBB` with the letters in upper case, so that two implementations write the same bytes. Every integer lies inside the range that RFC 8785 serialises the same way in every language; section 4.8 gives the ranges.
 
