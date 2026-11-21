@@ -7,7 +7,7 @@ import { uuid7 } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { baseDoc } from '../../../../packages/authority/test/fixtures.ts';
-import { PgAssetRegistry } from '../../src/control-plane/assets.ts';
+import { PgAssetRegistry } from '../../src/control-plane/assets-pg.ts';
 import { RegistryAssetAttachments } from '../../src/data-plane/asset-attachments.ts';
 import {
   createTestDatabase,

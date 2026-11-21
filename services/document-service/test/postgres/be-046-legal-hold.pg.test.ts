@@ -11,7 +11,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PgAssetRegistry } from '../../src/control-plane/assets.ts';
+import { PgAssetRegistry } from '../../src/control-plane/assets-pg.ts';
 import { sweepAbandonedUploads } from '../../src/control-plane/asset-sweep.ts';
 import { HoldService, type HoldServiceDeps } from '../../src/control-plane/holds.ts';
 import { PgHoldStore } from '../../src/control-plane/holds-pg.ts';

@@ -169,6 +169,33 @@ export function stateIdAt(built: Built, seq: number): string {
   return built.heads[seq] ?? built.start.contentHash;
 }
 
+/**
+ * An `applyCommit` request on a log built here: a user with `role` types `text` at `at`, based on
+ * `base`. The time is fixed, so that the same request gives the same commits and the same new
+ * `stateId` whenever it is applied (the time is part of the hash chain).
+ */
+export function applyRequest(
+  n: number,
+  base: number,
+  at: number,
+  text: string,
+  role: 'editor' | 'viewer' = 'editor',
+) {
+  return {
+    commit: {
+      id: `0192f0c4-7b1e-7c3a-9a54-${String(n).padStart(12, '0')}`,
+      base,
+      steps: [
+        { stepType: 'replace', from: at, to: at, slice: { content: [{ type: 'text', text }] } },
+      ],
+      author: { sub: `u-${role}`, session: `s-${role}`, role },
+      time: 1_700_000_100_000 + n * 1000,
+    },
+    // The revision the commits of `wireCommit` were stored under.
+    permissions: { revision: 1, grants: [] },
+  };
+}
+
 /** An `open` request for the log from a checkpoint to `seq`. */
 export async function openRequest(built: Built, seq: number, from = 0) {
   return {

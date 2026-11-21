@@ -8,6 +8,10 @@
 // test reads the service out of compose.json and starts it with `podman run` and the same options
 // (as infra/test-env.ps1 does). The container binds a random high port, a name ending in -w5 and
 // loopback only (host networking; see compose.json), and is removed at the end.
+//
+// Criterion 2 kills the container with SIGKILL and starts it again; the same flow in process is
+// be-007-restart-apply.test.ts. Criterion 4, the conformance kit's profile against the container,
+// is packages/tck/test/be-007-authority-container.test.ts.
 import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -15,7 +19,7 @@ import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { canonicalText } from '@docedit/model';
 import { afterAll, describe, expect, it } from 'vitest';
-import { buildLog, envelopeOf, openRequest } from './log.ts';
+import { applyRequest, buildLog, envelopeOf, openRequest, posInside } from './log.ts';
 
 const run = promisify(execFile);
 const enabled = process.env['DOCEDIT_AUTHORITY_CONTAINER'] === '1';
@@ -23,7 +27,7 @@ const cli = process.env['DOCEDIT_CONTAINER_CLI'] ?? 'podman';
 const root = resolve(import.meta.dirname, '../../..');
 const IMAGE = 'localhost/docedit-authority-service:w5-test';
 const NAME = 'docedit-authority-test-w5';
-const NAMES = [NAME, `${NAME}-a`, `${NAME}-b`, `${NAME}-storage`];
+const NAMES = [NAME, `${NAME}-a`, `${NAME}-b`, `${NAME}-storage`, `${NAME}-kill`];
 
 interface ComposeService {
   image: string;
@@ -167,6 +171,7 @@ describe.skipIf(!enabled)('the authority service container (BE-007)', () => {
     const caps = (await (await fetch(`${url}/v1/authority/capabilities`)).json()) as {
       calls: string[];
     };
+    // Every call of 05 §10 but `migrate`, which the operator has not enabled (03 §11.3).
     expect(caps.calls).toEqual([
       'open',
       'materialise',
@@ -175,6 +180,7 @@ describe.skipIf(!enabled)('the authority service container (BE-007)', () => {
       'diff',
       'attribution',
       'evaluateRules',
+      'mapRanges',
     ]);
 
     // Killed and started again: it holds nothing, and open with the same inputs gives the same bytes.
@@ -193,6 +199,76 @@ describe.skipIf(!enabled)('the authority service container (BE-007)', () => {
     expect(info[0]!.HostConfig.ReadonlyRootfs).toBe(true);
     expect(info[0]!.HostConfig.NetworkMode).toBe('host');
     expect(info[0]!.Config.User).toBe('node');
+  }, 600_000);
+
+  it('gives the same applyCommit answer after it was killed, started again and opened again (criterion 2)', async () => {
+    await build();
+    const name = `${NAME}-kill`;
+    const { url } = await start(name);
+    const built = await buildLog(['a', 'b', 'c']);
+    const req = await openRequest(built, 3);
+    const at = posInside(built.docs[3]!, 'pTwo000000000001');
+    const accepted = applyRequest(1, 3, at, 'Again ');
+    const refused = applyRequest(2, 3, at, 'No ', 'viewer');
+    const next = applyRequest(3, 4, at, 'More ');
+    const post = (path: string, body: unknown) =>
+      fetch(`${url}/v1/authority/${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const open = (body: unknown = req) => post(`documents/${built.doc}/open`, body);
+    const apply = (state: string, body: unknown) => post(`states/${state}/commits`, body);
+    const state = async () =>
+      (
+        JSON.parse((await run(cli, ['inspect', name])).stdout) as Array<{
+          State: { Status: string; ExitCode: number; StartedAt: string };
+        }>
+      )[0]!.State;
+
+    // Before the kill: an accepted commit, a rejected one, and a commit on the state the first made.
+    expect((await open()).status).toBe(201);
+    const first = await apply(req.stateId, accepted);
+    expect(first.status).toBe(200);
+    const firstText = await first.text();
+    const made = JSON.parse(firstText) as {
+      stateId: string;
+      seq: number;
+      commits: Array<{ hash: string }>;
+    };
+    expect(made.seq).toBe(4);
+    expect(made.commits.at(-1)!.hash).toBe(made.stateId);
+    const refusedText = await (await apply(req.stateId, refused)).text();
+    expect(JSON.parse(refusedText)).toMatchObject({ rejected: { code: 'permission_denied' } });
+    const nextText = await (await apply(made.stateId, next)).text();
+    expect((JSON.parse(nextText) as { seq: number }).seq).toBe(5);
+
+    // Killed with SIGKILL, so nothing of the service runs on the way out, and started again.
+    const startedBefore = (await state()).StartedAt;
+    await run(cli, ['kill', '--signal', 'KILL', name]);
+    await run(cli, ['wait', name]);
+    const dead = await state();
+    expect(dead.Status).toBe('exited');
+    expect(dead.ExitCode).toBe(137);
+    await run(cli, ['start', name]);
+    await ready(url);
+    expect((await state()).StartedAt).not.toBe(startedBefore);
+
+    // The new process holds nothing.
+    const lost = await apply(req.stateId, accepted);
+    expect(lost.status).toBe(404);
+    expect(((await lost.json()) as { code: string }).code).toBe('unknown_state');
+
+    // `open` again with the same inputs rebuilds the document, and the next applyCommit gives the
+    // answer it gave before the kill, byte for byte: the accepted commit and the rejected one.
+    expect((await open()).status).toBe(201);
+    expect(await (await apply(req.stateId, accepted)).text()).toBe(firstText);
+    expect(await (await apply(req.stateId, refused)).text()).toBe(refusedText);
+    // So does a commit on the state the first one made, once that state is opened from the log
+    // with the commit the first answer carried at its end, as the caller stored it.
+    const longer = { ...req, commits: [...req.commits, ...made.commits], stateId: made.stateId };
+    expect((await open(longer)).status).toBe(201);
+    expect(await (await apply(made.stateId, next)).text()).toBe(nextText);
   }, 600_000);
 
   it('rebuilds a state a second replica does not hold from storage (criterion 3)', async () => {

@@ -242,6 +242,8 @@ export class PgJobQueue implements JobQueue {
   }
 
   cancel(tenant: string, id: string): Promise<JobRecord | null> {
+    // As in `get`: an identifier that is not a UUID names no job, so there is none to cancel.
+    if (!isUuid(id)) return Promise.resolve(null);
     return inTenant(this.#pool, tenant, async (c) => {
       // A job cancelled while it runs has used its worker until now (EXP-009). Every expression
       // reads the row as it was before this update.

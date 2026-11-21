@@ -9,7 +9,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PgAssetRegistry } from '../../src/control-plane/assets.ts';
+import { PgAssetRegistry } from '../../src/control-plane/assets-pg.ts';
 import {
   ABANDONED_UPLOADS_TASK,
   abandonedUploadsTask,

@@ -13,7 +13,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PgAssetRegistry } from '../../src/control-plane/assets.ts';
+import { PgAssetRegistry } from '../../src/control-plane/assets-pg.ts';
 import { sweepAbandonedUploads } from '../../src/control-plane/asset-sweep.ts';
 import { S3ObjectStore, type S3Settings } from '../../src/objects/s3.ts';
 import { objectKeys, TenantObjects } from '../../src/objects/store.ts';
