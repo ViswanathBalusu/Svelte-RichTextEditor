@@ -168,6 +168,8 @@ test.describe('shaping from the font file (WASM-006)', () => {
             // The painter's pinned text settings (packages/painter/src/painter.ts, FE-090).
             s.fontKerning = 'auto';
             s.fontVariantLigatures = 'normal';
+            // Unhinted advances, as the painter's pins have them (PAINT_TEXT_PINS.textRendering).
+            s.textRendering = 'geometricPrecision';
             span.textContent = text;
             document.body.append(span);
             const painted = span.getBoundingClientRect().width;

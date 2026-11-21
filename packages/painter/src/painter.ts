@@ -27,10 +27,17 @@ import { justifyLine } from '../../layout/src/justify.ts';
  * the ligatures at their default, and CSS `font-kerning: auto` paints the same widths in Firefox
  * and WebKit. In Chromium no CSS value reproduces canvas `auto` on kerned pairs (about 0.9 px wide
  * on `AVATAR Wave Yes` at 16 px serif); that is open, see FE-090's Notes.
+ *
+ * `textRendering: geometricPrecision` keeps the advances unhinted. Chromium on Linux (hosted CI,
+ * Playwright 1.65, headless) otherwise rounds each glyph advance to a whole pixel, and a line of 40
+ * characters is painted up to 11 px away from the width the layout computed; with it the painted
+ * widths of the half-pixel harness (WASM-006) are within 0.4 px. Windows and macOS position glyphs
+ * at fractions of a pixel already, so the value changes nothing there.
  */
 export const PAINT_TEXT_PINS = {
   fontKerning: 'auto',
   fontVariantLigatures: 'normal',
+  textRendering: 'geometricPrecision',
 } as const;
 
 /**
@@ -202,6 +209,7 @@ export function paintTree(
     // (`PAINT_TEXT_PINS`; FE-090 criterion 4, spec 02 §9.3).
     style.fontKerning = PAINT_TEXT_PINS.fontKerning;
     style.fontVariantLigatures = PAINT_TEXT_PINS.fontVariantLigatures;
+    style.textRendering = PAINT_TEXT_PINS.textRendering;
     style.color = 'CanvasText';
 
     const span = doc.createElement('span');
