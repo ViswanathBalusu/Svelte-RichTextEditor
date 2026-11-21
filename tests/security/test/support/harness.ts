@@ -406,6 +406,8 @@ export interface HarnessOptions {
   jobHandlers?: NonNullable<Parameters<typeof startService>[0]['jobHandlers']>;
   /** The asset worker in process (SEC-007): with it the service announces `assets`. */
   assetWorker?: NonNullable<Parameters<typeof startService>[0]['assetWorker']>;
+  /** A Word importer (SEC-005 criterion 4): with it the service offers `/imports` and runs the job. */
+  importer?: NonNullable<Parameters<typeof startService>[0]['importer']>;
 }
 
 type StartOptionsRateLimits = NonNullable<Parameters<typeof startService>[0]['rateLimits']>;
@@ -457,6 +459,7 @@ export async function startHarness(storage: Storage, opts: HarnessOptions = {}):
       ...(opts.onSpan ? { onSpan: opts.onSpan } : {}),
       ...(opts.jobHandlers ? { jobHandlers: opts.jobHandlers } : {}),
       ...(opts.assetWorker ? { assetWorker: opts.assetWorker } : {}),
+      ...(opts.importer ? { importer: opts.importer } : {}),
       logger,
       now,
     });
