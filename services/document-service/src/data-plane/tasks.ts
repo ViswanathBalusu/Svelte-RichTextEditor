@@ -11,6 +11,7 @@ import { DEFAULT_LIMITS, applySteps, parseSteps, type StepJson } from '@docedit/
 import { canonicalText, type JsonEnvelope, type JsonNode } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { tokenCounts } from '../control-plane/search-index.ts';
+import { encodeSide, type CheckpointSide } from '../storage/codec.ts';
 
 /** Where a replay starts: a stored checkpoint's bytes, or a document as JSON. */
 export type Base = { readonly encoded: Uint8Array } | { readonly doc: unknown };
@@ -51,6 +52,13 @@ export interface OpenedParts {
 export interface TaskTypes {
   encode: { input: { envelope: JsonEnvelope }; output: Encoded };
   checkpoint: { input: ReplayInput; output: Encoded };
+  /**
+   * The side object of a checkpoint in its stored form (06 §2.2 step 3; BE-001 criterion 3): the
+   * attribution map and the comment ranges as canonical JSON, compressed with Zstandard. The map of
+   * a much-edited document names every commit whose text is still there, so it is serialised here
+   * with the content and not on the room's loop.
+   */
+  side: { input: { side: CheckpointSide }; output: { encoded: Uint8Array } };
   materialise: { input: ReplayInput; output: { doc: JsonNode } };
   decode: { input: { encoded: Uint8Array }; output: { envelope: JsonEnvelope } };
   /** Decodes, parses and checks a stored checkpoint; `slice` is the children per piece. */
@@ -160,6 +168,11 @@ export function runTask<K extends TaskName>(
       return encode(input as TaskTypes['encode']['input']) as TaskTypes[K]['output'];
     case 'checkpoint':
       return checkpoint(input as ReplayInput) as TaskTypes[K]['output'];
+    case 'side':
+      return {
+        // A copy in a buffer of its own: what Zstandard returns may share a pooled one.
+        encoded: new Uint8Array(encodeSide((input as TaskTypes['side']['input']).side)),
+      } as TaskTypes[K]['output'];
     case 'materialise':
       return materialise(input as ReplayInput) as TaskTypes[K]['output'];
     case 'decode':

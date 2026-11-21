@@ -16,7 +16,7 @@ import type { StepJson, ThreadAnchor } from '@docedit/authority';
 import type { AttributionJson } from '@docedit/history';
 import type { JsonEnvelope } from '@docedit/model';
 import { objectKeys } from '../objects/store.ts';
-import { decodeContent, decodeSide, encodeSide } from '../storage/codec.ts';
+import { decodeContent, decodeSide } from '../storage/codec.ts';
 import type { CheckpointIndex, CheckpointStore, DocRef } from '../storage/types.ts';
 import type { Base, Encoded } from './tasks.ts';
 import type { Workers } from './workers.ts';
@@ -232,16 +232,16 @@ export class Checkpointer {
     if (!store) throw new Error('no checkpoint store is configured');
     if ((side || threads?.length) && store.putSide) {
       try {
-        await store.putSide(
-          ref,
-          seq,
-          encodeSide({
+        // Serialised in a worker, as the content is (06 §2.2 step 3; BE-001 criterion 3).
+        const { encoded } = await this.#workers.run('side', {
+          side: {
             v: 1,
             seq,
             threads: threads ? [...threads] : [],
             ...(side ? { attribution: side } : {}),
-          }),
-        );
+          },
+        });
+        await store.putSide(ref, seq, encoded);
       } catch (err) {
         this.#onSavedError?.(err);
       }
