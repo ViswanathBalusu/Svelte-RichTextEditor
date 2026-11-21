@@ -104,6 +104,43 @@ describe('backend-mock', () => {
     await service.dispose();
   });
 
+  it('lists who can edit each region, as the document service derives it (05 §6.2; PRM-032)', async () => {
+    const service = new MockService();
+    const docId = service.createDocument(contractDocument(), {
+      grants: [
+        { region: IDS.locked, principal: 'user:ada', role: 'editor' },
+        { region: IDS.locked, principal: 'group:legal', role: 'editor' },
+        // A grant that conveys no `edit`, and one that has expired, name nobody as an editor.
+        { region: IDS.locked, principal: 'user:vic', role: 'commenter' },
+        { region: IDS.open, principal: 'user:old', role: 'editor', expiresAt: service.now() - 1 },
+      ],
+    });
+    const { b } = await open(service, docId, 'olivia', 'owner');
+    const editors = async () =>
+      Object.fromEntries((await b.permissions.regions!(docId)).map((r) => [r.id, r.editors]));
+    expect(await editors()).toEqual({
+      [IDS.open]: { roles: ['editor', 'owner'], principals: [] },
+      [IDS.locked]: { roles: ['owner'], principals: ['group:legal', 'user:ada'] },
+    });
+    // A lease names its holder until it expires (07 §10).
+    service.setLeases(docId, [
+      { region: IDS.open, holder: 'bob', expiresAt: service.now() + 60_000 },
+    ]);
+    expect((await editors())[IDS.open]).toEqual({
+      roles: ['editor', 'owner'],
+      principals: [],
+      leasedTo: 'bob',
+    });
+    service.advanceClock(60_001);
+    expect((await editors())[IDS.open]).toEqual({ roles: ['editor', 'owner'], principals: [] });
+    // Nobody can edit an approved region, or any region of a locked document (07 §4).
+    await b.permissions.setRegionState!(docId, IDS.locked, 'approved', { ifMatch: '*' });
+    expect((await editors())[IDS.locked]).toEqual({ roles: [], principals: [] });
+    service.setDocumentState(docId, 'locked');
+    expect((await editors())[IDS.open]).toEqual({ roles: [], principals: [] });
+    await service.dispose();
+  });
+
   it('is universal: no Node.js import, and type-checked without Node.js or DOM types (FND-004)', () => {
     const dir = resolve(import.meta.dirname, '../src');
     for (const f of readdirSync(dir)) {

@@ -41,6 +41,22 @@ describe('who can edit a region, in words (PRM-026, criterion 2)', () => {
     expect(text).toBe('It can be edited by Ada and Editors.');
   });
 
+  it('says a name once when several principals share it: groups the directory cannot name', () => {
+    // `resolveUsers` takes user identifiers only (05 §8.1), so every group has the same neutral word.
+    const neutral = (principal: string): string =>
+      principal.startsWith('group:') ? 'Group' : (NAMES[principal] ?? 'Collaborator');
+    expect(
+      whoCanEdit(
+        region({
+          id: 'r1',
+          editors: { roles: [], principals: ['group:a', 'group:b', 'user:u1', 'user:x', 'user:y'] },
+        }),
+        tr,
+        neutral,
+      ),
+    ).toBe('It can be edited by Group, Ada and Collaborator.');
+  });
+
   it('names document roles as well as grantees', () => {
     const text = whoCanEdit(
       region({ id: 'r1', editors: { roles: ['editor', 'owner'], principals: ['user:u2'] } }),
