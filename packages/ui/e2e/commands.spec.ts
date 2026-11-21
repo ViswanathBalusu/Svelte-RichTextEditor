@@ -343,6 +343,12 @@ test.describe('keyboard shortcuts from the registry (UX-013)', () => {
     await expect(page.locator('.de-pane [data-search]')).toBeFocused();
     // The painter, with its key and with the alternative of the table.
     await h.setSelection({ empty: false, marks: ['bold'] });
+    // The command is enabled once the shell has seen the selection; a key pressed before that finds
+    // it disabled and does nothing.
+    await expect(page.locator('[data-command-id="format.painter"]')).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     await focusSurface(page);
     await page.keyboard.press(`${mod}+Shift+C`);
     await expect(page.locator('[data-command-id="format.painter"]')).toHaveAttribute(

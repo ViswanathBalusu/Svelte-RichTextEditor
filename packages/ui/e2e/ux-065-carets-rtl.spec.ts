@@ -80,6 +80,8 @@ for (const locale of ['en-GB', 'ar-XB']) {
           selection: [],
         },
       ]);
+      // The caret is drawn on a frame of its own; measure only once it is in the page.
+      await expect(page.locator('.de-peer-caret[data-session="sNear"]')).toHaveCount(1);
       // A caret mapped near the right edge of the body: its physical x from the surface's left.
       const surfaceWidth = (await boxes(page, 'sNear')).surface.width;
       await h.setCarets([

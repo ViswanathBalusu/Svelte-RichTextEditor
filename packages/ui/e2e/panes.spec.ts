@@ -40,8 +40,14 @@ test.describe('the pane host (UX-019, UX-070)', () => {
     expect(chunks.filter((c) => c.includes('StylesPane'))).toHaveLength(1);
     expect(chunks.filter((c) => c.includes('RecoveredPane'))).toEqual([]);
     expect(await h.state('view.styles')).toMatchObject({ active: true });
-    // Every pane of 13 §3 is known; those without content or port are not offered.
-    expect(await h.commandIds()).not.toContain('view.comments');
+    // Every pane of 13 §3 is known; those without content or port are not offered. The comments
+    // pane has its content since UX-030, so its command is registered, and it is not offered while
+    // the backend has not announced the feature.
+    expect(await h.state('view.comments')).toMatchObject({
+      offered: false,
+      enabled: false,
+      reason: 'unannounced',
+    });
   });
 
   test('a network trace shows no pane code at start, and each pane as its own chunk on first open (UX-070)', async ({

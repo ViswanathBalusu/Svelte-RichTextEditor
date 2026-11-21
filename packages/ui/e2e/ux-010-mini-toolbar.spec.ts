@@ -51,6 +51,9 @@ test.describe('the mini toolbar (UX-010)', () => {
     expect((await focused(page)).className).toContain('de-editing-surface');
     // A new selection brings it back.
     await h.setSelection({ empty: true, marks: [] });
+    // The shell clears the dismissal when it sees the collapse, which it does in a task of its own.
+    // A reselection in the same task as the collapse is one change for it, not two.
+    await page.evaluate(() => new Promise((done) => setTimeout(done, 0)));
     await h.setSelection({ empty: false, marks: [] });
     await expect(page.locator('[data-mini-toolbar]')).toBeVisible();
   });

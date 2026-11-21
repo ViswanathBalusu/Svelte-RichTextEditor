@@ -141,6 +141,7 @@ test.describe('string tables load on demand (UX-064, criterion 2)', () => {
     const h = await open(page);
     expect(await h.labels()).toEqual({
       body: 'Document',
+      footer: 'Footer',
       footnote: 'Footnote text',
       story: 'Header',
     });

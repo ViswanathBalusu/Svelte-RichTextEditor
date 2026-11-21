@@ -157,7 +157,9 @@ test.describe('pointer targets in the remaining shell states (UX-068, criterion 
 
   test('the presence list, the full list and the header commands with counts', async ({ page }) => {
     await open(page, {
-      width: 640,
+      // Narrow enough that seven people never fit beside the title in any font: the header's commands
+      // wrap onto a row of their own in wide fonts, which leaves the presence the whole row at 640.
+      width: 420,
       features: ['presence', 'comments', 'history'],
       headerPanes: true,
       share: true,

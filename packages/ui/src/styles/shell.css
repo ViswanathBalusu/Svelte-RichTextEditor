@@ -1094,6 +1094,9 @@
   box-sizing: border-box;
   min-inline-size: 24px;
   block-size: 24px;
+  /* The thumbnail is a flex column of a fixed height: without this the number gives up a fraction of
+     a pixel to the drawing and the pointer target falls just under 24 pixels (seen in Firefox). */
+  flex: none;
   line-height: 24px;
   font-size: 0.85em;
   text-align: center;
