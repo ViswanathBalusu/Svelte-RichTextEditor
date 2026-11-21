@@ -32,7 +32,7 @@ The Canonical Document Model is the stored and transferred form of a document. T
 
 1. An attribute whose value equals its schema default is omitted. That includes an `ext` equal to `{}` and an `id` equal to null. An attribute whose value is an object or a list is compared with its default as a whole: a default inside it is not stripped.
 2. An empty `attrs`, `content` or `marks` is omitted, as the example of section 12 omits `content` on an empty paragraph.
-3. Marks are ordered by their position in the schema's mark list and then by the canonical serialisation of their attributes. The order of the mark list is part of the published schema and of its hash. The `suggest` list of a block (section 5) is an attribute, and the canonical form does not reorder it.
+3. Marks are ordered by their position in the schema's mark list and then by the canonical serialisation of their attributes, compared by UTF-16 code units as RFC 8785 orders member names. The order of the mark list is part of the published schema and of its hash. The `suggest` list of a block (section 5) is an attribute, and the canonical form does not reorder it.
 4. Adjacent text nodes with equal marks are merged, and a text node without text is dropped.
 5. `requires` is sorted by UTF-16 code units and holds no value twice.
 6. Every number is an integer in the interoperable range of RFC 8785 (principle 7). A document that holds any other number has no canonical form: canonicalisation fails with an error and never writes a floating-point number.
@@ -240,10 +240,10 @@ The details are those of [ADR 0032](../adr/0032-layout-semantics.md), section 1 
 
 - When no layer sets a property, a paragraph has `align: start`, indents and spaces of 0, a `lineSpacing` of 1000 under `multiple`, `widowControl` on and every other boolean off, and no tabs, borders or shading. Its `dir` comes from `settings.dir`. A run has a `fontSize` of 220, every toggle off, `underline: none`, `vertAlign: baseline`, and no colour or highlight. Its `lang` comes from `settings.lang`, and a null `fontFamily` means the default face of the font registry.
 - A style counts once, at the first layer that reaches it. The default paragraph style is layer 1 and is not applied again in layer 3, so a table style overrides it for content in a table.
+- The paragraph of a footnote takes no table style, even when the footnote stands in a table cell: the note is set at the foot of the page, not in the table.
 - The numbering level contributes its `indentLeft`, and its `hanging` as a negative `indentFirstLine`. Its `align` places the label and its `runProps` format the label only.
 - `numbering` resolves like a property through the style layers. A paragraph's own `numbering` replaces it whole.
 - `tabs`, `borders`, `shading` and `numbering` are whole values: the last layer that sets one gives all of it. An empty `tabs` list clears the stops a style sets. The resolved stops are in position order, and when two entries of a list share a position the later one wins.
-- The paragraph of a footnote takes no table style, even when the footnote stands in a table cell: the note is set at the foot of the page, not in the table.
 - Every other property resolves by itself, `lineSpacing` and `lineRule` included. The last layer that sets a toggle wins.
 - The marks `link`, `ins`, `del`, `fmt` and `preserved` do not format. Text with a `fmt` suggestion shows the formatting it suggests.
 - The `outlineLevel` of a heading comes from the paragraph's own style chain, not from the default style.

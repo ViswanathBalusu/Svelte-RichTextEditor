@@ -142,6 +142,44 @@ describe('03 §2 against the canonical form (CDM-003; ADR 0018, accepted)', () =
     expect(out.attrs!['suggest']).toEqual(suggest);
   });
 
+  it('rule 3: compares the serialisations by UTF-16 code units, in both implementations', () => {
+    expect(rules.get(3)).toMatch(/compared by UTF-16 code units as RFC 8785 orders member names/);
+    // Two `fmt` suggestions whose recorded formats first differ in one character: a fullwidth A
+    // (U+FF21) and an emoji outside the BMP (U+1F600, first code unit D83D). By code units the emoji
+    // comes first; by code points, or by UTF-8 bytes, the fullwidth letter would.
+    const fmt = (id: string, family: string): NonNullable<JsonNode['marks']>[number] => ({
+      type: 'fmt',
+      attrs: {
+        id,
+        user: 'u',
+        before: { marks: [{ type: 'fontFamily', attrs: { value: family } }] },
+      },
+    });
+    const out = canonicalNode(
+      paragraph({ id: 'pCodeUnits000001' }, [
+        {
+          type: 'text',
+          text: 'x',
+          marks: [fmt('sFullwidth000001', 'Ａ'), fmt('sOutsideBmp00001', '\u{1F600}')],
+        },
+      ]),
+    );
+    expect(out.content![0]!.marks!.map((m) => m.attrs!['id'])).toEqual([
+      'sOutsideBmp00001',
+      'sFullwidth000001',
+    ]);
+    expect('\u{1F600}' < 'Ａ').toBe(true);
+    expect('\u{1F600}'.codePointAt(0)! > 'Ａ'.codePointAt(0)!).toBe(true);
+    // The independent Python implementation of CDM-011 sorts by the same key.
+    const python = readFileSync(resolve(root, 'packages/model/conformance/canonical.py'), 'utf8');
+    expect(python).toContain('s.encode("utf-16-be")');
+    expect(python).toContain('utf16(jcs(attrs or {}))');
+    // `requires` (rule 5) is sorted the same way.
+    expect(canonicalEnvelope(envelope({ type: 'doc' }, ['Ａ', '\u{1F600}', 'a'])).requires).toEqual(
+      ['a', '\u{1F600}', 'Ａ'],
+    );
+  });
+
   it('rule 4: merges adjacent text with equal marks and drops empty text', () => {
     expect(rules.get(4)).toMatch(/merged/);
     const out = canonicalNode(
