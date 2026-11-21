@@ -19,8 +19,11 @@ import { TEST_FONTS } from './fonts.ts';
 import { startTestService, type TestService } from './service.ts';
 
 const WINDOW_MS = 300;
-/** How long the first preview takes before its compile: much longer than the window. */
-const SLOW_MS = 900;
+/**
+ * How long the first preview takes before its compile: much longer than the window, and long
+ * enough for the two requests that follow it to arrive first on a busy machine.
+ */
+const SLOW_MS = 1500;
 
 const RAW_LAYOUT = JSON.stringify({
   v: 1,

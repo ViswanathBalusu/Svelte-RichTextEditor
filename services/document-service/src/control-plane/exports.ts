@@ -56,8 +56,17 @@ export interface ExportOutputs {
    * EXP-113 criterion 2). Absent from a worker that does not report it.
    */
   imagesWithoutAlt?: number;
-  /** The job whose prefix holds the files, when it is not this job (a cached result). */
+  /**
+   * The job whose prefix holds the files, when it is not this job: a cached result (EXP-006), or a
+   * preview that showed the files of an earlier preview of the same bundle (EXP-008 criterion 3).
+   */
   from?: string;
+  /**
+   * The preview key of a preview's bundle, as the worker computed it (EXP-008 criterion 3;
+   * `preview-reuse.ts` of the export worker). The worker looks for it in the queue to find an
+   * earlier preview of the same bundle. The control plane neither reads nor shows it.
+   */
+  previewKey?: string;
 }
 
 /**
