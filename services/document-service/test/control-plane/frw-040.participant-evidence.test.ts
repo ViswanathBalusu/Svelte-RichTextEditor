@@ -105,6 +105,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     }
     const viewed = (doc: string) =>
       h.events.of('dep.workflow.participant_viewed.v1').filter((e) => e.subject === doc);
+    /**
+     * Waits for the event of a view. It is raised after the evidence row is written
+     * (`recordParticipantOpened`), so a test that has just seen the row may be ahead of it.
+     */
+    async function viewedAfter(doc: string, count: number) {
+      for (let i = 0; i < 100 && viewed(doc).length < count; i++)
+        await new Promise((r) => setTimeout(r, 50));
+      return viewed(doc);
+    }
 
     it.skipIf(skip)(
       'records the first view of a filler from the connection and the server clock, and not the client’s say (criteria 1, in part, and 2)',
@@ -146,7 +155,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(stored.state).toBe('in_progress');
         expect(stored.participants.find((p) => p.id === 'p1')!.firstViewedAt).toBeTypeOf('string');
         // `participant_viewed` is raised once, with identifiers only: no address, agent or amr.
-        const events = viewed(doc);
+        const events = await viewedAfter(doc, 1);
         expect(events).toHaveLength(1);
         expect(events[0]!.data).toMatchObject({ document: doc, participant: 'p1' });
         expect(JSON.stringify(events[0])).not.toMatch(/127\.0\.0\.1|FrwTest|otp|::1/);
