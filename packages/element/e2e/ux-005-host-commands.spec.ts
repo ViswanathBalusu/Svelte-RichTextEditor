@@ -96,6 +96,8 @@ test.describe('UX-005 a host-built toolbar on the mounted element', () => {
     await last.click();
     await page.keyboard.press('End');
     await page.keyboard.press('Shift+Home');
+    // The core has the selection once it draws the mini toolbar; exec before that acts on the caret.
+    await expect(page.locator(`${editor('one')} [data-mini-toolbar]`)).toBeVisible();
     const ran = await page.evaluate(
       (sel) => (document.querySelector(sel) as Host).exec('format.bold'),
       editor('one'),

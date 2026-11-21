@@ -260,9 +260,12 @@ test('SEC-007: a full wire session leaves no token in storage, journal, cookies,
       Record<string, unknown>
     >;
     for (const row of commitRows) {
-      // A journal row is the commit as it was sent, and the document it belongs to; nothing else.
+      // A journal row is the commit as it was sent, and the document it belongs to, with the log
+      // incarnation and the user's identifier that the next visit checks before it resubmits it
+      // (FE-009; decision 47 of docs/owner-decisions-2026-11-15.md); nothing else. The whole dump
+      // is also checked for the token below (`clean`).
       const extra = Object.keys(row).filter(
-        (k) => !['docId', 'id', 'base', 'steps', 'origin'].includes(k),
+        (k) => !['docId', 'id', 'base', 'steps', 'origin', 'incarnation', 'user'].includes(k),
       );
       expect(extra, 'a journal row holds a commit only').toEqual([]);
       expect(row['docId']).toBe(docId);
@@ -273,8 +276,22 @@ test('SEC-007: a full wire session leaves no token in storage, journal, cookies,
     }
     for (const row of journal(held).find((d) => d.store === 'queues')!.rows as Array<
       Record<string, unknown>
-    >)
-      expect(Object.keys(row).sort(), 'a queue row holds steps only').toEqual(['docId', 'steps']);
+    >) {
+      // The steps, and the confirmed document they were made on (seq, incarnation, user id; FE-009).
+      expect(
+        Object.keys(row)
+          .filter((k) => k !== 'at')
+          .sort(),
+        'a queue row holds steps only',
+      ).toEqual(['docId', 'steps']);
+      if (row['at'] !== undefined)
+        expect(
+          Object.keys(row['at'] as object)
+            .sort()
+            .filter((k) => !['incarnation', 'seq', 'user'].includes(k)),
+          'the position of a queue is a sequence number, an incarnation and a user',
+        ).toEqual([]);
+    }
     clean(JSON.stringify(held), 'IndexedDB, with a commit in the journal');
 
     // The commit is stored; the session ends with everything acknowledged.
