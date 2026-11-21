@@ -464,6 +464,35 @@ export interface DocumentStats {
   } | null;
 }
 
+/** The pages of the view on screen, as the navigation pane's thumbnails need them (UX-021). */
+export interface PagesInfo {
+  /** How many pages the view's layout has. */
+  readonly count: number;
+  /** The page the view shows now, counted from 0. */
+  readonly current: number;
+  /** A number that grows with every new layout: a thumbnail drawn before it may be out of date. */
+  readonly revision: number;
+}
+
+/**
+ * Page thumbnails for the navigation pane (UX-021; 13 §2), offered by a view that has pages and a
+ * layout tree to draw them from. The shell draws nothing itself: it gives an element to `paint`.
+ */
+export interface PageThumbnails {
+  /** Null while the view on screen shows no pages (the web view, 02 §7): no thumbnails are offered. */
+  readonly state: ReadView<PagesInfo | null>;
+  /** The size of page `index` in points; null when there is no such page. */
+  size(index: number): { readonly width: number; readonly height: number } | null;
+  /**
+   * Draws page `index` into `target`, `width` CSS pixels wide, in place of what `target` held. The
+   * drawing is a picture for the eye: the shell hides it from assistive technology and names the
+   * thumbnail itself. False when there is no such page.
+   */
+  paint(index: number, target: HTMLElement, width: number): boolean;
+  /** Moves the view to the page; false when there is no such page. */
+  goTo(index: number): boolean;
+}
+
 /** A style the document defines (03 §4 `style_def`; UX-022). Names are content. */
 export interface StyleSummary {
   readonly id: string;
@@ -904,6 +933,8 @@ export interface CoreApi {
 
   /** Word and page counts (UX-018). */
   readonly stats?: ReadView<DocumentStats>;
+  /** The pages of the view on screen, for the navigation pane's thumbnails (UX-021). */
+  readonly pages?: PageThumbnails;
   /** The document's default language (`settings.lang`), a BCP 47 tag; null when not set. */
   readonly language?: ReadView<string | null>;
   /**

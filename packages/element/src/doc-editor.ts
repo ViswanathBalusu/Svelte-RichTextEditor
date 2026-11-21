@@ -828,6 +828,8 @@ export class DocEditorElement extends Base {
           onError: (error) => this.#pageViewFailed(error),
         });
         this.#pageView = view;
+        // The navigation pane's thumbnails are this view's pages (UX-021).
+        mounted.setPageSource(view.pages);
         body.style.setProperty('display', 'none', 'important');
         frame.closest<HTMLElement>('.de-page')?.setAttribute('data-view', 'print');
         this.#showWebLabel();
@@ -845,6 +847,8 @@ export class DocEditorElement extends Base {
     if (view === null) return;
     this.#pageView = null;
     const hadFocus = view.root.contains(this.#root.activeElement);
+    // The web view shows no pages: the pane offers no thumbnails from here (UX-021 criterion 3).
+    this.#mounted?.setPageSource(null);
     view.destroy();
     const frame = this.#root.querySelector<HTMLElement>('.de-body-frame');
     frame?.querySelector<HTMLElement>('.de-body-host')?.style.removeProperty('display');

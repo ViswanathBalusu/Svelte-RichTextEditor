@@ -43,6 +43,8 @@ export type {
   HeldLease,
   LeasesService,
   OutlineItem,
+  PageThumbnails,
+  PagesInfo,
   PaneName,
   PanelInfo,
   PeerCaret,

@@ -65,6 +65,7 @@ import {
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
 import { sendService, type SendHarnessLog, type SendHarnessMode } from './frw-028-send-port.ts';
 import { catchUpPort, type CatchUpHarnessMode } from './his-028-catch-up-port.ts';
+import { fakePages, type PagesHarnessLog } from './ux-021-pages.ts';
 import {
   signingService,
   type SigningHarnessLog,
@@ -80,6 +81,9 @@ document.addEventListener('securitypolicyviolation', (e) => {
 /** What the shell asked of the send service (FRW-028). */
 const sendLog: SendHarnessLog = { fields: [], suggestions: [], refreshes: 0, sends: 0 };
 let sendHandle: ReturnType<typeof sendService> | null = null;
+/** What the navigation pane asked of the view with pages (UX-021). */
+const pagesLog: PagesHarnessLog = { goTo: [], paints: [] };
+let pagesHandle: ReturnType<typeof fakePages> | null = null;
 /** What the adoption and signing step asked of its service (FRW-045, FRW-046). */
 const signingLog: SigningHarnessLog = { adopts: [], signs: [], dismissed: 0 };
 let signingHandle: ReturnType<typeof signingService> | null = null;
@@ -161,6 +165,8 @@ export interface MountOptions {
   styleEdit?: FakeCoreOptions['styleEdit'];
   regions?: RegionSummary[];
   stats?: DocumentStats;
+  /** A view with that many pages is shown (UX-021); absent: the web view, which has no pages. */
+  pages?: number;
   language?: string | null;
   exportTargets?: ExportTarget[] | null;
   projected?: boolean;
@@ -621,6 +627,10 @@ function mountShell(options: MountOptions = {}): void {
     ],
   });
   if (options.proofing) core.proofingFindings = options.proofing.findings;
+  pagesLog.goTo.length = 0;
+  pagesLog.paints.length = 0;
+  pagesHandle = options.pages !== undefined ? fakePages(options.pages, pagesLog) : null;
+  if (pagesHandle) Object.assign(core, { pages: pagesHandle.service });
   if (options.selection) core.selection.set({ ...core.selection.get(), ...options.selection });
   if (options.history)
     Object.assign(core, {
@@ -1064,6 +1074,11 @@ const harness = {
   setStyles: (styles: StyleSummary[]) => need().core.styles?.set(styles),
   setRegions: (regions: RegionSummary[]) => need().core.regions?.set(regions),
   setStats: (stats: DocumentStats) => need().core.stats?.set(stats),
+  /** As a view with pages does (UX-021): another page shown, a new layout, or no pages (null). */
+  setPages: (next: { count?: number; current?: number; revision?: number } | null) =>
+    pagesHandle?.set(next),
+  /** What the navigation pane asked of the view with pages (UX-021). */
+  pagesLog: () => ({ goTo: [...pagesLog.goTo], paints: [...pagesLog.paints] }),
   setFill: (fill: FillSummary | null) => need().core.fill?.set(fill),
   setCarets: (carets: PeerCaret[]) => need().core.carets?.set(carets),
   setDirection: (dir: 'ltr' | 'rtl') => need().core.direction?.set(dir),

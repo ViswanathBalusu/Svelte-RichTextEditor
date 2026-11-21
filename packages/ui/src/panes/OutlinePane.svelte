@@ -5,9 +5,14 @@
   scrolls it into view, through the core. Headings in regions the user cannot edit are listed like
   any other. The outline updates from the core's view without losing the focused heading. Loaded
   on demand (02 §2); heading texts and matches are the document's content.
+
+  While the view on screen has pages (UX-021), the pane has two tabs, "Headings" and "Pages", and
+  the second lists the page thumbnails. In the web view there are no pages, so there is no tab and
+  the pane is the headings alone.
 -->
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
+  import PageThumbnails from '../components/PageThumbnails.svelte';
   import { useShell } from '../context.ts';
   import type { CoreApi, OutlineItem, SearchMatch, SearchResults } from '../core-api.ts';
   import { sourceTranslator } from '../i18n/strings.ts';
@@ -146,6 +151,34 @@
   function goTo(match: SearchMatch): void {
     gone = !(core?.selectMatch?.(match) ?? false);
   }
+
+  // Page thumbnails (UX-021): offered only while the view on screen has pages.
+  const pages = core?.pages;
+  const pagesView = pages ? live(pages.state) : null;
+  const pagesInfo = $derived(pagesView?.current ?? null);
+  let tab = $state<'headings' | 'pages'>('headings');
+  /** The tab shown: the pages only while there are pages. */
+  const shown = $derived(tab === 'pages' && pagesInfo !== null ? 'pages' : 'headings');
+  let tabsEl: HTMLElement | undefined = $state();
+
+  async function showTab(next: 'headings' | 'pages', focus: boolean): Promise<void> {
+    tab = next;
+    if (!focus) return;
+    await tick();
+    tabsEl?.querySelector<HTMLElement>(`[data-tab="${next}"]`)?.focus();
+  }
+
+  // The tabs pattern: the arrows move between the two tabs and show the one they reach.
+  function onTabsKeydown(event: KeyboardEvent): void {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const rtl = tabsEl ? getComputedStyle(tabsEl).direction === 'rtl' : false;
+    const next = rtl ? 'ArrowLeft' : 'ArrowRight';
+    const previous = rtl ? 'ArrowRight' : 'ArrowLeft';
+    if (event.key === next || event.key === 'End') void showTab('pages', true);
+    else if (event.key === previous || event.key === 'Home') void showTab('headings', true);
+    else return;
+    event.preventDefault();
+  }
 </script>
 
 <nav class="de-outline" aria-label={tr.t('outline.label')}>
@@ -192,40 +225,86 @@
       <p class="de-error" role="status">{tr.t('search.gone')}</p>
     {/if}
   {/if}
-  {#if items.length === 0}
-    <p class="de-outline-empty">{tr.t('outline.empty')}</p>
-  {:else}
-    <!-- A flat tree: levels, positions and expansion are attributes (WAI-ARIA 1.2 tree), so each
-         item's name is its own heading and not its children's. -->
-    <ul
-      bind:this={treeEl}
-      class="de-tree"
-      role="tree"
-      aria-label={tr.t('outline.label')}
-      onkeydown={onTreeKeydown}
-      onfocusin={onTreeFocus}
+  {#if pages && pagesInfo}
+    <div
+      bind:this={tabsEl}
+      class="de-nav-tabs"
+      role="tablist"
+      tabindex="-1"
+      aria-label={tr.t('outline.tabs')}
+      onkeydown={onTabsKeydown}
     >
-      {#each visible as node (node.item.id)}
-        <!-- The tree pattern: the keys are handled once, on the tree, for the focused item. -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <li
-          role="treeitem"
-          class="de-tree-item"
-          data-id={node.item.id}
-          data-level={node.item.level}
-          data-depth={node.depth}
-          aria-level={node.depth + 1}
-          aria-setsize={node.setSize}
-          aria-posinset={node.position}
-          aria-expanded={node.children.length ? !collapsed[node.item.id] : undefined}
-          aria-selected={current?.item.id === node.item.id}
-          tabindex={current?.item.id === node.item.id ? 0 : -1}
-          style:padding-inline-start={`${node.depth * 1.1}em`}
-          onclick={() => choose(node)}
-        >
-          <span class="de-tree-label" data-content>{node.item.text}</span>
-        </li>
-      {/each}
-    </ul>
+      <button
+        type="button"
+        class="de-tab"
+        role="tab"
+        id={`${id}-tab-headings`}
+        data-tab="headings"
+        aria-selected={shown === 'headings'}
+        aria-controls={`${id}-panel`}
+        tabindex={shown === 'headings' ? 0 : -1}
+        onclick={() => void showTab('headings', false)}>{tr.t('outline.label')}</button
+      >
+      <button
+        type="button"
+        class="de-tab"
+        role="tab"
+        id={`${id}-tab-pages`}
+        data-tab="pages"
+        aria-selected={shown === 'pages'}
+        aria-controls={`${id}-panel`}
+        tabindex={shown === 'pages' ? 0 : -1}
+        onclick={() => void showTab('pages', false)}>{tr.t('pages.label')}</button
+      >
+    </div>
+  {/if}
+  {#snippet headings()}
+    {#if items.length === 0}
+      <p class="de-outline-empty">{tr.t('outline.empty')}</p>
+    {:else}
+      <!-- A flat tree: levels, positions and expansion are attributes (WAI-ARIA 1.2 tree), so each
+           item's name is its own heading and not its children's. -->
+      <ul
+        bind:this={treeEl}
+        class="de-tree"
+        role="tree"
+        aria-label={tr.t('outline.label')}
+        onkeydown={onTreeKeydown}
+        onfocusin={onTreeFocus}
+      >
+        {#each visible as node (node.item.id)}
+          <!-- The tree pattern: the keys are handled once, on the tree, for the focused item. -->
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <li
+            role="treeitem"
+            class="de-tree-item"
+            data-id={node.item.id}
+            data-level={node.item.level}
+            data-depth={node.depth}
+            aria-level={node.depth + 1}
+            aria-setsize={node.setSize}
+            aria-posinset={node.position}
+            aria-expanded={node.children.length ? !collapsed[node.item.id] : undefined}
+            aria-selected={current?.item.id === node.item.id}
+            tabindex={current?.item.id === node.item.id ? 0 : -1}
+            style:padding-inline-start={`${node.depth * 1.1}em`}
+            onclick={() => choose(node)}
+          >
+            <span class="de-tree-label" data-content>{node.item.text}</span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  {/snippet}
+  {#if pages && pagesInfo && shown === 'pages'}
+    <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-pages`}>
+      <PageThumbnails {pages} info={pagesInfo} {id} />
+    </div>
+  {:else if pagesInfo}
+    <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-headings`}>
+      {@render headings()}
+    </div>
+  {:else}
+    {@render headings()}
   {/if}
 </nav>

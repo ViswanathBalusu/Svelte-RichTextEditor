@@ -1031,6 +1031,70 @@
   content: ' …';
 }
 
+/* The navigation pane's tabs and its page thumbnails (UX-021). */
+.de-nav-tabs {
+  display: flex;
+  gap: var(--_de-space-1);
+}
+
+/* A list with its own scrolling: only the thumbnails near what it shows are in the DOM. The places
+   of the thumbnails come from shell/page-thumbnails.ts, so the list has no padding of its own. */
+.de-thumbs {
+  position: relative;
+  max-block-size: 28em;
+  overflow-y: auto;
+}
+
+.de-thumbs-space {
+  position: relative;
+}
+
+/* A thumbnail: the drawing of the page, and under it the option, which is the page number. */
+.de-thumb {
+  position: absolute;
+  inset-inline: 0;
+  inline-size: fit-content;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+
+.de-thumb-page {
+  position: relative;
+  overflow: hidden;
+  outline: 1px solid var(--_de-border);
+}
+
+.de-thumb-number {
+  box-sizing: border-box;
+  min-inline-size: 24px;
+  block-size: 24px;
+  line-height: 24px;
+  font-size: 0.85em;
+  text-align: center;
+  outline: none;
+}
+
+/* The page the view shows: a heavier frame and a heavier number, not a colour alone. */
+.de-thumb[data-current] > .de-thumb-page {
+  outline: 3px solid var(--_de-control-active-border);
+  outline-offset: 1px;
+}
+
+.de-thumb-number[aria-selected='true'] {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* Focus is on the number; the ring is drawn round the whole thumbnail. */
+.de-thumb:has(> .de-thumb-number:focus-visible) {
+  outline: 2px solid var(--_de-focus);
+  outline-offset: 4px;
+}
+
 .de-search-row {
   display: flex;
   gap: var(--_de-space-1);

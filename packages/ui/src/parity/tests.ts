@@ -215,6 +215,23 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/context-menu.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-021 closed (2026-11-21): the headings and the search in the element and the
+  // shell, and the page thumbnails in the element's page view and, with a stand-in for the view,
+  // in the shell.
+  [
+    'navigation-pane',
+    [
+      { path: 'packages/element/e2e/ux-020-navigation.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-021-page-thumbnails.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-020-outline-place.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-020-search-context.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-021-page-thumbnails.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/ux-020-navigation.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/ux-020-place.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/ux-021-page-thumbnails.test.ts', kind: 'unit' },
+      { path: 'packages/element/test/ux-021-pages.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-016 closed (2026-11-20): the indicator's words in the shell, the return of a
   // visit that ended unsaved in the element and against the demo stack, and the outage and flush
   // on the element's own path.
