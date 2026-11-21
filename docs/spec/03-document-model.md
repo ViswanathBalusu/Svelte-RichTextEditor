@@ -236,18 +236,86 @@ For runs, continue with:
 7. The character style chain.
 8. Direct marks. A toggle mark with `value: false` switches the property off.
 
+The details are those of [ADR 0032](../adr/0032-layout-semantics.md), section 1 (accepted, section 7), and the fixtures are in `cascade.json`:
+
+- When no layer sets a property, a paragraph has `align: start`, indents and spaces of 0, a `lineSpacing` of 1000 under `multiple`, `widowControl` on and every other boolean off, and no tabs, borders or shading. Its `dir` comes from `settings.dir`. A run has a `fontSize` of 220, every toggle off, `underline: none`, `vertAlign: baseline`, and no colour or highlight. Its `lang` comes from `settings.lang`, and a null `fontFamily` means the default face of the font registry.
+- A style counts once, at the first layer that reaches it. The default paragraph style is layer 1 and is not applied again in layer 3, so a table style overrides it for content in a table.
+- The numbering level contributes its `indentLeft`, and its `hanging` as a negative `indentFirstLine`. Its `align` places the label and its `runProps` format the label only.
+- `numbering` resolves like a property through the style layers. A paragraph's own `numbering` replaces it whole.
+- `tabs`, `borders`, `shading` and `numbering` are whole values: the last layer that sets one gives all of it. An empty `tabs` list clears the stops a style sets.
+- Every other property resolves by itself, `lineSpacing` and `lineRule` included. The last layer that sets a toggle wins.
+- The marks `link`, `ins`, `del`, `fmt` and `preserved` do not format. Text with a `fmt` suggestion shows the formatting it suggests.
+- The `outlineLevel` of a heading comes from the paragraph's own style chain, not from the default style.
+- A missing style, a cycle and a chain of more than ten styles are typed errors, and resolution always ends.
+
 ## 7. Layout semantics
 
-The editor, the LaTeX writer and the DOCX writer must agree on more than formatting values. These rules are normative, and `packages/model` holds their one implementation and the shared fixtures. They are to be completed with fixtures during phases 0 and 1.
+The editor, the LaTeX writer and the DOCX writer must agree on more than formatting values. These rules are normative, and `packages/model` holds their one implementation and the shared fixtures. They are the rules of [ADR 0032](../adr/0032-layout-semantics.md), which gives the reasons; the owner accepted it on 2026-11-15 (decisions 9, 10 and 11 of the [owner's decisions](../owner-decisions-2026-11-15.md)). Each rule has fixtures in `packages/model/fixtures/semantics/`: language-neutral JSON with the input, the expected labels or geometry, and the edge cases. An engine or a writer in any language checks its own output against them.
 
-| Topic | Rule |
-|---|---|
-| Numbering | One algorithm computes every label from `numbering_def`, `numbering`, `listId`, `numberingRestart` and document order, across regions and tables. Writers print the computed label as literal text; they do not rely on their own counters. Cross-references to numbered items print the computed label too. Page numbers are the one exception, because only the typesetter knows them |
-| Paragraph spacing | The gap between two paragraphs is the larger of the first one's `spaceAfter` and the second one's `spaceBefore`. With `contextualSpacing`, the gap between two paragraphs of the same style is zero |
-| Line spacing | `multiple` applies per line to the height of the tallest run on that line; `exact` and `atLeast` are lengths |
-| Header growth | A header taller than the space the page setup gives it pushes the body down |
-| Tabs | Left, centre, right and decimal tab stops with leaders, measured from the left margin |
-| Fields | `date` fields, and form fields of kind `dateSigned` (12, section 3.3), use the time zone of the workflow or of the export job, never the client's |
+| Topic | Rule | Fixtures |
+|---|---|---|
+| Numbering | One algorithm computes every label from `numbering_def`, `numbering`, `listId`, `numberingRestart` and document order, across regions and tables. The LaTeX writer prints the computed label as literal text and uses no counters of its own. The DOCX writer writes Word's own numbering from the same definitions, so that a list stays a list in Word, and Word counts (owner decision 215). Cross-references to numbered items print the computed label too. Page numbers are the one exception, because only the typesetter knows them. Section 7.1 | `numbering-lists.json`, `numbering-sequences.json`, `numbering-footnotes.json`, `numbering-references.json`, `numbering-projections.json` |
+| Paragraph spacing | The gap between two paragraphs is the larger of the first one's `spaceAfter` and the second one's `spaceBefore`. With `contextualSpacing`, the gap between two paragraphs of the same style is zero. Section 7.2 | `paragraph-spacing.json` |
+| Line spacing | `multiple` applies per line to the height of the tallest run on that line; `exact` and `atLeast` are lengths. Section 7.3 | `line-spacing.json` |
+| Tabs | Left, centre, right and decimal tab stops with leaders, measured from the left margin. Section 7.4 | `tabs.json` |
+| Header growth | A header taller than the space the page setup gives it pushes the body down. A footer grows the same way, upwards. Section 7.5 | `header-growth.json` |
+| Spaces | Every space is kept; a run of spaces is not collapsed. Section 7.6 | `whitespace.json` |
+| Fields | `date` fields, and form fields of kind `dateSigned` (12, section 3.3), use the time zone of the workflow or of the export job, never the client's. Section 7.7 | `date-fields.json` |
+
+The cascade of section 6 has its fixtures in the same folder, in `cascade.json`. The expected values of every fixture were written by hand from the rules, not generated by the implementation.
+
+### 7.1 Numbering
+
+- A list instance is a `listId`. Each of its nine levels has a counter, which starts at `start - 1`. A paragraph counted at a level adds one to that level's counter, or sets it to the paragraph's `numberingRestart`. Paragraphs on two definitions that share a `listId` share the counters, and each is formatted by its own definition.
+- `restartAfter` is a level index counted from 0, like the `level` of `numbering`. When it is null, the level restarts after any higher level is counted. A value below the level means that it restarts only when a level from 0 to that value is counted. A value at or above the level itself means that it never restarts.
+- `numberingRestart` sets the counter of the paragraph's own level, and the label shows it. Deeper levels restart as after any count. Higher levels do not change.
+- A placeholder shows the counter of its level. A level that has not been counted yet shows `start - 1`, never less than 0, so level 0 followed by level 2 gives "1.0.1". A placeholder for a level that the definition does not have shows nothing.
+- With `legal`, the placeholders for the levels above the paragraph's own are decimal, whatever their format.
+- Letters run a to z, then aa to zz, then aaa. Roman numerals write thousands beyond three as repeated m. Neither has a zero: 0 is written "0". A bullet level prints its `bulletChar`, or • when that is null, and still counts. The format `none` prints nothing for its own level.
+- The `numbering` of a paragraph style joins the list instance that its `listId` names. A style based on a numbered style joins the same list, which is how headings are numbered.
+- A paste gives each `listId` in the pasted content a fresh one, the same fresh one for every paragraph that had it, so the copy is a new list that counts from its start values. A move keeps the `listId`.
+- A `seq` field counts in the sequence its `name` gives, in document order through the body: regions, table cells, figure captions and footnotes alike. Its `format` names a number format, decimal when it names none. A `seq` field without a name counts in no sequence and shows nothing. Numbered equation blocks count in the sequence `Equation`, together with the `seq` fields of that name, and an equation shows its number in parentheses.
+- Footnotes are counted in document order through the body, in the format of `settings.footnoteFormat`. The format `symbol` cycles * † ‡ § and then doubles them. With `footnoteRestart` set to `perPageSection`, the count restarts at every section break. The paragraph of a footnote is visited at the footnote's place in the text, so its numbered paragraphs and `seq` fields count there.
+- Each header and footer story is numbered on its own. A footnote in a story gets no mark.
+- A `ref` field prints the label of its target as it stands, punctuation included. For a `node:` target that is the paragraph's list label, or else its first `seq` number. For a `bookmark:` target it is the label of the paragraph or figure that holds the bookmark, or the mark of the footnote that holds it. For an `eq:` target it is the equation's number. A target without a label and a hidden target give no text, and the writer reports it.
+- A reader of a projection (ADR 0019) sees the numbers of the full document, and gaps may show (owner decision 11). The placeholder of a hidden region carries a counter effect, computed on the full document, which is applied at its place.
+
+### 7.2 Paragraph spacing
+
+- Contextual spacing is each paragraph's own, for its own side. When two neighbours have the same resolved style, a paragraph that has `contextualSpacing` drops its space on the side that faces the other. Two paragraphs of one style that both have it have no gap. If only the upper one has it, the lower one's `spaceBefore` remains.
+- The same style means the same resolved style: a paragraph whose `style` is null has the default paragraph style.
+- The first paragraph of a cell, a story, a footnote or the body keeps its `spaceBefore`, and the last keeps its `spaceAfter`. Both count in the height of the container.
+- Regions and section breaks are transparent: spacing and contextual spacing run across them as if they were not there.
+- A table, a figure, a display equation, a table of contents, an extension block, a preserved block and the placeholder of a hidden region have no spacing of their own. The gap next to one is the paragraph's own space.
+- The paragraphs of consecutive footnotes on a page follow the same rule.
+- Whether `spaceBefore` is dropped at the top of a page or a column is not fixed here. It belongs to pagination (02, section 9.4).
+
+### 7.3 Line spacing
+
+- Under `multiple`, the height of a line is `lineSpacing` thousandths of the natural single-spaced height of the tallest run on the line, rounded half up to whole twips: 1150 thousandths of 253 twips is 290.95 and gives 291 (owner decision 78). The height of a run is the line height of its font at its size. An inline picture or box counts as a run of its own height. An empty line has the height of the paragraph mark.
+- Under `exact`, `lineSpacing` is the height of the line whatever its runs hold. Under `atLeast`, the height is the larger of `lineSpacing` and the natural height of the tallest run.
+
+### 7.4 Tabs
+
+- A tab moves to the nearest of three candidates: the first of the paragraph's stops to the right of the current position; with a hanging indent, the left indent; and the next multiple of `settings.defaultTabStop` to the right of both the current position and the paragraph's last stop. Explicit stops clear the default stops to their left; the stop of a hanging indent does not. At one position an explicit stop wins over the stop of a hanging indent, and that over a default stop.
+- A list label is followed by a tab, which the same rule resolves.
+- The segment after a tab is the text up to the next tab, line break or end of the paragraph. A left stop starts the segment at the stop. A right stop ends it there. A centre stop centres it there, with half the width rounded down. A decimal stop puts the first decimal separator of the segment there, or its end when it has none. A segment that does not fit starts at the current position. The leader fills the span from the current position to the segment.
+- In version 1 the decimal separator is a full stop, and a right-to-left paragraph measures its tabs the same way.
+
+### 7.5 Header and footer growth
+
+- The body starts at the larger of `marginTop` and `headerDistance` plus the height of the header.
+- The body ends at the smaller of `height - marginBottom` and `height - footerDistance` less the height of the footer.
+- When the header and the footer leave no room, the height of the body is 0. The first page is shipped with an empty body, and the body starts on the next page at the same top (owner decision 77).
+- With `differentFirstPage`, the first page of a page section shows `headerFirst`. Otherwise, with `differentOddEven`, an even page shows `headerEven`. Otherwise a page shows `headerDefault`. Footers follow the same rule. A null slot means no header on those pages; it does not fall back to another slot.
+
+### 7.6 Spaces
+
+Each U+0020 is one space wide and stretches under justification (02, section 9.3). Leading and trailing spaces of a paragraph are kept. Other space characters are ordinary characters.
+
+### 7.7 Date fields
+
+The text of a `date` field is computed from the server's instant and the time zone of the workflow or of the export job. There is no default zone. The `format` picture has the tokens `yyyy`, `yy`, `MM`, `M`, `dd`, `d`, `HH`, `H`, `mm` and `ss`; text in single quotes and every other character is literal; a null `format` gives `yyyy-MM-dd`. Month and day names are not supported in version 1, because they need locale data that differs between engines.
 
 ## 8. Invariants
 
@@ -283,7 +351,7 @@ Definition identifiers have their own, wider form (section 4.8): a reserved buil
 | Construct | LaTeX (PDF) | DOCX | Notes |
 |---|---|---|---|
 | Named styles, direct formatting, fonts, colours | Yes | Yes | LaTeX uses macros generated from the styles |
-| Multi-level numbering | Yes | Yes | Literal labels from the shared algorithm |
+| Multi-level numbering | Yes | Yes | LaTeX prints literal labels from the shared algorithm. DOCX writes Word's own numbering from the same definitions (section 7; owner decision 215) |
 | Tables with spans, borders, shading, repeated header rows | Partial | Yes | Three table writers in LaTeX (09, section 3.2). A row taller than a page is split by the converter at paragraph boundaries. Tables inside multi-column sections, headers and footnotes cannot span pages |
 | Inline images and block figures with captions | Yes | Yes | |
 | Floating figures with text wrap | No | No | Not in the model in version 1 |
@@ -363,3 +431,4 @@ A key of `ext` has the form `vendor.example:name`: a namespace in lower-case let
 - The template of a numbering level takes only the placeholders `%1` to `%9` and a little punctuation (section 4.1), so the "Article %1" of a Word file cannot be stored. The grammar must widen before such files are imported without loss (A2; ADR 0018, open questions; review SR-M22).
 - A list of tab stops replaces the inherited list as a whole. It cannot clear one inherited stop, which Word files do (ADR 0018, open questions).
 - `caption` has no `id`, although principle 6 gives every block-level node one, and the `title` field has no source of its text inside the CDM (ADR 0018, open questions).
+- Layout semantics that ADR 0032 leaves open (section 7): a paragraph cannot switch off the numbering its style gives it; a numbering level cannot choose what follows its label (a tab, a space or nothing); whether the decimal separator of a decimal tab follows the language; whether a right-to-left paragraph measures its tabs from the right margin; whether `spaceBefore` is dropped at the top of a page or a column, and where the extra space of a `multiple` line goes; whether footnotes are allowed in headers and footers; and month and day names in date pictures. The first two need a change of the definition before Word files are imported without loss (A2).
