@@ -18,7 +18,7 @@ import {
   type ExportOutputs,
   type ExportPolicy,
 } from './exports.ts';
-import { refuseSeqBelowGate } from './gate.ts';
+import { readerConnectionOn, refuseSeqBelowGate } from './gate.ts';
 import { checkIfMatch } from './http.ts';
 import { MAX_START_GAP_MS, type JobRecord } from './jobs/queue.ts';
 import { withQueueProof } from './job-proof.ts';
@@ -156,9 +156,11 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
     // The export is of what the requester may read (EXP-123; SR-C4).
     const content =
       seq === head.seq ? headDoc : await d.content.rebuild(ref, head.incarnation, seq);
+    // The requester's class is that of their reads: a participant named by `wfp` exports with the
+    // roles the workflow gives them (FRW-038).
     const view = readerView(
       d.views,
-      identity && role && !full ? { ...identity.connection, role } : null,
+      identity && role && !full ? await readerConnectionOn(d, ctx.caller, doc) : null,
       content.doc,
       perms,
     );

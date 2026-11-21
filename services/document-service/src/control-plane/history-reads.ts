@@ -34,7 +34,7 @@ import {
 } from '@docedit/history';
 import type { JsonNode } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
-import { connectionOn, minVisibleSeqOf, regionInfosOfJson } from './gate.ts';
+import { connectionOn, minVisibleSeqOf, readerConnectionOn, regionInfosOfJson } from './gate.ts';
 import { json, type Kit } from './kit.ts';
 import { guard, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
@@ -114,10 +114,14 @@ export async function historyViewOf(k: Kit, ctx: Ctx, doc: string) {
   );
   const gate: HistoryGate = { min, head: head.seq, named: (s) => named.has(s) };
   const conn = connectionOn(ctx.caller, doc);
+  // What is hidden is asked of the connection as the document's workflow binds it (FRW-038).
+  const reader = await readerConnectionOn(d, ctx.caller, doc);
   /** What the caller's current access hides in any of the documents (ADR 0019; HIS-046). */
   const hiddenIn = (...docs: JsonNode[]) =>
     unionHidden(
-      ...docs.map((j) => withFieldsOfHiddenRegions(readerView(d.views, conn, j, perms).hidden, j)),
+      ...docs.map((j) =>
+        withFieldsOfHiddenRegions(readerView(d.views, reader, j, perms).hidden, j),
+      ),
     );
   return {
     record,
@@ -129,6 +133,7 @@ export async function historyViewOf(k: Kit, ctx: Ctx, doc: string) {
     gate,
     namedSeqs: [...named],
     conn,
+    reader,
     hiddenIn,
   };
 }

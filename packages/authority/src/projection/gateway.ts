@@ -448,7 +448,15 @@ export class ProjectionGateway {
   }
 
   private hiddenFor(conn: Connection): HiddenSet {
-    const hidden = this.visibility(conn, this.fullAt(this.head), this.room.permissions);
+    // The connection as the room's workflow binds it (FRW-038): a participant named by `wfp` reads
+    // with the roles the workflow gives them, as the room computes their access (ADR 0019; owner
+    // decision 156). Without this a participant could not read, or fill, a sensitive field of
+    // their own role.
+    const hidden = this.visibility(
+      this.room.connectionInWorkflow(conn),
+      this.fullAt(this.head),
+      this.room.permissions,
+    );
     this.cls(hidden);
     return hidden;
   }
@@ -576,8 +584,13 @@ export class ProjectionGateway {
     return this.finish(this.room.permissionsChanged(perms));
   }
 
-  /** The workflow moved (FRW-035): `perm.changed` and `wf.changed` go to each channel. */
+  /**
+   * The workflow moved (FRW-035): `perm.changed` and `wf.changed` go to each channel. The record
+   * decides which roles a participant holds, and so what they may read: visibility is derived
+   * again, and a reader whose class changed reloads (SYN-053).
+   */
   workflowChanged(record: WorkflowRecord, perms?: PermissionState): Effects {
+    this.replaced = true;
     return this.finish(this.room.workflowChanged(record, perms));
   }
 

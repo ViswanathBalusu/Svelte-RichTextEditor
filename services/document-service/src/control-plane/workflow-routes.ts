@@ -912,6 +912,9 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
             violations: p.problems.map((x) => ({
               path: x.key === '' ? '/' : `/fields/${x.key}`,
               rule: x.rule !== undefined ? `${x.code} (${x.rule})` : x.code,
+              // The message the author gave beside the field's pattern (12 §3.2; FRW-018 criterion
+              // 4): a text of the document's definitions, never a value.
+              ...(x.authored === true ? { message: x.message } : {}),
             })),
           },
         );

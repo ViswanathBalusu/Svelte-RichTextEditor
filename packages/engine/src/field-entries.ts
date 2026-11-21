@@ -122,33 +122,65 @@ const storedValue = (node: PMNode): JsonValue => (node.attrs['value'] ?? null) a
 const infoOf = (node: PMNode): FieldInfo | null =>
   fieldFrom(node.attrs as Record<string, JsonValue>);
 
-/** The form fields of a document by identifier, with their positions; one walk for each document. */
-const fieldIndexes = new WeakMap<PMNode, Map<string, { node: PMNode; pos: number }>>();
+/** A form field of a document with its position. */
+export interface FieldAt {
+  readonly node: PMNode;
+  readonly pos: number;
+}
+
+/** The form fields of a document: every one in document order, and the first of each identifier. */
+export interface FormFields {
+  readonly list: readonly FieldAt[];
+  readonly byId: ReadonlyMap<string, FieldAt>;
+}
+
+const fieldIndexes = new WeakMap<PMNode, FormFields>();
+
+/**
+ * The form fields of `doc`. The document is walked once, whoever asks and however often: the
+ * control of each field, the state of the entries, the rules and the fill list all read this one
+ * list, so a change of the document costs one walk and not one for each reader (FRW-023 criterion 6).
+ */
+export function formFieldsOf(doc: PMNode): FormFields {
+  let index = fieldIndexes.get(doc);
+  if (index === undefined) {
+    const list: FieldAt[] = [];
+    const byId = new Map<string, FieldAt>();
+    doc.descendants((node, pos) => {
+      if (node.type.name !== 'form_field') return true;
+      const at = { node, pos };
+      list.push(at);
+      const fieldId = node.attrs['id'];
+      if (typeof fieldId === 'string' && !byId.has(fieldId)) byId.set(fieldId, at);
+      return false;
+    });
+    fieldIndexes.set(doc, (index = { list, byId }));
+  }
+  return index;
+}
 
 /**
  * The form field with `id` in `doc`, with its position (the first, in document order). The fields
  * of a document are found in one walk, however many are asked for, so that drawing 2,000 fields
  * does not walk the document 2,000 times (FRW-023 criterion 6).
  */
-export function findFormField(doc: PMNode, id: string): { node: PMNode; pos: number } | null {
-  let index = fieldIndexes.get(doc);
-  if (index === undefined) {
-    const found = new Map<string, { node: PMNode; pos: number }>();
-    doc.descendants((node, pos) => {
-      if (node.type.name !== 'form_field') return true;
-      const fieldId = node.attrs['id'];
-      if (typeof fieldId === 'string' && !found.has(fieldId)) found.set(fieldId, { node, pos });
-      return false;
-    });
-    fieldIndexes.set(doc, (index = found));
-  }
-  return index.get(id) ?? null;
+export function findFormField(doc: PMNode, id: string): FieldAt | null {
+  return formFieldsOf(doc).byId.get(id) ?? null;
 }
 
 export class FieldEntries {
   readonly #host: FieldEntryHost;
   readonly #kept = new Map<string, Kept>();
+  /** Counts the changes of the kept entries, so that a list made from them knows when it is old. */
+  #keptVersion = 0;
   readonly #listeners = new Set<(change: FieldChange) => void>();
+  /**
+   * The status of a field as it was last computed from its node alone (no kept entry), with the
+   * definitions its role was read from. A node the document still holds keeps its status.
+   */
+  readonly #statusOf = new WeakMap<PMNode, { defs: PMNode | null; status: FieldStatus }>();
+  /** The last list `status()` made, and what it was made from. */
+  #statusList: { doc: PMNode; kept: number; out: readonly FieldStatus[] } | null = null;
 
   constructor(host: FieldEntryHost) {
     this.#host = host;
@@ -156,7 +188,18 @@ export class FieldEntries {
 
   /** Forgets every kept entry: what the fields show is what they store (the end of a preview, FRW-075). */
   clear(): void {
+    if (this.#kept.size === 0) return;
     this.#kept.clear();
+    this.#keptVersion++;
+  }
+
+  #keep(id: string, entry: Kept): void {
+    this.#kept.set(id, entry);
+    this.#keptVersion++;
+  }
+
+  #unkeep(id: string): void {
+    if (this.#kept.delete(id)) this.#keptVersion++;
   }
 
   /** The kept entry of a field, dropped once someone else changed the stored value. */
@@ -164,7 +207,7 @@ export class FieldEntries {
     const kept = this.#kept.get(id);
     if (!kept) return null;
     if (sameJson(stored, kept.value) || sameJson(stored, kept.base)) return kept;
-    this.#kept.delete(id);
+    this.#unkeep(id);
     return null;
   }
 
@@ -228,8 +271,8 @@ export class FieldEntries {
         return { ok: false, reason: 'refused' };
     }
     const problems = checkEntry(info, value);
-    if (problems.length > 0) this.#kept.set(id, { value, base });
-    else this.#kept.delete(id);
+    if (problems.length > 0) this.#keep(id, { value, base });
+    else this.#unkeep(id);
     if (!sameJson(shown, value)) {
       const empty = isEmptyValue(info, value);
       const change: FieldChange = {
@@ -253,22 +296,41 @@ export class FieldEntries {
     return () => this.#listeners.delete(listener);
   }
 
-  /** Every form field in document order with the state of its entry and its role; no value. */
-  status(): FieldStatus[] {
+  /**
+   * Every form field in document order with the state of its entry and its role; no value.
+   *
+   * The list is the same object until the document or a kept entry changes, and the status of a
+   * field is the same object while its node, the definitions and its entry are as they were. So a
+   * reader can tell what changed by identity, and a change of one value checks one entry and not
+   * 2,000 (FRW-023 criterion 6). The list and its members are not to be changed by the caller.
+   */
+  status(): readonly FieldStatus[] {
     const doc = this.#host.state().doc;
-    const roles = rolesOf(doc);
+    const last = this.#statusList;
+    if (last !== null && last.doc === doc && last.kept === this.#keptVersion) return last.out;
+    const defs = doc.firstChild;
+    let roles: Map<string, FieldRole> | null = null;
     const out: FieldStatus[] = [];
-    doc.descendants((node) => {
-      if (node.type.name !== 'form_field') return true;
-      const info = infoOf(node);
+    for (const { node } of formFieldsOf(doc).list) {
       const id = node.attrs['id'];
-      if (!info || typeof id !== 'string') return false;
+      if (typeof id !== 'string') continue;
       const stored = storedValue(node);
-      const kept = this.#keptFor(id, stored);
+      const kept = this.#kept.has(id) ? this.#keptFor(id, stored) : null;
+      if (kept === null) {
+        // The node says everything: its attributes, and its role from the same definitions.
+        const known = this.#statusOf.get(node);
+        if (known !== undefined && known.defs === defs) {
+          out.push(known.status);
+          continue;
+        }
+      }
+      const info = infoOf(node);
+      if (!info) continue;
       const value = kept ? kept.value : stored;
       const label = node.attrs['label'];
       const assignee = node.attrs['assignee'];
-      out.push({
+      roles ??= rolesOf(doc);
+      const status: FieldStatus = {
         id,
         key: info.key,
         label: typeof label === 'string' && label !== '' ? label : info.key,
@@ -277,9 +339,12 @@ export class FieldEntries {
         invalid: invalidReason(checkEntry(info, value)),
         assignee: typeof assignee === 'string' && assignee !== '' ? assignee : null,
         role: typeof assignee === 'string' ? (roles.get(assignee) ?? null) : null,
-      });
-      return false;
-    });
+      };
+      if (kept === null) this.#statusOf.set(node, { defs, status });
+      out.push(status);
+    }
+    // A kept entry that ended while the list was made is already counted in the version.
+    this.#statusList = { doc, kept: this.#keptVersion, out };
     return out;
   }
 
@@ -292,17 +357,15 @@ export class FieldEntries {
     const fields: FieldInfo[] = [];
     const values: Record<string, JsonValue> = {};
     const seen = new Set<string>();
-    this.#host.state().doc.descendants((node) => {
-      if (node.type.name !== 'form_field') return true;
+    for (const { node } of formFieldsOf(this.#host.state().doc).list) {
       const info = infoOf(node);
-      if (!info || seen.has(info.key)) return false;
+      if (!info || seen.has(info.key)) continue;
       seen.add(info.key);
       fields.push(info);
       const stored = storedValue(node);
       const kept = typeof info.id === 'string' ? this.#keptFor(info.id, stored) : null;
       values[info.key] = kept ? kept.value : stored;
-      return false;
-    });
+    }
     return validateFields(fields, values);
   }
 }

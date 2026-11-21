@@ -42,3 +42,15 @@ export function patternLengthBound(): number {
     throw new Error('form_field.validation.pattern is not a string');
   return inner.maxLength;
 }
+
+/**
+ * The CDM's bounds on `validation.message`, the message of a pattern (owner decision 187), for the
+ * test that keeps it equal to the bounds of a `validate` message.
+ */
+export function validationMessageBounds(): { minLength: number; maxLength: number } {
+  const g = grammarOf('form_field', 'validation');
+  const inner = g.kind === 'object' ? g.properties['message'] : undefined;
+  if (!inner || inner.kind !== 'string')
+    throw new Error('form_field.validation.message is not a string');
+  return { minLength: inner.minLength ?? 0, maxLength: inner.maxLength };
+}

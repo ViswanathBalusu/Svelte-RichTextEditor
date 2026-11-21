@@ -168,7 +168,10 @@ export class FinalSealer {
         if (!run.retryable) this.#gaveUp.set(key, 'seal_refused');
         return { status: 'stopped', code: 'seal_stopped', retryable: run.retryable };
       }
-      // What was not drawn is on record for the operator and the owner (FRW-057 criterion 6).
+      // The workflow is finalised by now: the host hears of it first, whatever follows.
+      await raiseWorkflowEvents(deps, ref, run.final.resource, run.final.control, run.final.raised);
+      // What was not drawn is on record for the operator and the owner (FRW-057 criterion 6). It is
+      // written after the events, so that a slow or failing audit store cannot delay or lose them.
       if (run.appearances && run.appearances.diagnostics.length > 0)
         await deps.audit?.record([
           {
@@ -187,7 +190,6 @@ export class FinalSealer {
             at: deps.now(),
           },
         ]);
-      await raiseWorkflowEvents(deps, ref, run.final.resource, run.final.control, run.final.raised);
       return { status: 'sealed', run };
     } finally {
       this.#running.delete(key);

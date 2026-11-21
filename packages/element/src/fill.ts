@@ -5,7 +5,9 @@
  * - `fillView` is the shell's `CoreApi.fill`: null outside the fill mode, else every form field of
  *   the document in order with the state of its entry, and the roles this participant holds. It
  *   holds no value. It is read again when the core's revision, mode or access moves and replaced
- *   only when it differs.
+ *   only when it differs. A field that did not change keeps its object, and the comparison is field
+ *   by field, so a change of one value in a document of 2,000 fields costs one field (FRW-023
+ *   criterion 6).
  * - `de-field-change` is raised for each entry this person submitted that changed what a field
  *   shows, with `{ fieldId, key, valid, empty }`. The detail is built here from those four
  *   members, so no value can travel in it.
@@ -52,39 +54,68 @@ export function fillView(
   core: FillSource,
   workflow?: View<{ readonly participant?: { readonly state: string } | undefined } | null>,
 ): View<FillSummary | null> {
+  type Field = FillSummary['fields'][number];
   let last: FillSummary | null = null;
-  let lastKey = 'null';
-  const read = (): FillSummary | null => {
-    let now: FillSummary | null = null;
-    if (core.mode.get().effective === 'fill') {
-      const fill = core.permissions.get()?.fill ?? null;
-      const active = fill?.active ?? false;
-      // Why the participant may not fill: the server's own word for them (`wf.changed`, FRW-035),
-      // `paused` while the owner corrects, `unverified` until the access code is right (FRW-039);
-      // every other reason reads as waiting.
-      const own = workflow?.get()?.participant?.state;
-      const inactive =
-        own === 'paused' ? 'paused' : own === 'unverified' ? 'unverified' : 'waiting';
-      now = {
-        active,
-        ...(active ? {} : { inactive }),
-        roles: [...(fill?.roles ?? [])],
-        fields: core.fillFields().map((f) => ({
-          id: f.id,
-          label: f.label,
-          required: f.required,
-          filled: f.filled,
-          invalid: f.invalid,
-          assignee: f.assignee,
-          role: f.role ? { name: f.role.name, color: f.role.color, order: f.role.order } : null,
-        })),
+  /** The list the core gave last, and the fields made from it. */
+  let lastSource: readonly FillFieldSource[] | null = null;
+  let lastFields: readonly Field[] = [];
+  /** The copy made of each field the core listed; a field the core lists again keeps its copy. */
+  const copies = new WeakMap<FillFieldSource, Field>();
+  // Copied member by member: whatever else the core's object holds, a value above all, stays behind.
+  const copyOf = (f: FillFieldSource): Field => {
+    let copy = copies.get(f);
+    if (copy === undefined) {
+      copy = {
+        id: f.id,
+        label: f.label,
+        required: f.required,
+        filled: f.filled,
+        invalid: f.invalid,
+        assignee: f.assignee,
+        role: f.role ? { name: f.role.name, color: f.role.color, order: f.role.order } : null,
       };
+      copies.set(f, copy);
     }
-    const key = JSON.stringify(now);
-    if (key !== lastKey) {
-      lastKey = key;
-      last = now;
+    return copy;
+  };
+  const sameField = (a: Field, b: Field): boolean =>
+    a === b || JSON.stringify(a) === JSON.stringify(b);
+  const read = (): FillSummary | null => {
+    if (core.mode.get().effective !== 'fill') {
+      last = null;
+      return null;
     }
+    const fill = core.permissions.get()?.fill ?? null;
+    const active = fill?.active ?? false;
+    // Why the participant may not fill: the server's own word for them (`wf.changed`, FRW-035),
+    // `paused` while the owner corrects, `unverified` until the access code is right (FRW-039);
+    // every other reason reads as waiting.
+    const own = workflow?.get()?.participant?.state;
+    const inactive = own === 'paused' ? 'paused' : own === 'unverified' ? 'unverified' : 'waiting';
+    const roles = fill?.roles ?? [];
+    // The fields are compared with the last ones field by field, and a field the core lists again
+    // unchanged is the same object, so a change of one value compares one field and copies one
+    // (FRW-023 criterion 6: the core keeps its list while nothing changes it).
+    const source = core.fillFields();
+    if (source !== lastSource) {
+      const next = source.map(copyOf);
+      const same =
+        next.length === lastFields.length && next.every((f, i) => sameField(f, lastFields[i]!));
+      lastSource = source;
+      if (!same) lastFields = next;
+    }
+    const fields = lastFields;
+    if (
+      last !== null &&
+      last.fields === fields &&
+      last.active === active &&
+      (active || last.inactive === inactive) &&
+      last.roles !== undefined &&
+      last.roles.length === roles.length &&
+      last.roles.every((r, i) => r === roles[i])
+    )
+      return last;
+    last = { active, ...(active ? {} : { inactive }), roles: [...roles], fields };
     return last;
   };
   return {

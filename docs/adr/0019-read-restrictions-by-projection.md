@@ -18,7 +18,7 @@ The rest of the design limits the options:
 ## What is hidden
 
 - **Confidential regions.** A region whose content, and optionally title, only principals with a read grant may see. Proposed as a third value of the region policy, `confidential`, where grants convey `view` explicitly. With no matching grant a reader gets nothing of the region except a placeholder, unless they hold `manage`.
-- **Hidden field values.** A field whose value only some principals may read. The reserved `sensitive` attribute (12 §3.2) becomes that rule. Proposed readers: the field's assignee role, users with `manage`, and principals named by a grant.
+- **Hidden field values.** A field whose value only some principals may read. The reserved `sensitive` attribute (12 §3.2) becomes that rule. Proposed readers: the field's assignee role, users with `manage`, and principals named by a grant. Decided by the owner on 2026-11-15 (decision 156, [owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)): these are the readers. How a connection is found to hold the assignee role, with and without a workflow, is in [ADR 0422](0422-w4-FRW-002-sensitive-readers-in-a-workflow.md) (proposed).
 
 Which of these is in version 1, and their exact rules, are for S12 to settle and the owner to confirm.
 
@@ -81,10 +81,10 @@ The design task touches every epic that reads or sends content. S12 lists the st
 
 - Whether region titles are hidden or shown, per region.
 - Whether timing leaks from empty commits matter. If they do, empty commits can be batched or delayed for readers without access, at the cost of latency.
-- Who may read a hidden value by default; whether hidden values appear in the sealed PDF for each participant; and what the evidence bundle shows.
+- Who may read a hidden value by default is decided (decision 156 of 2026-11-15, above). Still open: whether hidden values appear in the sealed PDF for each participant, and what the evidence bundle shows.
 - How suggestions and comments in hidden regions are reviewed.
 - Whether owners always see everything, or whether a region can hide content even from some owners (separation of duties).
-- Whether a reader may delete a field whose value they cannot read. S12 allows it under the full room's rules; deleting reveals nothing.
+- Whether a reader may delete a field whose value they cannot read. S12 allows it under the full room's rules; deleting reveals nothing. Decided by the owner on 2026-11-15 (decision 157): only with `manage`. Not applied yet: the outcome check still allows the deletion (`packages/authority/src/permissions/outcome.ts`); it is a permission rule for the PRM epic (see ADR 0422, "Not decided here").
 
 ## Revisit when
 

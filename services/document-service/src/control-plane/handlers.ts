@@ -57,7 +57,7 @@ import { threadRoutes } from './thread-routes.ts';
 import { versionRoutes } from './versions-routes.ts';
 import { leaseRoutes } from './lease-routes.ts';
 import { emptyCatalogue, fontsEtag } from './fonts.ts';
-import { refuseSeqBelowGate } from './gate.ts';
+import { readerConnectionOn, refuseSeqBelowGate } from './gate.ts';
 import { checkIfMatch, ifMatchTags, pageLimit, seqParam } from './http.ts';
 import { createKit, json, notModified, type HandlerDeps, type Kit } from './kit.ts';
 import { guard, type Ctx, type Handler } from './pipeline.ts';
@@ -463,13 +463,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     const head = await d.logs.head(ref);
     const full = await d.content.rebuild(ref, head.incarnation, head.seq);
     const perms = await d.grants.current(ref);
-    const identity = ctx.caller.identity;
-    const view = readerView(
-      d.views,
-      identity ? { ...identity.connection, role: identity.docs[doc]! } : null,
-      full.doc,
-      perms,
-    );
+    const view = readerView(d.views, await readerConnectionOn(d, ctx.caller, doc), full.doc, perms);
     const now = d.now();
     const names = await k.principalNames(ctx.caller.tenant, [
       ...perms.grants.map((g) => g.principal),

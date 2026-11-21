@@ -12,7 +12,7 @@ import {
   type AssetRecord,
   type AssetRegistry,
 } from './assets.ts';
-import { connectionOn, regionInfosOfJson, requireRow } from './gate.ts';
+import { connectionOn, readerConnectionOn, regionInfosOfJson, requireRow } from './gate.ts';
 import { json, type Kit } from './kit.ts';
 import { admitStorage } from './live-quota-rest.ts';
 import { guard, hiddenFrom, type Ctx, type Handler } from './pipeline.ts';
@@ -176,7 +176,7 @@ export function assetRoutes(k: Kit): Record<string, Handler> {
     const head = await d.logs.head(ref);
     const full = await d.content.rebuild(ref, head.incarnation, head.seq);
     const perms = await d.grants.current(ref);
-    const view = readerView(d.views, connectionOn(ctx.caller, doc), full.doc, perms);
+    const view = readerView(d.views, await readerConnectionOn(d, ctx.caller, doc), full.doc, perms);
     // Attached as the caller may read it: referenced in their projection at the head (SR-C4);
     // preserved fragments of an imported file only for the whole document (SR-C1).
     const refs = assetReferences(projectContent(view, full.doc));

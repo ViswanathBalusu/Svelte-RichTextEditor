@@ -32,6 +32,7 @@ import {
   ProjectionGateway,
   Room,
   SERVER_SESSION,
+  connectionInWorkflow,
   isSnapshot,
   project,
   projectCommitPage,
@@ -718,7 +719,7 @@ ecentHead, keeping one entry older than the window. */
     if (this.#deps.users) this.#subs.set(conn.sub, port.user.id);
     const perms =
       stored.revision > this.#room.permissions.revision ? stored : this.#room.permissions;
-    const hidden = this.#deps.tokens.hidden(conn, this.#gateway.fullHead, perms);
+    const hidden = this.#hiddenFor(conn, perms);
     const gatewayView = this.#deps.tokens.gatewayToken(hidden);
     let roomResume: RoomResume | undefined;
     if (resume) {
@@ -739,7 +740,7 @@ ecentHead, keeping one entry older than the window. */
       throw new Refusal('unavailable', 'the room stopped serving the document');
     }
     // The class the gateway put the channel in, under the permissions it now holds.
-    const now = this.#deps.tokens.hidden(conn, this.#gateway.fullHead, this.#room.permissions);
+    const now = this.#hiddenFor(conn);
     const ch: HostedChannel = {
       key,
       port,
@@ -809,11 +810,7 @@ ecentHead, keeping one entry older than the window. */
     for (const ch of this.#channels.values()) {
       if (user !== undefined && ch.conn.sub !== user) continue;
       if (regions.length > 0) {
-        const hidden = this.#deps.tokens.hidden(
-          ch.conn,
-          this.#gateway.fullHead,
-          this.#room.permissions,
-        );
+        const hidden = this.#hiddenFor(ch.conn);
         if (regions.some((r) => hidden.regions.has(r))) continue;
       }
       ch.port.event(n);
@@ -1118,7 +1115,7 @@ ecentHead, keeping one entry older than the window. */
     if (this.#stopped) return null;
     const head = this.#room.head;
     if (seq !== undefined && seq !== head) return null;
-    const hidden = this.#deps.tokens.hidden(conn, this.#gateway.fullHead, this.#room.permissions);
+    const hidden = this.#hiddenFor(conn);
     const doc = hidesNothing(hidden)
       ? this.#room.document.toJSON()
       : this.#gateway.projectionAtHead(hidden).doc.toJSON();
@@ -1134,8 +1131,19 @@ ecentHead, keeping one entry older than the window. */
 
   /** Whether `conn` is in a class that hides content in this room now. */
   hidesFor(conn: RoomConnection): boolean {
-    return !hidesNothing(
-      this.#deps.tokens.hidden(conn, this.#gateway.fullHead, this.#room.permissions),
+    return !hidesNothing(this.#hiddenFor(conn));
+  }
+
+  /**
+   * What `conn` may not see in this room under `perms` (default: the room's). The connection is
+   * the one the room's workflow binds (FRW-038): a participant named by `wfp` reads with the roles
+   * the workflow gives them, as the gateway derives the class of their channel (ADR 0019).
+   */
+  #hiddenFor(conn: Connection, perms: PermissionState = this.#room.permissions) {
+    return this.#deps.tokens.hidden(
+      this.#room.connectionInWorkflow(conn),
+      this.#gateway.fullHead,
+      perms,
     );
   }
 
@@ -2346,7 +2354,7 @@ export class RoomHost {
           throw new DataPlaneError('forbidden', 'the history before your access is not visible');
       }
       const full = at === head.seq ? atHead.doc : (await this.#materialise(ref, at)).doc;
-      const hidden = d.tokens.hidden(conn, headDoc, stored);
+      const hidden = d.tokens.hidden(await this.#readerOf(ref, conn), headDoc, stored);
       const out = hidesNothing(hidden)
         ? full
         : (project(schemaOf().nodeFromJSON(full), hidden).doc.toJSON() as JsonNode);
@@ -2361,6 +2369,18 @@ export class RoomHost {
     } catch (e) {
       throw this.#readError(e, `content of ${doc}`, { tenant: identity.tenant, doc });
     }
+  }
+
+  /**
+   * The connection of a read from storage as the document's workflow binds it (FRW-038; ADR 0019;
+   * owner decision 156): a token with `wfp` reads with the roles of the participant it names in a
+   * workflow that has left `draft`, and with no role otherwise. A room does the same from the
+   * record it holds, so a read answered from storage is of the same class as the reader's channel.
+   */
+  async #readerOf(ref: DocRef, conn: RoomConnection): Promise<Connection> {
+    if (conn.participantClaim === undefined) return conn;
+    const row = this.#deps.workflows ? await this.#deps.workflows.read(ref.tenant, ref.doc) : null;
+    return connectionInWorkflow(conn, row && row.state !== 'draft' ? recordOf(row) : null);
   }
 
   #readError(e: unknown, where: string, context: ErrorContext): DataPlaneError {
@@ -2440,7 +2460,9 @@ export class RoomHost {
             log: m.log,
             now: d.now(),
           });
-          hides = d.restricted && !hidesNothing(d.tokens.hidden(conn, headDoc, stored));
+          hides =
+            d.restricted &&
+            !hidesNothing(d.tokens.hidden(await this.#readerOf(ref, conn), headDoc, stored));
         }
       }
       if (!rangeAllowed(gate, after))
@@ -2465,7 +2487,7 @@ export class RoomHost {
       if (hides) {
         const atHead = await this.#materialise(ref, head.seq);
         const headDoc = schemaOf().nodeFromJSON(atHead.doc);
-        const hidden = d.tokens.hidden(conn, headDoc, stored);
+        const hidden = d.tokens.hidden(await this.#readerOf(ref, conn), headDoc, stored);
         const before = after === head.seq ? atHead.doc : (await this.#materialise(ref, after)).doc;
         page = projectCommitPage(schemaOf(), schemaOf().nodeFromJSON(before), hidden, storedPage);
         view = d.tokens.tokenFor(hidden);

@@ -2,7 +2,8 @@
  * The harness page for the web view (FND-007): one `<doc-editor>` from `@docedit/element` on a
  * corpus document, loaded the way the element's own demo pages load one (packages/element/demo):
  * through the in-memory backend (`@docedit/backend-mock`, the real authority in process), with
- * `backend` and `doc-id`. Query: `?doc=pages-100`.
+ * `backend` and `doc-id`. Query: `?doc=pages-100`; with `&fill=<role_def id>` the user is a
+ * participant who holds that role, in the fill mode.
  *
  * The observers of pages/editor.html run before this module. Marks for the specs:
  * `harness:fetched` (the CDM is in the page), `harness:backend` (the in-memory backend holds the
@@ -92,9 +93,14 @@ async function start(): Promise<void> {
 
   const t0 = performance.now();
   const service = new MockService();
-  const user = { sub: 'perf', name: 'Harness user' };
+  // `?fill=<role_def id>`: the user is a participant who holds that role and may only fill, and the
+  // element is in the fill mode (FRW-023 criterion 6). Otherwise an editor of the document.
+  const fillRole = params.get('fill');
+  const user = fillRole
+    ? { sub: 'perf', name: 'Harness user', fill: { roles: [fillRole] } }
+    : { sub: 'perf', name: 'Harness user' };
   const docId = service.createDocument(envelope);
-  const backend = remoteLike(service.backend(user, { [docId]: 'editor' }));
+  const backend = remoteLike(service.backend(user, { [docId]: fillRole ? 'filler' : 'editor' }));
   perf.backendMs = performance.now() - t0;
   perf.docId = docId;
   performance.mark('harness:backend');
@@ -108,6 +114,7 @@ async function start(): Promise<void> {
     perf.error = `de-error: ${JSON.stringify((e as CustomEvent).detail)}`;
   });
   el.backend = backend;
+  if (fillRole) el.setAttribute('mode', 'fill');
   el.setAttribute('doc-id', docId);
   document.body.append(el);
   perf.elementAt = performance.now();

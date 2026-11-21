@@ -19,7 +19,13 @@
  * - The anchors are those the store holds for the range; this store has none yet (HIS-036).
  */
 import { auditSegment } from '@docedit/history';
-import { actingConnection, minVisibleSeqOf, regionInfosOfJson, connectionOn } from './gate.ts';
+import {
+  actingConnection,
+  connectionOn,
+  minVisibleSeqOf,
+  readerConnectionOn,
+  regionInfosOfJson,
+} from './gate.ts';
 import { seqParam } from './http.ts';
 import { json, type Kit } from './kit.ts';
 import { guard, type Handler } from './pipeline.ts';
@@ -61,7 +67,9 @@ export function auditSegmentRoutes(k: Kit): Record<string, Handler> {
         logs: d.logs,
         now: d.now(),
       });
-      if (!readerView(d.views, conn, full.doc, perms).full)
+      // What is hidden is asked of the connection as the document's workflow binds it (FRW-038).
+      const reader = named ? conn : await readerConnectionOn(d, ctx.caller, doc);
+      if (!readerView(d.views, reader, full.doc, perms).full)
         throw new ApiError(
           'forbidden',
           'the audit export is not offered to a reader whose view hides content',

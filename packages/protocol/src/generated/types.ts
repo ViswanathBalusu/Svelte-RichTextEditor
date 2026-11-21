@@ -324,6 +324,8 @@ export interface ProblemDetails {
     /** A JSON Pointer into the request body. */
     path: string;
     rule: string;
+    /** For a field that does not pass when a participant completes (12 §5.3): the message the document's author gave for the pattern the value does not match (12 §3.2 `validation.message`). A text of the document's definitions, never a value. */
+    message?: string;
   }>;
   /** For `rate_limited` of the access code (FRW-039): how long to wait before retrying; `Retry-After` carries the same wait in whole seconds. */
   retryAfterMs?: number;
