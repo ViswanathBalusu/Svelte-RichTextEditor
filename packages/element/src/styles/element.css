@@ -220,7 +220,10 @@ img.ProseMirror-separator {
 }
 
 /* A form field's control shows where the focus is, on every background (FRW-079 criterion 5). */
-.de-form-field-control:focus-visible {
+/* A date control holds focus in its day, month and year parts; WebKit on Linux does not match
+   :focus-visible on the control itself then, so :focus is used for it. */
+.de-form-field-control:focus-visible,
+.de-form-field-control[type='date']:focus {
   outline: 2px solid var(--de-focus, #0969da);
   outline-offset: 1px;
 }
