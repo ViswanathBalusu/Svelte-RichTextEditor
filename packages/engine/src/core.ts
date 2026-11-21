@@ -225,6 +225,12 @@ import {
   listFormFields,
 } from './field-edit.ts';
 import { type Refusal, canWrite, capsOf, checkChange, depScope, guardPlugin } from './guard.ts';
+import {
+  type RegionLockDefaults,
+  type RegionLockLabel,
+  type RegionLockSpec,
+  regionLockSpecs,
+} from './region-lock.ts';
 import { idTypesOf, identifierPlugin } from './ids.ts';
 import { type Internals, register } from './internals.ts';
 import { layoutDirtyTracker } from './layout-dirty.ts';
@@ -262,6 +268,7 @@ import {
   NO_PROOFING,
   type ProofingClock,
   ProofingController,
+  type ProofingFindingInfo,
   type ProofingPort,
   type ProofingInfo,
 } from './proofing.ts';
@@ -912,6 +919,9 @@ export class DocumentCore implements DocumentApi {
   readonly markupView: ReadValue<MarkupView>;
   /** Names a suggestion for assistive technology (UX-035 criterion 4); the shell sets it. */
   #suggestionLabel: SuggestionLabel | null = null;
+  /** The shell's words for the lock indicators of regions the user cannot edit (PRM-026). */
+  #regionLabels: Readonly<Record<string, RegionLockLabel>> = {};
+  #regionLockDefaults: RegionLockDefaults = {};
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
   /** The confirmed commits since the client's first `seq`: a range reported earlier is mapped through them (FE-048). */
@@ -1380,6 +1390,15 @@ export class DocumentCore implements DocumentApi {
   /** The identifier of the finding the last navigation chose, while it is shown. */
   proofingCurrentId(): string | null {
     return this.#proofing?.currentId() ?? null;
+  }
+
+  /**
+   * The finding with this identifier, as the interface reads it; null when it is not shown now. The
+   * context menu asks for the finding whose mark was clicked (UX-008 criterion 5): a context click
+   * inside a selection moves no caret, so the caret cannot say which finding was meant.
+   */
+  proofingFinding(id: string): ProofingFindingInfo | null {
+    return this.#proofing?.infoOf(id) ?? null;
   }
 
   /**
@@ -2988,6 +3007,35 @@ one or original. It is a
   /** The function that names a suggestion for assistive technology, or null (UX-035). */
   get suggestionLabel(): SuggestionLabel | null {
     return this.#suggestionLabel;
+  }
+
+  /**
+   * Sets the shell's words for the lock indicators of the regions the user cannot edit, by region
+   * identifier (PRM-026; 07 §7; ui `CoreApi.setRegionLabels`). `defaults` are the words of a locked
+   * region that has none of its own: one the access does not list yet (`unlisted`), or any other
+   * (`locked`). Which regions are locked is never read from here: the access in force decides it.
+   * The body view draws again when this is called.
+   */
+  setRegionLabels(
+    labels: Readonly<Record<string, RegionLockLabel>>,
+    defaults: RegionLockDefaults = {},
+  ): void {
+    this.#regionLabels = { ...labels };
+    this.#regionLockDefaults = { ...defaults };
+  }
+
+  /**
+   * The regions the user cannot edit under the access in force, in document order, with the words
+   * of their lock indicators (PRM-026 criterion 1). Empty while no backend has given an access. The
+   * web view shades them; a new access gives a new answer, without a reload (PRM-006 criterion 5).
+   */
+  regionLocks(): RegionLockSpec[] {
+    return this.regionLocksIn(this.#state.doc);
+  }
+
+  /** `regionLocks` for the document a view is drawing, which is the one its decorations are for. */
+  protected regionLocksIn(doc: PMNode): RegionLockSpec[] {
+    return regionLockSpecs(doc, this.#accessValue, this.#regionLabels, this.#regionLockDefaults);
   }
 
   /**

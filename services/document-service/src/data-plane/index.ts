@@ -349,6 +349,8 @@ class DepDataPlane implements DataPlane {
         ...(this.#deps.participantOpened
           ? { participantOpened: this.#deps.participantOpened }
           : {}),
+        // HIS-003: the record of each session, written before its channel opens.
+        ...(this.#deps.sessionOpened ? { sessionOpened: this.#deps.sessionOpened } : {}),
       });
       this.#sessions.add(session);
       if (this.#closing) session.goaway(0);

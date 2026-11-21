@@ -6,12 +6,24 @@
   is not shown. Erased people (HIS-038) show the unknown-person label. Every state (loading, empty,
   error) has a message. The pane is loaded on demand (02 §2) and reads only the host's history port;
   without the port the history control is not offered and the pane says so.
+
+  Restoring (HIS-021; 08 §8): an open version offers a restore of the whole document or of one
+  region, as far as the host says the user may. The first step is always a preview: the dry run is
+  shown with the comparison view over the open version, and nothing is changed. The real restore is
+  asked for only by the confirmation that the preview shows.
 -->
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import AssistantMark from '../components/AssistantMark.svelte';
   import { useShell } from '../context.ts';
-  import type { CoreApi, HistoryPaneItem } from '../core-api.ts';
+  import type { CoreApi, HistoryPaneItem, HistoryRestoreRefusal } from '../core-api.ts';
+  import {
+    createRestoreController,
+    DOCUMENT_TARGET,
+    restoreTargets,
+    type RestoreController,
+    type RestoreState,
+  } from '../shell/history-restore.ts';
   import {
     createWhoController,
     type WhoController,
@@ -24,6 +36,7 @@
     authorOf,
     compareChoices,
     createCompareController,
+    CURRENT_KEY,
     fieldChanges,
     summaryByRegion,
     type CompareController,
@@ -66,6 +79,12 @@
   let cmp = $state.raw<CompareState | null>(null);
   let pickFrom = $state('');
   let pickTo = $state('current');
+  let restore: RestoreController | null = null;
+  let rst = $state.raw<RestoreState | null>(null);
+  let canRestore = $state(false);
+  let restoreScope = $state(DOCUMENT_TARGET);
+  let restoreTitleEl = $state.raw<HTMLElement | null>(null);
+  let restoreRunEl = $state.raw<HTMLElement | null>(null);
   /** Where focus was when a version was opened; it returns there when the user leaves (HIS-010). */
   let returnTo: HTMLElement | null = null;
   let viewHost = $state.raw<HTMLElement | null>(null);
@@ -94,6 +113,13 @@
     const offCompare = cc.subscribe(() => {
       cmp = cc.state();
     });
+    const rc = createRestoreController(port, ctl, cc);
+    restore = rc;
+    canRestore = rc.offered;
+    rst = rc.state();
+    const offRestore = rc.subscribe(() => {
+      rst = rc.state();
+    });
     snapshot = ctl.state();
     const off = ctl.subscribe(() => {
       snapshot = ctl.state();
@@ -105,7 +131,9 @@
       off();
       offWho();
       offCompare();
+      offRestore();
       offChange?.();
+      rc.dispose();
       ctl.dispose();
     };
   });
@@ -117,6 +145,15 @@
     // Another version, or none: an answer about the earlier one no longer stands.
     void openView;
     who?.clear();
+    // Nor does a restore preview of it (a restore that was sent, and its result, are kept).
+    restore?.reset();
+  });
+
+  // What the user may restore: the whole document and the regions the host names (07 §13).
+  const targets = $derived(restoreTargets(rst?.scopes ?? null, snapshot?.choices.regions ?? []));
+  $effect(() => {
+    if (!targets.some((target) => target.key === restoreScope))
+      restoreScope = targets[0]?.key ?? DOCUMENT_TARGET;
   });
   $effect(() => {
     const v = openView;
@@ -279,7 +316,59 @@
     shell.announce('history.fork.requested');
   }
 
+  /**
+   * The first step of a restore (HIS-021): the dry run, shown with the comparison view. When the
+   * preview is drawn, the confirmation has replaced the control that had focus, so the heading of
+   * the restore takes it and the text below it is read next.
+   */
+  async function previewRestore(): Promise<void> {
+    const target = targets.find((t) => t.key === restoreScope) ?? targets[0];
+    if (restore === null || target === undefined) return;
+    if (rst?.status === 'previewing' || rst?.status === 'restoring') return;
+    const shown = await restore.preview(target.region);
+    await tick();
+    if (shown) restoreTitleEl?.focus();
+  }
+
+  /** The second step: the real restore, asked for only from the confirmation of a preview. */
+  async function confirmRestore(): Promise<void> {
+    if (restore === null || rst?.status !== 'preview' || rst.unchanged) return;
+    const done = await restore.confirm();
+    await tick();
+    if (done) {
+      // The version is closed and the list shows the restore; the pane's heading takes focus.
+      shell?.announce('history.restore.done');
+      returnTo = null;
+      titleEl?.focus();
+    } else restoreRunEl?.focus();
+  }
+
+  function cancelRestore(): void {
+    restore?.cancel();
+    void tick().then(() => restoreRunEl?.focus());
+  }
+
+  /** What a restore is of, in words: the whole document, or a region by the name the list gives it. */
+  function targetText(region: string | null): string {
+    if (region === null) return tr.t('history.restore.scope.document');
+    const name = snapshot?.choices.regions.find((r) => r.id === region)?.label ?? region;
+    return tr.t('history.restore.scope.region', { name });
+  }
+
+  function restoreRefusal(step: 'preview' | 'restore' | null, reason: HistoryRestoreRefusal): string {
+    if (reason === 'forbidden') return tr.t('history.restore.refused.forbidden');
+    if (reason === 'not_found') return tr.t('history.restore.refused.not-found');
+    if (reason === 'conflict') return tr.t('history.restore.refused.conflict');
+    if (reason === 'workflow_active') return tr.t('history.restore.refused.workflow');
+    if (reason === 'too_large') return tr.t('history.restore.refused.too-large');
+    return step === 'preview'
+      ? tr.t('history.restore.refused.preview-failed')
+      : tr.t('history.restore.refused.failed');
+  }
+
   function leave(): void {
+    // A restore that was sent is not walked away from: its answer closes the version or says why not.
+    if (rst?.status === 'restoring') return;
     compare?.close();
     controller?.leave();
     const target = returnTo !== null && returnTo.isConnected ? returnTo : titleEl;
@@ -336,6 +425,89 @@
           >
             {tr.t('history.fork.request')}
           </button>
+        {/if}
+        {#if canRestore && rst !== null && targets.length > 0 && snapshot.viewing.key !== CURRENT_KEY}
+          <!-- Restore (HIS-021): a preview first; the confirmation it shows is the only way on.
+               The current document, open as the newer end of a comparison, is not restored to. -->
+          <div class="de-history-restore" data-restore>
+            <h3 class="de-subhead" id={`${id}-restore`} tabindex="-1" bind:this={restoreTitleEl}>
+              {tr.t('history.restore.title')}
+            </h3>
+            <p role="status" aria-live="polite" data-restore-status={rst.status}>
+              {#if rst.status === 'previewing'}{tr.t('history.restore.previewing')}{/if}
+              {#if rst.status === 'preview'}
+                {rst.unchanged
+                  ? tr.t('history.restore.unchanged')
+                  : tr.t('history.restore.preview', { count: rst.changes })}
+              {/if}
+              {#if rst.status === 'restoring'}{tr.t('history.restore.restoring')}{/if}
+            </p>
+            {#if rst.status === 'preview' || rst.status === 'restoring'}
+              <div role="group" aria-labelledby={`${id}-restore`} data-restore-confirmation>
+                <!-- The list of what to restore is gone by now, so the choice is said again. -->
+                <p data-restore-target>
+                  {tr.t('history.restore.target', { what: targetText(rst.request?.region ?? null) })}
+                </p>
+                {#if rst.recreated.length > 0}
+                  <p data-restore-note="recreated">
+                    {tr.t('history.restore.recreated', { names: rst.recreated.join(', ') })}
+                  </p>
+                {/if}
+                {#if rst.replaced.length > 0}
+                  <p data-restore-note="replaced">
+                    {tr.t('history.restore.replaced', { names: rst.replaced.join(', ') })}
+                  </p>
+                {/if}
+                <button
+                  type="button"
+                  class="de-list-button"
+                  data-restore-confirm
+                  aria-disabled={rst.unchanged || rst.status === 'restoring'}
+                  onclick={() => void confirmRestore()}
+                >
+                  {tr.t('history.restore.confirm')}
+                </button>
+                <button
+                  type="button"
+                  class="de-list-button"
+                  data-restore-cancel
+                  aria-disabled={rst.status === 'restoring'}
+                  onclick={cancelRestore}
+                >
+                  {tr.t('history.restore.cancel')}
+                </button>
+              </div>
+            {:else}
+              <label>
+                {tr.t('history.restore.scope')}
+                <select data-restore-scope bind:value={restoreScope}>
+                  {#each targets as target (target.key)}
+                    <option value={target.key}>{targetText(target.region)}</option>
+                  {/each}
+                </select>
+              </label>
+              <button
+                type="button"
+                class="de-list-button"
+                data-restore-preview
+                aria-disabled={rst.status === 'previewing'}
+                bind:this={restoreRunEl}
+                onclick={() => void previewRestore()}
+              >
+                {tr.t('history.restore.preview.run')}
+              </button>
+            {/if}
+            {#if rst.status === 'refused' && rst.reason !== null}
+              <p
+                role="alert"
+                data-status="restore-refused"
+                data-reason={rst.reason}
+                data-step={rst.step}
+              >
+                {restoreRefusal(rst.step, rst.reason)}
+              </p>
+            {/if}
+          </div>
         {/if}
         {#if cmp?.status === 'ready'}
           <div class="de-history-compare" data-compare>
@@ -493,6 +665,10 @@
           ? tr.t('history.compare.forbidden')
           : tr.t('history.compare.failed')}
       </p>
+    {/if}
+    {#if rst?.status === 'done'}
+      <!-- Said in the shell's live region when it happens; this line stays to be read again. -->
+      <p data-status="restored">{tr.t('history.restore.done')}</p>
     {/if}
     <div class="de-history-list" hidden={snapshot.viewing?.status === 'open'}>
       {#if canCompare && compareChoices(snapshot.items).length > 0}

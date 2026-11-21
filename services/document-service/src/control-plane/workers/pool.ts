@@ -1,6 +1,8 @@
 /**
  * Worker threads for work that would block the event loop (06 §1 stage 1; BE-001 criteria 3, 4):
- * log replay for content reads now; checkpoint serialisation, comparison and conversion later.
+ * log replay for content reads, comparisons, and the serialisation of the content a document is
+ * created with (replay-worker.ts). The rooms' checkpoints and the conversion of replaced or imported
+ * content run in the data plane's own pool (data-plane/workers.ts).
  * The main thread only queues tasks and passes messages, so it keeps serving requests and rooms
  * while a replay runs. A worker that crashes, or a task that runs past its time limit, fails the
  * task with the retryable code `internal`; the worker is replaced and the process goes on.

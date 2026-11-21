@@ -8,6 +8,19 @@
  * and a browser whose list was not read is "not checked". Where a browser gives a key another
  * meaning, `alternative` names the keys the shell binds as well; the binder binds them on every
  * browser, so the documented alternative always works (UX-013 criterion 2; UX-023 criterion 3).
+ *
+ * How a list is read (the rule of the reading of 2026-11-20, which went through every key of this
+ * table in all four lists, on each platform a list covers):
+ * - a conflict is a meaning the list gives the key while focus is in a web page. A meaning that
+ *   holds only in the browser's own interface (the address bar, a sidebar, the find bar, a menu) is
+ *   not one, and neither is a key the list names only as part of a longer gesture ("press and hold",
+ *   "while dragging");
+ * - a key the list gives the meaning the command has (Firefox lists Undo, Redo and Select All under
+ *   "Editing") is not a conflict;
+ * - where a list gives a key several such meanings, `meaning` quotes them in the list's order,
+ *   joined by "; ";
+ * - a key no list names (the Menu key) has no conflict to record.
+ * A browser may act on a key its list does not name: such behaviour is not recorded here.
  */
 import type { StringKey } from '../i18n/en-GB.ts';
 
@@ -15,18 +28,24 @@ export type BrowserName = 'chrome' | 'edge' | 'firefox' | 'safari';
 
 export const BROWSERS: readonly BrowserName[] = ['chrome', 'edge', 'firefox', 'safari'];
 
-/** The published shortcut lists that were read, with the date they were read. */
+/**
+ * The published shortcut lists that were read, with the date they were read. Chrome's list has a
+ * part for Windows and Linux and one for Mac; Edge's has one for Windows and one for Mac; Firefox's
+ * article shows one platform at a time and was read for Windows, Linux and Mac; Safari's is for Mac.
+ */
 export const SOURCES: Readonly<
   Record<BrowserName, { readonly url: string; readonly read: string } | null>
 > = {
-  chrome: { url: 'https://support.google.com/chrome/answer/157179', read: '2026-11-06' },
+  chrome: { url: 'https://support.google.com/chrome/answer/157179', read: '2026-11-20' },
   edge: {
-    url: 'https://support.microsoft.com/en-gb/microsoft-edge/keyboard-shortcuts-in-microsoft-edge-50d3edab-30d9-c7e4-21ce-37fe2713cfad',
-    read: '2026-11-06',
+    url: 'https://support.microsoft.com/en-gb/edge/keyboard-shortcuts-in-microsoft-edge',
+    read: '2026-11-20',
   },
-  // The support article did not load for the reader on 2026-11-06: not checked.
-  firefox: null,
-  safari: { url: 'https://support.apple.com/en-gb/guide/safari/cpsh003/mac', read: '2026-11-06' },
+  firefox: {
+    url: 'https://support.mozilla.org/en-US/kb/keyboard-shortcuts-perform-firefox-tasks-quickly',
+    read: '2026-11-20',
+  },
+  safari: { url: 'https://support.apple.com/en-gb/guide/safari/cpsh003/mac', read: '2026-11-20' },
 };
 
 export interface Conflict {
@@ -104,7 +123,22 @@ export const SHORTCUT_TABLE: readonly ShortcutRow[] = [
     conventional: ['Mod-b'],
     keys: ['Mod-b'],
     alternative: [],
-    conflicts: [],
+    conflicts: [
+      {
+        browser: 'firefox',
+        platform: 'windows-linux',
+        key: 'Mod-b',
+        meaning: 'Bookmarks sidebar',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'firefox',
+        platform: 'macos',
+        key: 'Mod-b',
+        meaning: 'Bookmarks sidebar',
+        resolution: 'inside-editor',
+      },
+    ],
   },
   {
     id: 'format.italic',
@@ -112,7 +146,22 @@ export const SHORTCUT_TABLE: readonly ShortcutRow[] = [
     conventional: ['Mod-i'],
     keys: ['Mod-i'],
     alternative: [],
-    conflicts: [],
+    conflicts: [
+      {
+        browser: 'firefox',
+        platform: 'windows-linux',
+        key: 'Mod-i',
+        meaning: 'Page Info',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'firefox',
+        platform: 'macos',
+        key: 'Mod-i',
+        meaning: 'Page Info',
+        resolution: 'inside-editor',
+      },
+    ],
   },
   {
     id: 'format.painter',
@@ -128,10 +177,19 @@ export const SHORTCUT_TABLE: readonly ShortcutRow[] = [
         meaning: 'Open Developer tools',
         resolution: 'alternative',
       },
+      // On a Mac Firefox's Inspector is Command+Alt+C, which is not a key of this row.
+      {
+        browser: 'firefox',
+        platform: 'windows-linux',
+        key: 'Shift-Mod-c',
+        meaning: 'Inspector',
+        resolution: 'alternative',
+      },
     ],
   },
   // The next and the previous spelling or grammar issue (UX-041). Word's own key for the next issue
-  // is Alt+F7; no browser list that was read gives it a meaning.
+  // is Alt+F7; no browser list that was read gives it a meaning (F7 alone is caret browsing in
+  // Chrome, Edge and Firefox, and Shift+F7 is Firefox's Style Editor).
   {
     id: 'proofing.next',
     kind: 'command',
@@ -171,10 +229,38 @@ export const SHORTCUT_TABLE: readonly ShortcutRow[] = [
         resolution: 'inside-editor',
       },
       {
+        browser: 'chrome',
+        platform: 'macos',
+        key: 'Mod-f',
+        meaning: 'Open the Find Bar to search the current page',
+        resolution: 'inside-editor',
+      },
+      {
         browser: 'edge',
         platform: 'windows-linux',
         key: 'Mod-f',
         meaning: 'Open find on page',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'edge',
+        platform: 'macos',
+        key: 'Mod-f',
+        meaning: 'Open find on page',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'firefox',
+        platform: 'windows-linux',
+        key: 'Mod-f',
+        meaning: 'Find in This Page',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'firefox',
+        platform: 'macos',
+        key: 'Mod-f',
+        meaning: 'Find in This Page',
         resolution: 'inside-editor',
       },
       {
@@ -235,6 +321,13 @@ export const SHORTCUT_TABLE: readonly ShortcutRow[] = [
         meaning: 'Open context menu',
         resolution: 'inside-editor',
       },
+      {
+        browser: 'firefox',
+        platform: 'windows-linux',
+        key: 'Shift-F10',
+        meaning: 'Toggle Context Menu',
+        resolution: 'inside-editor',
+      },
     ],
   },
   {
@@ -256,7 +349,23 @@ export const SHORTCUT_TABLE: readonly ShortcutRow[] = [
     conventional: [],
     keys: ['Enter'],
     alternative: [],
-    conflicts: [],
+    // Chrome, Edge and Safari name Enter or Return only for the address bar and for bookmarks.
+    conflicts: [
+      {
+        browser: 'firefox',
+        platform: 'windows-linux',
+        key: 'Enter',
+        meaning: 'Open Focused Bookmark or Link in Current Tab',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'firefox',
+        platform: 'macos',
+        key: 'Enter',
+        meaning: 'Open Focused Bookmark or Link in Current Tab',
+        resolution: 'inside-editor',
+      },
+    ],
   },
   {
     id: 'shell.cancel',
@@ -266,7 +375,57 @@ export const SHORTCUT_TABLE: readonly ShortcutRow[] = [
     conventional: [],
     keys: ['Escape'],
     alternative: [],
-    conflicts: [],
+    conflicts: [
+      {
+        browser: 'chrome',
+        platform: 'windows-linux',
+        key: 'Escape',
+        meaning: 'Stop the page loading',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'chrome',
+        platform: 'macos',
+        key: 'Escape',
+        meaning: 'Stop the page loading',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'edge',
+        platform: 'windows-linux',
+        key: 'Escape',
+        meaning: 'Stop loading page; close dialog or pop-up',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'edge',
+        platform: 'macos',
+        key: 'Escape',
+        meaning: 'Exit full-screen mode; Stop loading page; close dialog or pop-up',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'firefox',
+        platform: 'windows-linux',
+        key: 'Escape',
+        meaning: 'Stop; Stop Autoscroll Mode; Cancel Drag-and-Drop Operation',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'firefox',
+        platform: 'macos',
+        key: 'Escape',
+        meaning: 'Stop; Stop Autoscroll Mode; Cancel Drag-and-Drop Operation',
+        resolution: 'inside-editor',
+      },
+      {
+        browser: 'safari',
+        platform: 'macos',
+        key: 'Escape',
+        meaning: 'Exit full-screen view; Close Reader',
+        resolution: 'inside-editor',
+      },
+    ],
   },
 ];
 

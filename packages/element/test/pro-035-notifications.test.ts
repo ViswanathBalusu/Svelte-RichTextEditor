@@ -1,9 +1,13 @@
 // PRO-035 criterion 5: the client ignores an event type it does not know. The dispatcher is tested
 // alone, and then in a session against the mock backend, whose channel carries the notice. Runs in
 // Node.js.
-import type { Notification } from '@docedit/protocol';
+import { DEP1, DEP1_WIRE_NOTIFICATION_TYPES, type Notification } from '@docedit/protocol';
 import { describe, expect, it } from 'vitest';
-import { KNOWN_NOTIFICATION_TYPES, NotificationDispatcher } from '../src/notifications.ts';
+import {
+  KNOWN_NOTIFICATION_TYPES,
+  NOTIFICATION_TYPES,
+  NotificationDispatcher,
+} from '../src/notifications.ts';
 import { Session } from '../src/session.ts';
 import { backendFor, fakeEditor, recordingHost, service, settle } from './support.ts';
 
@@ -22,6 +26,15 @@ describe('NotificationDispatcher', () => {
       'document.updated',
     ])
       expect(KNOWN_NOTIFICATION_TYPES.has(t), t).toBe(true);
+  });
+
+  it('repeats the names of the protocol definition exactly (FE-002: the entry does not load it)', () => {
+    // The element keeps its own list so that its entry does not import the definition as data. A
+    // type added to or removed from the definition must be added or removed there too.
+    expect([...NOTIFICATION_TYPES]).toEqual([...DEP1_WIRE_NOTIFICATION_TYPES]);
+    expect([...NOTIFICATION_TYPES]).toEqual(DEP1.notifications.map((n) => n.type));
+    expect(new Set(NOTIFICATION_TYPES).size).toBe(NOTIFICATION_TYPES.length);
+    expect([...KNOWN_NOTIFICATION_TYPES]).toEqual([...NOTIFICATION_TYPES]);
   });
 
   it('hands a known notice to its handlers, unchanged and in order', () => {

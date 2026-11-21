@@ -14,6 +14,10 @@
       "types": "./src/fonts/coverage.ts",
       "default": "./src/fonts/coverage.ts"
     },
+    "./preflight": {
+      "types": "./src/preflight.ts",
+      "default": "./src/preflight.ts"
+    },
     "./class/*": "./class/*"
   },
   "scripts": {

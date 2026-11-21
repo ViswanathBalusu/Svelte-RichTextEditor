@@ -6,10 +6,15 @@
  *   feature settings (shaping);
  * - for every paragraph the layout engine breaks while it lays a corpus document out: the kernel's
  *   input (text, runs, the break opportunities it is given, the column), a checksum of the advances
- *   of each run, and the lines the kernel returns (line starts and ends, positions, widths).
+ *   of each run, the lines the kernel returns (line starts and ends, positions, widths), and the
+ *   kernel's own segmentation of the text (WASM-007: its break opportunities by UAX #14 and its
+ *   grapheme cluster boundaries by UAX #29).
  *
- * The break opportunities are an input of the kernel (UAX #14 from `linebreak` 1.1.0, the library of
- * spike S10), not an output: finding them in the kernel is WASM-007, which is not built.
+ * The break opportunities that the line breaker is given are an input (UAX #14 from `linebreak`
+ * 1.1.0, the library of spike S10, which recorded the lines before the kernel found opportunities
+ * itself), so the recorded lines do not move with the kernel's segmentation. The kernel's own
+ * opportunities are recorded beside them; they are the library's and three more over the corpus
+ * (`wasm-007-kernel-segmentation.test.ts` says which and why).
  *
  * `golden/reference.json` of `@docedit/layout-kernel` holds the result. Node.js writes it when
  * `DOCEDIT_UPDATE_GOLDEN=1`; the browsers and Node.js only read it.
@@ -63,6 +68,13 @@ export interface ParagraphCase {
   /** The kernel's checksum of the advances of each run (as little-endian 32-bit integers). */
   readonly runChecksums: number[];
   readonly lines: BrokenLine[];
+  /** What the kernel's segmentation (WASM-007) gives for the paragraph's text. */
+  readonly segmentation: {
+    /** The break opportunities before the end of the text (UAX #14), UTF-16 offsets. */
+    readonly breaks: number[];
+    /** The extended grapheme cluster boundaries (UAX #29), UTF-16 offsets. */
+    readonly graphemes: number[];
+  };
 }
 
 export interface KernelReference {
@@ -236,12 +248,16 @@ export async function recordReference(kernel: LayoutKernel): Promise<KernelRefer
         input,
         runChecksums: runChecksums(kernel, input),
         lines: kernel.shaper.breakParagraph(input),
+        segmentation: {
+          breaks: kernel.segmenter.opportunities(input.text),
+          graphemes: kernel.segmenter.graphemeBoundaries(input.text),
+        },
       };
     });
   }
   return {
     $comment:
-      'Reference outputs of the layout kernel, recorded in Node.js (WASM-010): advances of fixed lines, and for every paragraph of the shared corpus the kernel input, the checksum of each run’s advances and the lines. Break opportunities are an input (UAX #14 from linebreak 1.1.0), not a kernel output (WASM-007 is not built). Rewritten by DOCEDIT_UPDATE_GOLDEN=1 on purpose only; WASM-011 compares every browser with it.',
+      'Reference outputs of the layout kernel, recorded in Node.js (WASM-010): advances of fixed lines, and for every paragraph of the shared corpus the kernel input, the checksum of each run’s advances and the lines. The line breaker takes its break opportunities as an input (UAX #14 from linebreak 1.1.0); the kernel’s own segmentation of each paragraph’s text (WASM-007: break opportunities, UAX #14, and grapheme cluster boundaries, UAX #29) is recorded beside the lines. Rewritten by DOCEDIT_UPDATE_GOLDEN=1 on purpose only; WASM-011 compares every browser with it.',
     abi: kernel.abi,
     faces: manifestFaces,
     shaping: shapingCases(kernel),

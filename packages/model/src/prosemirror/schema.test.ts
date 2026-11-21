@@ -1,9 +1,12 @@
 // The generated ProseMirror schema (CDM-008).
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Slice, Fragment } from 'prosemirror-model';
-import { AddNodeMarkStep, AttrStep, ReplaceStep } from 'prosemirror-transform';
+import { Slice, Fragment, type Mark, type Node as PmNode } from 'prosemirror-model';
+import { AddNodeMarkStep, AttrStep, RemoveNodeMarkStep, ReplaceStep } from 'prosemirror-transform';
 import example from '../../fixtures/example-03-12.json' with { type: 'json' };
 import kitchenSink from '../../fixtures/kitchen-sink.json' with { type: 'json' };
+import { codes, sinkCtx, sinkDoc, type Json } from '../../test/support.ts';
 import { CDM1 } from '../definition/cdm1.ts';
 import type { CdmDefinition, NodeDef } from '../definition/grammar.ts';
 import { canonicalNode, type JsonNode } from '../canonical/canonical-form.ts';
@@ -189,5 +192,190 @@ describe('CDM ProseMirror schema', () => {
     const text = JSON.stringify(back);
     for (const part of ['preserved_block', 'preserved_inline', '"preserved"', 'textAlignment'])
       expect(text).toContain(part);
+  });
+});
+
+// CDM-008 criterion 4, as reworded on owner decisions 7 and 92 (docs/owner-decisions-2026-11-15.md):
+// the suggestion marks exclude nothing; no block takes a mark, so the node-mark steps of 04 §4 apply
+// to inline atoms only; and block suggestions are the `suggest` attribute of three node types.
+describe('suggestions in the published schema (CDM-008 criterion 4)', () => {
+  const SUGGESTION_MARKS = ['ins', 'del', 'fmt'] as const;
+  const suggestion = (type: string, n: number): Mark =>
+    schema.marks[type]!.create({
+      id: `sSuggestion${String(n).padStart(5, '0')}`,
+      user: `u${n}`,
+      ...(type === 'fmt' ? { before: { marks: [] } } : {}),
+    });
+  const sink = (): PmNode => schema.nodeFromJSON(kitchenSink.doc);
+  /** Every node of a document with its position, in document order. */
+  const nodesOf = (doc: PmNode): Array<{ node: PmNode; pos: number }> => {
+    const out: Array<{ node: PmNode; pos: number }> = [];
+    doc.descendants((node, pos) => {
+      out.push({ node, pos });
+    });
+    return out;
+  };
+
+  it('publishes ins, del and fmt as marks that exclude nothing, and no node that lets a block carry a mark', () => {
+    const published = JSON.parse(
+      readFileSync(
+        resolve(import.meta.dirname, '../../../../spec/cdm/cdm-1.prosemirror.json'),
+        'utf8',
+      ),
+    ) as {
+      nodes: Array<[string, { marks?: string; attrs?: Record<string, unknown> }]>;
+      marks: Array<[string, { excludes?: string }]>;
+    };
+    const marks = new Map(published.marks);
+    for (const name of SUGGESTION_MARKS) expect(marks.get(name)?.excludes, name).toBe('');
+    // Every other mark keeps ProseMirror's default: it excludes only another mark of its own type.
+    for (const [name, spec] of published.marks)
+      if (!(SUGGESTION_MARKS as readonly string[]).includes(name))
+        expect(spec.excludes, name).toBeUndefined();
+    // No node widens the marks of its children, so the default holds: only inline content takes marks.
+    for (const [name, spec] of published.nodes) expect(spec.marks, name).toBeUndefined();
+    expect(published).toEqual(JSON.parse(JSON.stringify(generateProseMirrorSpec(CDM1))));
+  });
+
+  it('lets each suggestion mark sit beside another of its type, beside the other two and beside formatting', () => {
+    for (const type of SUGGESTION_MARKS) {
+      const first = suggestion(type, 1);
+      const second = suggestion(type, 2);
+      expect(second.addToSet(first.addToSet([])), type).toHaveLength(2);
+      // The same mark twice is one mark.
+      expect(first.addToSet(first.addToSet([])), type).toHaveLength(1);
+    }
+    const all = [
+      suggestion('ins', 1),
+      suggestion('ins', 2),
+      suggestion('del', 3),
+      suggestion('fmt', 4),
+      schema.marks['bold']!.create(),
+    ];
+    let set: readonly Mark[] = [];
+    for (const m of all) set = m.addToSet(set);
+    expect(set).toHaveLength(5);
+    const paragraph = schema.nodes['paragraph']!.create(
+      { id: 'pTwoSuggesters01' },
+      schema.text('shared', set),
+    );
+    paragraph.check();
+    expect(paragraph.firstChild!.marks.map((m) => m.type.name).sort()).toEqual([
+      'bold',
+      'del',
+      'fmt',
+      'ins',
+      'ins',
+    ]);
+  });
+
+  it('allows marks on the children of nodes with inline content only', () => {
+    const withInline: string[] = [];
+    for (const [name, type] of Object.entries(schema.nodes)) {
+      if (type.inlineContent) {
+        withInline.push(name);
+        for (const mark of Object.values(schema.marks))
+          expect(type.allowsMarkType(mark), `${name} ${mark.name}`).toBe(true);
+      } else {
+        for (const mark of Object.values(schema.marks))
+          expect(type.allowsMarkType(mark), `${name} ${mark.name}`).toBe(false);
+      }
+    }
+    expect(withInline.sort()).toEqual(['caption', 'paragraph']);
+  });
+
+  it('refuses addNodeMark on every block of the kitchen sink and applies it to every inline atom', () => {
+    const doc = sink();
+    const blocks = nodesOf(doc).filter(({ node }) => node.isBlock);
+    const atoms = nodesOf(doc).filter(({ node }) => node.isInline && !node.isText);
+    const blockTypes = new Set(blocks.map(({ node }) => node.type.name));
+    for (const name of [
+      'paragraph',
+      'table',
+      'table_row',
+      'table_cell',
+      'region',
+      'figure',
+      'caption',
+      'story',
+      'style_def',
+      'section_break',
+    ])
+      expect(blockTypes.has(name), name).toBe(true);
+    for (const type of SUGGESTION_MARKS) {
+      const mark = suggestion(type, 1);
+      for (const { node, pos } of blocks) {
+        const added = new AddNodeMarkStep(pos, mark).apply(doc);
+        expect(added.failed, `${type} on ${node.type.name} at ${pos}`).not.toBeNull();
+        // Removing a mark a block cannot have changes nothing.
+        const removed = new RemoveNodeMarkStep(pos, mark).apply(doc);
+        expect(removed.failed).toBeNull();
+        expect(removed.doc!.eq(doc), `${type} off ${node.type.name}`).toBe(true);
+      }
+    }
+    const atomTypes = new Set(atoms.map(({ node }) => node.type.name));
+    for (const name of ['image', 'field', 'footnote', 'equation', 'anchor'])
+      expect(atomTypes.has(name), name).toBe(true);
+    for (const type of SUGGESTION_MARKS) {
+      const mark = suggestion(type, 1);
+      for (const { node, pos } of atoms) {
+        const added = new AddNodeMarkStep(pos, mark).apply(doc);
+        expect(added.failed, `${type} on ${node.type.name} at ${pos}`).toBeNull();
+        added.doc!.check();
+        expect(mark.isInSet(added.doc!.nodeAt(pos)!.marks), node.type.name).toBe(true);
+        const removed = new RemoveNodeMarkStep(pos, mark).apply(added.doc!);
+        expect(removed.failed).toBeNull();
+        expect(removed.doc!.eq(doc), `${type} off ${node.type.name}`).toBe(true);
+      }
+    }
+  });
+
+  it('keeps block suggestions in the suggest attribute of a paragraph, a table row and a table, and nowhere else', () => {
+    const hosts = Object.entries(schema.nodes)
+      .filter(([, type]) => type.spec.attrs?.['suggest'])
+      .map(([name]) => name)
+      .sort();
+    expect(hosts).toEqual(['paragraph', 'table', 'table_row']);
+    const doc = sink();
+    const entry = { type: 'del', attrs: { id: 'sSuggestion00001', user: 'u1' } };
+    for (const name of hosts) {
+      expect(schema.nodes[name]!.spec.attrs!['suggest']!.default, name).toBeNull();
+      const { pos } = nodesOf(doc).find(({ node }) => node.type.name === name)!;
+      const set = new AttrStep(pos, 'suggest', [entry]).apply(doc);
+      expect(set.failed, name).toBeNull();
+      set.doc!.check();
+      expect(set.doc!.nodeAt(pos)!.attrs['suggest'], name).toEqual([entry]);
+    }
+    // A node that is not a host has no such attribute, in ProseMirror or in a stored document.
+    for (const name of ['table_cell', 'region', 'figure', 'equation_block', 'toc'])
+      expect(schema.nodes[name]!.spec.attrs?.['suggest'], name).toBeUndefined();
+  });
+
+  it('has validate() refuse a mark on any block and a suggest attribute on any other node (I1)', () => {
+    const mark = { type: 'ins', attrs: { id: 'sSuggestion00001', user: 'u1' } };
+    const find = (node: Json, type: string): Json | undefined => {
+      if (node['type'] === type) return node;
+      for (const child of (node['content'] as Json[] | undefined) ?? []) {
+        const found = find(child, type);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    expect(codes(sinkDoc(), sinkCtx)).toEqual([]);
+    for (const type of ['paragraph', 'table', 'table_row', 'table_cell', 'region', 'figure']) {
+      const d = sinkDoc();
+      find(d['doc'], type)!['marks'] = [mark];
+      expect(codes(d, sinkCtx), type).toContain('node_mark_host');
+    }
+    for (const type of ['table_cell', 'region', 'figure']) {
+      const d = sinkDoc();
+      find(d['doc'], type)!['attrs'].suggest = [mark];
+      expect(codes(d, sinkCtx), type).toContain('unknown_attribute');
+    }
+    for (const type of ['paragraph', 'table', 'table_row']) {
+      const d = sinkDoc();
+      find(d['doc'], type)!['attrs'].suggest = [mark];
+      expect(codes(d, sinkCtx), type).toEqual([]);
+    }
   });
 });
