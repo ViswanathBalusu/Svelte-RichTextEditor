@@ -13,6 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { uuid7 } from '@docedit/model';
 import {
   podmanSandbox,
   signExportUrl,
@@ -127,7 +128,11 @@ import { sweepTenant } from './workflow/schedule-sweep.ts';
 import { FinalSealer } from './workflow/final-seal.ts';
 import { appearanceRequestFor } from './workflow/appearances.ts';
 import { MemoryAnchorStore, type AnchorStore } from './workflow/anchor-store.ts';
-import { HttpSigningClient, type SigningClient } from './workflow/signing-client.ts';
+import {
+  HttpSigningClient,
+  type BatchAnchorClient,
+  type SigningClient,
+} from './workflow/signing-client.ts';
 import { recordParticipantOpened } from './workflow/participant-view.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import type { SearchService } from './control-plane/search-routes.ts';
@@ -170,6 +175,13 @@ import {
   type ColdSegmentStore,
 } from './control-plane/cold-segments.ts';
 import { PgColdSegmentStore } from './control-plane/cold-segments-pg.ts';
+import {
+  HeadAnchoring,
+  headAnchoringTask,
+  type HeadAnchorFiles,
+  type HeadAnchorStore,
+} from './control-plane/head-anchoring.ts';
+import { PgHeadAnchorStore } from './control-plane/head-anchoring-pg.ts';
 import {
   PayloadThinning,
   payloadThinningTask,
@@ -328,6 +340,17 @@ export interface ServiceParts {
    */
   coldSegmentStore?: ColdSegmentStore;
   /**
+   * The rows of the hourly anchoring of chain heads (HIS-036): the records and the head each
+   * document's newest record covers. Absent: no head is anchored.
+   */
+  headAnchorStore?: HeadAnchorStore;
+  /**
+   * Write-once storage for the anchor records and their leaf lists (HIS-036 criterion 4): a bucket
+   * with Object Lock (`ObjectHeadAnchorFiles`). The operator creates the bucket; `pgParts` does not
+   * make this part. Absent: no head is anchored.
+   */
+  headAnchorFiles?: HeadAnchorFiles;
+  /**
    * Per-document keys (HIS-041). With both `documentKeyStore` and `keyService`, the service seals
    * the payloads and objects of documents that have a key and builds `documentKeys` to give and
    * destroy keys (`PgDocumentKeyStore` is the store of the PostgreSQL composition). Absent: no
@@ -451,6 +474,13 @@ export interface StartOptions {
     retainMs: number;
     sleep?: (ms: number) => Promise<void>;
   };
+  /**
+   * The hourly anchoring of chain heads (HIS-036; ADR 0409): the signing service's client and how
+   * long a record is retained in write-once storage. Default: built from `config.sealing` (the
+   * signing service of `DOCEDIT_SEAL_*`) and `config.anchorRetentionDays`; with neither, no head is
+   * anchored. It needs `parts.headAnchorStore`, `parts.headAnchorFiles` and `parts.audit`.
+   */
+  headAnchoring?: { signing: BatchAnchorClient; retainMs: number };
   /** Read-your-writes sessions kept at most, with `parts.replica` (BE-064 criterion 3; a setting). */
   readSessions?: number;
   /**
@@ -685,6 +715,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     homeRegions: new PgHomeRegions(pool),
     readMarkers: new PgReadMarkerStore(pool),
     sessionRecords: new SessionRecords(new PgSessionRecordStore(pool)),
+    headAnchorStore: new PgHeadAnchorStore(pool),
     threads: new PgThreadStore(pool),
     versions: new PgVersionStore(pool),
   };
@@ -1484,7 +1515,61 @@ export async function startService(opts: StartOptions): Promise<Service> {
             }),
         })
       : null;
+  // The hourly anchoring of chain heads (HIS-036; ADR 0409): one signed, time-stamped record per
+  // tenant with a change, written to write-once storage. This process holds no key: the signing
+  // service signs. A run that stops is told to the operator by an error line, a counter and an
+  // audit entry, and the next run covers what it missed. Rooms never wait for it.
+  const anchorSetup =
+    opts.headAnchoring ??
+    (config.sealing && config.anchorRetentionDays !== null
+      ? {
+          signing: new HttpSigningClient({
+            url: config.sealing.url,
+            credential: config.sealing.credential,
+            timeoutMs: config.sealing.timeoutMs,
+          }),
+          retainMs: config.anchorRetentionDays * DAY_MS,
+        }
+      : null);
+  const headAnchoring =
+    anchorSetup && parts.headAnchorStore && parts.headAnchorFiles && parts.audit
+      ? new HeadAnchoring({
+          store: parts.headAnchorStore,
+          signing: anchorSetup.signing,
+          files: parts.headAnchorFiles,
+          audit: parts.audit,
+          retainMs: anchorSetup.retainMs,
+          now,
+        })
+      : null;
   const tasks: ScheduledTask[] = [
+    ...(headAnchoring
+      ? [
+          headAnchoringTask(headAnchoring, async (f) => {
+            metrics.inc(
+              'docedit_head_anchor_failures_total',
+              'Runs of the hourly anchoring of chain heads that stopped, by stage and code (HIS-036).',
+              { stage: f.stage, code: f.code, retryable: String(f.retryable) },
+            );
+            logger.error({
+              event: 'heads.anchor.failed',
+              tenant: f.tenant,
+              message: `anchoring stopped at ${f.stage}: ${f.code}`,
+            });
+            await parts.audit!.record([
+              {
+                id: uuid7(),
+                tenant: f.tenant,
+                doc: null,
+                actor: 'system',
+                kind: 'heads.anchor_failed',
+                data: { stage: f.stage, code: f.code, retryable: f.retryable },
+                at: now(),
+              },
+            ]);
+          }),
+        ]
+      : []),
     // The move of payloads older than 30 days to cold segments (HIS-029). It is not a task that
     // deletes: a legal hold does not stop it, because moving is not thinning (08 §11).
     ...(coldSegments

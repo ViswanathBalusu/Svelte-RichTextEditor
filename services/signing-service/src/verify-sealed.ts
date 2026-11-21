@@ -345,3 +345,110 @@ export async function verifyAnchorFile(
   }
   return { ok: problems.length === 0 && record !== null, record, timestampTime, problems };
 }
+
+export interface BatchAnchorReport {
+  readonly ok: boolean;
+  /** The record as the file gives it, parsed; null when it is not a batch record. */
+  readonly record: {
+    readonly tenant: string;
+    readonly from: string | null;
+    readonly to: string;
+    readonly root: string;
+    readonly leaves: number;
+    readonly previous: string | null;
+  } | null;
+  /** `genTime` of the signature's time-stamp token: the batch existed no later than this. */
+  readonly timestampTime: string | null;
+  /** The signer's subject, for the reader; not an identity check. */
+  readonly signer: string | null;
+  readonly problems: readonly string[];
+}
+
+/**
+ * The signed, time-stamped record of an hourly batch of chain heads (HIS-036; ADR 0409) as a
+ * relying party checks it: the record's hash, the detached signature over it, the chain to a
+ * trusted root at the time of the time-stamp, and the RFC 3161 token over the signature value (its
+ * own signature and chain, and its imprint). Whether a head is under the record's root, and whether
+ * that head is the head of a log, are the caller's two further checks (`headCovered` and
+ * `verifyBundle` of `@docedit/history`).
+ */
+export async function verifyBatchAnchorFile(
+  file: { record: string; recordSha256: string; cms: string },
+  roots: readonly Uint8Array[],
+): Promise<BatchAnchorReport> {
+  const problems: string[] = [];
+  if (
+    typeof file !== 'object' ||
+    file === null ||
+    typeof file.record !== 'string' ||
+    typeof file.recordSha256 !== 'string' ||
+    typeof file.cms !== 'string'
+  )
+    return {
+      ok: false,
+      record: null,
+      timestampTime: null,
+      signer: null,
+      problems: ['the file has no record, record hash and signature'],
+    };
+  const bytes = new TextEncoder().encode(file.record);
+  if (Buffer.from(sha256(bytes)).toString('hex') !== file.recordSha256)
+    problems.push('the record does not hash to the stated SHA-256');
+  let record: BatchAnchorReport['record'] = null;
+  try {
+    const r = JSON.parse(file.record) as Record<string, unknown>;
+    const nullable = (v: unknown): boolean => v === null || typeof v === 'string';
+    if (
+      r['format'] === 'docedit-anchor/1' &&
+      typeof r['tenant'] === 'string' &&
+      nullable(r['from']) &&
+      typeof r['to'] === 'string' &&
+      typeof r['root'] === 'string' &&
+      typeof r['leaves'] === 'number' &&
+      nullable(r['previous'])
+    )
+      record = {
+        tenant: r['tenant'],
+        from: r['from'] as string | null,
+        to: r['to'],
+        root: r['root'],
+        leaves: r['leaves'],
+        previous: r['previous'] as string | null,
+      };
+    else problems.push('the record is not of the batch anchor format');
+  } catch {
+    problems.push('the record is not JSON');
+  }
+  let timestampTime: string | null = null;
+  let signer: string | null = null;
+  try {
+    const trusted = roots.map(certificateOf);
+    const cms = new Uint8Array(Buffer.from(file.cms, 'base64'));
+    const sd = signedDataOf(cms);
+    signer =
+      certsOf(sd)[0]
+        ?.subject.typesAndValues.map((t) => String(t.value.valueBlock.value))
+        .join(', ') ?? null;
+    const token = cmsSignatureToken(cms);
+    if (token === null) problems.push('the signature has no time-stamp token');
+    const at = token !== null ? timestampInfo(token).genTime : null;
+    timestampTime = at?.toISOString() ?? null;
+    const r = await verifyCms(sd, bytes, trusted, at, []);
+    if (!r.signature || !r.chain) problems.push(`signature: ${r.reason}`);
+    if (token !== null) {
+      const value = new Uint8Array(sd.signerInfos[0]!.signature.valueBlock.valueHexView);
+      const t = await verifyCms(signedDataOf(token), value, trusted, at, certsOf(sd));
+      if (!(t.signature && t.chain && equal(timestampInfo(token).imprint, sha256(value))))
+        problems.push(`time-stamp: ${t.reason || 'the imprint is not the signature value'}`);
+    }
+  } catch (e) {
+    problems.push(`unreadable: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return {
+    ok: problems.length === 0 && record !== null,
+    record,
+    timestampTime,
+    signer,
+    problems,
+  };
+}

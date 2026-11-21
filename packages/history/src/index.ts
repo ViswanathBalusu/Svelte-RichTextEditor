@@ -200,6 +200,24 @@ export {
   type SuggestionIntroduction,
 } from './suggestions.ts';
 export {
+  HEAD_ANCHOR_FORMAT,
+  anchorLeaf,
+  anchorPath,
+  anchorTree,
+  headAnchorRecordText,
+  headCovered,
+  leafListText,
+  parseHeadAnchorRecord,
+  parseLeafList,
+  rootFromPath,
+  type AnchorLeaf,
+  type AnchorTree,
+  type AnchoredHead,
+  type HeadAnchorRecord,
+  type HeadProof,
+  type PathStep,
+} from './head-anchor.ts';
+export {
   COLD_AFTER_MS,
   PAYLOAD_SEGMENT_FORMAT,
   coldMovePlan,

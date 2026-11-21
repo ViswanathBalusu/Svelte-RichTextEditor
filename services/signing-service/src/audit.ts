@@ -43,6 +43,11 @@ export interface AuditEntry {
   readonly code: string | null;
   /** The chain head of an anchor request (`anchor.*`); absent for a seal. */
   readonly chainHead?: string | null;
+  /**
+   * The Merkle root of a batch of chain heads (`anchor.*` of an hourly batch, HIS-036); absent for
+   * every other entry. Such an entry names the tenant and no document.
+   */
+  readonly batchRoot?: string | null;
 }
 
 export interface AuditSink {

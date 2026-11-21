@@ -190,6 +190,8 @@ export async function startHarness(
     webhooks?: StartOptions['webhooks'];
     /** The seal step of finalisation (FRW-053): the signing client and the retry of a run. */
     finalSealing?: StartOptions['finalSealing'];
+    /** The hourly anchoring of chain heads (HIS-036): the signing client and the retention. */
+    headAnchoring?: StartOptions['headAnchoring'];
   } = {},
 ): Promise<Harness> {
   let offset = 0;
@@ -229,6 +231,7 @@ export async function startHarness(
       ...(config.webhooks ? {} : { events }),
       ...(opts.webhooks ? { webhooks: opts.webhooks } : {}),
       ...(opts.finalSealing ? { finalSealing: opts.finalSealing } : {}),
+      ...(opts.headAnchoring ? { headAnchoring: opts.headAnchoring } : {}),
       now,
       signing: signingKey(undefined, 'service-test'),
       ...(opts.realDataPlane
