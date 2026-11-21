@@ -45,6 +45,10 @@ describe('the base definition of a client (FND-008)', () => {
     const names = new Set(DEP1_WIRE_BASE.shapes.map((s) => s.name));
     for (const name of ['TokenRequest', 'CreateExportRequest', 'Workflow', 'RetentionPolicy'])
       expect(names.has(name)).toBe(false);
+    // The body of a webhook goes to a host's server, never to a client, so it is not in the base
+    // either (FND-008); the notification names are.
+    expect(names.has('WebhookDelivery')).toBe(false);
+    expect(names.has('NotificationType')).toBe(true);
     // The shapes the first load needs are there.
     for (const name of ['Discovery', 'Content', 'RemoteCommit']) expect(names.has(name)).toBe(true);
   });
@@ -72,6 +76,30 @@ describe('a validator that loads the shapes left out (FND-008)', () => {
     // Nothing more is loaded for a shape the validator has.
     await v.ensure('Discovery');
     expect(loads).toBe(1);
+  });
+
+  it('loads the shape of a webhook body on first use and checks it as the whole does', async () => {
+    const lazy = new ShapeValidator(DEP1_WIRE_BASE, { more: loadWireMoreShapes });
+    const whole = new ShapeValidator(DEP1_WIRE);
+    const event = {
+      specversion: '1.0',
+      id: 'evt-1',
+      source: '/documents',
+      type: 'dep.export.completed.v1',
+      subject: DOC,
+      data: { seq: 3 },
+    };
+    expect(lazy.checkNamed('WebhookDelivery', event)).toEqual([
+      { path: '', message: 'unknown shape WebhookDelivery' },
+    ]);
+    await lazy.ensure('WebhookDelivery');
+    for (const value of [event, { ...event, specversion: '2.0' }, { ...event, data: {} }, null]) {
+      expect(lazy.checkNamed('WebhookDelivery', value)).toEqual(
+        whole.checkNamed('WebhookDelivery', value),
+      );
+    }
+    expect(lazy.checkNamed('WebhookDelivery', event)).toEqual([]);
+    expect(lazy.checkNamed('WebhookDelivery', { ...event, specversion: '2.0' }).length).toBe(1);
   });
 
   it('gives the verdict of a validator made from the whole definition', async () => {

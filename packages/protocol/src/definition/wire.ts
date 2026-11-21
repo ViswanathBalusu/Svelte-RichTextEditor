@@ -14,6 +14,7 @@
 import { CDM1 } from '@docedit/model/definition';
 import { COMMON_SHAPES, ENGINES, PROTOCOL_VERSION } from './common.ts';
 import { EVENT_SHAPES } from './events.ts';
+import { NOTIFICATION_TYPE_SHAPE } from './notifications.ts';
 import type { DepDefinition } from './extension.ts';
 import { FEATURES } from './features.ts';
 import { FRW_FEATURES, FRW_MESSAGES } from './frw.ts';
@@ -36,7 +37,7 @@ export const DEP1_WIRE_BASE: WireDefinition = {
   version: PROTOCOL_VERSION,
   engines: ENGINES,
   cdm: { min: CDM1.cdm, max: CDM1.cdm },
-  shapes: [...COMMON_SHAPES, ...EVENT_SHAPES],
+  shapes: [...COMMON_SHAPES, NOTIFICATION_TYPE_SHAPE],
   messages: [...MESSAGES, ...FRW_MESSAGES],
   features: [...FEATURES, ...FRW_FEATURES],
 };
