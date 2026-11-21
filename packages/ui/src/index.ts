@@ -40,6 +40,8 @@ export type {
   GrantsService,
   GrantsSnapshot,
   HeaderPaneName,
+  HeldLease,
+  LeasesService,
   OutlineItem,
   PaneName,
   PanelInfo,

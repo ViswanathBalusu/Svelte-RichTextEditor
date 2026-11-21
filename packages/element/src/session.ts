@@ -48,7 +48,6 @@ import { type IdbJournal, openIdbJournal } from './journal-idb.ts';
 import { AUTH_CODES, codeOf, messageOf, retryAfterMsOf } from './errors.ts';
 import type { FailureInfo } from './failure.ts';
 import { manifestFamilyLookup, readOnce, registerManifestFonts } from './font-loader.ts';
-import { loadGlyphCoverage, usedFamilies } from './font-coverage.ts';
 import type { HostApi } from './host-api.ts';
 import {
   DEFAULT_PRESENCE_BASELINE_MS,
@@ -372,7 +371,10 @@ export class Session {
       // FE-136 criterion 4: the coverage of the fonts, so that a symbol the font lacks is flagged. It
       // is read alongside the load; a manifest or a file that cannot be read leaves it unknown.
       if (fonts && editor.setGlyphCoverage) {
-        void loadGlyphCoverage(fonts, usedFamilies(content.doc))
+        // The coverage code loads after the editor is up, not with it (FND-008; owner decision 32).
+        const doc = content.doc;
+        void import('./font-coverage.ts')
+          .then((m) => m.loadGlyphCoverage(fonts, m.usedFamilies(doc)))
           .then((coverage) => {
             if (!this.closed) editor.setGlyphCoverage?.(coverage);
           })

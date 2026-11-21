@@ -154,7 +154,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'focusFieldByKey'
       | 'nextFillableField'
       // HIS-013: a read-only version view draws a comparison over its document.
-      | 'setComparison';
+      | 'setComparison'
+      // FE-098: the page view reads and edits the core through its handle, with no view of its own.
+      | 'attachPageView';
     expectTypeOf<Exclude<keyof EditorCore, WebAllowed>>().toEqualTypeOf<never>();
   });
 });

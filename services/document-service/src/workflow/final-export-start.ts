@@ -49,6 +49,11 @@ export interface FinalExportDeps {
   /** The evidence the certificate prints; without it a certificate cannot be made. */
   readonly evidence?: Pick<EvidenceLedger, 'list' | 'settings'> | undefined;
   readonly now: () => number;
+  /**
+   * True when this service seals the final PDF: the job then carries the pin of a sealing export
+   * (`sealing`), so that the worker compiles twice and compares (EXP-079), and its cache key says so.
+   */
+  readonly sealing?: boolean | undefined;
   /** Called after a job is queued, so that an in-process runner starts at once. */
   readonly onQueued?: (() => void) | undefined;
 }
@@ -78,6 +83,32 @@ async function senderOf(
   });
   const sent = rows.find((r) => r.data['to'] === 'sent');
   return sent?.actor ?? fallback;
+}
+
+/** The `seq` the workflow completed at: the last completion, or null when no one has completed. */
+export function completedSeqOf(workflow: WorkflowResourceView): number | null {
+  const seqs = workflow.participants.flatMap((p) =>
+    p.state === 'completed' && typeof p.completedSeq === 'number' ? [p.completedSeq] : [],
+  );
+  return seqs.length === 0 ? null : Math.max(...seqs);
+}
+
+/**
+ * The identifier of the final export job of a workflow: from the document, the workflow, the `seq`
+ * and the certificate option, so that the job can be found again (the seal step, FRW-053) and a
+ * repeat of the start makes no second job. Null when no one has completed.
+ */
+export function finalExportJobId(ref: DocRef, workflow: WorkflowResourceView): string | null {
+  const seq = completedSeqOf(workflow);
+  if (seq === null) return null;
+  return derivedCommitId(
+    'final-export',
+    ref.tenant,
+    ref.doc,
+    workflow.id,
+    String(seq),
+    String(workflow.members.finalisation?.certificate === true),
+  );
 }
 
 export async function startFinalExport(
@@ -121,11 +152,13 @@ export async function startFinalExport(
   // The certificate of completion (FRW-050): the facts it prints, from the evidence, checked and
   // ordered by the authority. They go into the job as a member the control plane alone writes.
   let certificate: CertificateFacts | null = null;
-  if (request.certificate) {
-    if (!deps.evidence) return failed('no evidence ledger for the certificate');
+  // The chain head of the history at `completedSeq`: a fact of the certificate and, when the
+  // service seals, the pin of the sealing export (EXP-079 criterion 2).
+  let chainHead: string | null = null;
+  if (request.certificate || deps.sealing === true) {
     const exact = (deps.logs as { chainHeadAt?: (r: DocRef, n: number) => Promise<string | null> })
       .chainHeadAt;
-    let chainHead = exact
+    chainHead = exact
       ? await exact.call(deps.logs, ref, request.seq)
       : head.seq === request.seq
         ? ((await deps.logs.state?.(ref))?.chainHead ?? null)
@@ -139,12 +172,15 @@ export async function startFinalExport(
         .digest('hex');
     }
     if (chainHead === null) return failed('the log cannot name the chain head at completedSeq');
+  }
+  if (request.certificate) {
+    if (!deps.evidence) return failed('no evidence ledger for the certificate');
     try {
       certificate = certificateFactsOf({
         workflow,
         rows: await deps.evidence.list(ref.tenant, ref.doc),
         completedSeq: request.seq,
-        chainHead,
+        chainHead: chainHead!,
         captureSettings: await deps.evidence.settings?.(ref.tenant),
       });
     } catch (e) {
@@ -173,7 +209,8 @@ export async function startFinalExport(
     seq: request.seq,
     view: view.token,
     target: 'pdf',
-    options,
+    // A pair of compiles is a different result from one: a cached ordinary export is not reused.
+    options: deps.sealing === true ? { ...options, sealing: true } : options,
     full: true,
     classVersion: deps.policy.classVersion,
   });
@@ -191,6 +228,10 @@ export async function startFinalExport(
     // Marks the job as the final export of this workflow, for the hooks that record its outcome.
     finalisation: { workflow: workflow.id, certificate: request.certificate },
     ...(certificate ? { certificate } : {}),
+    // The pin of a sealing export: the worker compiles twice and compares (EXP-079).
+    ...(deps.sealing === true && chainHead !== null
+      ? { sealing: { completedSeq: request.seq, chainHead } }
+      : {}),
     ...exportView(view),
   };
   const id = derivedCommitId(

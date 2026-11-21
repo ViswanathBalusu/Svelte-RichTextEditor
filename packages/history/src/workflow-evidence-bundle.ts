@@ -55,6 +55,8 @@ export interface WorkflowEvidenceBundle {
 export const WORKFLOW_BUNDLE_INSTRUCTIONS: readonly string[] = [
   'Save this file and run: node packages/history/scripts/verify-log.ts <bundle.json> [--anchor <seq>:<hash>]... . It needs no access to the service. The report names each record by its `seq` and each evidence item by its identifier. Exit 0: intact. Exit 1: altered. Exit 2: incomplete.',
   'The log records are checked by recomputing the hash chain from the stored hashes, starting at `log.from`. Each control commit carries its payload, which is checked against its stored hash; other records are held without their payload.',
+  'Each signing, completion and decline in the evidence record must also be found in the chain: its commitment is the `evidenceHash` of a control commit of the segment. A view and a consent are not anchored. The report lists the items found (`evidenceInChain`) and names any that are not.',
+  "To check the sealed PDF as well, run: node services/signing-service/scripts/verify-final.ts <bundle.json> <sealed.pdf> --root <root certificate>... [--anchor <anchor file>] . It checks this bundle as above, every signature and time-stamp of the PDF against the roots you name (it trusts none of its own), and, with the anchor file, that the signed and time-stamped chain head at completion is this bundle's chain at that `seq`. It does not say who any person is.",
   ...BUNDLE_INSTRUCTIONS,
 ];
 
@@ -82,8 +84,33 @@ export interface WorkflowBundleVerdict {
   readonly log: VerifyReport;
   /** The identifiers of the evidence items that fail. */
   readonly failedEvidence: readonly string[];
+  /**
+   * The evidence items found in the chain: their commitment is in the payload of a control commit of
+   * the segment (FRW-055 criterion 2). Only the items of a signing, a completion and a decline are
+   * anchored; a view and a consent are not.
+   */
+  readonly evidenceInChain: readonly string[];
+  /**
+   * Anchored items that could not be looked for, because a control commit of the segment has no
+   * payload (erased). They are not failures.
+   */
+  readonly evidenceUnchecked: readonly string[];
+  /** The seq of control commits that anchor evidence the bundle does not hold (an erased participant, or an item left out). */
+  readonly unmatchedAnchors: readonly number[];
   /** Every thing that failed, the first bad record and each bad item, named. */
   readonly findings: readonly Finding[];
+}
+
+/** The items a control commit anchors: a signing, a completion and a decline (FRW-041). */
+const ANCHORED_ITEMS: ReadonlySet<string> = new Set(['signed', 'completed', 'declined']);
+
+function isAnchoredItem(canonical: string): boolean {
+  try {
+    const item = (JSON.parse(canonical) as { item?: unknown }).item;
+    return typeof item === 'string' && ANCHORED_ITEMS.has(item);
+  } catch {
+    return false;
+  }
 }
 
 function malformed(bundle: unknown): string | null {
@@ -125,6 +152,9 @@ export async function verifyWorkflowEvidenceBundle(
       ok: false,
       log,
       failedEvidence: [],
+      evidenceInChain: [],
+      evidenceUnchecked: [],
+      unmatchedAnchors: [],
       findings: [{ kind: 'format', ref: '', reason: bad }],
     };
   }
@@ -149,10 +179,47 @@ export async function verifyWorkflowEvidenceBundle(
   for (const item of evidence.items)
     if (!item.ok)
       findings.push({ kind: 'evidence', ref: item.id, reason: item.problem ?? 'mismatch' });
+  // The match of the evidence with the chain (FRW-055 criterion 2): each anchored item's commitment
+  // is the videnceHash of a control commit of the segment. The commit payloads are checked by the
+  // log verifier above, so a commitment read from one is the one the chain holds.
+  const inChain: string[] = [];
+  const unchecked: string[] = [];
+  const failedMatch: string[] = [];
+  const anchoredAt = new Map<string, number>();
+  let erased = 0;
+  for (const c of bundle.log.commits) {
+    if (c.meta.kind !== 'control') continue;
+    if (c.payload === undefined || c.payload === null) {
+      erased += 1;
+      continue;
+    }
+    const hash = (c.payload as { evidence?: { evidenceHash?: unknown } }).evidence?.evidenceHash;
+    if (typeof hash === 'string') anchoredAt.set(hash, c.meta.seq);
+  }
+  const held = new Set<string>();
+  for (const item of bundle.evidence.items) {
+    held.add(item.commitment);
+    const verdict = evidence.items.find((v) => v.id === item.id);
+    if (!verdict?.ok || !isAnchoredItem(item.canonical)) continue;
+    if (anchoredAt.has(item.commitment)) inChain.push(item.id);
+    else if (erased > 0) unchecked.push(item.id);
+    else {
+      failedMatch.push(item.id);
+      findings.push({
+        kind: 'evidence',
+        ref: item.id,
+        reason: 'no control commit of the segment holds this commitment',
+      });
+    }
+  }
+  const unmatchedAnchors = [...anchoredAt].filter(([h]) => !held.has(h)).map(([, seq]) => seq);
   return {
-    ok: log.status === 'intact' && evidence.ok,
+    ok: log.status === 'intact' && evidence.ok && failedMatch.length === 0,
     log,
-    failedEvidence: evidence.failed,
+    failedEvidence: [...evidence.failed, ...failedMatch],
+    evidenceInChain: inChain,
+    evidenceUnchecked: unchecked,
+    unmatchedAnchors,
     findings,
   };
 }

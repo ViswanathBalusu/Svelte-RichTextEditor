@@ -29,9 +29,9 @@
   import type { CommandRegistry } from './commands/registry.ts';
   import { bindShortcuts } from './commands/shortcuts.ts';
   import type { CommandEntry, ContextTarget } from './commands/types.ts';
-  import Carets from './components/Carets.svelte';
-  import CommandSearch from './components/CommandSearch.svelte';
-  import AccessKeyTips from './components/AccessKeyTips.svelte';
+  // The parts a user reaches only by an action (a right click, the command search, a fill, a
+  // workflow, the full toolbar) are `{#await import()}` blocks in the markup below, so that their
+  // code is not in the first interactive load (FND-008; owner decision 32).
   import { pressAccessKey } from './commands/access-keys.ts';
   import {
     AccessKeyGesture,
@@ -39,12 +39,6 @@
     type AccessKeyTip,
     type ShownAccessKey,
   } from './shell/access-key-mode.ts';
-  import MiniToolbar from './components/MiniToolbar.svelte';
-  import ContextMenu from './components/ContextMenu.svelte';
-  import FillBar from './components/FillBar.svelte';
-  import RolePreviewBar from './components/RolePreviewBar.svelte';
-  import WorkflowBanner from './components/WorkflowBanner.svelte';
-  import FullToolbar from './components/FullToolbar.svelte';
   import Header from './components/Header.svelte';
   import StatusBar from './components/StatusBar.svelte';
   import Toolbar from './components/Toolbar.svelte';
@@ -1569,18 +1563,26 @@
     <Header title={props.title} />
   {/if}
   {#if mode.toolbar === 'full'}
-    <FullToolbar onEscape={() => core.focus()} />
+    {#await import('./components/FullToolbar.svelte') then { default: FullToolbar }}
+      <FullToolbar onEscape={() => core.focus()} />
+    {/await}
   {:else if mode.toolbar !== 'none'}
     <Toolbar onEscape={() => core.focus()} />
   {/if}
   {#if core.workflowSend}
-    <WorkflowBanner service={core.workflowSend} />
+    {#await import('./components/WorkflowBanner.svelte') then { default: WorkflowBanner }}
+      <WorkflowBanner service={core.workflowSend} />
+    {/await}
   {/if}
   {#if core.rolePreview}
-    <RolePreviewBar preview={core.rolePreview} onLeave={() => core.endRolePreview?.()} />
+    {#await import('./components/RolePreviewBar.svelte') then { default: RolePreviewBar }}
+      <RolePreviewBar preview={core.rolePreview} onLeave={() => core.endRolePreview?.()} />
+    {/await}
   {/if}
   {#if core.fill}
-    <FillBar fill={core.fill} onFinish={finishFill} />
+    {#await import('./components/FillBar.svelte') then { default: FillBar }}
+      <FillBar fill={core.fill} onFinish={finishFill} />
+    {/await}
   {/if}
   <div class="de-workspace">
     <div
@@ -1600,7 +1602,9 @@
           {@attach (node) => core.mountBody(node)}
         ></div>
         {#if core.carets}
-          <Carets carets={core.carets} />
+          {#await import('./components/Carets.svelte') then { default: Carets }}
+            <Carets carets={core.carets} />
+          {/await}
         {/if}
       </div>
       <!-- Where focus waits after Escape leaves the editing surface (FE-103): the next Tab goes on from here. -->
@@ -1687,21 +1691,29 @@
     statusItems={props.statusItems}
   />
   {#if menu}
-    <ContextMenu
-      point={menu.point}
-      targets={menu.targets}
-      finding={menu.finding}
-      onClose={closeMenu}
-    />
+    {#await import('./components/ContextMenu.svelte') then { default: ContextMenu }}
+      <ContextMenu
+        point={menu.point}
+        targets={menu.targets}
+        finding={menu.finding}
+        onClose={closeMenu}
+      />
+    {/await}
   {/if}
   {#if commandSearchOpen}
-    <CommandSearch onClose={closeCommandSearch} />
+    {#await import('./components/CommandSearch.svelte') then { default: CommandSearch }}
+      <CommandSearch onClose={closeCommandSearch} />
+    {/await}
   {/if}
   {#if accessMode}
-    <AccessKeyTips tips={accessTips} />
+    {#await import('./components/AccessKeyTips.svelte') then { default: AccessKeyTips }}
+      <AccessKeyTips tips={accessTips} />
+    {/await}
   {/if}
   {#if miniShown && miniAnchor}
-    <MiniToolbar anchor={miniAnchor} />
+    {#await import('./components/MiniToolbar.svelte') then { default: MiniToolbar }}
+      <MiniToolbar anchor={miniAnchor} />
+    {/await}
   {/if}
   {#if dialogs}
     {@const {

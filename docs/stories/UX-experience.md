@@ -1110,7 +1110,7 @@ As a maintainer, I want to know whether a built-in fallback spell checker is wor
 
 - [x] Given the spec lists "dictionaries and their licences for a built-in fallback spell checker" as open, when the spike ends, then a written recommendation states whether to ship a fallback at all.
 - [x] Given candidate dictionaries for the first locales, when they are listed, then each has its licence checked against the project licence (Apache-2.0 recommended) and its size.
-- [x] Given the 300 KB initial budget, when the cost is estimated, then the recommendation shows how the fallback would load on demand.
+- [x] Given the 320 KB initial budget (owner decision 32; it was 300 KB), when the cost is estimated, then the recommendation shows how the fallback would load on demand.
 - [x] Given no proofing port, when the recommendation is written, then it states what the web view's context menu should do for misspellings (open questions).
 
 **Evidence:** Criterion 2 (lane V-UX-031-045, round 2, 2026-11-13): `docs/adr/0327-lane-V-UX-031-045.md`, Part A, the npm registry metadata and `npm pack` tarball sizes for en-GB, de-DE and fr-FR (declared licences `(MIT AND BSD)`, `(GPL-2.0 OR GPL-3.0)` and `MPL-2.0`); no test, a measurement. The locale list is this lane's proposal, the owner sets the first locales.

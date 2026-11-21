@@ -32,6 +32,7 @@ import {
   Icons,
   type IconOverrides,
   createCommandRegistry,
+  eventKey,
   headerMode,
   themeMode,
   toolbarMode,
@@ -40,6 +41,7 @@ import {
   type DocumentStats,
   type EditorMode,
   type ExportService,
+  type LeasesService,
   type ResolveUsers,
   type ReviewItem,
   type ShellSettings,
@@ -103,6 +105,11 @@ export interface MountOptions {
    * offers no export command.
    */
   exports?: ExportService;
+  /**
+   * Check-out of regions (PRM-043), when the backend has the leases port and announced `leases`.
+   * Without it the permissions pane shows no check-out control.
+   */
+  leases?: LeasesService;
   /**
    * The session's workflow port and document, when the backend has the workflow port (FRW-028).
    * Without it the shell offers no "send for completion" command. Null while no session is current.
@@ -209,6 +216,12 @@ export interface MountedEditor extends EditorHandle {
   text(key: string, params: Readonly<Record<string, string | number>>): string | null;
   /** Brings the host's extensions in line with the list the element holds (UX-050). */
   setExtensions(list: readonly unknown[]): void;
+  /**
+   * Runs the registry command bound to a key event, as the shell's own listener does, for the page
+   * view's input bridge, which is a text field that listener leaves alone (FE-098 criterion 6). True
+   * when the key is bound to an offered command, whether or not it could run.
+   */
+  pageShortcut(event: KeyboardEvent): boolean;
 }
 
 export { SettingsStore };
@@ -717,6 +730,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
             ),
           }
         : {}),
+      // Check-out (PRM-043): the leases port, when the backend announced the feature.
+      ...(options.leases ? { leases: options.leases } : {}),
     },
     config.features,
   );
@@ -872,6 +887,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     setExtensions(list: readonly unknown[]) {
       app.setExtensions(list);
+    },
+    pageShortcut(event: KeyboardEvent) {
+      const key = eventKey(event);
+      if (key === null) return false;
+      const id = registry.commandForKey(key);
+      if (!id || !registry.state(id).offered) return false;
+      registry.exec(id);
+      return true;
     },
     restoreShareFocus() {
       return app.restoreFocus();

@@ -20,7 +20,8 @@ export {
   type DepDefinition,
   type DepExtension,
 } from './definition/index.ts';
-export { DEP1_WIRE, DEP1_WIRE_NOTIFICATION_TYPES, type WireDefinition } from './definition/wire.ts';
+export { DEP1_WIRE, type WireDefinition } from './definition/wire.ts';
+export { DEP1_WIRE_NOTIFICATION_TYPES } from './definition/notification-types.ts';
 export * from './codec/index.ts';
 export type {
   Body,

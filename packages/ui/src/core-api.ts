@@ -661,6 +661,37 @@ export interface GrantsService {
   save(grants: readonly RegionGrant[], etag: string): Promise<GrantsSnapshot>;
 }
 
+/** A region lease this session holds (05 §6.2 `Lease`; 07 §10). */
+export interface HeldLease {
+  readonly region: string;
+  /** The holder: the host's user identifier. */
+  readonly holder: string;
+  /** When the lease ends unless it is extended (RFC 3339). */
+  readonly expiresAt: string;
+}
+
+/**
+ * Check-out of a region through the backend's leases port (PRM-043): the user holds a region
+ * alone for a short time. The lease is kept alive until it is released (the port sends the
+ * heartbeats, 07 §10). Absent when the backend does not announce `leases` (05 §8.3), and then the
+ * shell offers no check-out.
+ */
+export interface LeasesService {
+  /**
+   * The leases this session took and has not released, as a view. A lease that lapsed or that
+   * someone broke stays here until the next `acquire` or `release` of its region; the shell compares
+   * its holder with the region list (`RegionEditors.leasedTo`) before it says the user holds it.
+   */
+  readonly held: ReadView<readonly HeldLease[]>;
+  /**
+   * `POST /documents/{id}/regions/{rid}/lease`. Rejects with an error whose `code` is `forbidden`
+   * (no `edit` in the region, or an approved region) or `conflict` (another user holds it).
+   */
+  acquire(region: string): Promise<HeldLease>;
+  /** `DELETE /documents/{id}/regions/{rid}/lease`: the holder gives the region back. */
+  release(region: string): Promise<void>;
+}
+
 /** A field of the document as fill mode shows it (FRW-076, FRW-077, FRW-078). */
 export interface FillField {
   readonly id: string;
@@ -929,6 +960,11 @@ export interface CoreApi {
   extensionApi?(options: ExtensionApiOptions): ExtensionDocumentApi;
   /** Region grants (PRM-035), when the backend announces `regions`. */
   readonly grants?: GrantsService;
+  /**
+   * Check-out of regions (PRM-043), when the backend announces `leases`. Absent: the permissions
+   * pane shows no check-out control.
+   */
+  readonly leases?: LeasesService;
   /** Fill mode for this participant (FRW-076), or null outside fill mode. */
   readonly fill?: ReadView<FillSummary | null>;
   /** Moves focus to a field and scrolls it into view (FRW-078); false when it is gone. */
