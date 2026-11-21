@@ -387,6 +387,20 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/ux-036-037-review-bulk-live.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when EXP-001 closed (lane w2, 2026-11-20); entry added by the batch 1 integrator. The
+  // export from the shell's dialog to the PDF pane on the demo stack, the pane with the real viewer
+  // in the element, and in Node.js the export through the control plane and the worker's sandbox
+  // (Podman), the job that follows a document's `seq`, and the pane's choice of the newest PDF.
+  [
+    'export-pdf',
+    [
+      { path: 'apps/reference-host/e2e/w2-exp-001-pdf-export.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/exp-001-pdf-pane.spec.ts', kind: 'playwright' },
+      { path: 'services/export-worker/test/export.e2e.test.ts', kind: 'unit' },
+      { path: 'services/export-worker/src/exp-004-v-exp-001-016.seq.job.test.ts', kind: 'unit' },
+      { path: 'packages/element/test/exp-001-latest-pdf.test.ts', kind: 'unit' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);

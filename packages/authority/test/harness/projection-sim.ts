@@ -3,7 +3,8 @@
  * clients. One region is confidential and one field value is sensitive; both carry unique
  * "TOPSECRET" markers. Checks: every client converges to the projection of the head for its view,
  * no message ever carries a marker to a client that may not read it, and the permission oracle of
- * S3 holds on the full log.
+ * S3 holds on the full log. The region's text marker counts as a secret until a stored version holds
+ * it outside the region (`markerIsPublic`).
  */
 import { canonicalize } from '@docedit/model';
 import type { Node } from 'prosemirror-model';
@@ -91,6 +92,21 @@ export function canReadValue(conn: Connection): boolean {
   return conn.role === 'owner' || conn.participantRoles.includes('role_tenant');
 }
 
+/**
+ * Whether the confidential region's marker stands in text that is not in that region: in a
+ * paragraph everyone reads, or in what was the region's content once the region itself is gone.
+ * Independent of the gateway: it reads a document, not a projection.
+ */
+export function markerOutsideRegion(doc: Node): boolean {
+  let found = false;
+  doc.descendants((n) => {
+    if (found || (n.type.name === 'region' && n.attrs['id'] === LEGAL)) return false;
+    if (n.isTextblock && n.textContent.includes(SECRET_REGION)) found = true;
+    return !found;
+  });
+  return found;
+}
+
 export class ProjectionSim {
   readonly storage: MemoryStorage;
   readonly clients: SimClient[];
@@ -125,8 +141,24 @@ export class ProjectionSim {
     /** Refreshed tokens, and the `perm.changed` messages the room sent for them. */
     refreshes: 0,
     permChanged: 0,
+    /** 1 when a stored version held the region's marker outside the region (see `markerIsPublic`). */
+    declassified: 0,
   };
   readonly pschema = projectionSchema();
+  /** The stored log replayed so far, independently of the room and the gateway. */
+  private replayed: { seq: number; doc: Node } | null = null;
+  /**
+   * Whether a stored version has held the confidential region's marker outside the region. The
+   * marker is a secret only as long as it has stood nowhere else, and two things the room rightly
+   * stores put it elsewhere. A user who may edit the region and the body removes the region and
+   * keeps its paragraphs, which are then body text. And a client that may read the region re-applies
+   * its unconfirmed typing by position after a snapshot reset (04 §8), on content that is laid out
+   * differently, so that the typing lands in another paragraph; the room cannot know where a client
+   * meant its text to go. From then on a message that carries the marker is no leak by the room or
+   * the gateway, and the simulation stops counting it as one for the rest of the run. Both findings
+   * are recorded in ADR 0423.
+   */
+  private markerIsPublic = false;
 
   private readonly visibility: Visibility = (conn, _doc, perms) => ({
     regions: canReadRegion(conn, perms, this.now) ? new Set() : new Set([LEGAL]),
@@ -183,7 +215,24 @@ export class ProjectionSim {
     return this.visibility(conn, this.gateway.fullHead, this.room.permissions);
   }
 
+  /** The head of the stored log, replayed here and not asked of the room or the gateway. */
+  private storedHead(): Node {
+    let at = this.replayed ?? { seq: 0, doc: this.storage.initial };
+    try {
+      for (const c of this.storage.log.slice(at.seq))
+        at = { seq: at.seq + 1, doc: this.replay(at.doc, c) };
+    } catch {
+      // A stored commit that does not apply is reported by `check`; the replay stops before it.
+    }
+    this.replayed = at;
+    return at.doc;
+  }
+
   private apply(fx: Effects): void {
+    if (!this.markerIsPublic && fx.send.length > 0 && markerOutsideRegion(this.storedHead())) {
+      this.markerIsPublic = true;
+      this.stats.declassified = 1;
+    }
     for (const o of fx.send) {
       if (o.channel === CONTROL) {
         // The control plane's answer to a snapshot request: done, or kept for a retry.
@@ -207,7 +256,12 @@ export class ProjectionSim {
       this.stats.leakChecks++;
       const readsRegion = canReadRegion(c.conn, this.room.permissions, this.now);
       const readsValue = canReadValue(c.conn);
-      if (!readsRegion && (text.includes(SECRET_REGION) || text.includes(SECRET_TITLE)))
+      // The region's title is never anywhere but on the region. Its text marker is a secret until a
+      // stored version holds it outside the region (`markerIsPublic`).
+      if (
+        !readsRegion &&
+        (text.includes(SECRET_TITLE) || (!this.markerIsPublic && text.includes(SECRET_REGION)))
+      )
         this.leaks.push(`${c.name} received hidden region content in ${o.msg.t}`);
       if (!readsValue && text.includes(SECRET_VALUE))
         this.leaks.push(`${c.name} received a hidden value in ${o.msg.t}`);

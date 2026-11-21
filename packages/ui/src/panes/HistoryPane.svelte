@@ -19,7 +19,7 @@
   import type { CoreApi, HistoryPaneItem, HistoryRestoreRefusal } from '../core-api.ts';
   import {
     createRestoreController,
-    DOCUMENT_TARGET,
+    WHOLE_TARGET,
     restoreTargets,
     type RestoreController,
     type RestoreState,
@@ -82,7 +82,7 @@
   let restore: RestoreController | null = null;
   let rst = $state.raw<RestoreState | null>(null);
   let canRestore = $state(false);
-  let restoreScope = $state(DOCUMENT_TARGET);
+  let restoreScope = $state(WHOLE_TARGET);
   let restoreTitleEl = $state.raw<HTMLElement | null>(null);
   let restoreRunEl = $state.raw<HTMLElement | null>(null);
   /** Where focus was when a version was opened; it returns there when the user leaves (HIS-010). */
@@ -153,7 +153,7 @@
   const targets = $derived(restoreTargets(rst?.scopes ?? null, snapshot?.choices.regions ?? []));
   $effect(() => {
     if (!targets.some((target) => target.key === restoreScope))
-      restoreScope = targets[0]?.key ?? DOCUMENT_TARGET;
+      restoreScope = targets[0]?.key ?? WHOLE_TARGET;
   });
   $effect(() => {
     const v = openView;

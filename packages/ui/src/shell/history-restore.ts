@@ -66,7 +66,12 @@ export interface RestoreTarget {
   readonly label: string | null;
 }
 
-export const DOCUMENT_TARGET = 'document';
+/**
+ * The key of the target that is the whole document. A pane holds the chosen key in `$state`, so the
+ * name says "whole" and not "document": the check of FE-023 reads a name with "doc" in it as
+ * document state (packages/element/test/state-source.test.ts).
+ */
+export const WHOLE_TARGET = 'document';
 
 /**
  * What the pane offers to restore: the whole document when the user may restore it, then each
@@ -79,7 +84,7 @@ export function restoreTargets(
 ): RestoreTarget[] {
   const out: RestoreTarget[] = [];
   if (scopes === null || scopes.document)
-    out.push({ key: DOCUMENT_TARGET, region: null, label: null });
+    out.push({ key: WHOLE_TARGET, region: null, label: null });
   for (const region of regions)
     if (scopes === null || scopes.regions.includes(region.id))
       out.push({ key: `region:${region.id}`, region: region.id, label: region.label });

@@ -50,6 +50,7 @@ describe('S12: read restrictions by projection', () => {
       empty: 0,
       refreshes: 0,
       permChanged: 0,
+      declassified: 0,
       routes: { mapped: 0, noop: 0, inside: 0, value: 0, diff: 0 },
     };
     fc.assert(
@@ -72,6 +73,7 @@ describe('S12: read restrictions by projection', () => {
           totals.empty += sim.stats.empty;
           totals.refreshes += sim.stats.refreshes;
           totals.permChanged += sim.stats.permChanged;
+          totals.declassified += sim.stats.declassified;
           for (const k of ['mapped', 'noop', 'inside', 'value', 'diff'] as const)
             totals.routes[k] += sim.stats.routes[k];
           for (const c of sim.clients) totals.recovered += c.recovered;
@@ -107,5 +109,9 @@ describe('S12: read restrictions by projection', () => {
     // instead of closing, and closed only readers whose class changed (counted above).
     expect(totals.refreshes).toBeGreaterThan(0);
     expect(totals.permChanged).toBeGreaterThan(0);
+    // The region's marker stops being a secret in a run where a stored version holds it outside the
+    // region (projection.schedules.test.ts has the two ways that happens). That must stay rare, or
+    // the leak check would be blunt: it was 1 run of 6,000 when this was written (2026-11-20).
+    expect(totals.declassified).toBeLessThanOrEqual(Math.ceil(RUNS / 50));
   });
 });

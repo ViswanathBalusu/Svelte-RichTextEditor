@@ -298,24 +298,18 @@ export class SimClient {
         const local = [...(awaited ? [] : (this.inflight?.local ?? [])), ...this.queue];
         this.inflight = awaited;
         this.waitForHead = null;
-        let doc = next;
-        const kept: Step[] = [];
-        for (const s of local) {
-          let r: ReturnType<Step['apply']> | null;
-          try {
-            r = s.apply(doc);
-          } catch {
-            r = null;
-          }
-          if (r?.doc) {
-            doc = r.doc;
-            kept.push(s);
-          } else this.recovered++;
-        }
+        // The steps are tried in order on the new content, by position: nothing maps the old
+        // document to the new one. A step made after one that fails was made on a document that
+        // held the failed step's change, so it is mapped back over that change first (the drop mode
+        // of the rebase, with nothing to rebase over). Without that it would be applied as far from
+        // its place as the failed step had moved the text behind it.
+        const rr = rebaseOver(local, [], next, 'drop');
+        if (!rr.ok) throw new Error('drop-mode rebase cannot fail');
+        this.recovered += rr.value.dropped.length;
         this.confirmed = next;
         this.confirmedSeq = msg.seq;
-        this.visible = doc;
-        this.queue = kept;
+        this.visible = rr.value.doc;
+        this.queue = rr.value.steps;
         if (msg.view !== undefined) this.view = msg.view;
         this.resets++;
         return;

@@ -436,6 +436,23 @@ function snapshotContent(seq: number): Content {
   } as unknown as Content;
 }
 
+/**
+ * The contract document with the last three letters of the intro moved to the start of the open
+ * region's paragraph: the same size, and the same positions from the end of that paragraph on.
+ */
+function movedLetters(seq: number): Content {
+  const doc = schema.nodeFromJSON(contractDocument().doc);
+  const intro = posOf(doc, IDS.intro);
+  const tr = new Transform(doc).delete(intro + 9, intro + 12);
+  tr.insert(posOf(tr.doc, IDS.openPara) + 1, schema.text('rld'));
+  return {
+    ...contractDocument(),
+    doc: tr.doc.toJSON(),
+    seq,
+    incarnation: 'inc-1',
+  } as unknown as Content;
+}
+
 describe('rejected fills (SYN-021)', () => {
   /** A fill of the intro paragraph in flight, and an edit queued behind it on another paragraph. */
   const fill = (): SyncState => {
@@ -531,6 +548,31 @@ describe('reset on a snapshot (SYN-023)', () => {
       ['reset', null, 1],
     ]);
     expect(t.actions).toContainEqual({ t: 'discarded', items: t.state.discarded });
+  });
+
+  it('maps a step made after one that fails back over it, so that it keeps its place', () => {
+    // Queued: the last three letters of the intro are deleted, then "z" is typed at the start of
+    // the paragraph between the regions. The second step was made on a document that is three
+    // positions shorter before its place.
+    let s = start();
+    const intro = posOf(s.visible, IDS.intro);
+    const cut = new Transform(s.visible).delete(intro + 9, intro + 12);
+    s = local(s, cut.steps, cut.doc);
+    s = typeAt(s, IDS.mid, 0, 'z');
+    expect(text(s.visible, IDS.intro)).toBe('Hello wo');
+    expect(text(s.visible, IDS.mid)).toBe('zBetween');
+    // In the snapshot those three letters stand at the start of the open region's paragraph: the
+    // deletion would now join the intro with a paragraph inside the region, and cannot apply.
+    // Every position from the end of that paragraph on is where it was.
+    const t = reset(s, movedLetters(9), schema);
+    expect(t.state.discarded.map((d) => [d.reason, d.steps.length])).toEqual([['reset', 1]]);
+    expect(t.state.queue).toHaveLength(1);
+    // The typing is where it was typed. Applied without the mapping it would stand three positions
+    // earlier, at the end of the paragraph inside the open region.
+    expect(text(t.state.visible, IDS.mid)).toBe('zBetween');
+    expect(text(t.state.visible, IDS.openPara)).toBe('rldOpen region');
+    expect(text(t.state.visible, IDS.intro)).toBe('Hello wo');
+    expect(text(t.state.confirmed, IDS.mid)).toBe('Between');
   });
 
   it('an in-flight commit with an older base is not resubmitted unchanged after stale_base', () => {

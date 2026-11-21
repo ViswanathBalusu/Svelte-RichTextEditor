@@ -871,36 +871,42 @@ export function reload(
  * re-applied to the new content; those that fail go to recovered edits. The in-flight commit stays
  * in flight with its re-applied steps: its base is now older than the snapshot, so it is rejected
  * with `stale_base` and action `rebase`, and its work is then resubmitted as a new commit.
+ *
+ * The steps are tried in order and by position, because nothing maps the old document to the new
+ * one. A step made after one that fails was made on a document that held the failed step's change,
+ * so it is first mapped back over that change (the drop mode of the rebase, with nothing to rebase
+ * over); a step that needs what the failed step had inserted fails with it. Without the mapping a
+ * later step would be applied as far from its place as the failed step had moved the text behind
+ * it (ADR 0423).
  */
 export function reset(s: SyncState, content: Content, schema: Schema): Transition {
   const doc = schema.nodeFromJSON(content.doc);
   doc.check();
   const inf = s.inflight;
-  const kept: Step[] = [];
-  const failed: Step[] = [];
-  let visible = doc;
-  let nInfKept = 0;
-  unconfirmed(s).forEach((step, i) => {
-    let result: ReturnType<Step['apply']> | null;
-    try {
-      result = step.apply(visible);
-    } catch {
-      result = null;
-    }
-    if (result?.doc) {
-      visible = result.doc;
-      kept.push(step);
-      if (inf && i < inf.local.length) nInfKept++;
-    } else failed.push(step);
-  });
-  const items = discard(s, failed, 'reset', null);
+  const nInf = inf?.local.length ?? 0;
+  const before = unconfirmed(s);
+  const rr = rebaseOver(before, [], doc, 'drop');
+  if (!rr.ok) throw new Error('a rebase in drop mode cannot fail');
+  const { steps, positions, dropped, doc: visible } = rr.value;
+  carryOrigins(before, positions, steps);
+  const pick = (from: number, to: number) =>
+    positions
+      .slice(from, to)
+      .filter((i) => i >= 0)
+      .map((i) => steps[i]!);
+  const items = discard(
+    s,
+    dropped.map((i) => before[i]!),
+    'reset',
+    null,
+  );
   const state: SyncState = {
     ...s,
     confirmed: doc,
     seq: content.seq,
     incarnation: content.incarnation,
-    inflight: inf ? { ...inf, local: kept.slice(0, nInfKept) } : null,
-    queue: kept.slice(nInfKept),
+    inflight: inf ? { ...inf, local: pick(0, nInf) } : null,
+    queue: pick(nInf, before.length),
     visible,
     waitForHead: null,
     discarded: [...s.discarded, ...items],
