@@ -321,8 +321,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         });
         expect(res.status).toBe(200);
         expect(sha256(new Uint8Array(await res.arrayBuffer()))).toBe(sha256(pdf));
-        expect(h.events.of('dep.workflow.finalised.v1').some((e) => e.subject === w.doc)).toBe(
-          true,
+        // The event is raised by the step that finalised, just after the state is stored.
+        await waitFor('the finalised event', () =>
+          h.events.of('dep.workflow.finalised.v1').some((e) => e.subject === w.doc),
         );
         expect(h.events.of('dep.workflow.completed.v1').some((e) => e.subject === w.doc)).toBe(
           true,
@@ -431,12 +432,16 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(reports).toHaveLength(1);
         expect(reports[0]!.main.ok, reports[0]!.main.detail).toBe(true);
         expect((await verifySealedPdf(pdf, [pki.root])).ok).toBe(true);
-        // The initials field has no rectangle: it is on record, and the seal went on.
-        const entries = await h.parts.audit!.query(h.tenant, {
-          doc: w.doc,
-          kind: 'workflow.appearance_diagnostics',
-          limit: 5,
-        });
+        // The initials field has no rectangle: it is on record, and the seal went on. The entry is
+        // written after the events of the finalisation, so the test waits for it.
+        const diagnostics = () =>
+          h.parts.audit!.query(h.tenant, {
+            doc: w.doc,
+            kind: 'workflow.appearance_diagnostics',
+            limit: 5,
+          });
+        await waitFor('the diagnostics on record', async () => (await diagnostics()).length > 0);
+        const entries = await diagnostics();
         expect(entries).toHaveLength(1);
         expect(entries[0]!.data).toMatchObject({ workflow: w.workflowId, drawn: 1 });
         expect(JSON.parse(String(entries[0]!.data['diagnostics']))).toEqual([
