@@ -301,6 +301,7 @@ export async function startHarness(
           await admin.query(
             `UPDATE jobs SET created_at = created_at - $1::interval,
                              started_at = started_at - $1::interval,
+                             claimed_at = claimed_at - $1::interval,
                              run_after = CASE WHEN state = 'queued'
                                               THEN run_after - $1::interval ELSE run_after END`,
             [by],

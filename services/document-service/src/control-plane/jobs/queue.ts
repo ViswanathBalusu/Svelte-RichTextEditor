@@ -21,6 +21,11 @@
  * Its start then moves to the time it reports that stage, and until it has, no other job of the
  * document and kind is claimed, so the starts of that stage are a gap apart too, however long each
  * job takes to reach it.
+ *
+ * EXP-009: the queue measures the worker time of every job, from each claim to the end of that
+ * attempt, in its own clock (`JobRecord.workerMs`), and sums it for a tenant and a period
+ * (`workerTime`). It is measured here, and not by the runner, so that it is counted whichever
+ * process runs the job and is kept with the job.
  */
 import { uuid7 } from '@docedit/model';
 
@@ -70,6 +75,15 @@ export interface JobRecord {
   startGapMs?: number | null;
   /** See `NewJob.startGapStage`; null (or absent) when the job names none. */
   startGapStage?: string | null;
+  /** Unix ms of the latest claim, in the queue's clock; null (or absent) while never claimed. */
+  claimedAt?: number | null;
+  /**
+   * The worker time the job has used, ms, in the queue's clock (EXP-009): for every attempt that
+   * ended, the time from its claim to its end. An attempt ends when it completes, fails, is queued
+   * again, or is cancelled while it runs. An attempt whose worker stopped is not counted, because
+   * nobody knows how long it worked. The queue measures it, whichever process runs the job.
+   */
+  workerMs?: number;
 }
 
 export interface NewJob {
@@ -195,6 +209,13 @@ export interface JobQueue {
   setLimit(tenant: string, kind: string, maxRunning: number | null): Promise<void>;
   /** The tenant's jobs of `kind` that are queued or running (BE-092: export concurrency). */
   activeCount(tenant: string, kind: string): Promise<number>;
+  /**
+   * The worker time, ms, of the tenant's jobs of `kinds` that ended at or after `from` and before
+   * `to`, both in Unix ms (EXP-009: the compile minutes of a month). A job counts once, with all
+   * its attempts (`JobRecord.workerMs`), at the time it ended; one that has not ended does not
+   * count yet. Never a job of another tenant.
+   */
+  workerTime(tenant: string, kinds: readonly string[], from: number, to: number): Promise<number>;
 }
 
 /** Defaults of the queue, settings rather than measurements (ADR 0036). */
@@ -285,9 +306,16 @@ export class MemoryJobQueue implements JobQueue {
       startedAt: null,
       startGapMs: job.startGapMs ?? null,
       startGapStage: job.startGapStage ?? null,
+      claimedAt: null,
+      workerMs: 0,
     };
     this.#jobs.set(record.id, record);
     return structuredClone(record);
+  }
+
+  /** The worker time of `j` with the attempt that ends at `now` added (`JobRecord.workerMs`). */
+  #workerMsAt(j: JobRecord, now: number): number {
+    return (j.workerMs ?? 0) + Math.max(0, now - (j.claimedAt ?? now));
   }
 
   /** The latest start of a job of the tenant, document and kind; null when none has started. */
@@ -391,6 +419,7 @@ export class MemoryJobQueue implements JobQueue {
         lockedBy: worker,
         lockedUntil: now + leaseMs,
         startedAt: now,
+        claimedAt: now,
         updatedAt: now,
         // A new attempt has reported no stage yet: what an earlier attempt reported is cleared, so
         // that the job counts as not yet started until it reports its start stage again.
@@ -442,6 +471,7 @@ export class MemoryJobQueue implements JobQueue {
       lockedUntil: null,
       finishedAt: now,
       updatedAt: now,
+      workerMs: this.#workerMsAt(j, now),
     });
     return true;
   }
@@ -466,6 +496,8 @@ export class MemoryJobQueue implements JobQueue {
       runAfter: again ? now + retryAfterMs : j.runAfter,
       finishedAt: again ? null : now,
       updatedAt: now,
+      // The attempt ends here, whether or not the job is tried again.
+      workerMs: this.#workerMsAt(j, now),
     });
     return true;
   }
@@ -476,6 +508,8 @@ export class MemoryJobQueue implements JobQueue {
     if (j.state === 'queued' || j.state === 'running') {
       const now = this.#now();
       Object.assign(j, {
+        // A job cancelled while it runs has used its worker until now.
+        ...(j.state === 'running' ? { workerMs: this.#workerMsAt(j, now) } : {}),
         state: 'cancelled',
         lockedBy: null,
         lockedUntil: null,
@@ -569,5 +603,24 @@ export class MemoryJobQueue implements JobQueue {
     checkLimit(kind, maxRunning);
     if (maxRunning === null) this.#limits.delete(`${tenant}/${kind}`);
     else this.#limits.set(`${tenant}/${kind}`, maxRunning);
+  }
+
+  async workerTime(
+    tenant: string,
+    kinds: readonly string[],
+    from: number,
+    to: number,
+  ): Promise<number> {
+    let ms = 0;
+    for (const j of this.#jobs.values())
+      if (
+        j.tenant === tenant &&
+        kinds.includes(j.kind) &&
+        j.finishedAt !== null &&
+        j.finishedAt >= from &&
+        j.finishedAt < to
+      )
+        ms += j.workerMs ?? 0;
+    return ms;
   }
 }

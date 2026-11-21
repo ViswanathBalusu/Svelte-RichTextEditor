@@ -49,7 +49,16 @@ interface JobRow {
   started_at: Date | null;
   start_gap_ms: number | null;
   start_gap_stage: string | null;
+  claimed_at: Date | null;
+  worker_ms: string | number | null;
 }
+
+/**
+ * The worker time of the attempt that ends with this statement, added to what the job has used
+ * (EXP-009; `JobRecord.workerMs`): from the claim to now, in the database's clock. A job claimed
+ * by a worker of a release that did not record the claim adds nothing.
+ */
+const WORKER_MS_NOW = `worker_ms + greatest(0, floor(extract(epoch FROM (clock_timestamp() - coalesce(claimed_at, clock_timestamp()))) * 1000))::bigint`;
 
 function toRecord(r: JobRow): JobRecord {
   return {
@@ -78,6 +87,8 @@ function toRecord(r: JobRow): JobRecord {
     startGapMs:
       r.start_gap_ms === null || r.start_gap_ms === undefined ? null : int(r.start_gap_ms),
     startGapStage: r.start_gap_stage ?? null,
+    claimedAt: millis(r.claimed_at ?? null),
+    workerMs: int(r.worker_ms ?? 0),
   };
 }
 
@@ -189,7 +200,8 @@ export class PgJobQueue implements JobQueue {
     return inTenant(this.#pool, job.tenant, async (c) => {
       const r = await c.query(
         `UPDATE jobs SET state = 'completed', result = $3::jsonb, progress = 100,
-                         locked_by = NULL, locked_until = NULL, finished_at = now(), updated_at = now()
+                         locked_by = NULL, locked_until = NULL, finished_at = now(), updated_at = now(),
+                         worker_ms = ${WORKER_MS_NOW}
           WHERE id = $1 AND state = 'running' AND locked_by = $2`,
         [job.id, worker, JSON.stringify(result)],
       );
@@ -213,7 +225,8 @@ export class PgJobQueue implements JobQueue {
                 finished_at = CASE WHEN $4::boolean AND attempts < max_attempts THEN NULL ELSE now() END,
                 result = CASE WHEN $4::boolean AND attempts < max_attempts
                               THEN result ELSE coalesce($6::jsonb, result) END,
-                error = $3::jsonb, locked_by = NULL, locked_until = NULL, updated_at = now()
+                error = $3::jsonb, locked_by = NULL, locked_until = NULL, updated_at = now(),
+                worker_ms = ${WORKER_MS_NOW}
           WHERE id = $1 AND state = 'running' AND locked_by = $2`,
         [
           job.id,
@@ -230,9 +243,13 @@ export class PgJobQueue implements JobQueue {
 
   cancel(tenant: string, id: string): Promise<JobRecord | null> {
     return inTenant(this.#pool, tenant, async (c) => {
+      // A job cancelled while it runs has used its worker until now (EXP-009). Every expression
+      // reads the row as it was before this update.
       await c.query(
         `UPDATE jobs SET state = 'cancelled', locked_by = NULL, locked_until = NULL,
-                         finished_at = now(), updated_at = now()
+                         finished_at = now(), updated_at = now(),
+                         worker_ms = CASE WHEN state = 'running' THEN ${WORKER_MS_NOW}
+                                          ELSE worker_ms END
           WHERE id = $1 AND state IN ('queued', 'running')`,
         [id],
       );
@@ -327,6 +344,23 @@ export class PgJobQueue implements JobQueue {
           [tenant, kind],
         );
         return Number(r.rows[0]?.n ?? '0');
+      },
+      { readOnly: true },
+    );
+  }
+
+  workerTime(tenant: string, kinds: readonly string[], from: number, to: number): Promise<number> {
+    return inTenant(
+      this.#pool,
+      tenant,
+      async (c) => {
+        const r = await c.query<{ ms: string }>(
+          `SELECT coalesce(sum(worker_ms), 0)::text AS ms FROM jobs
+            WHERE tenant_id = $1 AND kind = ANY($2::text[])
+              AND finished_at >= $3 AND finished_at < $4 AND worker_ms > 0`,
+          [tenant, [...kinds], new Date(from).toISOString(), new Date(to).toISOString()],
+        );
+        return Number(r.rows[0]?.ms ?? '0');
       },
       { readOnly: true },
     );

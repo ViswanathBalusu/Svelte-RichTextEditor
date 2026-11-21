@@ -57,8 +57,10 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
     // Row 12 of 07 §12: `view`, unless restricted with `no-export`.
     guard(ctx.caller, 'export', doc);
     // The tenant's monthly compile-minute budget (EXP-009 criterion 2): refused before any job.
+    // The minutes used are the queue's record of the tenant's jobs of this month, so they are the
+    // same whichever process ran them.
     await d.quotaSource?.load?.(ctx.caller.tenant);
-    const spent = d.compileBudget?.refusal(ctx.caller.tenant, d.now());
+    const spent = await d.compileBudget?.refusal(ctx.caller.tenant, d.now());
     if (spent)
       throw new ApiError(
         'quota_exceeded',
