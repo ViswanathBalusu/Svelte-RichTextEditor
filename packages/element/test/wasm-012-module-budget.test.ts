@@ -39,8 +39,8 @@ const KERNEL = 'assets/docedit_layout_kernel_bg-abc123.wasm';
 const budget = MODULE_BUDGETS.find((b) => b.name === 'layout kernel')!;
 
 describe('the layout kernel module budget (WASM-012 criterion 1)', () => {
-  it('is S10 prototype size, rounded up, and applies to the kernel file only', () => {
-    expect(budget.gzipBytes).toBe(420_000);
+  it('is S10 prototype size and the segmentation crates, rounded up, and applies to the kernel file only', () => {
+    expect(budget.gzipBytes).toBe(426_000);
     expect(budget.source).toContain('419,844');
     expect(budget.match.test(KERNEL)).toBe(true);
     expect(budget.match.test('viewer/pdfjs/wasm/qcms_bg.wasm')).toBe(false);
@@ -62,7 +62,7 @@ describe('the layout kernel module budget (WASM-012 criterion 1)', () => {
     expect(report.moduleBudgetViolations).toHaveLength(1);
     const [violation] = report.moduleBudgetViolations;
     expect(violation).toContain(KERNEL);
-    expect(violation).toContain('420000');
+    expect(violation).toContain('426000');
     expect(violation).toContain('S10');
   });
 

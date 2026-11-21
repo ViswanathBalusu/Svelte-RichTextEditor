@@ -8,11 +8,13 @@
  * - the advances of fixed lines in every face, at four sizes and two settings of language and
  *   features (656 cases);
  * - for each of 666 paragraphs of the shared corpus (`pages-1`, `form-fields`, `pages-20`): the
- *   checksum of each run's advances, and the lines (starts, ends, positions, widths, spacing).
+ *   checksum of each run's advances, the lines (starts, ends, positions, widths, spacing), and the
+ *   kernel's own segmentation of the text: its line-break opportunities (UAX #14) and its grapheme
+ *   cluster boundaries (UAX #29), WASM-007.
  *
- * Any difference, to the unit, fails the run. The break opportunities of a paragraph are an input of
- * the kernel (UAX #14 from `linebreak` 1.1.0), so they are the same everywhere by construction; the
- * kernel does not find them yet (WASM-007).
+ * Any difference, to the unit, fails the run. The break opportunities that feed the line breaker are
+ * an input recorded with the paragraph (UAX #14 from `linebreak` 1.1.0), so the lines do not depend
+ * on the kernel's segmentation; that is compared on its own.
  *
  * Needs the build (`pnpm --filter @docedit/layout-kernel build:wasm`).
  */
@@ -39,7 +41,13 @@ interface Golden {
   }>;
   paragraphs: Record<
     string,
-    Array<{ id: string; input: unknown; runChecksums: number[]; lines: unknown[] }>
+    Array<{
+      id: string;
+      input: unknown;
+      runChecksums: number[];
+      lines: unknown[];
+      segmentation: { breaks: number[]; graphemes: number[] };
+    }>
   >;
 }
 const golden = JSON.parse(readFileSync(join(pkg, 'golden/reference.json'), 'utf8')) as Golden;
@@ -86,6 +94,10 @@ test('the kernel gives, in this browser, what Node.js recorded for every advance
         shaper: {
           advances(style: unknown, text: string): Int32Array;
           breakParagraph(input: unknown): unknown[];
+        };
+        segmenter: {
+          opportunities(text: string): number[];
+          graphemeBoundaries(text: string): number[];
         };
       }
       const glue = await import(`${location.origin}/dist/docedit_layout_kernel.js`);
@@ -155,6 +167,19 @@ test('the kernel gives, in this browser, what Node.js recorded for every advance
           const lines = kernel.shaper.breakParagraph(input);
           if (JSON.stringify(lines) !== JSON.stringify(p.lines) && bad.length < 20)
             bad.push(`lines of ${name} paragraph ${i} (${p.id})`);
+          const text = input.text;
+          if (
+            JSON.stringify(kernel.segmenter.opportunities(text)) !==
+              JSON.stringify(p.segmentation.breaks) &&
+            bad.length < 20
+          )
+            bad.push(`break opportunities of ${name} paragraph ${i} (${p.id})`);
+          if (
+            JSON.stringify(kernel.segmenter.graphemeBoundaries(text)) !==
+              JSON.stringify(p.segmentation.graphemes) &&
+            bad.length < 20
+          )
+            bad.push(`grapheme boundaries of ${name} paragraph ${i} (${p.id})`);
           paragraphsChecked++;
           linesChecked += lines.length;
         }

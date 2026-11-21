@@ -190,7 +190,11 @@ export interface NodeDef {
   group?: string;
   /** ProseMirror content expression. */
   content?: string;
-  /** Marks allowed on children (for block containers: the node marks of 03 §5). */
+  /**
+   * Marks allowed on children. No node of CDM 1 sets it: a node with inline content takes every
+   * mark on its children and every other node none, so no block carries a mark (owner decision 92;
+   * block suggestions are the `suggest` attribute of 03 §5). The schema test of CDM-008 checks it.
+   */
   marks?: string;
   inline?: boolean;
   atom?: boolean;
