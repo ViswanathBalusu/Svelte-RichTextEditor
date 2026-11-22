@@ -46,6 +46,8 @@ test.describe('FE-050 criterion 4: copy and paste with the keyboard in the same 
     await first.click();
     await page.keyboard.press('Home');
     await page.keyboard.press('Shift+End');
+    // The editor has the selection a moment after the keys (selectionchange); a copy before that copies the caret.
+    await page.waitForTimeout(250);
     await page.keyboard.press(COPY_KEY);
 
     // Caret at the end of the last paragraph, then paste with the keyboard.

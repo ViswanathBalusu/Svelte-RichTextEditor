@@ -46,6 +46,8 @@ test.describe('FE-028 the host toolbar mirrors bold from de-command-state', () =
     await surface(page).locator('p', { hasText: 'Last paragraph.' }).click();
     await page.keyboard.press('End');
     await page.keyboard.press('Shift+Home');
+    // The editor has the selection a moment after the keys (selectionchange); Bold before that acts on the caret.
+    await page.waitForTimeout(250);
     await page.keyboard.press('Control+B');
     await expect.poll(() => pressed(page)).toBe('true');
 
