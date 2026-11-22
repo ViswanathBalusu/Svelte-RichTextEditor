@@ -46,11 +46,16 @@ const hostUp = ready.ok ? await Promise.all(TARGETS.map((t) => hostAccepts(t.por
 const liveTargets = ready.ok && hostUp.every(Boolean);
 
 describe.skipIf(!ready.ok)(`EXP-072 criterion 2: sandbox reach (${ready.reason})`, () => {
-  it('the test services accept connections from the host (positive control)', () => {
-    // A failure here means the shared test environment is not running, not that the sandbox
-    // is safe; start it with infra/test-env.ps1 up before reading the probe below.
-    TARGETS.forEach((t, i) => expect(hostUp[i], `${t.name} on 127.0.0.1:${t.port}`).toBe(true));
-  });
+  // DOCEDIT_TEST_ENV=1 (set by infra/test-env.ps1 for the command it runs) makes an absent test
+  // environment a failure; without it the control skips, with the reason on the console.
+  it.skipIf(!liveTargets && process.env['DOCEDIT_TEST_ENV'] !== '1')(
+    'the test services accept connections from the host (positive control)',
+    () => {
+      // A failure here means the shared test environment is not running, not that the sandbox
+      // is safe; start it with infra/test-env.ps1 up before reading the probe below.
+      TARGETS.forEach((t, i) => expect(hostUp[i], `${t.name} on 127.0.0.1:${t.port}`).toBe(true));
+    },
+  );
 
   it.skipIf(!liveTargets)(
     'a job sandbox is refused on the database, the object store and the other probed addresses, while the host reaches them',

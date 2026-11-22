@@ -5,7 +5,7 @@
  *   `text` emitter. Read back with `pdftotext`, as EXP-036 does. Skips when sandboxed compiles
  *   cannot run here (EXP-070).
  * - Criterion 2 (sandbox): a document without a label prints no marking.
- * - Criterion 3 (no sandbox): a label change changes the bundle hash, and the label is in the
+ * - Criterion 3 (no compile, but the worker image for its font manifest): a label change changes the bundle hash, and the label is in the
  *   manifest's options. A bundle without a label carries no `classification` option.
  * - Criterion 4 (other targets) is not tested here: see `services/export-worker/src/exp-089-other-
  *   targets.job.test.ts` (HTML, Markdown) and `packages/export-docx/test/exp-089-classification.test.ts`.
@@ -23,6 +23,7 @@ import {
 } from '../test/harness.ts';
 import { convert } from './convert.ts';
 import type { CdmEnvelope } from '@docedit/model';
+import { sandboxRequired } from '../../../services/export-worker/src/sandbox-ready.ts';
 
 const ready = (await sandboxReady()).ok;
 
@@ -102,26 +103,31 @@ describe.skipIf(!ready)('EXP-089 criterion 2: no label, no marking', () => {
   }, 300_000);
 });
 
-describe('EXP-089 criterion 3: a label change changes the bundle hash', () => {
-  it('records the label in the options and changes the bundle hash when it changes', async () => {
-    const base = { fonts: await imageFonts(), classFiles: classFiles(), ...OPTIONS, title: 'x' };
-    const none = await convert(envelope(), base as never);
-    const a = await convert(envelope(), { ...base, classification: 'Internal' } as never);
-    const b = await convert(envelope(), { ...base, classification: 'Public' } as never);
-    expect(none.manifest.options).not.toHaveProperty('classification');
-    expect(a.manifest.options['classification']).toBe('Internal');
-    expect(a.manifest.bundleHash).not.toBe(none.manifest.bundleHash);
-    expect(b.manifest.bundleHash).not.toBe(a.manifest.bundleHash);
-  }, 300_000);
+// Criterion 3 compiles nothing, but it reads the font manifest out of the worker image, so it needs
+// the image: it skips without it, and fails instead under DOCEDIT_REQUIRE_SANDBOX=1 (the export job).
+describe.skipIf(!ready && !sandboxRequired())(
+  'EXP-089 criterion 3: a label change changes the bundle hash',
+  () => {
+    it('records the label in the options and changes the bundle hash when it changes', async () => {
+      const base = { fonts: await imageFonts(), classFiles: classFiles(), ...OPTIONS, title: 'x' };
+      const none = await convert(envelope(), base as never);
+      const a = await convert(envelope(), { ...base, classification: 'Internal' } as never);
+      const b = await convert(envelope(), { ...base, classification: 'Public' } as never);
+      expect(none.manifest.options).not.toHaveProperty('classification');
+      expect(a.manifest.options['classification']).toBe('Internal');
+      expect(a.manifest.bundleHash).not.toBe(none.manifest.bundleHash);
+      expect(b.manifest.bundleHash).not.toBe(a.manifest.bundleHash);
+    }, 300_000);
 
-  it('writes the label through the text emitter as \\DEdefclassification, escaped', async () => {
-    const bundle = await convert(envelope(), {
-      fonts: await imageFonts(),
-      classFiles: classFiles(),
-      ...OPTIONS,
-      title: 'x',
-      classification: 'Internal & 50%',
-    } as never);
-    expect(bundle.files['main.tex']).toContain('\\DEdefclassification{Internal \\& 50\\%}');
-  }, 300_000);
-});
+    it('writes the label through the text emitter as \\DEdefclassification, escaped', async () => {
+      const bundle = await convert(envelope(), {
+        fonts: await imageFonts(),
+        classFiles: classFiles(),
+        ...OPTIONS,
+        title: 'x',
+        classification: 'Internal & 50%',
+      } as never);
+      expect(bundle.files['main.tex']).toContain('\\DEdefclassification{Internal \\& 50\\%}');
+    }, 300_000);
+  },
+);

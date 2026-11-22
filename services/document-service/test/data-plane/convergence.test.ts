@@ -3,14 +3,18 @@
 // the S3 harness's (packages/authority/test/harness). The same run against PostgreSQL is
 // convergence.pg.test.ts.
 //
-// Runs: SYN047_DEP_RUNS schedules (default 60). A failure prints fast-check's seed and the
+// Runs: SYN047_DEP_RUNS schedules (default 300; see RUNS). A failure prints fast-check's seed and the
 // schedule as JSON; SYN047_SEED replays the same schedules.
 import { appendFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { MemoryStore } from '../../src/storage/memory.ts';
 import { memorySimStores, runSchedules } from './sim/schedules.ts';
 
-const RUNS = Number(process.env['SYN047_DEP_RUNS'] ?? 60);
+// The seed is random, and the test checks that each refusal code occurred. In 8 local runs of 60
+// schedules `invalid_op` occurred 1 to 4 times (mean 2.4), so a run of 60 had no `invalid_op` about
+// once in eleven (Poisson estimate), and the first hosted run failed on it. 300 schedules took 20 to 21 s (3 runs)
+// on the same machine and make that miss rare (Poisson estimate: below 1 in 1000).
+const RUNS = Number(process.env['SYN047_DEP_RUNS'] ?? 300);
 const SEED = process.env['SYN047_SEED'] ? Number(process.env['SYN047_SEED']) : undefined;
 
 describe('SYN-047: the S3 schedules through the data plane (memory)', () => {

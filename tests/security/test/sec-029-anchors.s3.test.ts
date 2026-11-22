@@ -160,7 +160,19 @@ const asAnchor = (a: StoredAnchor): Anchor => ({
 
 let store: S3ObjectStore;
 
+// The test environment (infra/test-env.ps1) sets DOCEDIT_TEST_ENV=1 for the command it runs. Then
+// the store must be up and an unreachable store fails the file. Without it (a plain `pnpm test`
+// on a host with no containers, the hosted unit job) the file skips, with the reason on the console.
+const probe = await fetch(ENDPOINT).catch((e: unknown) => e);
+const unreachable = probe instanceof Error ? probe.message : null;
+const required = process.env['DOCEDIT_TEST_ENV'] === '1';
+if (unreachable !== null && !required)
+  console.warn(
+    `sec-029-anchors.s3: skipped: the S3 test store is not reachable at ${ENDPOINT} (${unreachable}); start it with: pwsh -NoProfile -File infra/test-env.ps1 up -NoExport`,
+  );
+
 beforeAll(async () => {
+  if (unreachable !== null && !required) return;
   store = new S3ObjectStore({
     endpoint: ENDPOINT,
     region: 'us-east-1',
@@ -171,62 +183,65 @@ beforeAll(async () => {
   await store.createBucket({ objectLock: true });
 }, 60_000);
 
-describe('SEC-029 criterion 5: signed chain heads in write-once storage', () => {
-  it('an anchor written under retention is not replaced at its key, and reads back with a valid signature', async () => {
-    const log = await buildLog(6);
-    const head = log.commits[5]!.hash;
-    await writeAnchor(store, 6, head);
+describe.skipIf(unreachable !== null && !required)(
+  'SEC-029 criterion 5: signed chain heads in write-once storage',
+  () => {
+    it('an anchor written under retention is not replaced at its key, and reads back with a valid signature', async () => {
+      const log = await buildLog(6);
+      const head = log.commits[5]!.hash;
+      await writeAnchor(store, 6, head);
 
-    const again = await writeAnchor(store, 6, 'f'.repeat(64)).then(
-      () => 'replaced',
-      () => 'refused',
-    );
-    expect(again).toBe('refused');
+      const again = await writeAnchor(store, 6, 'f'.repeat(64)).then(
+        () => 'replaced',
+        () => 'refused',
+      );
+      expect(again).toBe('refused');
 
-    const back = await readAnchor(store, 6);
-    expect(back.body.chainHead).toBe(head);
-    expect(verified(back)).toBe(true);
+      const back = await readAnchor(store, 6);
+      expect(back.body.chainHead).toBe(head);
+      expect(verified(back)).toBe(true);
 
-    // A body edited after signing does not verify, so an edited anchor is visible to a reader.
-    const edited: StoredAnchor = { ...back, body: { ...back.body, seq: 5 } };
-    expect(verified(edited)).toBe(false);
-    // Nor does one signed by another key.
-    const other = generateKeyPairSync('ed25519');
-    const forged = sign(null, canonical(back.body), other.privateKey).toString('base64');
-    expect(verified({ ...back, sig: forged })).toBe(false);
-  });
+      // A body edited after signing does not verify, so an edited anchor is visible to a reader.
+      const edited: StoredAnchor = { ...back, body: { ...back.body, seq: 5 } };
+      expect(verified(edited)).toBe(false);
+      // Nor does one signed by another key.
+      const other = generateKeyPairSync('ed25519');
+      const forged = sign(null, canonical(back.body), other.privateKey).toString('base64');
+      expect(verified({ ...back, sig: forged })).toBe(false);
+    });
 
-  it('a rewrite up to an anchored head disagrees with the anchor; an earlier anchor still matches', async () => {
-    const original = await buildLog(6);
-    await writeAnchor(store, 2, original.commits[1]!.hash);
-    const anchor2 = await readAnchor(store, 2);
-    const anchor6 = await readAnchor(store, 6);
-    expect(verified(anchor2)).toBe(true);
+    it('a rewrite up to an anchored head disagrees with the anchor; an earlier anchor still matches', async () => {
+      const original = await buildLog(6);
+      await writeAnchor(store, 2, original.commits[1]!.hash);
+      const anchor2 = await readAnchor(store, 2);
+      const anchor6 = await readAnchor(store, 6);
+      expect(verified(anchor2)).toBe(true);
 
-    const rewritten = await rewriteFrom(original, 3, (seq) => ({
-      steps: [{ stepType: 'insert', text: `rewritten${seq}` }],
-      retired: [],
-      claimed: [],
-    }));
+      const rewritten = await rewriteFrom(original, 3, (seq) => ({
+        steps: [{ stepType: 'insert', text: `rewritten${seq}` }],
+        retired: [],
+        claimed: [],
+      }));
 
-    const before = await verifyBundle(rewritten, { anchors: [asAnchor(anchor2)] });
-    expect(before.anchors[0]?.result).toBe('match');
-    expect(before.status).toBe('intact');
+      const before = await verifyBundle(rewritten, { anchors: [asAnchor(anchor2)] });
+      expect(before.anchors[0]?.result).toBe('match');
+      expect(before.status).toBe('intact');
 
-    const atHead = await verifyBundle(rewritten, { anchors: [asAnchor(anchor6)] });
-    expect(atHead.anchors[0]?.result).toBe('mismatch');
-    expect(atHead.status).toBe('altered');
-    expect(atHead.firstBadSeq).toBe(6);
-  });
+      const atHead = await verifyBundle(rewritten, { anchors: [asAnchor(anchor6)] });
+      expect(atHead.anchors[0]?.result).toBe('mismatch');
+      expect(atHead.status).toBe('altered');
+      expect(atHead.firstBadSeq).toBe(6);
+    });
 
-  it('a rewrite with no anchor held verifies: the verifier alone cannot see it (10 §2, documented)', async () => {
-    const original = await buildLog(6, 'u');
-    const rewritten = await rewriteFrom(original, 3, (seq) => ({
-      steps: [{ stepType: 'insert', text: `unanchored${seq}` }],
-      retired: [],
-      claimed: [],
-    }));
-    const r = await verifyBundle(rewritten);
-    expect(r.status).toBe('intact');
-  });
-});
+    it('a rewrite with no anchor held verifies: the verifier alone cannot see it (10 §2, documented)', async () => {
+      const original = await buildLog(6, 'u');
+      const rewritten = await rewriteFrom(original, 3, (seq) => ({
+        steps: [{ stepType: 'insert', text: `unanchored${seq}` }],
+        retired: [],
+        claimed: [],
+      }));
+      const r = await verifyBundle(rewritten);
+      expect(r.status).toBe('intact');
+    });
+  },
+);

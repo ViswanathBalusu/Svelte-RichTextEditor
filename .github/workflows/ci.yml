@@ -271,9 +271,22 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: podman --version
-      - name: Start the environment, run the Node.js tests against it, tear it down
+      - name: Install poppler-utils, the compile tests read the PDFs with pdftotext and pdftoppm
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends poppler-utils
+      - name: Pull the pinned veraPDF image (the reference is in services/export-worker/src/verapdf.ts)
+        run: |
+          image="$(node --input-type=module -e "import { VERAPDF_IMAGE } from './services/export-worker/src/verapdf.ts'; console.log(VERAPDF_IMAGE);")"
+          podman pull "$image"
+      - name: Build the asset worker sandbox image (PRO-114 runs its sandbox)
+        run: node services/asset-worker/scripts/build-image.ts
+      - name: Start the environment with the export worker, run the Node.js tests against it, tear it down
         shell: pwsh
-        run: pwsh -NoProfile -File infra/test-env.ps1 run -NoExport pnpm test
+        env:
+          # The export worker image is built here, as in the export job (same tag, same reason). The
+          # tests that need the environment (S3 store, worker image) fail, not skip, because
+          # infra/test-env.ps1 run sets DOCEDIT_TEST_ENV=1.
+          DOCEDIT_EXPORT_IMAGE: localhost/docedit-export-worker:test
+        run: pwsh -NoProfile -File infra/test-env.ps1 run pnpm test
 
   export:
     # The export pipeline with its real tools: the worker image is built, and the tests of the
@@ -293,6 +306,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: podman --version
+      - name: Install poppler-utils, the compile tests read the PDFs with pdftotext and pdftoppm
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends poppler-utils
       - name: Pull the pinned veraPDF image (the reference is in services/export-worker/src/verapdf.ts)
         run: |
           image="$(node --input-type=module -e "import { VERAPDF_IMAGE } from './services/export-worker/src/verapdf.ts'; console.log(VERAPDF_IMAGE);")"

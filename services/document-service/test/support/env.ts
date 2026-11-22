@@ -155,3 +155,16 @@ export function pgStores(pool: pg.Pool) {
 export function newTenant(): string {
   return randomUUID();
 }
+
+/**
+ * The Podman machine for the asset worker's sandbox (DOCEDIT_PODMAN_MACHINE), as an environment
+ * fragment. The setting wins; otherwise the default machine name on Windows and macOS, where Podman runs in
+ * a machine whose cgroup manager cannot apply the sandbox's limits (services/asset-worker/src/container.ts).
+ * Elsewhere (Linux, hosted CI) there is none: a name would send every sandbox call through
+ * `podman machine ssh`, which fails where no machine exists.
+ */
+export function machineEnv(s: Record<string, string>): Record<string, string> {
+  const name =
+    s['DOCEDIT_PODMAN_MACHINE'] ?? (process.platform !== 'linux' ? 'podman-machine-default' : '');
+  return name ? { DOCEDIT_PODMAN_MACHINE: name } : {};
+}
