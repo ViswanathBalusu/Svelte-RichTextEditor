@@ -199,9 +199,15 @@ async function open(page: Page, envelope: unknown) {
     ]);
     await new Promise((r) => setTimeout(r, 250));
     const surface = el.shadowRoot?.querySelector('.de-editing-surface') ?? null;
+    // A formula is drawn by KaTeX: its source is text, and its MathML is the one place `math` may
+    // appear (inside `.katex-mathml`). Even there no element may carry a link, an event handler or
+    // an embedded document, so that a hostile TeX source can only ever be shown as characters.
     const forbidden = surface
       ? surface.querySelectorAll(
-          'svg, script, iframe, math, object, embed, style, a[href^="javascript"], a[href^="data"]',
+          'svg, script, iframe, math:not(.katex-mathml math), object, embed, style, annotation-xml, a[href^="javascript"], a[href^="data"]',
+        ).length +
+        Array.from(surface.querySelectorAll('.katex-mathml *')).filter((e) =>
+          Array.from(e.attributes).some((a) => /^on|href$/i.test(a.name)),
         ).length
       : -1;
     // A picture is allowed only inside the image placeholder, and only from an http(s) URL.

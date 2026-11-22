@@ -7,6 +7,7 @@
 <script lang="ts">
   import '../i18n/late/dialogs.ts';
   import { useShell } from '../context.ts';
+  import { languageName } from '../shell/status.ts';
   import Dialog from './Dialog.svelte';
 
   interface Props {
@@ -37,14 +38,7 @@
 
   const parsed = $derived(useDefault ? null : canonical(tag));
   const invalid = $derived(!useDefault && tag.trim() !== '' && parsed === null);
-  const name = $derived.by(() => {
-    if (!parsed) return '';
-    try {
-      return new Intl.DisplayNames([tr.locale], { type: 'language' }).of(parsed) ?? parsed;
-    } catch {
-      return parsed;
-    }
-  });
+  const name = $derived(parsed ? languageName(parsed, tr.locale) : '');
 
   function submit(event: SubmitEvent): void {
     event.preventDefault();

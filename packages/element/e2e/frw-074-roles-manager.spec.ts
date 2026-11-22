@@ -148,9 +148,11 @@ test.describe('FRW-074 the roles manager', () => {
       { icon: 'circle', name: 'Tenant', shape: 'Shape: circle' },
       { icon: 'square', name: 'Landlord', shape: 'Shape: square' },
     ]);
-    // Nothing in the manager can be activated: no button, no form control.
+    // Nothing in the manager changes a role: no add, edit, delete or save button, no form control.
+    // The one button per role is the role preview, which writes nothing.
     const manager = pane.locator('.de-roles');
-    await expect(manager.getByRole('button')).toHaveCount(0);
+    await expect(manager.getByRole('button')).toHaveCount(2);
+    await expect(manager.locator('button:not([data-roles="preview"])')).toHaveCount(0);
     await expect(manager.locator('input, select, textarea')).toHaveCount(0);
   });
 

@@ -53,7 +53,9 @@ test.describe('the mini toolbar (UX-010)', () => {
     await h.setSelection({ empty: true, marks: [] });
     // The shell clears the dismissal when it sees the collapse, which it does in a task of its own.
     // A reselection in the same task as the collapse is one change for it, not two.
+    // WebKit on Linux needs more than one task for it (seen on the hosted runner), so two frames pass.
     await page.evaluate(() => new Promise((done) => setTimeout(done, 0)));
+    await h.frames(2);
     await h.setSelection({ empty: false, marks: [] });
     await expect(page.locator('[data-mini-toolbar]')).toBeVisible();
   });

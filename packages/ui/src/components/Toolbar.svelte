@@ -171,7 +171,25 @@
     menuOpen = true;
     menuIndex = 0;
     await tick();
+    fitMenu();
     focusMenuItem(0);
+  }
+
+  /**
+   * The element clips what leaves its box (`contain: content`), and the menu is as long as the
+   * commands that do not fit the row, so a long list must scroll inside the room the editor has:
+   * from the top of the menu to the bottom of the editor, less a small margin. Without this the
+   * last items cannot be reached with a pointer.
+   */
+  function fitMenu(): void {
+    if (!menu) return;
+    const root = menu.getRootNode();
+    const box = (root instanceof ShadowRoot ? root.host : (menu.closest('.de-shell') ?? menu))
+      .getBoundingClientRect();
+    const room = box.bottom - menu.getBoundingClientRect().top - 8;
+    const minimum = 6 * 16;
+    menu.style.maxBlockSize = `${Math.max(minimum, Math.floor(room))}px`;
+    menu.style.overflowY = 'auto';
   }
 
   function closeMenu(returnFocus: boolean): void {

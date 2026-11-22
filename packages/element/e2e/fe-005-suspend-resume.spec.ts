@@ -503,7 +503,10 @@ test.describe('FE-005 the read view', () => {
     // rest of this test is the same.
     const settled = async (): Promise<boolean> => {
       const s = await readState(page, 'read');
-      return drawn ? s.frames === 1 && s.status === '' : s.status.includes('could not be made');
+      const isDrawn = s.frames === 1 && s.status === '';
+      // Firefox on Linux draws the PDF where Firefox on Windows and Edge cannot (seen on the hosted
+      // runner), so in the filtered browsers either outcome ends the wait.
+      return drawn ? isDrawn : isDrawn || s.status.includes('could not be made');
     };
     await expect.poll(settled, { timeout: 30_000 }).toBe(true);
     expect((await readState(page, 'read')).exportRequests).toBe(1);

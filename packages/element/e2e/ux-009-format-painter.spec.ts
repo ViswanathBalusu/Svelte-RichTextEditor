@@ -20,6 +20,15 @@ async function selectParagraph(page: Page, name: string, text: string): Promise<
   await page.keyboard.press('Shift+Home');
 }
 
+/**
+ * The editor takes the selection the browser made from the document's `selectionchange`, a moment
+ * after the keys. The mini toolbar is drawn for a non-empty selection of the core, so its presence
+ * says the core has it; a command pressed before that acts on the collapsed caret.
+ */
+async function selectionSettled(page: Page, name: string): Promise<void> {
+  await expect(page.locator(`${editor(name)} [data-mini-toolbar]`)).toBeVisible();
+}
+
 test.describe('UX-009 the format painter on the mounted element', () => {
   test('armed from a bold selection, Enter makes the next selection, bold and keeps its words', async ({
     page,
@@ -34,6 +43,7 @@ test.describe('UX-009 the format painter on the mounted element', () => {
 
     // The source: the last paragraph, made bold.
     await selectParagraph(page, 'one', 'Last paragraph.');
+    await selectionSettled(page, 'one');
     await page.keyboard.press('Control+B');
     await expect(
       surface(page).locator('p', { hasText: 'Last paragraph.' }).locator(BOLD).first(),
@@ -49,6 +59,7 @@ test.describe('UX-009 the format painter on the mounted element', () => {
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Home');
     await page.keyboard.press('Shift+End');
+    await selectionSettled(page, 'one');
     await page.keyboard.press('Enter');
     await expect(button).toHaveAttribute('aria-pressed', 'false');
     await expect(first.locator(BOLD).first()).toBeVisible();
@@ -60,6 +71,7 @@ test.describe('UX-009 the format painter on the mounted element', () => {
     await mountEditor(page, { name: 'one', sub: 'ada' });
     const host = page.locator(editor('one'));
     await selectParagraph(page, 'one', 'Last paragraph.');
+    await selectionSettled(page, 'one');
     await page.keyboard.press('Control+B');
     await page.keyboard.press(ARM);
     const button = host.locator('[data-command-id="format.painter"]');

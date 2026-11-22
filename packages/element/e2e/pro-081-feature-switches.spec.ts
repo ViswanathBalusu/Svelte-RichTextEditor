@@ -22,7 +22,13 @@ type Group = 'comments' | 'export' | 'history' | 'assistant';
 
 /** What each group's switch must remove: accessible names of buttons, More-menu commands and modes. */
 const GONE: Record<Group, { buttons: string[]; menu: string[]; modes: string[] }> = {
-  comments: { buttons: ['Comments', 'Review pane'], menu: ['view.review'], modes: ['Reviewing'] },
+  // The comments button names its count of open threads (none in a new document); the toolbar also
+  // draws the "New comment" button (UX-028).
+  comments: {
+    buttons: ['Comments, 0 open threads', 'New comment', 'Review pane'],
+    menu: ['review.comment', 'view.review'],
+    modes: ['Reviewing'],
+  },
   export: { buttons: ['Export', 'Print'], menu: ['document.export', 'document.print'], modes: [] },
   history: { buttons: ['Catch up'], menu: [], modes: [] },
   assistant: { buttons: ['Assistant'], menu: ['view.assistant'], modes: [] },

@@ -40,11 +40,15 @@ function call<T>(page: Page, name: string, ...args: unknown[]): Promise<T> {
 
 const text = (page: Page, id: string) => call<string | null>(page, 'nodeText', id);
 const selected = (page: Page) => call<string>(page, 'selectedText');
-const caret = (page: Page, id: string, at: 'start' | 'end') =>
-  call<unknown>(page, 'caretIn', id, at);
-
 /** ProseMirror reads native selection changes on `selectionchange`, in a later task (S1 §4.2). */
 const settle = (page: Page) => page.waitForTimeout(150);
+
+/** Puts the caret in a paragraph and waits for the editor to have it, before the keys that extend it. */
+const caret = async (page: Page, id: string, at: 'start' | 'end') => {
+  const placed = await call<unknown>(page, 'caretIn', id, at);
+  await settle(page);
+  return placed;
+};
 
 test.describe('FE-111 criterion 4: region boundaries in right-to-left text', () => {
   test.beforeEach(async ({ page }) => {
@@ -92,7 +96,15 @@ test.describe('FE-111 criterion 4: region boundaries in right-to-left text', () 
 
   test('a selection that stays inside the region is kept, in both paragraphs of it', async ({
     page,
+    browserName,
   }) => {
+    // Firefox on Linux (Playwright 1.65) selects nothing for Shift+ArrowLeft from the start of a
+    // right-to-left paragraph here, as in fe-111-bidi-caret.spec.ts; Firefox on Windows selects the
+    // first three letters. The other FE-111 region tests pass in Firefox on Linux.
+    test.skip(
+      browserName === 'firefox' && process.platform === 'linux',
+      'Firefox on Linux moves the caret the other way at the start of a right-to-left line',
+    );
     await caret(page, IDS.first, 'start');
     for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowLeft');
     await settle(page);

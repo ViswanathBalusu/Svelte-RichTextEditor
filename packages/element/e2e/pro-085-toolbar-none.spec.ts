@@ -104,12 +104,20 @@ test.describe('PRO-085 criterion 5: toolbar="none" reaches every command of the 
     }
 
     // exec reaches each command. A disabled one says why; an enabled one runs or has no effect.
+    // A command run earlier may change what a later one is enabled for (Select all makes a selection,
+    // which enables "New comment"), so each is asked for its state just before it is run.
     const outcomes: Record<string, { ok: boolean; reason: string | null }> = {};
+    const enabledBefore: Record<string, boolean> = {};
     for (const id of ids) {
-      outcomes[id] = await page.evaluate(
-        ({ sel, id }) => (document.querySelector(sel) as Host).exec(id),
+      const r = await page.evaluate(
+        ({ sel, id }) => {
+          const el = document.querySelector(sel) as Host;
+          return { enabled: el.queryCommand(id).enabled, outcome: el.exec(id) };
+        },
         { sel: editor('none'), id },
       );
+      outcomes[id] = r.outcome;
+      enabledBefore[id] = r.enabled;
       // A command may open a pane or a dialog; the next one is run from a clean shell.
       await page.keyboard.press('Escape');
     }
@@ -117,7 +125,7 @@ test.describe('PRO-085 criterion 5: toolbar="none" reaches every command of the 
       const o = outcomes[id]!;
       expect(o.reason, `${id} is known to the registry`).not.toBe('unknown');
       expect(o.reason, `${id}: a document is loaded`).not.toBe('not-loaded');
-      if (builtIn.get(id)!.enabled) expect(o.reason, `${id} is enabled`).not.toBe('no-access');
+      if (enabledBefore[id]) expect(o.reason, `${id} is enabled`).not.toBe('no-access');
       else expect(o.ok, `${id} is disabled, so nothing runs`).toBe(false);
     }
     test.info().annotations.push({

@@ -148,6 +148,15 @@ test.describe('the editable page view (FE-101)', () => {
         const c = document.querySelector(sel)!.shadowRoot!.querySelector('.de-page-view .de-caret');
         return c ? Math.round(c.getBoundingClientRect().left) : null;
       }, editor);
+    // The caret is drawn from the selection the browser made, a moment after the keys (WebKit on
+    // Linux takes longer than the others): read the start once it has stopped moving.
+    await expect
+      .poll(async () => {
+        const before = await caretLeft();
+        await page.waitForTimeout(200);
+        return before === (await caretLeft());
+      })
+      .toBe(true);
     const start = await caretLeft();
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');

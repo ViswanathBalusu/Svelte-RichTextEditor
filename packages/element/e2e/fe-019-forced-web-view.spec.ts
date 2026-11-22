@@ -142,6 +142,7 @@ test.describe('FE-019 forced colours: the web view uses system colours', () => {
           canvasText: probe('color', 'CanvasText'),
           linkText: probe('color', 'LinkText'),
           highlight: probe('background-color', 'Highlight'),
+          canvas: probe('background-color', 'Canvas'),
         },
       };
     });
@@ -158,7 +159,17 @@ test.describe('FE-019 forced colours: the web view uses system colours', () => {
       const b = plain.getBoundingClientRect();
       return { x: b.x, y: b.y, width: b.width, height: b.height };
     });
-    const highlight = r.probes.highlight.match(/\d+/g)!.map(Number);
+    // Highlight is opaque on Windows and has an alpha below one in Chromium on Linux (rgba(5, 0, 73,
+    // 0.8) in Playwright 1.65), where the painted pixel is the colour blended over the canvas. The
+    // expected pixel is that blend; for an opaque colour it is the colour itself.
+    const channels = (css: string) => css.match(/\d*\.?\d+/g)!.map(Number);
+    const [hr, hg, hb, ha = 1] = channels(r.probes.highlight);
+    const [cr, cg, cb] = channels(r.probes.canvas);
+    const highlight = [
+      hr! * ha + cr! * (1 - ha),
+      hg! * ha + cg! * (1 - ha),
+      hb! * ha + cb! * (1 - ha),
+    ].map(Math.round);
     const countPixels = (png: Buffer) =>
       page.evaluate(
         async ({ b64, rgb }) => {
@@ -173,7 +184,12 @@ test.describe('FE-019 forced colours: the web view uses system colours', () => {
           const data = ctx.getImageData(0, 0, c.width, c.height).data;
           let n = 0;
           for (let i = 0; i < data.length; i += 4)
-            if (data[i] === rgb[0] && data[i + 1] === rgb[1] && data[i + 2] === rgb[2]) n += 1;
+            if (
+              Math.abs(data[i]! - rgb[0]!) <= 1 &&
+              Math.abs(data[i + 1]! - rgb[1]!) <= 1 &&
+              Math.abs(data[i + 2]! - rgb[2]!) <= 1
+            )
+              n += 1;
           return n;
         },
         { b64: png.toString('base64'), rgb: highlight },
