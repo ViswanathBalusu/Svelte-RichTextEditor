@@ -1757,11 +1757,16 @@
   cursor: default;
 }
 
+/*
+ * A figure hangs to the left of its line, so that the last one never reaches past the end of the
+ * track (the ruler is left to right; a box that overhangs the start does not scroll).
+ */
 .de-ruler-tick {
   position: absolute;
   inset-block-start: 0;
-  padding-inline-start: 2px;
-  border-inline-start: 1px solid var(--_de-border-strong);
+  translate: -100% 0;
+  padding-inline-end: 2px;
+  border-inline-end: 1px solid var(--_de-border-strong);
   font-size: 0.7em;
   color: var(--_de-text-muted);
   user-select: none;

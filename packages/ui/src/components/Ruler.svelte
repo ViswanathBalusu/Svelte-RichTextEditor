@@ -17,6 +17,7 @@
   import type { TabStopView } from '../core-api.ts';
   import type { StringKey } from '../i18n/en-GB.ts';
   import { live } from '../live.ts';
+  import { useSuspension } from '../shell/suspension.ts';
   import {
     TWIPS_PER_CM,
     addTab,
@@ -47,6 +48,7 @@
   let { body, zoom, onDialog }: Props = $props();
 
   const shell = useShell()!;
+  const suspended = useSuspension();
   const core = shell.core;
   const tr = $derived(shell.strings.current);
   const view = live(core.paragraphFormat!);
@@ -57,6 +59,11 @@
   // Where the text starts on the ruler, and how wide it is, in CSS pixels.
   let origin = $state(0);
   let width = $state(0);
+
+  // A marker's target is 24 pixels wide and centred on its place, so the one at the right edge of
+  // the text reaches 12 pixels past it. The track has that room, and its two border pixels, so
+  // nothing of it scrolls.
+  const MARKER_REACH = 14;
 
   const ppt = $derived(pxPerTwip(zoom));
   const column = $derived(width > 0 ? width / ppt : 0);
@@ -71,12 +78,22 @@
 
   $effect(() => {
     void zoom;
-    if (!root || !body) return;
+    // Not observed while the shell is suspended (FE-005); measured again when it resumes.
+    if (!root || !body || suspended()) return;
     measure();
-    const observer = new ResizeObserver(measure);
+    // The measure writes what the ruler draws, which can change its own size. Doing it in the
+    // next frame, not in the observer's callback, keeps the observer from reporting a loop.
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    });
     observer.observe(root);
     observer.observe(body);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   });
 
   type Drag =
@@ -218,7 +235,7 @@
     class="de-ruler-track"
     data-editable={editable ? 'true' : 'false'}
     style:inset-inline-start={length(origin)}
-    style:inline-size={length(width)}
+    style:inline-size={length(width > 0 ? width + MARKER_REACH : width)}
     onpointerdown={addAt}
   >
     {#each marks as cm (cm)}

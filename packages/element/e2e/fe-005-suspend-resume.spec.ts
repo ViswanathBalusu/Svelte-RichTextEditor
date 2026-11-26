@@ -240,8 +240,10 @@ test.describe('FE-005 suspend and resume', () => {
     expect(suspended.own).toEqual(['document:selectionchange']);
     expect(suspended.delegation).toEqual(running.delegation);
     // Observers: the shell's are stopped. What stays observes the editing surface inside the
-    // shadow root and belongs to the view that is kept.
-    expect(suspended.observers.filter((o) => o !== 'MutationObserver')).toEqual([]);
+    // shadow root and belongs to the view that is kept: a mutation observer, and the resize
+    // observer of the tab stops (FE-129), which watches the width of that one element and never
+    // fires while the element is out of the document.
+    expect(suspended.observers.filter((o) => o !== 'MutationObserver')).toEqual(['ResizeObserver']);
     expect(suspended.observers.length).toBeLessThan(running.observers.length);
     // No worker, no channel; the journal stays open; the only timer is the grace period's.
     expect(suspended.workers).toBe(0);
@@ -329,7 +331,8 @@ test.describe('FE-005 suspend and resume', () => {
     record('fe-005-suspend-page-view', { running, suspended });
     expect(suspended.own).toEqual(['document:selectionchange']);
     expect(suspended.workers).toBe(0);
-    expect(suspended.observers.filter((o) => o !== 'MutationObserver')).toEqual([]);
+    // The resize observer of the tab stops stays, as in the web view (FE-129).
+    expect(suspended.observers.filter((o) => o !== 'MutationObserver')).toEqual(['ResizeObserver']);
 
     await reattach(page);
     await expect.poll(async () => (await held(page)).connection).toBe('online');

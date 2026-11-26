@@ -3,7 +3,7 @@
  * the element does not expose matches nothing. The documented names are header, toolbar, ruler,
  * page, sidebar, statusbar and dialog. A host rule is added for each name; the test reads the
  * computed outline of the shadow-root element that carries the part, and reports which parts the
- * page shows. The ruler is not built yet (UX-102), so it is only checked as absent.
+ * page shows. The ruler (UX-102) is built, so it is styled like the others.
  *
  * Run from the repository root with
  *   pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-018-parts-regions.spec.ts --retries=0 --output=packages/element/test-results/V-FE-017-032-fe018
@@ -13,12 +13,13 @@ import { mountEditor, openEmbed } from './embed-helpers.ts';
 
 const editor = 'doc-editor[data-test="one"]';
 
-const PARTS = ['header', 'toolbar', 'page', 'sidebar', 'statusbar', 'dialog'] as const;
+const PARTS = ['header', 'toolbar', 'ruler', 'page', 'sidebar', 'statusbar', 'dialog'] as const;
 
 /** The outline colour the test gives each part, one per part, plus a bogus name. */
 const COLOUR: Record<string, string> = {
   header: 'rgb(10, 20, 30)',
   toolbar: 'rgb(40, 50, 60)',
+  ruler: 'rgb(20, 90, 40)',
   page: 'rgb(70, 80, 90)',
   sidebar: 'rgb(100, 110, 120)',
   statusbar: 'rgb(130, 140, 150)',
@@ -45,10 +46,8 @@ test.describe('FE-018 criterion 5: ::part() styles each documented region', () =
     // Only documented names may be exposed at all.
     const documented = ['dialog', 'header', 'page', 'ruler', 'sidebar', 'statusbar', 'toolbar'];
     expect(shown.filter((p) => !documented.includes(p))).toEqual([]);
-    // The ruler is not built yet (UX-102): it must not be exposed.
-    expect(shown).not.toContain('ruler');
-    // The page shows at least the toolbar and the page region.
-    expect(shown).toEqual(expect.arrayContaining(['page', 'toolbar']));
+    // The page shows at least the toolbar, the ruler (UX-102) and the page region.
+    expect(shown).toEqual(expect.arrayContaining(['page', 'ruler', 'toolbar']));
     console.log(`FE-018 parts shown on the embed page: ${shown.join(', ')}`);
 
     const rules = PARTS.map((p) => `doc-editor::part(${p}) { outline: 3px solid ${COLOUR[p]}; }`);
