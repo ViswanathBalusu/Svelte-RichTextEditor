@@ -121,6 +121,16 @@ import {
   type WorkflowResourceStore,
 } from './workflow/workflow-resource.ts';
 import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
+import { PgRenewalStore } from './workflow/renewal-state-pg.ts';
+import { MemoryRenewalStore } from './workflow/renewal-state-memory.ts';
+import { sealedRenewalSigner } from './workflow/extend-sealed.ts';
+import {
+  RENEWAL_KIND,
+  renewalHandler,
+  renewalScheduleTask,
+  type RenewalDueSource,
+  type RenewalStore,
+} from './control-plane/jobs/workflow-renewal.ts';
 import { MemoryTemplateStore, type TemplateStore } from './workflow/template-store.ts';
 import { PgTemplateStore } from './workflow/template-store-pg.ts';
 import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-store.ts';
@@ -375,6 +385,8 @@ export interface ServiceParts {
   evidence?: EvidenceLedger;
   /** The sealed final PDFs (FRW-054): `GET /documents/{id}/workflow/final` reads them. Absent: the route is not offered. */
   sealedPdfs?: SealedPdfStore;
+  /** The expiry of each sealed PDF's newest time-stamp, for the renewal task (FRW-056, BE-052). */
+  renewals?: RenewalStore & RenewalDueSource;
   /** The signed, time-stamped chain heads at completion, written once (FRW-054 criterion 3). */
   anchors?: AnchorStore;
   /** The registered access codes of workflow participants and their attempt counters (FRW-039). */
@@ -479,6 +491,13 @@ export interface StartOptions {
     retainMs: number;
     sleep?: (ms: number) => Promise<void>;
   };
+  /**
+   * The renewal of time-stamps on sealed PDFs (FRW-056, BE-052): the lead time before an expiry at
+   * which the renewal starts, and how long a run's claim on an expiry holds. Settings with no
+   * default (the spec gives none). Default: `config.sealing.renewal`. It needs sealing and
+   * `parts.renewals`; without any of them nothing is scheduled.
+   */
+  renewal?: { leadMs: number; claimMs: number };
   /**
    * The hourly anchoring of chain heads (HIS-036; ADR 0409): the signing service's client and how
    * long a record is retained in write-once storage. Default: built from `config.sealing` (the
@@ -702,6 +721,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
       now,
     }),
     workflows: new PgWorkflowResourceStore(pool, { now }),
+    renewals: new PgRenewalStore(pool),
     templates: new PgTemplateStore(pool),
     reminders: new PgReminderStore(pool),
     evidence: new PgEvidenceLedger(pool, { now }),
@@ -765,6 +785,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     reminders: new MemoryReminderStore(),
     evidence: new MemoryEvidenceLedger(now),
     sealedPdfs: new MemorySealedPdfStore(),
+    renewals: new MemoryRenewalStore(),
     anchors: new MemoryAnchorStore(),
     accessCodes: new MemoryAccessCodeStore(),
     quotaAdmin: quotaAdminOver(
@@ -1329,6 +1350,43 @@ export async function startService(opts: StartOptions): Promise<Service> {
     });
   }
   const sealing = sealer;
+  // The renewal of time-stamps (FRW-056): the job that makes one renewal, and the scheduled task
+  // that enqueues it for each chain whose newest time-stamp expires within the lead time.
+  const renewalSetup = opts.renewal ?? config.sealing?.renewal ?? null;
+  let renewalTask: ScheduledTask | null = null;
+  if (sealSetup && renewalSetup && parts.renewals && parts.workflows && parts.sealedPdfs) {
+    const workflows = parts.workflows;
+    runnerFor({
+      [RENEWAL_KIND]: renewalHandler({
+        store: parts.renewals,
+        signer: sealedRenewalSigner(
+          {
+            workflows,
+            sealed: parts.sealedPdfs,
+            signing: sealSetup.signing,
+            now,
+            retainMs: sealSetup.retainMs,
+          },
+          // The `seq` the workflow completed at: the last participant's completion.
+          async (tenant, doc) =>
+            Math.max(
+              0,
+              ...((await workflows.read(tenant, doc))?.participants ?? []).map(
+                (p) => p.completedSeq ?? 0,
+              ),
+            ),
+        ),
+        leadMs: renewalSetup.leadMs,
+        claimMs: renewalSetup.claimMs,
+        now,
+      }),
+    });
+    renewalTask = renewalScheduleTask({
+      source: parts.renewals,
+      queue: parts.queue,
+      leadMs: renewalSetup.leadMs,
+    });
+  }
   const runSeal = (ref: { tenant: string; doc: string }): Promise<unknown> =>
     sealing === null
       ? Promise.resolve(null)
@@ -1617,6 +1675,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
           }),
         ]
       : []),
+    // The renewal of time-stamps before they expire (FRW-056): not a task that deletes.
+    ...(renewalTask ? [renewalTask] : []),
     ...(checkpointThinning ? [checkpointThinningTask(checkpointThinning)] : []),
     // Thinning of old payloads for tenants and documents whose policy says so (HIS-032); the
     // scheduler hands the task the documents under a legal hold, and the task leaves them alone.

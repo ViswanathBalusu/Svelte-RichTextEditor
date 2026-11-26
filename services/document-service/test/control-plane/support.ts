@@ -13,6 +13,8 @@ import { uuid7 } from '@docedit/model';
 import type { Notification } from '@docedit/protocol';
 import { configFromEnv, type ServiceConfig } from '../../src/config.ts';
 import { PgPurgeStore } from '../../src/control-plane/document-purge-pg.ts';
+import { PgColdSegmentStore } from '../../src/control-plane/cold-segments-pg.ts';
+import { PgCheckpointThinningStore } from '../../src/control-plane/checkpoint-thinning-pg.ts';
 import { MemoryEventSink } from '../../src/control-plane/events.ts';
 import type { JobHandler } from '../../src/control-plane/jobs/runner.ts';
 import { b64url, signJws, type Algorithm, type PublicJwk } from '../../src/control-plane/jwt.ts';
@@ -192,6 +194,8 @@ export async function startHarness(
     finalSealing?: StartOptions['finalSealing'];
     /** The hourly anchoring of chain heads (HIS-036): the signing client and the retention. */
     headAnchoring?: StartOptions['headAnchoring'];
+    /** The renewal of time-stamps (FRW-056): the lead time and the claim time. */
+    renewal?: StartOptions['renewal'];
   } = {},
 ): Promise<Harness> {
   let offset = 0;
@@ -212,6 +216,9 @@ export async function startHarness(
         void c.query('SET ROLE docedit_purge');
       });
       parts.purgeStore = new PgPurgeStore(purgePool);
+      // The moves and the thinning delete rows of the log, so they use the same role (HIS-029, HIS-030).
+      parts.coldSegmentStore = new PgColdSegmentStore(purgePool);
+      parts.checkpointThinningStore = new PgCheckpointThinningStore(purgePool);
     }
   } else parts = memoryParts(now);
   Object.assign(parts, opts.parts ?? {});
@@ -232,6 +239,7 @@ export async function startHarness(
       ...(opts.webhooks ? { webhooks: opts.webhooks } : {}),
       ...(opts.finalSealing ? { finalSealing: opts.finalSealing } : {}),
       ...(opts.headAnchoring ? { headAnchoring: opts.headAnchoring } : {}),
+      ...(opts.renewal ? { renewal: opts.renewal } : {}),
       now,
       signing: signingKey(undefined, 'service-test'),
       ...(opts.realDataPlane

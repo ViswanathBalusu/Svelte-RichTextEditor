@@ -91,6 +91,17 @@ export class Scheduler {
         throw new RangeError(`scheduled task ${t.name}: a lower-case name and at least a second`);
   }
 
+  /** The names of the registered tasks, sorted: the registry the scheduler runs (BE-052). */
+  taskNames(): readonly string[] {
+    return [...this.#tasks.keys()].sort();
+  }
+
+  /** The identifier of the job of a task's current slot; null for a name that is not registered. */
+  currentJobId(name: string): string | null {
+    const t = this.#tasks.get(name);
+    return t ? Scheduler.jobId(name, Math.floor(this.#o.now() / t.everyMs)) : null;
+  }
+
   /** The job identifier of a task's slot. */
   static jobId(task: string, slot: number): string {
     return uuidFromName(`docedit.schedule\n${task}\n${slot}`);

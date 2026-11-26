@@ -16,7 +16,11 @@
  * the tenant's rows. Times are epoch milliseconds from the caller's clock.
  */
 import type { RenewalState } from '@docedit/authority';
-import type { RenewalClaim, RenewalStore } from '../control-plane/jobs/workflow-renewal.ts';
+import type {
+  RenewalClaim,
+  RenewalDueSource,
+  RenewalStore,
+} from '../control-plane/jobs/workflow-renewal.ts';
 import { inTenant, type Pool } from '../storage/db.ts';
 
 export const WORKFLOW_RENEWAL_STATE_TABLE = 'workflow_renewal_state';
@@ -26,7 +30,7 @@ function requireMs(name: string, value: number): void {
     throw new RangeError(`${name} must be a positive safe integer of milliseconds`);
 }
 
-export class PgRenewalStore implements RenewalStore {
+export class PgRenewalStore implements RenewalStore, RenewalDueSource {
   readonly #pool: Pool;
 
   constructor(pool: Pool) {
@@ -58,6 +62,29 @@ export class PgRenewalStore implements RenewalStore {
     );
     const row = r.rows[0];
     return row === undefined ? null : { expiresAtMs: Number(row.e) };
+  }
+
+  async listDue(
+    tenant: string,
+    fromMs: number,
+    toMs: number,
+    limit: number,
+  ): Promise<readonly { readonly doc: string; readonly expiresAtMs: number }[]> {
+    requireMs('toMs', toMs);
+    if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError('limit must be at least 1');
+    const r = await inTenant(
+      this.#pool,
+      tenant,
+      (c) =>
+        c.query<{ d: string; e: string }>(
+          `SELECT doc_id AS d, expires_at_ms::text AS e FROM ${WORKFLOW_RENEWAL_STATE_TABLE}
+            WHERE tenant_id = $1 AND expires_at_ms > $2 AND expires_at_ms <= $3
+            ORDER BY expires_at_ms, doc_id LIMIT $4`,
+          [tenant, fromMs, toMs, limit],
+        ),
+      { readOnly: true },
+    );
+    return r.rows.map((x) => ({ doc: x.d, expiresAtMs: Number(x.e) }));
   }
 
   async claim(
