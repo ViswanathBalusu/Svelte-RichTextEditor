@@ -2,7 +2,7 @@
  * Reads the facts of the certificate of completion from a sealed PDF's text, for the relying party's
  * command (12 §8.2 step 4, §10; FRW-055 criterion 2).
  *
- * The certificate pages print, each on its own line (`packages/export-latex/src/certificate.ts`):
+ * The certificate pages print, each on its own line (the certificate pages of the final export, FRW-050):
  * `Document: <id>`, `Workflow: <id>`, `Completed at sequence number <n>` and
  * `Chain head at completion (SHA-256): <64 hexadecimal digits>`. The text of a PDF is read with
  * `pdftotext` (poppler), which the reader installs or names; this package adds no PDF library for it.
