@@ -15,6 +15,7 @@
   import '../i18n/late/dialogs.ts';
   import { useShell } from '../context.ts';
   import type { TabStopView } from '../core-api.ts';
+  import type { StringKey } from '../i18n/en-GB.ts';
   import { live } from '../live.ts';
   import {
     TWIPS_PER_CM,
@@ -41,11 +42,9 @@
     zoom: number;
     /** Opens the paragraph dialog. */
     onDialog: () => void;
-    /** Told after each change the ruler asked for: whether the core took it. */
-    onChanged: (done: boolean) => void;
   }
 
-  let { body, zoom, onDialog, onChanged }: Props = $props();
+  let { body, zoom, onDialog }: Props = $props();
 
   const shell = useShell()!;
   const core = shell.core;
@@ -101,6 +100,17 @@
       : '',
   );
 
+  const MARKER_NAMES: Record<MarkerKind, StringKey> = {
+    left: 'ruler.marker.left',
+    firstLine: 'ruler.marker.firstLine',
+    right: 'ruler.marker.right',
+  };
+  const ALIGN_NAMES: Record<TabStopView['align'], StringKey> = {
+    left: 'dialog.paragraph.align.left',
+    center: 'dialog.paragraph.align.center',
+    right: 'dialog.paragraph.align.right',
+    decimal: 'dialog.paragraph.align.decimal',
+  };
   const MARKERS: readonly MarkerKind[] = ['right', 'firstLine', 'left'];
 
   const px = (twips: number): number => twips * ppt;
@@ -110,11 +120,12 @@
 
   function run(patch: Record<string, unknown> | null): void {
     if (!patch) return;
-    onChanged(core.runNamed?.('setParagraphFormat', patch) ?? false);
+    const done = core.runNamed?.('setParagraphFormat', patch) ?? false;
+    shell.announceText(tr.t(done ? 'announce.paragraph.set' : 'announce.paragraph.failed'));
   }
 
   function nameOf(kind: MarkerKind): string {
-    return tr.t(`ruler.marker.${kind}`);
+    return tr.t(MARKER_NAMES[kind]);
   }
 
   function valueText(name: string, twips: number): string {
@@ -189,7 +200,7 @@
   }
 
   const tabLabel = (align: TabStopView['align']): string =>
-    tr.t('ruler.tab', { align: tr.t(`dialog.paragraph.align.${align}`) });
+    tr.t('ruler.tab', { align: tr.t(ALIGN_NAMES[align]) });
 </script>
 
 <div
@@ -268,5 +279,5 @@
       >{tr.t('ruler.dialog')}</button
     >
   </div>
-  <p class="de-ruler-note de-hint">{margins}</p>
+  <p class="de-hint">{margins}</p>
 </div>

@@ -19,6 +19,7 @@ import type {
   CommentAnchor,
   CommentBodyPart,
   CommentView,
+  ReactionName,
   ReadView,
   ThreadDetail,
   ThreadOutcome,
@@ -33,6 +34,14 @@ export interface ThreadsSource {
   readonly docId: string;
   /** The signed-in user's identifier, as the service names authors (`user:<id>`), or null. */
   readonly self: () => string | null;
+  /** Whether the backend announced the feature 
+eactions (UX-033); without it no reaction is offered. */
+  readonly reactions?: boolean;
+  /**
+   * Called when the user asks for a comment's link (UX-034; owner decision 88): the element raises
+   * de-comment-link-request and the host builds the address. Absent: no control is offered.
+   */
+  readonly onLinkRequest?: (request: { thread: string; comment: string }) => void;
 }
 
 /** A thread as the service last gave it. */
@@ -74,7 +83,10 @@ export type ThreadsCore = Pick<
   | 'pickedThread'
 >;
 
-export function threadsService(core: ThreadsCore, source: ThreadsSource): ThreadsService {
+/** The thread service, and the element's way to say what became of the address the host gave. */
+export type ElementThreads = ThreadsService & { linkResult(ok: boolean): void };
+
+export function threadsService(core: ThreadsCore, source: ThreadsSource): ElementThreads {
   const { port, docId } = source;
   const held = new Map<string, Held>();
   const listeners = new Set<() => void>();
@@ -164,6 +176,9 @@ export function threadsService(core: ThreadsCore, source: ThreadsSource): Thread
     createdAt: c.createdAt,
     body: c.body.map((p) => ({ ...p })),
     edited: c.editedAt !== null,
+    ...(c.reactions && c.reactions.length > 0
+      ? { reactions: c.reactions.map((r) => ({ reaction: r.reaction, users: [...r.users] })) }
+      : {}),
   });
 
   const detailOf = (id: string): ThreadDetail | null => {
@@ -222,8 +237,30 @@ export function threadsService(core: ThreadsCore, source: ThreadsSource): Thread
     };
   };
 
+  // What became of the last address the host gave; it moves with `changes`, and `n` tells it apart.
+  let lastCopy: { n: number; ok: boolean } | null = null;
+  const linkCopied: ReadView<{ n: number; ok: boolean } | null> = {
+    get: () => lastCopy,
+    subscribe: changes.subscribe,
+  };
+
   return {
     self: principal,
+    // The address of a comment is the host's to build (owner decision 88); this asks for it.
+    ...(source.onLinkRequest
+      ? {
+          requestLink(id: string, commentId: string) {
+            if (!commentOf(id, commentId)) return false;
+            source.onLinkRequest?.({ thread: id, comment: commentId });
+            return true;
+          },
+          linkCopied,
+        }
+      : {}),
+    linkResult(ok: boolean) {
+      lastCopy = { n: (lastCopy?.n ?? 0) + 1, ok };
+      bump();
+    },
     changes,
     reveal(thread) {
       const t = held.get(thread.id)?.thread.target;
@@ -263,6 +300,23 @@ export function threadsService(core: ThreadsCore, source: ThreadsSource): Thread
         return failed(id, e);
       }
     },
+
+    // A reaction (UX-033): idempotent, no tag, no commit; the notice comment.reacted makes every
+    // client, this one included, read the thread again.
+    ...(source.reactions
+      ? {
+          async react(id: string, commentId: string, reaction: ReactionName, on: boolean) {
+            try {
+              await (on
+                ? port.addReaction(commentId, reaction)
+                : port.removeReaction(commentId, reaction));
+              return await written(id);
+            } catch (e) {
+              return failed(id, e);
+            }
+          },
+        }
+      : {}),
 
     async deleteThread(id, etag) {
       try {

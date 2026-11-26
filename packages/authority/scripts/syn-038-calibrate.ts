@@ -275,7 +275,7 @@ function staleSection(): void {
   const N = 200_000;
   console.log(
     `Model: each other editor types ${STEPS_PER_S} steps a second while active, and ${ACTIVE * 100} % of them are active at any moment, so the room accepts \`editors x ${ACTIVE} x ${STEPS_PER_S}\` steps a second from others. ` +
-      'A client class has a lag drawn from a lognormal distribution with the median and sigma shown; the distance of its commit is a Poisson count of the others\' steps in that lag. ' +
+      "A client class has a lag drawn from a lognormal distribution with the median and sigma shown; the distance of its commit is a Poisson count of the others' steps in that lag. " +
       `${N.toLocaleString('en-GB')} commits per cell, seed ${process.argv[3] ?? 1}. The medians and sigmas are assumptions, chosen to show a fast link, a slow link and a return after a drop; they are not recordings. ` +
       'Not modelled: `stale_base` for a base before the oldest commit the room holds, or before a snapshot commit.\n',
   );
@@ -303,7 +303,8 @@ function staleSection(): void {
   );
   console.log('| maxRebaseSteps | Maps kept per room (KiB) |');
   console.log('|---|---|');
-  for (const l of LIMITS) console.log(`| ${l.toLocaleString('en-GB')} | ${f((l * 120) / 1024, 0)} |`);
+  for (const l of LIMITS)
+    console.log(`| ${l.toLocaleString('en-GB')} | ${f((l * 120) / 1024, 0)} |`);
   console.log('');
 }
 

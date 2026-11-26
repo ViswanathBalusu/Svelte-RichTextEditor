@@ -74,3 +74,67 @@ test.describe('tracked changes for everyone in the mode switcher (UX-038)', () =
     await expect(page.locator('.de-mode-reason')).toHaveCount(0);
   });
 });
+
+const MANAGE = {
+  scope: 'body',
+  caps: ['view', 'comment', 'suggest', 'edit', 'manage'] as Array<
+    'view' | 'comment' | 'suggest' | 'edit' | 'manage'
+  >,
+};
+const EDITOR = { scope: 'body', caps: ['view', 'comment', 'suggest', 'edit'] as const };
+
+test.describe('the setting in the review pane (UX-038 criteria 1, 2, 3 and 5)', () => {
+  test('a user with manage turns it on and off, and the mode follows with the reason (criteria 1 and 3)', async ({
+    page,
+  }) => {
+    const h = await open(page, {
+      extended: true,
+      review: true,
+      modes: ['edit', 'review', 'view'],
+      mode: 'edit',
+      trackedForEveryone: false,
+      access: MANAGE,
+    });
+    expect(await h.exec('view.review')).toEqual({ ran: true, reason: null });
+    const pane = page.locator('.de-pane[data-pane="review"]');
+    const box = pane.getByRole('checkbox', { name: 'Track changes for everyone' });
+    await expect(pane.locator('[data-tracked-state]')).toContainText('are off');
+    await expect(box).not.toBeChecked();
+    await expect(page.locator('.de-mode-button')).toHaveAttribute('data-mode', 'edit');
+
+    await box.check();
+    await expect(pane.locator('[data-tracked-state]')).toContainText('are on');
+    await expect(page.locator('.de-mode-button')).toHaveAttribute('data-mode', 'review');
+    await expect(page.locator('.de-mode-reason')).toHaveText(REASON);
+    expect((await h.named()).filter(([n]) => n === 'setTrackedForEveryone')).toEqual([
+      ['setTrackedForEveryone', { on: true }],
+    ]);
+
+    // Off again: the same page, no reload, editors edit directly (the mode returns to edit).
+    await box.uncheck();
+    await expect(pane.locator('[data-tracked-state]')).toContainText('are off');
+    await expect(page.locator('.de-mode-button')).toHaveAttribute('data-mode', 'edit');
+  });
+
+  test('without manage the control is not offered, and the pane says who may switch it off (criteria 2 and 5)', async ({
+    page,
+  }) => {
+    const h = await open(page, {
+      extended: true,
+      review: true,
+      modes: ['edit', 'review', 'view'],
+      mode: 'edit',
+      trackedForEveryone: true,
+      access: { scope: 'body', caps: [...EDITOR.caps] },
+    });
+    expect(await h.exec('view.review')).toEqual({ ran: true, reason: null });
+    const pane = page.locator('.de-pane[data-pane="review"]');
+    await expect(pane.locator('[data-tracked-state]')).toContainText('are on');
+    await expect(pane.locator('[data-tracked-who]')).toContainText('right to manage');
+    await expect(pane.getByRole('checkbox', { name: 'Track changes for everyone' })).toHaveCount(0);
+    // The setting turned off elsewhere reaches this page as it is: the note about who may switch it off goes.
+    await h.setTrackedForEveryone(false);
+    await expect(pane.locator('[data-tracked-who]')).toHaveCount(0);
+    expect(await axe(page)).toEqual([]);
+  });
+});

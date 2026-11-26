@@ -111,6 +111,17 @@ function isBlank(ch: string): boolean {
   return ch === ' ' || ch === ' ' || ch === '\t';
 }
 
+/** Whether a run is set in the face of the run before it, so that a browser would shape the two together. */
+function joinsFace(prev: PaintRun | null, run: PaintRun): boolean {
+  return (
+    prev !== null &&
+    prev.fontFamily === run.fontFamily &&
+    prev.fontSizePt === run.fontSizePt &&
+    prev.bold === run.bold &&
+    prev.italic === run.italic
+  );
+}
+
 /** Appends the runs of a line to `span`; the trailing blanks of the line are left out of the word spacing (FE-091). */
 function paintRuns(
   doc: Document,
@@ -121,6 +132,7 @@ function paintRuns(
   if (wordSpacing > 0) span.style.wordSpacing = `${wordSpacing}pt`;
   const last = runs.length - 1;
   runs.forEach((run, i) => {
+    const prev = i > 0 ? runs[i - 1]! : null;
     let body = run.text;
     let tail = '';
     if (wordSpacing > 0 && i === last) {
@@ -145,6 +157,11 @@ function paintRuns(
       if (run.color !== null) s.color = run.color;
       if (run.vertAlign !== null) s.verticalAlign = run.vertAlign;
       if (reset) s.wordSpacing = '0pt';
+      // The layout measures each run on its own, so the browser must not shape a run together with
+      // the one before it (it kerns a pair across two spans of one face, as 'r' and ',' in
+      // "colour" and ", ", and Chromium and Firefox then paint the line narrower than it was
+      // measured). A bidi isolate ends the shaping run at each edge (FE-094).
+      if (joinsFace(prev, run)) s.unicodeBidi = 'isolate';
       el.textContent = text;
       span.appendChild(el);
     };

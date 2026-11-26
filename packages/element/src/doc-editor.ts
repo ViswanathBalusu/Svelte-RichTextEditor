@@ -209,6 +209,8 @@ export class DocEditorElement extends Base {
    * host's value; setting it again clears this.
    */
   #viewOverride: ViewName | null = null;
+  /** The control in the view label that switches between the web view and the page view (FE-099). */
+  #viewSwitch: HTMLButtonElement | null = null;
   /** The message that says the page view is not available because the kernel did not start (WASM-003). */
   #kernelNotice: HTMLElement | null = null;
   /** The element's layout kernel: its worker runs while the page view is asked for (WASM-004). */
@@ -828,6 +830,30 @@ export class DocEditorElement extends Base {
     }
     label.dataset['view'] = view;
     label.textContent = VIEW_STRINGS[view];
+    // The page view is drawn, not the page's own text, so a person who prefers the accessible
+    // layout has a control for the web view with the same content, and one to come back (FE-099
+    // criterion 4). The choice lasts until the host sets `view` again, as a fall-back does.
+    const asked = this.getAttribute('view') === 'print';
+    const back = asked && this.#viewOverride === 'web' && this.#pageViewOffered();
+    this.#viewSwitch?.remove();
+    this.#viewSwitch = null;
+    if (view === 'print' || back) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'de-view-switch';
+      // At least the minimum target size (FE-104).
+      button.style.minBlockSize = '24px';
+      button.style.minInlineSize = '24px';
+      button.textContent = view === 'print' ? VIEW_STRINGS.toWeb : VIEW_STRINGS.toPrint;
+      button.addEventListener('click', () => {
+        this.#viewOverride = view === 'print' ? 'web' : null;
+        this.#syncPageView();
+        this.#showWebLabel();
+        this.#mounted?.core.focus();
+      });
+      label.after(button);
+      this.#viewSwitch = button;
+    }
   }
 
   // --- The page view (FE-101) ----------------------------------------------------------------
@@ -950,6 +976,8 @@ export class DocEditorElement extends Base {
   #hideWebLabel(): void {
     this.#webLabel?.remove();
     this.#webLabel = null;
+    this.#viewSwitch?.remove();
+    this.#viewSwitch = null;
   }
 
   /** Removes the read view, if one is shown, and forgets which document it showed. */
@@ -1210,6 +1238,38 @@ export class DocEditorElement extends Base {
   }
 
   /**
+   * Copies the address the host built for a comment to the clipboard (UX-034). The host calls it
+   * from its `de-comment-link-request` listener, in the user's gesture, so the browser allows the
+   * copy; the shell says whether it worked. Resolves false when nothing was copied.
+   */
+  async copyCommentLink(address: string): Promise<boolean> {
+    try {
+      await navigator.clipboard.writeText(address);
+    } catch {
+      this.#mounted?.linkResult(false);
+      return false;
+    }
+    this.#mounted?.linkResult(true);
+    return true;
+  }
+
+  /**
+   * Shows the thread of the comment a marker names, as the host passes it back when someone follows
+   * the address it built (UX-034). A document that is still loading is waited for. A comment that
+   * is deleted, or that the user may not view, gives `unavailable`, with a message and nothing
+   * else shown.
+   */
+  async openComment(marker: string): Promise<'open' | 'unavailable' | 'not-loaded'> {
+    // The document may still be loading, and its threads are listed once it is shown: ask until
+    // the thread is there or about five seconds have passed.
+    let outcome: 'open' | 'unavailable' | 'not-loaded' = 'not-loaded';
+    for (let i = 0; i < 100 && outcome !== 'open'; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 50));
+      outcome = (await this.#mounted?.openLinkedComment(marker)) ?? 'not-loaded';
+    }
+    return outcome;
+  }
+  /**
    * Prints the typeset PDF of the loaded document (02 §9.8; FE-073). When the access lists
    * `no-print`, nothing is requested and nothing is printed, and the outcome says why (FE-055; UX-040
    * criterion 3). Otherwise the export job runs and its PDF is printed through a hidden frame.
@@ -1227,12 +1287,25 @@ export class DocEditorElement extends Base {
     return printTypesetPdf({
       source,
       access: session?.access ?? null,
-      printPdf: (url) => printPdfAtUrl(url, this.#root),
+      printPdf: (url) =>
+        printPdfAtUrl(url, this.#root, {
+          viewerUrl: this.#config.pdfViewerUrl ?? new URL(VIEWER_PAGE, import.meta.url).href,
+        }),
       onError: (detail) => this.#emit('de-error', detail),
       // The job's reports reach the host as `de-export-*` events, as for `requestExport` (FE-073
       // criterion 4): a failed job raises `de-export-failed` and then `de-error`. A replaced session raises nothing.
       onExportEvent: (event) => {
-        if (this.#session === session) this.#emit(event.name, event.detail);
+        if (this.#session !== session) return;
+        this.#emit(event.name, event.detail);
+        // The shell shows the preparation in its live region (FE-073 criterion 1, "with progress").
+        if (event.name === 'de-export-progress') {
+          const p = event.detail.progress;
+          this.#live.announce(
+            p === null
+              ? 'Preparing the PDF to print.'
+              : `Preparing the PDF to print, ${String(Math.round(p * 100))} per cent.`,
+          );
+        }
       },
     });
   }
@@ -1277,7 +1350,12 @@ export class DocEditorElement extends Base {
       signing: () => {
         const live = this.#session === session ? session?.backend : undefined;
         return live?.assets && live.fields && session
-          ? { assets: live.assets, fields: live.fields, docId: session.docId }
+          ? {
+              assets: live.assets,
+              fields: live.fields,
+              docId: session.docId,
+              ...(live.workflow && hasPort(live, 'workflow') ? { workflow: live.workflow } : {}),
+            }
           : null;
       },
     };
@@ -1296,6 +1374,12 @@ export class DocEditorElement extends Base {
       threads: {
         port: backend.comments,
         docId,
+        reactions: backend.features.has('reactions'),
+        // The host builds the address of a comment from its own page address (UX-034; decision 88).
+        onLinkRequest: ({ thread, comment }) => {
+          if (this.#session?.docId === docId)
+            this.#emit('de-comment-link-request', { docId, thread, comment, marker: comment });
+        },
         self: () => {
           const user = backend.auth.session?.user.id;
           return user === undefined ? null : `user:${user}`;

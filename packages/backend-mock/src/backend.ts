@@ -247,6 +247,16 @@ export class MockBackend implements Backend {
           const d = ofComment(id);
           d.threads.removeComment(connection(d.id), id, opts?.ifMatch);
         }),
+      addReaction: (id, reaction) =>
+        run(() => {
+          const d = ofComment(id);
+          return d.threads.react(connection(d.id), id, reaction, true);
+        }),
+      removeReaction: (id, reaction) =>
+        run(() => {
+          const d = ofComment(id);
+          return d.threads.react(connection(d.id), id, reaction, false);
+        }),
     };
   }
 

@@ -238,6 +238,8 @@ import {
   assembleAssistantContext,
 } from './assistant-context.ts';
 import {
+  type DictionaryEntry,
+  type DictionaryScope,
   type LocatedFinding,
   NO_PROOFING,
   type ProofingClock,
@@ -291,6 +293,8 @@ import { type AltRequest, setAltText } from './alt-text.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
 import { setParagraphFormat } from './paragraph-format.ts';
+import { moveBlock, moveBlockRefusal } from './move-block.ts';
+import { setTableSize, tableSizeInfo, type TableSizeInfo, tableSizeRefusal } from './table-size.ts';
 import { paragraphFormatInfo, type ParagraphFormatInfo } from './paragraph-format-info.ts';
 import { DEFAULT_MAPPING_HISTORY, PresenceClient, toConfirmed } from './presence.ts';
 import { type SearchMatch, findMatches } from './search.ts';
@@ -533,6 +537,10 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'hasNextEditableRegion',
   'canCopyFormat',
   'canPasteFormat',
+  'canSetTableSize',
+  'canMoveBlockUp',
+  'canMoveBlockDown',
+  'canSetTrackedForEveryone',
 ];
 
 /**
@@ -561,6 +569,10 @@ const COMMANDS: readonly CommandName[] = [
   'splitCell',
   'setTableStyle',
   'sortTableRows',
+  // `setTableSize` takes its sizes as an argument, so only `queryCommand` with them answers.
+  'setTableSize',
+  'moveBlockUp',
+  'moveBlockDown',
   'resizeFigure',
   'setFigureLayout',
   'increaseIndent',
@@ -591,6 +603,9 @@ const BLOCK_ONLY_COMMANDS: ReadonlySet<CommandName> = new Set<CommandName>([
   'markRegion',
   'setRegionPolicy',
   'renameRegion',
+  // FE-104: a block moved by a command is a change suggestion mode cannot record either.
+  'moveBlockUp',
+  'moveBlockDown',
 ]);
 
 const AUTHORING: ReadonlySet<CommandName> = new Set<CommandName>([
@@ -879,6 +894,8 @@ export class DocumentCore implements DocumentApi {
   readonly direction: ReadValue<'ltr' | 'rtl'>;
   /** The document's default language, a BCP 47 tag, or null when it sets none (UX-018). */
   readonly language: ReadValue<string | null>;
+  /** `settings.trackChanges` is `everyone` (UX-038): every user edits as suggestions. */
+  readonly trackedForEveryone: ReadValue<boolean>;
   /** The words in the body; null until the first count, which is made off the typing path (UX-018). */
   readonly words: ReadValue<number | null>;
   /**
@@ -886,6 +903,8 @@ export class DocumentCore implements DocumentApi {
    * dialog (UX-102); null when the selection covers no paragraph.
    */
   readonly paragraphFormat: ReadValue<ParagraphFormatInfo | null>;
+  /** The widths of the caret's table and its row height, for the table size dialog (FE-104); null outside a table. */
+  readonly tableSize: ReadValue<TableSizeInfo | null>;
   readonly #words = new WordCounter(
     () => countBodyWords(this.#state.doc),
     (n) => this.words.set(n),
@@ -1117,8 +1136,10 @@ export class DocumentCore implements DocumentApi {
     this.revision = new ReadValue<number>(0, Object.is, hub);
     this.direction = new ReadValue<'ltr' | 'rtl'>('ltr', Object.is, hub);
     this.language = new ReadValue<string | null>(null, Object.is, hub);
+    this.trackedForEveryone = new ReadValue<boolean>(false, Object.is, hub);
     this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.paragraphFormat = new ReadValue<ParagraphFormatInfo | null>(null, sameJson, hub);
+    this.tableSize = new ReadValue<TableSizeInfo | null>(null, sameJson, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.altRequest = new ReadValue<AltRequest | null>(null, sameJson, hub);
     this.glyphNotice = new ReadValue<GlyphNotice | null>(null, sameJson, hub);
@@ -1515,16 +1536,20 @@ export class DocumentCore implements DocumentApi {
     return this.#proofing?.addToDictionary(id) ?? Promise.resolve(false);
   }
 
-  /** The words of the custom dictionary for a language; null when the port has no dictionary. */
-  dictionaryWords(lang: string): Promise<string[] | null> {
+  /** The custom dictionaries for a language, the person's and the tenant's; null when the port has none. */
+  dictionaryWords(lang: string): Promise<DictionaryEntry[] | null> {
     return this.#proofing?.words(lang) ?? Promise.resolve(null);
   }
 
-  /** Removes a word from the custom dictionary and checks again. */
-  removeDictionaryWord(word: string, lang: string): Promise<boolean> {
-    return this.#proofing?.removeWord(word, lang) ?? Promise.resolve(false);
+  /** Adds a word to a custom dictionary (UX-042); the port says who may change the shared one. */
+  addDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean> {
+    return this.#proofing?.addWord(word, lang, scope) ?? Promise.resolve(false);
   }
 
+  /** Removes a word from a custom dictionary and checks again. */
+  removeDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean> {
+    return this.#proofing?.removeWord(word, lang, scope) ?? Promise.resolve(false);
+  }
   // --- Suggestion mode (FE-041, FE-042, FE-043) ----------------------------------------------
 
   /** `settings.trackChanges` of the document, read again only when the definitions change. */
@@ -1678,6 +1703,7 @@ export class DocumentCore implements DocumentApi {
           this.styles.set(styleSummaries(state.doc));
         this.direction.set(stylesOf(state.doc).settings.dir);
         this.language.set(stylesOf(state.doc).settings.lang ?? null);
+        this.trackedForEveryone.set(this.#trackChangesSetting() === 'everyone');
         // The count is made later, off the typing path (UX-018 criterion 1).
         this.#words.changed();
       }
@@ -1692,6 +1718,8 @@ export class DocumentCore implements DocumentApi {
           this.queryCommand('setParagraphFormat', { paragraphFormat: { indentLeft: 0 } }).enabled,
         ),
       );
+      // The widths of the caret's table and its row height, for the table size dialog (FE-104).
+      this.tableSize.set(tableSizeInfo(state, this.#locked()));
       this.access.set(this.#accessSummary());
       if (last?.doc !== state.doc) this.#refreshFind();
       this.revision.set(this.revision.get() + 1);
@@ -1776,6 +1804,14 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('copyFormat').enabled;
       case 'canPasteFormat':
         return this.queryCommand('pasteFormat').enabled;
+      case 'canSetTableSize':
+        return this.queryCommand('setTableSize').enabled;
+      case 'canMoveBlockUp':
+        return this.queryCommand('moveBlockUp').enabled;
+      case 'canMoveBlockDown':
+        return this.queryCommand('moveBlockDown').enabled;
+      case 'canSetTrackedForEveryone':
+        return !this.#locked() && (this.#accessValue?.caps.includes('manage') ?? false);
       default:
         return undefined;
     }
@@ -1802,6 +1838,35 @@ export class DocumentCore implements DocumentApi {
       // `reason.query.fieldLimit`. Other refusals have no code here.
       if (this.queryCommand('insertField', { field: { kind: 'text' } }).enabled) return null;
       return formFieldCount(this.#state) >= FIELD_LIMITS.fields ? 'fieldLimit' : null;
+    }
+    if (name === 'canSetTableSize' || name === 'canMoveBlockUp' || name === 'canMoveBlockDown') {
+      // FE-104: the shell states the reason of the command as `reason.query.<code>`.
+      const state = this.queryCommand(
+        name === 'canSetTableSize'
+          ? 'setTableSize'
+          : name === 'canMoveBlockUp'
+            ? 'moveBlockUp'
+            : 'moveBlockDown',
+      );
+      if (state.enabled) return null;
+      switch (state.reason) {
+        case 'first-block':
+          return 'firstBlock';
+        case 'last-block':
+          return 'lastBlock';
+        case 'not-in-table':
+          return 'notInTable';
+        case 'not-movable':
+          return 'notMovable';
+        case 'read-only':
+          return 'locked';
+        case 'suggestion':
+          return 'suggestion';
+        case 'no-access':
+          return 'noEdit';
+        default:
+          return null;
+      }
     }
     if (name !== 'canMarkRegion') return null;
     const state = this.queryCommand('markRegion', { title: REGION_QUERY_TITLE });
@@ -2779,6 +2844,10 @@ export class DocumentCore implements DocumentApi {
       return args.sortDirection === undefined
         ? null
         : sortTableRows(args.sortDirection, args.sortColumn);
+    if (name === 'setTableSize')
+      return args.tableSize === undefined ? null : setTableSize(args.tableSize);
+    if (name === 'moveBlockUp' || name === 'moveBlockDown')
+      return moveBlock(name === 'moveBlockUp' ? 'up' : 'down');
     if (name === 'resizeFigure')
       return args.figurePos === undefined || args.figureSize === undefined
         ? null
@@ -3135,7 +3204,8 @@ export class DocumentCore implements DocumentApi {
       return this.#refuseSuggestedSpan();
     // FE-131 criterion 4: a sort under suggestion mode is unavailable (ADR 0365, proposed), and it
     // is refused as a span change is: with the `suggestion` reason and no change.
-    if (name === 'sortTableRows' && this.#suggestsTable()) return this.#refuseSuggestedSpan();
+    if ((name === 'sortTableRows' || name === 'setTableSize') && this.#suggestsTable())
+      return this.#refuseSuggestedSpan();
     if (BLOCK_ONLY_COMMANDS.has(name) && this.queryCommand(name, args).reason === 'suggestion') {
       // FE-044 criterion 5: refused with the reason, and the document does not change.
       this.#refused({
@@ -3885,6 +3955,30 @@ one or original. It is a
         ? { enabled: true, active: false }
         : { enabled: false, active: false, reason: refusal };
     }
+    if (name === 'setTableSize') {
+      // Column widths and row height (FE-104 criterion 1): a lock first, then the table and the values.
+      if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
+      if (this.#suggestsTable()) return { enabled: false, active: false, reason: 'suggestion' };
+      if (args?.tableSize === undefined) {
+        // Without values the question is whether a table is at the caret and may be changed.
+        const open = tableSizeInfo(state, false);
+        return open?.editable
+          ? { enabled: true, active: false }
+          : { enabled: false, active: false, reason: open === null ? 'not-in-table' : 'no-access' };
+      }
+      const refusal = tableSizeRefusal(state, args.tableSize);
+      return refusal === null
+        ? { enabled: true, active: false }
+        : { enabled: false, active: false, reason: refusal };
+    }
+    if (name === 'moveBlockUp' || name === 'moveBlockDown') {
+      // Moving blocks (FE-104 criterion 3): a lock first, then the selection's place among its siblings.
+      if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
+      const refusal = moveBlockRefusal(state, name === 'moveBlockUp' ? 'up' : 'down');
+      return refusal === null
+        ? { enabled: true, active: false }
+        : { enabled: false, active: false, reason: refusal };
+    }
     if (name === 'resizeFigure' || name === 'setFigureLayout') {
       // Figure size and layout (FE-132) say why they are unavailable, through the figure's guard.
       if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
@@ -4087,6 +4181,32 @@ one or original. It is a
     return { ok: true, id };
   }
 
+  /**
+   * Turns "tracked changes for everyone" on or off (UX-038; owner decision 118: only a user with
+   * `manage`). A refusal is recorded for the shell as any refused edit is, and the document is left
+   * as it was. True when the setting now has the value asked for, also when it already had.
+   */
+  setTrackedForEveryone(on: boolean): boolean {
+    if (!this.query('canSetTrackedForEveryone')) {
+      this.#refused(
+        this.#locked()
+          ? { reason: 'read-only', scopes: [] }
+          : { reason: 'scope', scopes: ['defs'] },
+      );
+      return false;
+    }
+    if ((this.#trackChangesSetting() === 'everyone') === on) return true;
+    const doc = this.#state.doc;
+    let at = -1;
+    doc.descendants((node, pos) => {
+      if (node.type.name === 'settings') at = pos;
+      return at < 0;
+    });
+    if (at < 0) return false;
+    const attrs = { ...doc.nodeAt(at)!.attrs, trackChanges: on ? 'everyone' : 'off' };
+    this.dispatchTransaction(this.#state.tr.setNodeMarkup(at, undefined, attrs));
+    return true;
+  }
   deleteStyle(id: string): StyleEditResult {
     const check = this.checkStyleEdit('delete', id);
     if (!check.ok) return this.#styleFailed(check);

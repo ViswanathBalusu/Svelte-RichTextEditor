@@ -233,5 +233,78 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(await consentVerdict(deps, ref, 'p1')).toEqual({ ok: true });
       },
     );
+
+    // The text reaches the client (criterion 1): `GET .../consent`, for the participant it is bound to.
+    const read = (doc: string, pid: string, tok = token(doc, pid)) =>
+      h.call('GET', `/v1/documents/${doc}/workflow/participants/${pid}/consent`, { token: tok });
+
+    it.skipIf(skip)(
+      'gives the participant the text the workflow names, and whether they accepted it (criterion 1)',
+      async () => {
+        const { doc } = await workflow();
+        const first = await read(doc, 'p1');
+        expect(first.status, first.text).toBe(200);
+        // The text is the service's, in full, with its identifier and version; not yet accepted.
+        expect(first.json).toEqual({
+          textId: TEXT_ID,
+          version: VERSION,
+          text: TEXT,
+          acceptedAt: null,
+        });
+        expect(first.headers.get('cache-control')).toBe('no-store');
+        // Reading writes nothing.
+        expect(await rows(doc, 'p1')).toHaveLength(0);
+
+        const accepted = await consent(doc, 'p1');
+        expect(accepted.status, accepted.text).toBe(200);
+        const after = await read(doc, 'p1');
+        expect(after.json).toEqual({
+          textId: TEXT_ID,
+          version: VERSION,
+          text: TEXT,
+          acceptedAt: (accepted.json as { acceptedAt: string }).acceptedAt,
+        });
+        // Another participant has accepted nothing.
+        expect((await read(doc, 'p2')).json).toMatchObject({ acceptedAt: null });
+
+        // The text changes under the same identifier and version: the acceptance no longer counts.
+        texts.put(h.tenant, TEXT_ID, VERSION, `${TEXT} Changed.`);
+        try {
+          expect((await read(doc, 'p1')).json).toMatchObject({
+            text: `${TEXT} Changed.`,
+            acceptedAt: null,
+          });
+        } finally {
+          texts.put(h.tenant, TEXT_ID, VERSION, TEXT);
+        }
+      },
+    );
+
+    it.skipIf(skip)(
+      'shows the text to nobody but the participant it is bound to, and not when there is nothing to accept',
+      async () => {
+        const { doc, owner } = await workflow();
+        for (const [who, tok] of [
+          ['another participant', token(doc, 'p2')],
+          ['the owner', owner],
+          ['the host service', h.serviceJwt()],
+        ] as const) {
+          const r = await read(doc, 'p1', tok);
+          expect(r.status, `${who} ${r.text}`).toBe(403);
+          expect(r.text).not.toContain(TEXT);
+        }
+        // An approver accepts nothing, so is shown nothing; an access code not yet given holds it back.
+        expect((await read(doc, 'p3')).status).toBe(409);
+        expect((await read(doc, 'p4')).status).toBe(409);
+        expect((await read(doc, 'nobody', owner)).status).toBe(404);
+        // A draft, a workflow with no consent and a missing text are conflicts, as for the acceptance.
+        const draft = await workflow({ send: false });
+        expect((await read(draft.doc, 'p1')).status).toBe(409);
+        const none = await workflow({ consent: null });
+        expect((await read(none.doc, 'p1')).status).toBe(409);
+        const unknown = await workflow({ consent: { textId: 'not-held', version: 1 } });
+        expect((await read(unknown.doc, 'p1')).status).toBe(409);
+      },
+    );
   });
 }

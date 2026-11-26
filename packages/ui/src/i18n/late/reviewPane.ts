@@ -12,6 +12,13 @@ export const EN_GB_REVIEW_PANE = {
   'review.gone': 'That suggestion has already been resolved.',
 
   // The review pane (UX-037).
+  'review.tracked.on':
+    'Tracked changes for everyone are on: every change anyone makes is a suggestion.',
+  'review.tracked.off':
+    'Tracked changes for everyone are off: people who may edit change the text directly.',
+  'review.tracked.who': 'Only people with the right to manage this document can switch it off.',
+  'review.tracked.toggle': 'Track changes for everyone',
+  'review.tracked.failed': 'The setting could not be changed.',
   'review.pane.kind.insertion': 'Insertion',
   'review.pane.kind.deletion': 'Deletion',
   'review.pane.kind.formatting': 'Formatting change',

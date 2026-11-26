@@ -9,9 +9,11 @@
  * page view yet. Firefox has no acceptable canvas measurement (S5), so the page view is not offered
  * there (`pageViewSupported`).
  *
- * Breaks: FE-080 has not chosen the bundled Unicode line breaking algorithm. Until it does, the page
- * view breaks after blanks, after a hyphen between letters, and between ideographs. This is a
- * placeholder with a narrow rule; it is recorded in docs/adr/0417-w1-page-view-mount.md.
+ * Breaks: the bundled Unicode line breaking algorithm is the kernel's (kernel.segmenter, WASM-007;
+ * FE-080), which fits the engine's BreakOpportunities. The page thread loads no WebAssembly (the
+ * kernel runs in the layout worker), so until layout runs there the page view breaks after blanks,
+ * after a hyphen between letters, and between ideographs. This is a placeholder with a narrow rule;
+ * it is recorded in docs/adr/0417-w1-page-view-mount.md.
  */
 import { cachingMeasurer, type TextMeasurer } from '../../../layout/src/measure.ts';
 import { firstFitBreaker, type ItemProviders } from '../../../layout/src/items.ts';

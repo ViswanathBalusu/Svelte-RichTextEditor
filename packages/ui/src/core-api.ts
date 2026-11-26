@@ -271,10 +271,21 @@ export type CoreQueryName =
  *   document has room for another region (PRM-033);
  * - `hasNextEditableRegion`: a region after the caret, in document order, where the user has
  *   `edit` (PRM-027);
- * - `canInsertField`: a field may be inserted at the selection (FRW-072).
+ * - `canInsertField`: a field may be inserted at the selection (FRW-072);
+ * - `canSetTableSize`: the caret is in a table whose column widths and row height may be changed
+ *   (FE-104);
+ * - `canMoveBlockUp`, `canMoveBlockDown`: the blocks at the selection have a sibling above or below
+ *   to change places with, in a scope the user may change (FE-104).
  */
 export type CoreQueryName1b =
-  'canCopyFormat' | 'canPasteFormat' | 'canMarkRegion' | 'hasNextEditableRegion' | 'canInsertField';
+  | 'canCopyFormat'
+  | 'canPasteFormat'
+  | 'canMarkRegion'
+  | 'hasNextEditableRegion'
+  | 'canInsertField'
+  | 'canSetTableSize'
+  | 'canMoveBlockUp'
+  | 'canMoveBlockDown';
 
 /**
  * Named commands of phase 1b, run through `runNamed` and declared in `commandNames` (ADR 0052).
@@ -303,10 +314,20 @@ export type CoreQueryName1b =
  *   `page` as the format; inserts a `ref` field at the caret (FE-134 criterion 2);
  * - `setParagraphFormat`: a patch of `indentLeft`, `indentRight`, `indentFirstLine` (twips) and
  *   `tabs` (the whole list, or null for none) for the selected paragraphs; the ruler and the
- *   paragraph dialog both run it (UX-102 criterion 2; FE-129).
+ *   paragraph dialog both run it (UX-102 criterion 2; FE-129);
+ * - `setTableSize`: `{ columnWidths?, rowHeight? }` in twips for the caret's table: the width of
+ *   every column and the height of the caret's row, or null for the natural height (FE-104);
+ * - `moveBlockUp`, `moveBlockDown`: none; the blocks at the selection change places with the block
+ *   above or below (FE-104);
+ * - `setTrackedForEveryone`: `{ on }`; switches `settings.trackChanges` between `everyone` and `off`,
+ *   for a user with `manage` only (UX-038; owner decision 118).
  */
 export type CoreCommandName =
   | 'setParagraphFormat'
+  | 'setTableSize'
+  | 'moveBlockUp'
+  | 'moveBlockDown'
+  | 'setTrackedForEveryone'
   | 'copyFormat'
   | 'pasteFormat'
   | 'paragraphStyle'
@@ -439,6 +460,23 @@ export interface ProofingFindingView {
 }
 
 /** The proofing state the status bar and the menus read (UX-041, UX-042). */
+/** Whose list a dictionary word is on: the person's own, or the tenant's shared one (decision 34). */
+export type DictionaryScope = 'user' | 'tenant';
+
+export interface DictionaryEntryView {
+  readonly word: string;
+  readonly scope: DictionaryScope;
+  /** False for a shared word that only an administrator removes. */
+  readonly removable: boolean;
+}
+
+export interface DictionaryService {
+  /** The words for a language; null when the port cannot list them or the request failed. */
+  words(lang: string): Promise<readonly DictionaryEntryView[] | null>;
+  /** Adds a word; false when the port refused (a shared word needs an administrator) or failed. */
+  add(word: string, lang: string, scope: DictionaryScope): Promise<boolean>;
+  remove(word: string, lang: string, scope: DictionaryScope): Promise<boolean>;
+}
 export interface ProofingStatus {
   /** A proofing port is attached. Without one no proofing control is shown. */
   readonly available: boolean;
@@ -498,6 +536,22 @@ export interface ParagraphFormatView {
     readonly marginRight: number;
   } | null;
   /** Whether the paragraphs may be changed now. */
+  readonly editable: boolean;
+}
+
+/**
+ * The table at the caret, for the table size dialog (FE-104; 03 §4.3). Lengths are twips, as the
+ * document stores them.
+ */
+export interface TableSizeView {
+  /** The width of every column. */
+  readonly columnWidths: readonly number[];
+  /** The height of the caret's row, or null for its natural height. */
+  readonly rowHeight: number | null;
+  /** The caret's row and column, zero based. */
+  readonly row: number;
+  readonly column: number;
+  /** Whether the sizes may be changed now. */
   readonly editable: boolean;
 }
 
@@ -797,6 +851,8 @@ export interface LeasesService {
 /** A field of the document as fill mode shows it (FRW-076, FRW-077, FRW-078). */
 export interface FillField {
   readonly id: string;
+  /** The field's kind (signature, initials, 	ext, ...); absent when the core does not say. */
+  readonly kind?: string;
   /** The field's `label`: document content. */
   readonly label: string;
   readonly required: boolean;
@@ -998,6 +1054,11 @@ export interface CoreApi {
   /** Adds the finding's text to the port's custom dictionary. */
   addFindingToDictionary?(id: string): Promise<boolean>;
   /**
+   * The custom dictionaries (UX-042; owner decision 34): the person's own and the tenant's shared
+   * one. Offered, with its controls, only while `proofing` says the port supports dictionaries.
+   */
+  readonly dictionary?: DictionaryService;
+  /**
    * The finding with this identifier, while it is shown; null otherwise. The editing surface marks a
    * finding's text with `data-de-finding`, and a context click on the mark asks for that finding
    * (UX-008 criterion 5). Absent: the menu uses the finding at the caret.
@@ -1013,6 +1074,8 @@ export interface CoreApi {
    * paragraph. Absent: the shell offers no ruler and no paragraph dialog.
    */
   readonly paragraphFormat?: ReadView<ParagraphFormatView | null>;
+  /** The widths of the caret's table and its row height, for the table size dialog (FE-104); null outside a table. */
+  readonly tableSize?: ReadView<TableSizeView | null>;
   /** The document's default language (`settings.lang`), a BCP 47 tag; null when not set. */
   readonly language?: ReadView<string | null>;
   /**
@@ -1130,6 +1193,8 @@ export interface CoreApi {
   readonly workflowSend?: WorkflowSendService;
   /** Adopting a signature and signing a field (FRW-045, FRW-046). Absent: signature fields cannot be signed here. */
   readonly signing?: SigningService;
+  /** Finishing the participant's part (FRW-048, FRW-071). Absent: the Finish control runs the named command only. */
+  readonly completion?: CompletionService;
   /** Submits the participant's access code (FRW-039). Absent: the bar shows no code input. */
   readonly accessCode?: AccessCodeService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
@@ -1535,8 +1600,59 @@ export interface SignRequest {
   readonly role: string | null;
 }
 
+/** The consent text the workflow names, as the service holds it, and the acceptance on record (FRW-044). */
+export interface ConsentView {
+  readonly textId: string;
+  readonly version: number;
+  /** The text in full: the service's, never the client's. */
+  readonly text: string;
+  /** The server time of the acceptance on record for this text, or null. */
+  readonly acceptedAt: string | null;
+}
+
+export type ConsentLoadOutcome =
+  | { readonly ok: true; readonly consent: ConsentView }
+  /** `none`: this participant has no consent text to accept (the workflow names none, or the kind accepts none). */
+  | { readonly ok: false; readonly reason: 'none' | 'failed' };
+
+export type ConsentAcceptOutcome =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'failed' | 'forbidden' };
+
+export type ConsentDeclineOutcome =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'reason_required' | 'failed' };
+
+/** The first step of the ceremony: the consent text, its acceptance and the way out (FRW-044; FRW-033). */
+export interface ConsentService {
+  /** Reads the text and whether it was accepted (`GET .../consent`). */
+  load(): Promise<ConsentLoadOutcome>;
+  /** Records the acceptance (`POST .../consent`); the service holds the text and takes the hash and time. */
+  accept(): Promise<ConsentAcceptOutcome>;
+  /** Declines instead (`POST .../decline`); a reason is required (FRW-033). */
+  decline(reason: string): Promise<ConsentDeclineOutcome>;
+}
+
+/** How many of the participant's signature and initials fields are signed, of how many (FRW-048). */
+export interface SignProgress {
+  readonly signed: number;
+  readonly total: number;
+}
+
+/** What finishing the participant's part answered (FRW-048; FRW-071). */
+export type CompletionOutcome =
+  | { readonly ok: true }
+  /** Fields still need attention: the first has focus, and nothing was sent. */
+  | { readonly ok: false; readonly reason: 'invalid'; readonly count: number }
+  | { readonly ok: false; readonly reason: 'not_active' | 'failed' };
+
+/** Completes the participant's part (POST .../complete) after the fields are checked. */
+export interface CompletionService {
+  complete(): Promise<CompletionOutcome>;
+}
+
 /** The signing ceremony's adoption and sign steps over the backend (FRW-045, FRW-046). */
 export interface SigningService {
+  /** The consent step that comes before any signing action. Absent: the step is not shown. */
+  readonly consent?: ConsentService;
   /** The field the participant activated, until the step is closed. */
   readonly request: ReadView<SignRequest | null>;
   /** The adoption made earlier for this kind and kept for the rest of the visit; null when none. */
@@ -1550,6 +1666,12 @@ export interface SigningService {
   ): Promise<AdoptOutcome>;
   /** Asks the server to sign the field with the adoption (`POST /documents/{id}/fields/{fid}/sign`). */
   sign(fieldId: string, adoption: SignatureAdoption): Promise<SignOutcome>;
+  /**
+   * The participant's own signature and initials fields, signed of all, counting signedField as
+   * signed (the value arrives through the channel a moment after the sign call answers); null when the
+   * core cannot say.
+   */
+  progress?(signedField?: string): SignProgress | null;
   /** Closes the step without signing. */
   dismiss(): void;
   dispose?(): void;
@@ -1975,6 +2097,17 @@ export interface CommentView {
   readonly body: readonly CommentBodyPart[];
   /** True once the author has edited the comment. */
   readonly edited: boolean;
+  /** The reactions to the comment, in the order of `REACTIONS`, none that nobody holds (UX-033). */
+  readonly reactions?: readonly ReactionView[];
+}
+
+/** The reactions a comment takes, in the order the service lists them (UX-033; ADR 0424). */
+export type ReactionName = 'thumbsUp' | 'heart' | 'laugh' | 'celebrate' | 'eyes' | 'done';
+
+/** One reaction of a comment with the people who made it, as principals (`user:<sub>`). */
+export interface ReactionView {
+  readonly reaction: ReactionName;
+  readonly users: readonly string[];
 }
 
 /**
@@ -2066,6 +2199,23 @@ export interface ThreadsService {
   ): Promise<ThreadWrite>;
   /** Deletes a comment. */
   deleteComment?(id: string, commentId: string, etag: string): Promise<ThreadWrite>;
+  /**
+   * Asks the host for the address of a comment (UX-034; owner decision 88): the element raises
+   * `de-comment-link-request` with the identifiers and a marker, and the host builds the address
+   * from its own page address. False when the element can ask nobody. Absent: no control is offered.
+   */
+  requestLink?(id: string, commentId: string): boolean;
+  /**
+   * What became of the last address the host gave: it was copied (`ok`) or it could not be. `n`
+   * counts the answers, so the same outcome twice is two changes. Null before the first.
+   */
+  readonly linkCopied?: ReadView<{ readonly n: number; readonly ok: boolean } | null>;
+  /**
+   * Adds the user to a reaction of a comment (`on`), or takes them out of it (UX-033). Absent
+   * unless the backend announces the feature `reactions`: then no reaction control is offered.
+   * It makes no commit and needs no tag; a user may react again to the same reaction safely.
+   */
+  react?(id: string, commentId: string, reaction: ReactionName, on: boolean): Promise<ThreadWrite>;
   /** Deletes a whole thread. */
   deleteThread?(
     id: string,

@@ -199,6 +199,13 @@ export const OPERATIONS = [
     text: 'Send, correct, resume, void or remind a workflow.',
   },
   {
+    id: 'workflow.evidence',
+    needs: 'manage',
+    where: 'control',
+    spec: '07 §12; 12 §8.2',
+    text: 'Fetch the evidence bundle of a workflow; every retrieval is audited.',
+  },
+  {
     id: 'document.restore',
     needs: 'manage',
     where: 'control',
@@ -211,6 +218,13 @@ export const OPERATIONS = [
     where: 'control',
     spec: '07 §2, §12',
     text: 'Delete the document.',
+  },
+  {
+    id: 'settings.track_changes_on',
+    needs: 'manage',
+    where: 'commit',
+    spec: '07 §5.2; owner decision 118',
+    text: 'Switch `settings.trackChanges` from `off` to `everyone`.',
   },
   {
     id: 'settings.track_changes_off',

@@ -1424,6 +1424,14 @@
       "capability": "editing"
     },
     {
+      "id": "edit.moveBlockUp",
+      "capability": "editing"
+    },
+    {
+      "id": "edit.moveBlockDown",
+      "capability": "editing"
+    },
+    {
       "id": "insert.field.text",
       "capability": "fields-and-forms"
     },
@@ -1550,6 +1558,10 @@
     {
       "id": "format.paragraph",
       "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "table.size",
+      "capability": "editing"
     },
     {
       "id": "insert.crossReference",

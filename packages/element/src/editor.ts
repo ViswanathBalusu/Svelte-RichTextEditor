@@ -58,6 +58,7 @@ import type { NormalConfig } from './config.ts';
 import { attachWithSwitches, shellWithSwitches, switchedModes } from './feature-switches.ts';
 import type { Connection, StatusDetail } from './events.ts';
 import { fillActionsService } from './fill-actions.ts';
+import { completionService } from './completion.ts';
 import { threadsService, type ThreadsSource } from './threads.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
@@ -72,7 +73,7 @@ import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
 import { rulesService } from './rules.ts';
 import { signRequestWatch, signingService, type SigningSource } from './signing.ts';
-import { participantsService } from './participants.ts';
+import { lazyParticipantsService } from './participants-lazy.ts';
 import { workflowSendService, type WorkflowSendSource } from './workflow-send.ts';
 import { fieldPropertiesService } from './field-properties.ts';
 import { mathEditorService } from './math-editor.ts';
@@ -213,6 +214,14 @@ export interface MountedEditor extends EditorHandle {
    * the published element does not expose it). Resolves false when the pane is not offered.
    */
   openPane(id: string): Promise<boolean>;
+  /**
+   * Shows the thread of a comment the host named by its marker (UX-034; owner decision 88): opens
+   * the comments pane and focuses the thread. 'unavailable' for a comment that is deleted or that
+   * the user may not view, which show the same message and nothing else.
+   */
+  openLinkedComment(marker: string): Promise<'open' | 'unavailable'>;
+  /** Tells the shell whether the address the host gave was copied (UX-034). */
+  linkResult(ok: boolean): void;
   /** Replaces the host's string replacements while the shell is mounted (UX-063, UX-064). */
   setStrings(overrides: StringOverrides): void;
   /** Replaces the host's icons while the shell is mounted (UX-063). */
@@ -423,9 +432,16 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The send dialog and the lock banner (FRW-028, FRW-029): made once, so that one service follows the workflow.
   const workflowSend = options.workflow ? workflowSendService(core, options.workflow) : null;
   // The participants of the workflow and their order (FRW-026): the roles pane lists and edits them.
-  const participants = options.workflow ? participantsService(core, options.workflow) : null;
+  const participants = options.workflow ? lazyParticipantsService(core, options.workflow) : null;
   // The adoption and signing step (FRW-045, FRW-046): a signature field the participant activated.
-  const signing = options.signing ? signingService(core, options.signing) : null;
+  // The consent step reads the participant's identifier from the workflow status, reported by the server.
+  const signing = options.signing
+    ? signingService(
+        core,
+        options.signing,
+        () => fillActions?.status.get()?.participant?.id ?? null,
+      )
+    : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
   const workflowCompleteListeners = new Set<() => void>();
   const fillActions = options.workflow
@@ -563,6 +579,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'discardRecovered',
         'setLanguage',
         'setParagraphFormat',
+        'setTableSize',
+        'moveBlockUp',
+        'moveBlockDown',
+        'setTrackedForEveryone',
         'paragraphStyle',
         'characterStyle',
         'tableStyle',
@@ -591,12 +611,36 @@ export function mountEditor(options: MountOptions): MountedEditor {
         if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
         // The ruler and the paragraph dialog (UX-102): the args are the patch of indents and tab
         // stops; the core checks every value and the user's right to change the paragraphs.
+        // The review pane's switch (UX-038): { on }; the core needs manage, and the server checks again.
+        if (name === 'setTrackedForEveryone') {
+          const on = (args as { on?: unknown } | undefined)?.on;
+          return typeof on === 'boolean' && core.setTrackedForEveryone(on);
+        }
         if (name === 'setParagraphFormat') {
           if (args === null || typeof args !== 'object' || Array.isArray(args)) return false;
           return core.run('setParagraphFormat', {
             paragraphFormat: args as Readonly<Record<string, unknown>>,
           });
         }
+        // The table size dialog (FE-104): `{ columnWidths?, rowHeight? }` in twips; the core checks
+        // every value and the user's right to change the table. The two move commands take no
+        // argument and change the place of the blocks at the selection.
+        if (name === 'setTableSize') {
+          if (args === null || typeof args !== 'object' || Array.isArray(args)) return false;
+          const a = args as { columnWidths?: unknown; rowHeight?: unknown };
+          const tableSize: { columnWidths?: number[]; rowHeight?: number | null } = {};
+          if (a.columnWidths !== undefined) {
+            if (!Array.isArray(a.columnWidths) || a.columnWidths.some((w) => typeof w !== 'number'))
+              return false;
+            tableSize.columnWidths = [...(a.columnWidths as number[])];
+          }
+          if (a.rowHeight !== undefined) {
+            if (a.rowHeight !== null && typeof a.rowHeight !== 'number') return false;
+            tableSize.rowHeight = a.rowHeight;
+          }
+          return core.run('setTableSize', { tableSize });
+        }
+        if (name === 'moveBlockUp' || name === 'moveBlockDown') return core.run(name);
         // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
         // puts it on the selection through the guards; neither takes an argument.
         if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
@@ -682,6 +726,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
       language: core.language,
       // The indents and tab stops at the selection, for the ruler and the paragraph dialog (UX-102).
       paragraphFormat: core.paragraphFormat,
+      // The widths of the caret's table and its row height, for the table size dialog (FE-104).
+      tableSize: core.tableSize,
+      // `settings.trackChanges` is `everyone` (UX-038): the mode switcher shows review with the reason.
+      trackedForEveryone: core.trackedForEveryone,
       // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
       // port `proofing.get().available` is false and the shell shows no proofing control.
       // The assistant pane, offered only while the backend's assistant port is attached (UX-045).
@@ -691,6 +739,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
       applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
       ignoreFinding: (id, everywhere) => core.ignoreFinding(id, everywhere),
       addFindingToDictionary: (id) => core.addFindingToDictionary(id),
+      // The custom dictionaries, shown while the port supports them (UX-042; decision 34).
+      dictionary: {
+        words: (lang) => core.dictionaryWords(lang),
+        add: (word, lang, scope) => core.addDictionaryWord(word, lang, scope),
+        remove: (word, lang, scope) => core.removeDictionaryWord(word, lang, scope),
+      },
       proofingFinding: (id) => core.proofingFinding(id),
       // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
       // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).
@@ -727,6 +781,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(participants ? { participants } : {}),
       ...(threads ? { threads } : {}),
       ...(signing ? { signing } : {}),
+      // Finishing the participant's part (FRW-048): the fields are checked, then /complete is called.
+      ...(fillActions ? { completion: completionService(fillActions) } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
       ...(fillActions
         ? { accessCode: { submit: (code: string) => fillActions.verify(code) } }
@@ -972,6 +1028,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     openPane(id: string) {
       return app.openPaneById(id);
+    },
+    openLinkedComment(marker: string) {
+      return app.openLinkedComment(marker);
+    },
+    linkResult(ok: boolean) {
+      threads?.linkResult(ok);
     },
     focus() {
       core.focus();

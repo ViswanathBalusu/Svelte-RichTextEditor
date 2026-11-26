@@ -14,6 +14,7 @@ export const DEP1_WIRE_NOTIFICATION_TYPES: readonly string[] = [
   'comment.created',
   'comment.updated',
   'comment.deleted',
+  'comment.reacted',
   'version.created',
   'version.restored',
   'export.progress',

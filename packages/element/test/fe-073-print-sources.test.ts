@@ -43,6 +43,7 @@ describe('what can reach the printer (FE-073 criterion 2)', () => {
         'element/src/doc-editor.ts: this.print().catch((error: unknown) =>',
         'element/src/doc-editor.ts: async print(): Promise<PrintOutcome> {',
         'element/src/print-frame.ts: win.print();',
+        'element/src/print-frame.ts: win.print();',
         'ui/src/commands/builtin.ts: run: () => (host.print ? host.print() : false),',
       ].sort(),
     );
@@ -51,6 +52,8 @@ describe('what can reach the printer (FE-073 criterion 2)', () => {
   it('prints from the window of the frame that holds the PDF, never from the page or a shadow root', () => {
     const frame = readFileSync(join(PACKAGES, 'element/src/print-frame.ts'), 'utf8');
     expect(frame).toMatch(/const win = frame\.contentWindow;/);
+    // The print-only frame is an empty document of the page's origin, filled with canvases.
+    expect(frame).toMatch(/frame\.src = blobUrl;/);
     expect(frame).not.toMatch(/window\.print|globalThis\.print|document\.defaultView/);
     // The frame holds the PDF's URL and nothing of the editor's DOM.
     expect(frame).toMatch(/frame\.src = url|frame\.setAttribute\('src', url\)/);

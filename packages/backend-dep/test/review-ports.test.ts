@@ -239,6 +239,17 @@ describe('comments port over REST (PRO-097 criterion 2, the routes)', () => {
     expect(sent[1]?.headers['if-match']).toBe('W/"1"');
     expect(sent[2]?.headers['if-match']).toBe('W/"2"');
   });
+
+  it('takes and leaves a reaction on its route, with no tag (UX-033)', async () => {
+    const { ports, sent } = recordingRest(() => ({ body: COMMENT, etag: 'W/"1"' }));
+    await ports.comments.addReaction('c-1', 'heart');
+    await ports.comments.removeReaction('c-1', 'heart');
+    expect(sent.map((s) => [s.method, s.url.replace('https://dep.test/api', '')])).toEqual([
+      ['POST', '/comments/c-1/reactions/heart'],
+      ['DELETE', '/comments/c-1/reactions/heart'],
+    ]);
+    expect(sent.every((s) => s.headers['if-match'] === undefined)).toBe(true);
+  });
 });
 
 describe('leases and imports over REST (PRO-097, the routes)', () => {

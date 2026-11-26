@@ -12,6 +12,8 @@ import type { FieldReport, SendProblem, StepJson } from '@docedit/authority';
 export type { FieldReport };
 import type {
   Access,
+  DictionaryEntry,
+  DictionaryScope,
   Limits,
   PresencePeers,
   PresenceUpdate,
@@ -69,6 +71,10 @@ export type CommandName =
   | TableCommandName
   | 'setTableStyle'
   | 'sortTableRows'
+  // FE-104: the keyboard and dialog forms of dragging a column border, a row edge and a block.
+  | 'setTableSize'
+  | 'moveBlockUp'
+  | 'moveBlockDown'
   | 'resizeFigure'
   | 'setFigureLayout'
   | 'increaseIndent'
@@ -202,6 +208,11 @@ export interface CommandArgs {
   /** For `sortTableRows` (FE-131): the direction; `sortColumn` is the column, default the caret's. */
   sortDirection?: 'ascending' | 'descending';
   sortColumn?: number;
+  /** For `setTableSize` (FE-104): the column widths and the caret's row height, in twips. */
+  tableSize?: {
+    columnWidths?: readonly number[];
+    rowHeight?: number | null;
+  };
   /** For `resizeFigure` and `setFigureLayout` (FE-132): the figure's position in the document. */
   figurePos?: number;
   /** For `resizeFigure`: twips; the aspect ratio is kept unless `lockAspect` is false. */
@@ -307,6 +318,9 @@ export type CommandUnavailable =
   | 'empty-row'
   | 'single-cell'
   | 'not-merged'
+  | 'first-block'
+  | 'last-block'
+  | 'not-movable'
   | 'suggestion'
   | 'scheme-not-allowed'
   | 'malformed-link'
@@ -542,7 +556,13 @@ export type CoreQueryName =
   | 'hasNextEditableRegion'
   // UX-009: the selection has formatting to take; formatting was taken and may be put here.
   | 'canCopyFormat'
-  | 'canPasteFormat';
+  | 'canPasteFormat'
+  // FE-104: the table at the caret may be resized; the selection's blocks may change places.
+  | 'canSetTableSize'
+  | 'canMoveBlockUp'
+  | 'canMoveBlockDown'
+  // UX-038: the user may switch settings.trackChanges (manage, and the document is not locked).
+  | 'canSetTrackedForEveryone';
 
 /** `de-status.connection` (05 §8.1), plus `detached` before any channel is attached. */
 export type ConnectionState = 'detached' | 'online' | 'reconnecting' | 'offline';
@@ -1121,10 +1141,12 @@ export interface DocumentApi {
   ignoreFinding(id: string, everywhere?: boolean): boolean;
   /** Adds the finding's text to the port's custom dictionary; false where the port has none. */
   addFindingToDictionary(id: string): Promise<boolean>;
-  /** The custom dictionary's words for a language; null where the port has no dictionary. */
-  dictionaryWords(lang: string): Promise<string[] | null>;
-  /** Removes a word from the custom dictionary. */
-  removeDictionaryWord(word: string, lang: string): Promise<boolean>;
+  /** The custom dictionaries for a language, the person's and the tenant's; null where the port has none. */
+  dictionaryWords(lang: string): Promise<DictionaryEntry[] | null>;
+  /** Adds a word to a custom dictionary (UX-042). */
+  addDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean>;
+  /** Removes a word from a custom dictionary. */
+  removeDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean>;
   /** Pastes plain text at the selection, one paragraph per line (FE-052); false when refused. */
   pastePlainText(text: string): boolean;
   /** The clipboard payload of the selection (FE-050): `text/html` with the fragment, and `text/plain`. Null for an empty selection; changes nothing. */

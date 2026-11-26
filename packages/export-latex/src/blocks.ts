@@ -30,6 +30,7 @@ import {
   join,
   lit,
   pdfString,
+  placeholderLabel,
   tex,
   text,
   url,
@@ -305,7 +306,7 @@ function figure(ctx: Ctx, flow: Flow, node: J): void {
     const picture =
       file && w !== null && h !== null
         ? imageBox(ctx, file, w, h, alt ?? '')
-        : tex`\DEph{${pdfString(alt ? `[figure: ${alt}]` : '[figure]')}}`;
+        : tex`\DEph{${pdfString(placeholderLabel(alt ? `[figure: ${alt}]` : '[figure]'))}}`;
     let captionTex: Tex = EMPTY;
     if (caption) {
       const styleId = ctx.table.styles.has('Caption') ? 'Caption' : null;
@@ -449,7 +450,7 @@ export function block(ctx: Ctx, flow: Flow, node: J): void {
           gap(ctx, flow, null);
           const picture = file
             ? imageBox(ctx, file, w, h, fb ?? '')
-            : tex`\DEph{${pdfString(fb ?? '[content]')}}`;
+            : tex`\DEph{${pdfString(placeholderLabel(fb ?? '[content]'))}}`;
           line(ctx, tex`\DEfig{${int(n)}}{0}{0}{${picture}}{}`);
         });
         flow.prev = null;
