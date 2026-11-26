@@ -107,6 +107,8 @@ import {
 import { PgPurgeStore } from './control-plane/document-purge-pg.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
 import { PgTenantFontStore } from './control-plane/tenant-fonts-pg.ts';
+import { PgTenantSettingStore } from './control-plane/tenant-settings-pg.ts';
+import { MemoryTenantSettingStore, TenantSettingService } from './control-plane/tenant-settings.ts';
 import {
   MemoryTenantFontStore,
   TenantFontService,
@@ -310,6 +312,8 @@ export interface ServiceParts {
   holds?: HoldService;
   /** The fonts tenants add (BE-048). Absent: `/tenant-fonts` is not offered. */
   tenantFonts?: TenantFontStore;
+  /** The settings a tenant switches on or off (BE-051). Absent: every setting is at its default. */
+  tenantSettings?: TenantSettingService;
   /**
    * The rows of the purge of deleted documents (HIS-039). Needs a pool that connects as a member of
    * docedit_purge (migration 0073), so `pgParts` does not make it. Absent: no purge task runs.
@@ -692,6 +696,11 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     historyVisibility: visibilityOver(visibility, documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
     tenantFonts: new PgTenantFontStore(pool),
+    tenantSettings: new TenantSettingService({
+      store: new PgTenantSettingStore(pool),
+      audit,
+      now,
+    }),
     workflows: new PgWorkflowResourceStore(pool, { now }),
     templates: new PgTemplateStore(pool),
     reminders: new PgReminderStore(pool),
@@ -746,6 +755,11 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     historyVisibility: visibilityOver(visibility, store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
     tenantFonts: new MemoryTenantFontStore(),
+    tenantSettings: new TenantSettingService({
+      store: new MemoryTenantSettingStore(),
+      audit,
+      now,
+    }),
     workflows: new MemoryWorkflowResourceStore(),
     templates: new MemoryTemplateStore(),
     reminders: new MemoryReminderStore(),
@@ -1902,6 +1916,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),
     ...(tenantFonts ? { tenantFonts } : {}),
+    ...(parts.tenantSettings ? { tenantSettings: parts.tenantSettings } : {}),
     ...(erasures ? { erasures } : {}),
     ...(tombstones ? { tombstones } : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),

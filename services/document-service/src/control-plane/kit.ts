@@ -48,6 +48,7 @@ import type { ErasureRequests } from './erasure-requests.ts';
 import type { CommitTombstone } from './commit-tombstone.ts';
 import type { QuotaAdminService } from './quota-admin.ts';
 import type { TenantFontService } from './tenant-fonts.ts';
+import type { TenantSettingService } from './tenant-settings.ts';
 import type { TenantRegistry } from './tenants.ts';
 import type { SearchHit, SearchQuery } from './search-index.ts';
 import type { CompileBudget } from './exp-009-compile-budget.ts';
@@ -176,6 +177,8 @@ export interface HandlerDeps {
   quotaAdmin?: QuotaAdminService;
   /** The fonts tenants add (BE-048). Absent: `/tenant-fonts` is not offered and `/fonts` is the shared catalogue. */
   tenantFonts?: TenantFontService;
+  /** The settings a tenant switches on or off (BE-051). Absent: every setting has its default (off). */
+  tenantSettings?: TenantSettingService;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: not offered. */
   workflows?: WorkflowResourceStore;
   /** The templates of /templates (FRW-062). Absent: not offered. */

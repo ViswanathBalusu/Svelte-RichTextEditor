@@ -717,6 +717,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
           'An IANA zone name. Default `UTC`. The job records the value it used.',
         ),
         certificate: opt(bool(), 'Append the certificate of completion (12).'),
+        layout: opt(
+          enm(['blocks', 'lines']),
+          'What the compile reports of the layout (09 §7.1). `lines` asks for line starts, for page-break reconciliation in the page view (L1); it is refused with `forbidden` unless the tenant has enabled page-break reconciliation, which is off by default (06 §10; BE-051). Default `blocks`.',
+        ),
       },
       { doc: 'Export options (09 §9.1).', spec: '09 §9.1' },
     ),

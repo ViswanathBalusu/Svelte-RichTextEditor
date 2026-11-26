@@ -755,6 +755,8 @@ export interface ExportOptions {
   timeZone?: string;
   /** Append the certificate of completion (12). */
   certificate?: boolean;
+  /** What the compile reports of the layout (09 §7.1). `lines` asks for line starts, for page-break reconciliation in the page view (L1); it is refused with `forbidden` unless the tenant has enabled page-break reconciliation, which is off by default (06 §10; BE-051). Default `blocks`. */
+  layout?: "blocks" | "lines";
 }
 
 export interface CreateExportRequest {
