@@ -149,18 +149,13 @@
       "provenBy": "SEC-006",
       "criteria": [3, 4],
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "data-url-media.test.ts",
         "packages/element/e2e/sec-006-data-url-paste.spec.ts",
+        "packages/element/e2e/sec-006-007-assets.spec.ts",
         "packages/engine/test/sec-006-no-live-svg.test.ts",
         "services/asset-worker/test/content.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 4,
-          "what": "an SVG with script and outside references uploaded and shown in the editor, with a canary and a network log"
-        }
       ],
       "boundaries": ["host-page-to-element", "service-to-workers"],
       "specRows": ["Hostile images"]
