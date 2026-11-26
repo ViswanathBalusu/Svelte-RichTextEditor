@@ -30,9 +30,22 @@ import {
 import { startTestTsa, type TestTsa } from '../../../signing-service/test/support/tsa.ts';
 import { verifyDetached, verifyWithOpenssl } from '../../../signing-service/test/support/verify.ts';
 import { InProcessKeyService } from '../../../signing-service/test/support/world.ts';
+import { CscKeyService, cscCertificates } from '../../../signing-service/src/csc.ts';
+import { SigningService } from '../../../signing-service/src/service.ts';
+import { startCscServer } from '../../../signing-service/test/support/csc-server.ts';
 import { objectKeys } from '../../src/objects/store.ts';
 import { HttpSigningClient } from '../../src/workflow/signing-client.ts';
-import { extendFinalised, type ExtendDeps } from '../../src/workflow/extend-sealed.ts';
+import {
+  extendFinalised,
+  sealedRenewalSigner,
+  type ExtendDeps,
+} from '../../src/workflow/extend-sealed.ts';
+import { scheduleRenewals } from '../support/renewal-run.ts';
+import {
+  RENEWAL_KIND,
+  renewalHandler,
+  renewalJobId,
+} from '../../src/control-plane/jobs/workflow-renewal.ts';
 import { verifySealedPdf } from '../../../signing-service/src/verify-sealed.ts';
 import { MemoryAnchorStore } from '../../src/workflow/anchor-store.ts';
 import { MemorySealedPdfStore } from '../../src/workflow/sealed-store.ts';
@@ -166,6 +179,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             logged.push(f);
           },
         },
+        // A one-second lead: the service's own renewal job never finds an expiry due here; the
+        // renewal test below runs the schedule and the handler itself.
+        renewal: { leadMs: 1000, claimMs: 60_000 },
         finalSealing: {
           // The credential is read at each call, so that a test can send the worker's.
           signing: {
@@ -199,7 +215,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
                   classVersion: '1.0.0',
                   granularity: 'block',
                   unit: 'twip',
-                  pages: [],
+                  pages: [{ n: 1, setup: null, starts: null, opensWith: 'text' }],
                   blocks: {},
                   fields: { [SIGN_FIELD]: { page: 1, rect: [400, 3000, 2400, 3600] } },
                 }),
@@ -542,6 +558,176 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         ).toMatchObject({ ok: false, reason: 'tsa_unreachable', retryable: true });
         expect((await sealed.readLatest(w.ref.tenant, w.doc, w.workflowId))!.n).toBe(2);
         authority.current = new HttpTimestampAuthority(tsa.url);
+      },
+      300_000,
+    );
+    it.skipIf(skip !== null)(
+      'finalises with the signature of a provider reached through the CSC API, sends it only hashes, and records its level and signer as asserted by the provider (FRW-059)',
+      async () => {
+        authority.current = new HttpTimestampAuthority(tsa.url);
+        credential.current = DOCUMENT_SERVICE_SECRET;
+        // A second signing service whose operator key is held by a provider (a test double of the
+        // CSC API over the key of this test). The document service is pointed at it for this test.
+        const csc = await startCscServer({
+          key: ks,
+          otherKey: ks,
+          chain: [pki.seal, pki.intermediate],
+          credentialId: 'credential-1',
+          token: 'csc-token-for-tests',
+          subjectDN: 'CN=Ada Lovelace,O=Example Trust Services,C=GB',
+        });
+        const providerKey = new CscKeyService({
+          baseUrl: csc.url,
+          credentialId: 'credential-1',
+          provider: 'Example Trust Services',
+          level: 'advanced electronic signature (as the provider states it)',
+          accessToken: () => Promise.resolve('csc-token-for-tests'),
+          timeoutMs: 20_000,
+        });
+        const world2 = makeWorld({
+          operator: { id: 'operator-key', keyService: providerKey, pki },
+          tsaUrl: tsa.url,
+          timestamps: { stamp: (d) => authority.current.stamp(d) },
+        });
+        const server2 = createSigningServer(
+          new SigningService({
+            ...world2.config,
+            certificates: cscCertificates(new Map([['operator-key', providerKey]])),
+          }),
+          { maxBodyBytes: 5_000_000 },
+        );
+        await new Promise<void>((r) => server2.listen(0, '127.0.0.1', r));
+        const a2 = server2.address();
+        if (!a2 || typeof a2 === 'string') throw new Error('no address');
+        const native = url;
+        url = `http://127.0.0.1:${a2.port}`;
+        try {
+          const w = await complete();
+          await waitFor('finalised', async () => (await stateOf(w.ref)) === 'finalised');
+          const pdf = (await sealed.read(w.ref.tenant, w.doc, w.workflowId))!.bytes;
+          const reports = verifyWithOpenssl(pdf, pki);
+          expect(reports[0]!.main.ok, reports[0]!.main.detail).toBe(true);
+          expect((await verifySealedPdf(pdf, [pki.root])).ok).toBe(true);
+          // The provider was asked for hashes of 32 bytes and nothing else.
+          const signs = csc.requests.filter((r) => r.path === 'signatures/signHash');
+          expect(signs.length).toBeGreaterThan(0);
+          for (const s of signs) {
+            expect(Object.keys(s.body).sort()).toEqual(
+              ['credentialID', 'hash', 'hashAlgo', 'signAlgo'].sort(),
+            );
+            expect(Buffer.from((s.body['hash'] as string[])[0]!, 'base64')).toHaveLength(32);
+          }
+          expect(JSON.stringify(csc.requests)).not.toContain(w.doc);
+          // What the provider says about itself is on record, as asserted by the provider.
+          const asserted = () =>
+            h.parts.audit!.query(h.tenant, {
+              doc: w.doc,
+              kind: 'workflow.seal_provider_asserted',
+              limit: 5,
+            });
+          await waitFor('the assertion on record', async () => (await asserted()).length > 0);
+          expect((await asserted())[0]!.data).toEqual({
+            workflow: w.workflowId,
+            assertedBy: 'provider',
+            provider: 'Example Trust Services',
+            signatureLevel: 'advanced electronic signature (as the provider states it)',
+            signerIdentification: 'CN=Ada Lovelace,O=Example Trust Services,C=GB',
+          });
+          // A provider that is down leaves the workflow completed, with the alert, and nothing stored.
+          csc.fault = 'down';
+          const before = h.service.metrics.value('docedit_finalisation_stopped_total', {
+            reason: 'signing_unavailable',
+            code: 'signing_unavailable',
+            retryable: 'true',
+          });
+          const w2 = await complete();
+          await waitFor('the alert', () => {
+            const n = h.service.metrics.value('docedit_finalisation_stopped_total', {
+              reason: 'signing_unavailable',
+              code: 'signing_unavailable',
+              retryable: 'true',
+            });
+            return n > before;
+          });
+          expect(await stateOf(w2.ref)).toBe('completed');
+          expect(await sealed.read(w2.ref.tenant, w2.doc, w2.workflowId)).toBeNull();
+        } finally {
+          url = native;
+          await csc.close();
+          await new Promise<void>((r) => server2.close(() => r()));
+        }
+      },
+      300_000,
+    );
+    it.skipIf(skip !== null)(
+      'records the end of the seal time-stamp at finalisation, queues one renewal before it ends, and the renewal appends a further time-stamp (FRW-056 criterion 2)',
+      async () => {
+        authority.current = new HttpTimestampAuthority(tsa.url);
+        credential.current = DOCUMENT_SERVICE_SECRET;
+        const w = await complete();
+        await waitFor('finalised', async () => (await stateOf(w.ref)) === 'finalised');
+        const registry = h.parts.renewals!;
+
+        // The first expiry was recorded by the finalisation itself: the authority certificate's end.
+        await waitFor(
+          'the first expiry',
+          async () => (await registry.load(w.ref.tenant, w.doc)) !== null,
+        );
+        const first = (await registry.load(w.ref.tenant, w.doc))!.expiresAtMs;
+        expect(first).toBeGreaterThan(Date.now());
+        expect(await registry.start(w.ref.tenant, w.doc, first + 1)).toBe(false);
+        expect((await registry.load(w.ref.tenant, w.doc))!.expiresAtMs).toBe(first);
+
+        // Outside the lead time nothing is queued; inside it, one job for the expiry, however often.
+        const outside = { registry, queue: h.parts.queue, leadMs: 1000, now: () => Date.now() };
+        expect((await scheduleRenewals(outside, w.ref.tenant)).queued).toEqual([]);
+        const inside = { ...outside, leadMs: first - Date.now() + 1000 };
+        const queuedDocs = (await scheduleRenewals(inside, w.ref.tenant)).queued;
+        expect(queuedDocs).toContainEqual({ doc: w.doc, expiresAtMs: first });
+        await scheduleRenewals(inside, w.ref.tenant);
+        const jobId = renewalJobId(w.doc, first);
+        const job = (await h.parts.queue.get(w.ref.tenant, jobId))!;
+        expect(job).toMatchObject({ kind: RENEWAL_KIND, doc: w.doc, payload: { expiry: first } });
+
+        // The renewal appends a time-stamp over the sealed PDF. The test authority's certificate
+        // does not change, so the signer reports a later end, as a rotated certificate would.
+        const seq = jobs.find((j) => j.payload['doc'] === w.doc)!.payload['seq'] as number;
+        const real = sealedRenewalSigner(
+          {
+            workflows: h.parts.workflows!,
+            sealed,
+            signing: client(),
+            now: () => Date.now(),
+            retainMs: RETAIN_MS,
+          },
+          async () => seq,
+        );
+        const YEAR = 365 * 24 * 3600 * 1000;
+        const handler = renewalHandler({
+          store: registry,
+          signer: {
+            renew: async (tenant, doc, expected, key) => {
+              const out = await real.renew(tenant, doc, expected, key);
+              return out.ok ? { ok: true, newExpiresAtMs: out.newExpiresAtMs + YEAR } : out;
+            },
+          },
+          leadMs: inside.leadMs,
+          claimMs: 60_000,
+          now: () => Date.now(),
+        });
+        const ctx = undefined as never;
+        expect(await handler(job, ctx)).toEqual({ renewed: true, expiresAtMs: first + YEAR });
+        const latest = (await sealed.readLatest(w.ref.tenant, w.doc, w.workflowId))!;
+        expect(latest.n).toBe(1);
+        const proof = verifyWithOpenssl(latest.bytes, pki);
+        expect(proof.map((r) => r.signature.kind)).toEqual(['signature', 'document-time-stamp']);
+        expect((await verifySealedPdf(latest.bytes, [pki.root])).ok).toBe(true);
+
+        // The expiry has moved, so the document is not listed again: one time-stamp, one expiry.
+        expect((await registry.load(w.ref.tenant, w.doc))!.expiresAtMs).toBe(first + YEAR);
+        const after = (await scheduleRenewals(inside, w.ref.tenant)).queued;
+        expect(after.find((d) => d.doc === w.doc)).toBeUndefined();
+        expect((await sealed.readLatest(w.ref.tenant, w.doc, w.workflowId))!.n).toBe(1);
       },
       300_000,
     );
