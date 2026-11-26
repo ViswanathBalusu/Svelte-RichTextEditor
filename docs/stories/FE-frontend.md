@@ -2449,6 +2449,8 @@ As an author, I want a thousand-page document to scroll and edit smoothly, so th
 
 **Notes (lane w1, 2026-11-18):** Checked again after the merge of `stories/integration`; criteria 4 and 5 stay open. Owner decision 26 (docs/owner-decisions-2026-11-15.md) confirms the page view is built, so these two are real targets, but both need a measurement this lane cannot make honestly. Criterion 4: 'usable' still has no measurable definition in the story (FE-102 holds the page view's budgets and is open), and `fe-092-scale.universal.test.ts` already shows the window stays at most 4 pages over 1,000 pages in three engines; a time on this development machine would not be the reference machine's (decision 22 keeps the tolerances provisional until a dedicated runner measures them). Criterion 5: a page cannot read a browser's total memory, and the only thing built to measure is the painter and the layout without the editor, so a figure would not be the editor's memory for a 100-page document. Needs from others: FE-102's budgets, the page view mounted in the element (FE-101), and a run on the reference machine.
 
+**Notes (lane w1, 2026-11-26):** Nothing new ticked. Criteria 4 and 5 are targets that need a measurement on the reference machine: a 1,000-page scroll (fe-092-scale.universal.test.ts shows at most 4 pages mounted, but no time) and a 100-page memory figure (a page cannot read total browser memory). The page view is mounted (FE-101), but this machine is not the reference, and the budgets are FE-102 (open).
+
 ### FE-093 Provide an interactive overlay layer
 
 | Type | Phase | Size | Priority | Persona |
