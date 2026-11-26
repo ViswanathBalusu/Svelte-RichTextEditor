@@ -61,3 +61,7 @@ Bad:
 ## Revisit when
 
 Customer templates become a requirement, or preview cost at scale justifies a second, faster writer.
+
+## Sandbox technology
+
+The sandbox of the compile workers is gVisor (owner decision 146, 2026-11-15), recorded in ADR 0434 (`docs/adr/0434-w2-EXP-069-sandbox-technology.md`). The measurements of the alternatives are outstanding.
