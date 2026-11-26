@@ -102,10 +102,10 @@ export interface ExportServiceOptions {
 }
 
 /** True when the body of a document holds a placeholder for a region hidden from the reader. */
-export function hasHiddenRegion(content: {
-  readonly doc?: { readonly content?: readonly { readonly content?: readonly unknown[] }[] };
-}): boolean {
-  const top = content.doc?.content;
+export function hasHiddenRegion(content: { readonly doc?: unknown }): boolean {
+  const doc = content.doc as
+    { readonly content?: readonly { readonly content?: readonly unknown[] }[] } | undefined;
+  const top = doc?.content;
   const body = top?.[top.length - 1];
   return (body?.content ?? []).some(
     (node) => (node as { type?: unknown } | null)?.type === 'hidden_region',
