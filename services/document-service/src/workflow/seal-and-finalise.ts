@@ -30,6 +30,7 @@ import type { WorkflowResourceView } from './workflow-resource.ts';
 import type {
   AppearanceReport,
   AppearanceRequest,
+  ProviderAssertionFacts,
   SigningClient,
   SigningFailure,
 } from './signing-client.ts';
@@ -79,6 +80,10 @@ export type SealAndFinaliseOutcome =
       readonly attempts: number;
       /** The time in the seal's time-stamp token: the third party's time. */
       readonly timestampTime: Date;
+      /** The end of the newest time-stamp's validity, when the signing service said (FRW-056). */
+      readonly expiresAtMs?: number;
+      /** What a signature provider asserts about its signature, when one signed (FRW-059). */
+      readonly provider?: ProviderAssertionFacts;
       /** What was drawn at the fields and what was not, when appearances were asked for. */
       readonly appearances?: AppearanceReport;
       readonly final: Extract<FinaliseSealedOutcome, { readonly ok: true }>;
@@ -138,6 +143,8 @@ export async function sealAndFinalise(
         sealed: true,
         attempts,
         timestampTime: out.timestampTime,
+        ...(out.expiresAtMs !== undefined ? { expiresAtMs: out.expiresAtMs } : {}),
+        ...(out.provider ? { provider: out.provider } : {}),
         ...(out.appearances ? { appearances: out.appearances } : {}),
         final,
       };

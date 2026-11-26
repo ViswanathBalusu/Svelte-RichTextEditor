@@ -24,10 +24,13 @@ export class MemoryRenewalStore implements RenewalStore, RenewalDueSource {
   }
 
   /** Records the expiry of the newest time-stamp of a document that was just sealed. */
-  async start(tenant: string, doc: string, expiresAtMs: number): Promise<void> {
+  async start(tenant: string, doc: string, expiresAtMs: number): Promise<boolean> {
+    if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= 0)
+      throw new RangeError('expiresAtMs must be a positive safe integer of milliseconds');
     const k = MemoryRenewalStore.#key(tenant, doc);
-    if (this.#rows.has(k)) throw new Error('the document already has a time-stamp chain');
+    if (this.#rows.has(k)) return false;
     this.#rows.set(k, { expiresAtMs, holder: null, untilMs: null });
+    return true;
   }
 
   async load(tenant: string, doc: string): Promise<RenewalState | null> {

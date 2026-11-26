@@ -401,7 +401,10 @@ export class CommandRegistry {
     access: AccessSummary | undefined,
     features: ReadonlySet<string>,
   ): CommandState {
-    if (entry.feature !== undefined && !features.has(entry.feature))
+    if (
+      (entry.feature !== undefined && !features.has(entry.feature)) ||
+      (entry.also?.some((f) => !features.has(f)) ?? false)
+    )
       return {
         offered: false,
         enabled: false,

@@ -322,6 +322,7 @@ export {
   type PageBounds,
   type Rect,
 } from './workflow/appearance.ts';
+export { validateLayoutFile } from './workflow/layout-file.ts';
 // Time-stamp renewal of a sealed workflow (FRW-056 criteria 2 and 5; lane V-FRW-055-072).
 export {
   applyRenewalResult,

@@ -96,7 +96,15 @@ PostgreSQL run.
 
 The database outage is the service's fault hook, not a stopped database container: the service refuses writes as it would for an unreachable database, but the connection pool and the container are not touched. A run that stops the PostgreSQL container is not part of this harness yet.
 
-## Not measured
+## A 20-page export (target: 95th percentile 10 seconds, empty queue)
 
-- A 20-page export (criterion 3 of FND-009). The export path needs the export worker and its sandbox (BE-005 stack); the harness has no scenario for it.
+Added on 2026-11-26 (lane w5). The script is `services/export-worker/scripts/fnd-009-export.ts`; the result is `docs/research/2026-11-26-fnd-009-export.json`.
+
+- Command: `node scripts/fnd-009-export.ts --runs 20 --out ...` from `services/export-worker`. The service and the export worker run in one Node.js 22.18 process, on memory storage, with the real Podman sandbox (image `localhost/docedit-export-worker:s4`, the single-use container of EXP-070). Each run creates a document, posts `POST /v1/documents/{id}/exports` and polls `GET /v1/exports/{id}` every 25 ms until `completed`. Runs are sequential, so the queue is empty at each start. The time is from the post to the poll that sees `completed`: it covers queueing, conversion, the sandbox start, the compile passes, storing the outputs and the poll interval.
+- Document: 120 sections (a heading and a paragraph of about 70 words each), no table of contents; the job result reports 20 pages in every run. Found by a probe export that is not counted.
+- Machine: the development machine above (i9-10900KF, 20 logical CPUs, 128 GiB, Windows 11, Podman). It was not idle: other agents ran builds and test suites on it, and the processor was at 100 % before the run and 36 % after it. This is not the reference machine of ADR 0037.
+- Result (20 runs, none failed): minimum 10.4 s, median 13.0 s, 95th percentile 28.5 s, maximum 34.6 s. Samples in order, in ms: 10821, 10550, 11276, 12810, 12965, 12731, 12997, 11365, 15280, 34592, 15547, 24285, 27939, 28498, 15254, 13806, 13810, 11314, 10503, 10443. A trial of 3 runs earlier on the same loaded machine gave 11.0 to 12.3 s.
+- Reading: the target of 10 s at the 95th percentile is **not met** here. Even the fastest run (10.4 s) is above it, and the spread (10 to 35 s) follows the machine's load, so the 95th percentile of this run says little about an idle machine. A repeat on a quiet machine, and then on the reference machine, is needed before the figure means anything. The script prints no per-stage times; the worker's own metrics (`onMetrics`, EXP-064) would say where the time goes.
+
+## Not measured
 - Anything on the reference machine of ADR 0037, on a network, or on more than one node.

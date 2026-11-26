@@ -37,17 +37,22 @@ export class PgRenewalStore implements RenewalStore, RenewalDueSource {
     this.#pool = pool;
   }
 
-  /** Records the expiry of the newest time-stamp of a document that was just sealed. */
-  async start(tenant: string, doc: string, expiresAtMs: number): Promise<void> {
+  /**
+   * Records the expiry of the newest time-stamp of a document that was just sealed. A document
+   * already recorded is left as it is (a run that is repeated starts nothing twice); the answer says
+   * whether this call recorded it.
+   */
+  async start(tenant: string, doc: string, expiresAtMs: number): Promise<boolean> {
     requireMs('expiresAtMs', expiresAtMs);
-    await inTenant(this.#pool, tenant, (c) =>
+    const r = await inTenant(this.#pool, tenant, (c) =>
       c.query(
-        `INSERT INTO ${WORKFLOW_RENEWAL_STATE_TABLE} (tenant_id, doc_id, expires_at_ms) VALUES ($1, $2, $3)`,
+        `INSERT INTO ${WORKFLOW_RENEWAL_STATE_TABLE} (tenant_id, doc_id, expires_at_ms)
+         VALUES ($1, $2, $3) ON CONFLICT (tenant_id, doc_id) DO NOTHING`,
         [tenant, doc, expiresAtMs],
       ),
     );
+    return (r.rowCount ?? 0) === 1;
   }
-
   async load(tenant: string, doc: string): Promise<RenewalState | null> {
     const r = await inTenant(
       this.#pool,

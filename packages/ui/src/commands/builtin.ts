@@ -30,8 +30,8 @@ export const CONTEXT_GROUPS = ['table', 'picture', 'story', 'field'] as const;
 export const HEADER_GROUP = 'header';
 
 /**
- * Field kinds of the palette (12 §3.2; FRW-072), in the spec's order, with the feature that offers
- * each: the five kinds of phase 1b always, the signing kinds with `sign`, the formula with `rules`.
+ * Field kinds of the palette (12 §3.2; FRW-072), in the spec's order, with the feature each needs in
+ * addition to `fields`: the five kinds of phase 1b none, the signing kinds `sign`, the formula `rules`.
  * This list is the palette: each kind is an `insert.field.<kind>` command, and the registry offers
  * it only when the feature is announced. Whether a field may go at the selection is the query
  * `canInsertField` (`fieldInsertSource` in queries.ts, then the core).
@@ -245,7 +245,10 @@ export function coreCommands(): Entry[] {
       changesContent: true,
       capability: 'fields-and-forms',
       needs: 'insertField',
-      ...(feature ? { feature } : {}),
+      // Every field command needs the fields port; a signing kind needs sign as well and the
+      // formula `rules` (FRW-065 criterion 3).
+      feature: 'fields',
+      ...(feature ? { also: [feature] } : {}),
       run: ({ core }) => named(core, 'insertField', { kind }),
     })),
   ];
@@ -538,6 +541,7 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       group: 'view',
       active: 'shell.pane.fields',
       changesContent: false,
+      feature: 'fields',
       capability: 'fields-and-forms',
       toolbar: false,
       run: () => host.togglePane('fields'),
@@ -548,6 +552,8 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       group: 'view',
       active: 'shell.pane.rules',
       changesContent: false,
+      feature: 'fields',
+      also: ['rules'],
       capability: 'fields-and-forms',
       toolbar: false,
       run: () => host.togglePane('rules'),
@@ -558,6 +564,7 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       group: 'view',
       active: 'shell.pane.roles',
       changesContent: false,
+      feature: 'fields',
       capability: 'fields-and-forms',
       toolbar: false,
       run: () => host.togglePane('roles'),
@@ -569,6 +576,7 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       group: 'view',
       active: 'shell.pane.fill',
       changesContent: false,
+      feature: 'fields',
       capability: 'fields-and-forms',
       toolbar: false,
       run: () => host.togglePane('fill'),
@@ -694,6 +702,7 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       label: 'command.workflow.send',
       group: 'review',
       changesContent: false,
+      feature: 'workflow',
       capability: 'fields-and-forms',
       run: () => host.openDialog('send'),
     },
