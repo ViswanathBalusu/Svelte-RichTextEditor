@@ -96,10 +96,17 @@ describe('the compose definition (UX-091 criterion 1 in part; BE-005 criterion 4
   });
 
   it('has a development mail sink, pinned by digest, and the host sends to it (UX-098 criterion 5)', async () => {
+    // The image is named once, in the shared container file, which the demo's service extends
+    // (FND-010 criterion 2).
     const compose = JSON.parse(await readFile(join(APP_DIR, 'compose.json'), 'utf8')) as {
+      services: Record<string, { extends?: { file: string; service: string } }>;
+    };
+    const mail = compose.services['mail']?.extends;
+    expect(mail?.service).toBe('mail');
+    const base = JSON.parse(await readFile(join(APP_DIR, mail!.file), 'utf8')) as {
       services: Record<string, { image?: string }>;
     };
-    expect(compose.services['mail']?.image).toMatch(
+    expect(base.services['mail']?.image).toMatch(
       /^docker\.io\/axllent\/mailpit:v[\d.]+@sha256:[0-9a-f]{64}$/,
     );
     const s = stackSettings({});
