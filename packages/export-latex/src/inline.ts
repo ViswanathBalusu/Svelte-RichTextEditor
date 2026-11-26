@@ -5,7 +5,9 @@
  */
 import {
   dateFieldText,
+  paragraphGap,
   referenceText,
+  type GapSide,
   valueText,
   type ResolvedParagraph,
   type RunProperties,
@@ -433,7 +435,15 @@ function footnoteParts(ctx: Ctx, n: J): { para: J | null; inlines: J[]; blockId:
   return { para, inlines, blockId: idOf(para ?? undefined) ?? idOf(n) };
 }
 
-function footnoteText(ctx: Ctx, n: J): { fn: number; props: Tex; body: Tex } {
+/**
+ * The footnote paragraph written last in each conversion, for the gap between two notes. TeX knows
+ * which notes share a page and the converter does not, so the gap is the one between a note and the
+ * note before it in the document (the larger of the two spacings, 03 §7), and the first note gets
+ * its own `spaceBefore`. On a page that starts with a later note the gap is a little large.
+ */
+const lastNote = new WeakMap<Ctx, GapSide | null>();
+
+function footnoteText(ctx: Ctx, n: J): { fn: number; props: Tex; body: Tex; gap: number } {
   const { para, inlines, blockId } = footnoteParts(ctx, n);
   const fn = register(ctx, blockId, para ? 'footnoteParagraph' : 'footnote', idOf(n));
   const attrs = { ...(para?.attrs ?? {}) };
@@ -452,7 +462,21 @@ function footnoteText(ctx: Ctx, n: J): { fn: number; props: Tex; body: Tex } {
   const label = blockId ? ctx.labels.lists.get(blockId) : undefined;
   const lab = label && label.kind !== 'none' && label.text !== '' ? [text(`${label.text} `)] : [];
   const body = ownLines(fn, join([...lab, ...paragraphBody(ctx, inlines, inner)], t('%\n')));
-  return { fn, props: f.tex, body };
+  const p0 = f.resolved.properties;
+  const side: GapSide = {
+    styleId: f.resolved.styleId,
+    spaceBefore: p0.spaceBefore,
+    spaceAfter: p0.spaceAfter,
+    contextualSpacing: p0.contextualSpacing,
+  };
+  const gap = paragraphGap(lastNote.get(ctx) ?? null, side);
+  lastNote.set(ctx, side);
+  return { fn, props: f.tex, body, gap };
+}
+
+/** The gap before a note, for the class to put above the note's first line (empty when 0). */
+function noteGap(gap: number): Tex {
+  return gap > 0 ? tex`\DEfngap{${dimen(gap, { min: 0, max: 31680 })}}` : EMPTY;
 }
 
 function footnote(ctx: Ctx, n: J, st: InlineState): Tex {
@@ -465,15 +489,16 @@ function footnote(ctx: Ctx, n: J, st: InlineState): Tex {
     st.off += 1;
     return EMPTY;
   }
-  const { fn, props, body } = footnoteText(ctx, n);
+  const { fn, props, body, gap } = footnoteText(ctx, n);
   const off = st.off;
   st.off += 1;
   // `\footnote` where LaTeX allows it: a paragraph of the body flow (EXP-029 criterion 1).
-  if (st.place === 'body') return tex`\DEfn{${int(off)}}{${int(fn)}}{${mark}}{${props}}{${body}}`;
+  if (st.place === 'body')
+    return tex`${noteGap(gap)}\DEfn{${int(off)}}{${int(fn)}}{${mark}}{${props}}{${body}}`;
   // Elsewhere the mark and the text are apart: a table cell and a caption set the text right after
   // the mark, and a heading (a moving argument) sets it after the heading.
   const out = tex`\DEfnmark{${int(off)}}{${int(fn)}}{${mark}}`;
-  const note = tex`\DEfntext{${int(fn)}}{${mark}}{${props}}{${body}}`;
+  const note = tex`${noteGap(gap)}\DEfntext{${int(fn)}}{${mark}}{${props}}{${body}}`;
   if (st.place === 'heading') {
     st.deferred.push(note);
     return out;

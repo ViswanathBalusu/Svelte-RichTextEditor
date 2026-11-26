@@ -85,7 +85,6 @@ const MEASURES: Record<string, readonly Measure[]> = {
       from: 'p01xxxxxxxxxxxxx',
       to: 'p02xxxxxxxxxxxxx',
       expected: 280,
-      open: 'the leading gap of a cell adds one more line, 533 twips measured',
     },
     { what: 'gap inside a cell', from: 'p02xxxxxxxxxxxxx', to: 'p03xxxxxxxxxxxxx', expected: 240 },
     // Trailing gap of the cell (160) and the gap below the table (120).
@@ -94,7 +93,6 @@ const MEASURES: Record<string, readonly Measure[]> = {
       from: 'p03xxxxxxxxxxxxx',
       to: 'p05xxxxxxxxxxxxx',
       expected: 280,
-      open: 'the trailing gap of a cell is not placed, 120 twips measured',
     },
     // The second cell starts with a gap of 0 where the first has 120: the two cells sit side by side.
     {
@@ -102,7 +100,6 @@ const MEASURES: Record<string, readonly Measure[]> = {
       from: 'p02xxxxxxxxxxxxx',
       to: 'p04xxxxxxxxxxxxx',
       expected: -120,
-      open: 'the leading gap of a cell adds one more line, -373 twips measured',
     },
   ],
   'table-style-in-cells': [
@@ -127,7 +124,6 @@ const MEASURES: Record<string, readonly Measure[]> = {
       from: 'fp01xxxxxxxxxxxx',
       to: 'fp02xxxxxxxxxxxx',
       expected: 60,
-      open: 'the converter writes no gap in a footnote, 0 twips measured',
     },
   ],
   'footnote-edges': [
@@ -138,7 +134,6 @@ const MEASURES: Record<string, readonly Measure[]> = {
       from: 'p01xxxxxxxxxxxxx',
       to: 'fp01xxxxxxxxxxxx',
       expected: 40,
-      open: 'the converter writes no gap in a footnote, 0 twips measured',
     },
   ],
   'story-edges': [

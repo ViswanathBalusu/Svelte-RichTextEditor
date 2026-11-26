@@ -198,7 +198,7 @@ export function paragraph(ctx: Ctx, flow: Flow, p: J): void {
       flow.prev = null;
       flow.pageTop = true;
     }
-    gap(ctx, flow, side);
+    const lead = gap(ctx, flow, side, !isList && !heading);
     const st = newInlineState(ctx, p.content, {
       blockId: id,
       para: r,
@@ -244,7 +244,9 @@ export function paragraph(ctx: Ctx, flow: Flow, p: J): void {
     } else {
       const macro =
         flow.place === 'cell' ? t('\\DEcp') : flow.place === 'story' ? t('\\DEsp') : t('\\DEp');
-      line(ctx, tex`${macro}{${int(n)}}{${f.tex}}{${pre}%`);
+      if (lead > 0)
+        line(ctx, tex`\DEcpg{${int(n)}}{${dimen(lead, { min: 0, max: 31680 })}}{${f.tex}}{${pre}%`);
+      else line(ctx, tex`${macro}{${int(n)}}{${f.tex}}{${pre}%`);
       for (const b of body) line(ctx, tex`${b}%`);
       line(ctx, t('}'));
     }

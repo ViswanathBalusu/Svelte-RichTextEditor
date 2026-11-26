@@ -56,12 +56,18 @@ export function closeLists(ctx: Ctx, flow: Flow, keep: (f: ListFrame) => boolean
   }
 }
 
-/** Writes the gap before a block (`below` null for a block that is not a paragraph). */
-export function gap(ctx: Ctx, flow: Flow, below: GapSide | null): void {
+/**
+ * Writes the gap before a block (`below` null for a block that is not a paragraph). With `lead`, the
+ * gap above the first paragraph of a table cell is not written but returned, in twips, for the
+ * paragraph to take as `\DEcpg` (a plain `\vskip` first in a cell would move the cell's reference
+ * point, so the cell would not stand on the row's baseline as its neighbours do).
+ */
+export function gap(ctx: Ctx, flow: Flow, below: GapSide | null, lead = false): number {
   const g = paragraphGap(flow.prev, below);
   if (flow.keepNext) line(ctx, t('\\DEkeep'));
   flow.keepNext = false;
-  if (g > 0)
+  const inCell = lead && flow.place === 'cell' && flow.prev === null;
+  if (g > 0 && !inCell)
     line(
       ctx,
       flow.pageTop
@@ -69,13 +75,17 @@ export function gap(ctx: Ctx, flow: Flow, below: GapSide | null): void {
         : tex`\DEgap{${dimen(g, { min: 0, max: 31680 })}}`,
     );
   flow.pageTop = false;
+  return inCell && g > 0 ? g : 0;
 }
 
 /** The gap after the last block of a cell or a story: it counts in the container's height. */
 export function endGap(ctx: Ctx, flow: Flow): void {
   closeLists(ctx, flow, () => false);
   const g = paragraphGap(flow.prev, null);
-  if (g > 0 && flow.place !== 'body') line(ctx, tex`\DEgap{${dimen(g, { min: 0, max: 31680 })}}`);
+  if (g <= 0 || flow.place === 'body') return;
+  // A cell is a column box that ends with `\unskip`, which would remove a glue: a kern stays.
+  if (flow.place === 'cell') line(ctx, tex`\DEcellend{${dimen(g, { min: 0, max: 31680 })}}`);
+  else line(ctx, tex`\DEgap{${dimen(g, { min: 0, max: 31680 })}}`);
 }
 
 /** Sets the blocks of a container; injected into the table and story writers. */
