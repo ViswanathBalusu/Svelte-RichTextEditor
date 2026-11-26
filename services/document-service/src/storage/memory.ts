@@ -45,6 +45,8 @@ interface MemoryDocument {
   owner: string | null;
   perms: PermissionState;
   history: PermissionState[];
+  /** The grants revision a workflow transition raised, by its key (FRW-030; ChangeOptions.transition). */
+  transitions?: Map<string, number>;
   retired: Map<string, number>;
 }
 
@@ -496,6 +498,12 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     opts: ChangeOptions,
   ): Promise<PermissionState> {
     const d = this.#get(ref);
+    // A transition repeated after a stop finds the revision its first attempt raised (FRW-030).
+    if (opts.transition !== undefined) {
+      const raised = d.transitions?.get(opts.transition);
+      const found = raised === undefined ? undefined : d.history.find((h) => h.revision === raised);
+      if (found) return clone(found);
+    }
     if (opts.ifRevision !== undefined && opts.ifRevision !== d.perms.revision)
       throw new RevisionConflictError(
         `the grants revision is ${d.perms.revision}, not ${opts.ifRevision}`,
@@ -510,6 +518,8 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     if (bad) throw new RetiredRegionError(`region ${bad} is retired`);
     d.perms = applyChange(d.perms, change, d.perms.revision + 1);
     d.history.push(d.perms);
+    if (opts.transition !== undefined)
+      (d.transitions ??= new Map()).set(opts.transition, d.perms.revision);
     return clone(d.perms);
   }
 }
