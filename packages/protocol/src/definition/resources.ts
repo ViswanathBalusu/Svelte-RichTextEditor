@@ -33,7 +33,7 @@ import {
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /** User token (05 §3.1) or service credential (05 §3.2). */
-export type Credential = 'user' | 'service';
+export type Credential = 'user' | 'service' | 'operator';
 
 export interface SuccessDef {
   /**
@@ -95,6 +95,8 @@ export const PATH_PARAMS: Readonly<Record<string, Prop>> = {
 const PRO = 'PRO';
 const BOTH: readonly Credential[] = ['user', 'service'];
 const SERVICE: readonly Credential[] = ['service'];
+/** The operator credential (decision 68): for every tenant, never for a user's token. */
+const OPERATOR: readonly Credential[] = ['operator'];
 /* @__NO_SIDE_EFFECTS__ */
 const placeholder = (doc: string, gaps: string[], props: Record<string, Prop> = {}): Shape =>
   obj(props, { doc: `${doc} Placeholder: not defined by the prose.`, gaps, decisions: ['D26'] });
@@ -1162,6 +1164,89 @@ export const REST_SHAPES: readonly NamedShape[] = [
         doc: 'The quota values of a tenant; a dimension is null when no value is set (UX-078; 06 section 12).',
         spec: '06 §12; 13 §10',
       },
+    ),
+    'UX',
+  ),
+  // The tenants, their usage and their sealing keys (UX-076; owner decisions 68, 69 and 112). The
+  // shapes are proposals, recorded in docs/adr/0371-w3-UX-076-admin-api-contract.md: the spec gives
+  // no body for them. A tenant is managed with the operator credential only.
+  named(
+    'TenantView',
+    obj(
+      {
+        id: req(text({ minLength: 1 }), 'The tenant identifier, as the control plane assigns it.'),
+        name: req(text({ minLength: 1, maxLength: 200 }), 'The name the operator gave the tenant.'),
+        state: req(
+          enm(['active', 'suspended']),
+          'A suspended tenant is refused at the door; its data is kept (UX-076).',
+        ),
+        createdAt: req(text(), 'When the tenant was registered (RFC 3339, UTC).'),
+      },
+      { doc: 'A tenant (UX-076; 13 section 10).', spec: '13 §10; 06 §12' },
+    ),
+    'UX',
+  ),
+  named(
+    'TenantRegistration',
+    obj(
+      { name: req(text({ minLength: 1, maxLength: 200 }), 'The name of the new tenant.') },
+      { doc: 'The body that registers a tenant (UX-076).', spec: '13 §10; 06 §12' },
+    ),
+    'UX',
+  ),
+  named(
+    'TenantUpdate',
+    obj(
+      {
+        name: opt(text({ minLength: 1, maxLength: 200 }), 'A new name.'),
+        state: opt(enm(['active', 'suspended']), 'Suspends or resumes the tenant.'),
+      },
+      { doc: 'The fields of a tenant an operator may change (UX-076).', spec: '13 §10; 06 §12' },
+    ),
+    'UX',
+  ),
+  // One figure for each quota dimension of QuotaSettings, over one calendar month in UTC (decision
+  // 69). The figures count; they carry no document content and no personal data.
+  named(
+    'UsageView',
+    obj(
+      {
+        month: req(
+          text({ pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$' }),
+          'The calendar month, UTC, as YYYY-MM.',
+        ),
+        connections: req(int({ min: 0 }), 'The most connections held at once in the month.'),
+        openDocuments: req(int({ min: 0 }), 'The most documents open at once in the month.'),
+        commitRate: req(int({ min: 0 }), 'The most commits made in one window in the month.'),
+        roomCpuBudget: req(int({ min: 0 }), 'The most room CPU milliseconds spent in one window.'),
+        storage: req(
+          int({ min: 0 }),
+          'Storage used at the end of the month, or now for this month.',
+        ),
+        exportConcurrency: req(int({ min: 0 }), 'The most export jobs run at once in the month.'),
+        exportMinutes: req(int({ min: 0 }), 'Export minutes used in the month.'),
+      },
+      {
+        doc: 'The usage of a tenant in one calendar month, UTC (UX-076; decision 69).',
+        spec: '06 §12; 13 §10',
+      },
+    ),
+    'UX',
+  ),
+  // The sealing keys of PDF signatures (10 section 6), a section of their own beside the token keys
+  // (decision 112). Only public facts are shown; production custody of the keys is open (decisions
+  // 221 to 223 allow development choices only), so there is no write route yet.
+  named(
+    'SealingKeyView',
+    obj(
+      {
+        kid: req(text({ minLength: 1 }), 'The key identifier.'),
+        alg: req(enm(['ES256', 'EdDSA', 'RS256']), 'The algorithm the key signs with.'),
+        thumbprint: req(text(), 'The thumbprint of the certificate that carries the public key.'),
+        subject: req(text(), 'The subject of that certificate.'),
+        notAfter: req(text(), 'When the certificate expires (RFC 3339, UTC).'),
+      },
+      { doc: 'A PDF sealing key of a tenant, public facts only (UX-076).', spec: '10 §6; 13 §10' },
     ),
     'UX',
   ),
@@ -2446,6 +2531,82 @@ export const OPERATIONS: readonly OperationDef[] = [
     body: ref('QuotaSettings'),
     ifMatch: 'required',
     success: ok(ref('QuotaSettings'), { etag: true }),
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'listTenants',
+    method: 'GET',
+    path: '/tenants',
+    summary: 'The tenants of the service, for an operator (UX-076).',
+    spec: '13 §10; 06 §12',
+    security: OPERATOR,
+    requires: 'Operator credential',
+    success: list(ref('TenantView')),
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'createTenant',
+    method: 'POST',
+    path: '/tenants',
+    summary: 'Registers a tenant; audited (UX-076).',
+    spec: '13 §10; 06 §12',
+    security: OPERATOR,
+    requires: 'Operator credential',
+    body: ref('TenantRegistration'),
+    idempotencyKey: true,
+    success: created(ref('TenantView')),
+    codes: ['idempotency_mismatch'],
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'getTenant',
+    method: 'GET',
+    path: '/tenants/{tenantId}',
+    summary: 'One tenant, for an operator (UX-076).',
+    spec: '13 §10; 06 §12',
+    security: OPERATOR,
+    requires: 'Operator credential',
+    params: { tenantId: req(text({ minLength: 1 }), 'The tenant identifier.') },
+    success: ok(ref('TenantView'), { etag: true }),
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'updateTenant',
+    method: 'PATCH',
+    path: '/tenants/{tenantId}',
+    summary: 'Renames, suspends or resumes a tenant; audited (UX-076).',
+    spec: '13 §10; 06 §12',
+    security: OPERATOR,
+    requires: 'Operator credential',
+    params: { tenantId: req(text({ minLength: 1 }), 'The tenant identifier.') },
+    body: ref('TenantUpdate'),
+    ifMatch: 'required',
+    success: ok(ref('TenantView'), { etag: true }),
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'getTenantUsage',
+    method: 'GET',
+    path: '/usage',
+    summary: 'The tenant usage in one calendar month, UTC; this month when none is given (UX-076).',
+    spec: '06 §12; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    query: {
+      month: opt(text({ pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$' }), 'The month, as YYYY-MM.'),
+    },
+    success: ok(ref('UsageView')),
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'listSealingKeys',
+    method: 'GET',
+    path: '/sealing-keys',
+    summary: 'The PDF sealing keys of the tenant, public facts only (UX-076).',
+    spec: '10 §6; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    success: list(ref('SealingKeyView')),
     owner: 'UX',
   }),
   op({

@@ -88,9 +88,13 @@ describe('the OpenAPI document: conditional and idempotent requests (PRO-002 cri
 });
 
 describe('the OpenAPI document: credentials of every route (PRO-002 criterion 3)', () => {
-  const SCHEMES = ['userToken', 'serviceCredential'];
+  const SCHEMES = ['userToken', 'serviceCredential', 'operatorCredential'];
   const serviceOnly = (o: Operation): boolean =>
     o.schemes.length > 0 && o.schemes.every((s) => s.length === 1 && s[0] === 'serviceCredential');
+  // The routes of the operator row name the operator credential alone (UX-076; decision 68).
+  const operatorRoutes = permissions.matrix
+    .filter((r) => r.requirement.kind === 'operator')
+    .flatMap((r) => r.routes);
   const publicRoutes = permissions.unmatrixedRoutes
     .filter((r) => r.class === 'public')
     .map((r) => r.route);
@@ -102,6 +106,10 @@ describe('the OpenAPI document: credentials of every route (PRO-002 criterion 3)
     for (const o of operations) {
       if (publicRoutes.includes(o.route)) {
         expect(o.schemes, o.route).toEqual([]);
+        continue;
+      }
+      if (operatorRoutes.includes(o.route)) {
+        expect(o.schemes, o.route).toEqual([['operatorCredential']]);
         continue;
       }
       expect(o.schemes.length, o.route).toBeGreaterThan(0);
@@ -120,6 +128,7 @@ describe('the OpenAPI document: credentials of every route (PRO-002 criterion 3)
   it('marks as service credential only exactly the routes of the service row of the matrix', () => {
     const row = permissions.matrix.filter((r) => r.requirement.kind === 'service');
     expect(row.length).toBe(1);
+    expect(operatorRoutes.length).toBeGreaterThan(0);
     const expected = [...row[0]!.routes].sort();
     expect(expected.length).toBeGreaterThan(0);
     expect(
@@ -133,7 +142,7 @@ describe('the OpenAPI document: credentials of every route (PRO-002 criterion 3)
   it('accepts the user token on every route of every other row and classification', () => {
     const userRoutes = [
       ...permissions.matrix
-        .filter((r) => r.requirement.kind !== 'service')
+        .filter((r) => r.requirement.kind !== 'service' && r.requirement.kind !== 'operator')
         .flatMap((r) => r.routes),
       ...permissions.unmatrixedRoutes.filter((r) => r.class !== 'public').map((r) => r.route),
     ];
@@ -151,6 +160,7 @@ describe('the OpenAPI document: credentials of every route (PRO-002 criterion 3)
     const covered = new Set([
       ...userRoutes,
       ...permissions.matrix.flatMap((r) => r.routes),
+      ...operatorRoutes,
       ...publicRoutes,
     ]);
     expect(operations.map((o) => o.route).filter((r) => !covered.has(r))).toEqual([]);
@@ -200,6 +210,10 @@ describe('the OpenAPI document: every route is complete (PRO-002 criterion 1)', 
     'GET /workflow/capture-settings',
     'PUT /workflow/capture-settings',
   ];
+  // The routes of the operator row name the operator credential alone (UX-076; decision 68).
+  const operatorRoutes = permissions.matrix
+    .filter((r) => r.requirement.kind === 'operator')
+    .flatMap((r) => r.routes);
   const publicRoutes = permissions.unmatrixedRoutes
     .filter((r) => r.class === 'public')
     .map((r) => r.route);

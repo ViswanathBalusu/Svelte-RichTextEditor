@@ -96,6 +96,8 @@ function serviceRoutes(doc: string): Array<[string, string, unknown]> {
     ['DELETE', '/origins/https%3A%2F%2Fa.example.test', undefined],
     ['POST', '/keys', {}],
     ['DELETE', '/keys/some-key', undefined],
+    ['GET', '/usage', undefined],
+    ['GET', '/sealing-keys', undefined],
     ['POST', `/documents/${doc}/imports`, { asset: uuid7(), format: 'docx' }],
     ['PUT', `/documents/${doc}/content`, { cdm: 1, requires: [], doc: {} }],
     ['POST', `/documents/${doc}/fork`, {}],
@@ -370,6 +372,8 @@ export const AUTHZ: ProfileDef = {
           'DELETE /origins/{origin}',
           'POST /keys',
           'DELETE /keys/{kid}',
+          'GET /usage',
+          'GET /sealing-keys',
           'POST /documents/{id}/imports',
           'PUT /documents/{id}/content',
           'POST /documents/{id}/fork',
@@ -418,6 +422,50 @@ export const AUTHZ: ProfileDef = {
           'POST /tokens with the service credential',
           { body: { sub: ctx.sub('minted'), docs: { [doc]: 'viewer' } } },
         );
+      },
+    }),
+    a({
+      id: 'operator',
+      title: 'row 14: the tenant routes refuse a user token and a service credential',
+      spec: '07 §12 row 14; 05 §3.2, §6.2; decision 68',
+      covers: {
+        operations: [
+          'GET /tenants',
+          'POST /tenants',
+          'GET /tenants/{tenantId}',
+          'PATCH /tenants/{tenantId}',
+        ],
+        errors: ['forbidden'],
+      },
+      async run(ctx) {
+        const r = row('operator');
+        const doc = await ctx.document();
+        const { token } = await ctx.token('owner', { [doc]: 'owner' });
+        const tenant = uuid7();
+        const routes: Array<[string, string, unknown]> = [
+          ['GET', '/tenants', undefined],
+          ['POST', '/tenants', { name: 'kit' }],
+          ['GET', `/tenants/${tenant}`, undefined],
+          ['PATCH', `/tenants/${tenant}`, { state: 'suspended' }],
+        ];
+        check(
+          routes.length === r.routes.length,
+          'the kit calls every route of row 14',
+          r.routes,
+          routes.map(([m, p]) => `${m} ${p}`),
+        );
+        for (const [method, path, body] of routes) {
+          await refused(ctx, token, method, path, `${method} ${path} with a user token`, body);
+          // The tenant's own administrator credential is not an operator credential either.
+          await refused(
+            ctx,
+            ctx.target.config.credential,
+            method,
+            path,
+            `${method} ${path} with the service credential`,
+            body,
+          );
+        }
       },
     }),
     a({

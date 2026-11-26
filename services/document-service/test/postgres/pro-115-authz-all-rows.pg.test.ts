@@ -3,7 +3,7 @@
  * kit runs against the document service on PostgreSQL and the S3-compatible store of the
  * integration environment, with the export worker's job handler in the same process (so that
  * `exports` is announced and row 12 is called) and with the features of the rows that need one
- * (`comments`, `history`, `leases`, `assets`) announced. Every row 1 to 13 must be called with and
+ * (`comments`, `history`, `leases`, `assets`) announced. Every row 1 to 14 must be called with and
  * without its capability: no scenario of the profile may be skipped, and none may fail.
  *
  * The database is created by this test as docedit_w5_pro_115_<hex> and dropped afterwards; the
@@ -181,7 +181,7 @@ describe.skipIf(unavailable !== null)(
 
     it('has a scenario for every row of the published matrix, and each row passed', () => {
       const byId = new Map(scenarios().map((s) => [s.id, s]));
-      expect(MATRIX.length).toBe(13);
+      expect(MATRIX.length).toBe(14);
       for (const r of MATRIX) {
         const s = byId.get(`authz.${r.id}`);
         expect(s, `row ${r.row} (${r.id}) has a scenario`).toBeDefined();

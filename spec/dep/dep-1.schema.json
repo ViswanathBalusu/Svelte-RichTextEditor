@@ -3962,6 +3962,188 @@
         }
       }
     },
+    "TenantView": {
+      "title": "TenantView",
+      "description": "A tenant (UX-076; 13 section 10).",
+      "$comment": "13 §10; 06 §12",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The tenant identifier, as the control plane assigns it.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "description": "The name the operator gave the tenant.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "state": {
+          "description": "A suspended tenant is refused at the door; its data is kept (UX-076).",
+          "type": "string",
+          "enum": [
+            "active",
+            "suspended"
+          ]
+        },
+        "createdAt": {
+          "description": "When the tenant was registered (RFC 3339, UTC).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "state",
+        "createdAt"
+      ]
+    },
+    "TenantRegistration": {
+      "title": "TenantRegistration",
+      "description": "The body that registers a tenant (UX-076).",
+      "$comment": "13 §10; 06 §12",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The name of the new tenant.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "TenantUpdate": {
+      "title": "TenantUpdate",
+      "description": "The fields of a tenant an operator may change (UX-076).",
+      "$comment": "13 §10; 06 §12",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "A new name.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "state": {
+          "description": "Suspends or resumes the tenant.",
+          "type": "string",
+          "enum": [
+            "active",
+            "suspended"
+          ]
+        }
+      }
+    },
+    "UsageView": {
+      "title": "UsageView",
+      "description": "The usage of a tenant in one calendar month, UTC (UX-076; decision 69).",
+      "$comment": "06 §12; 13 §10",
+      "type": "object",
+      "properties": {
+        "month": {
+          "description": "The calendar month, UTC, as YYYY-MM.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "connections": {
+          "description": "The most connections held at once in the month.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "openDocuments": {
+          "description": "The most documents open at once in the month.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "commitRate": {
+          "description": "The most commits made in one window in the month.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "roomCpuBudget": {
+          "description": "The most room CPU milliseconds spent in one window.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "storage": {
+          "description": "Storage used at the end of the month, or now for this month.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exportConcurrency": {
+          "description": "The most export jobs run at once in the month.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exportMinutes": {
+          "description": "Export minutes used in the month.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "month",
+        "connections",
+        "openDocuments",
+        "commitRate",
+        "roomCpuBudget",
+        "storage",
+        "exportConcurrency",
+        "exportMinutes"
+      ]
+    },
+    "SealingKeyView": {
+      "title": "SealingKeyView",
+      "description": "A PDF sealing key of a tenant, public facts only (UX-076).",
+      "$comment": "10 §6; 13 §10",
+      "type": "object",
+      "properties": {
+        "kid": {
+          "description": "The key identifier.",
+          "type": "string",
+          "minLength": 1
+        },
+        "alg": {
+          "description": "The algorithm the key signs with.",
+          "type": "string",
+          "enum": [
+            "ES256",
+            "EdDSA",
+            "RS256"
+          ]
+        },
+        "thumbprint": {
+          "description": "The thumbprint of the certificate that carries the public key.",
+          "type": "string"
+        },
+        "subject": {
+          "description": "The subject of that certificate.",
+          "type": "string"
+        },
+        "notAfter": {
+          "description": "When the certificate expires (RFC 3339, UTC).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kid",
+        "alg",
+        "thumbprint",
+        "subject",
+        "notAfter"
+      ]
+    },
     "HoldRequest": {
       "title": "HoldRequest",
       "description": "The body of a legal hold (UX-080; 08 section 11; 13 section 10).",

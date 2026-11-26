@@ -1016,6 +1016,66 @@ export interface QuotaSettings {
   exportMinutes?: number | null;
 }
 
+/** A tenant (UX-076; 13 section 10). */
+export interface TenantView {
+  /** The tenant identifier, as the control plane assigns it. */
+  id: string;
+  /** The name the operator gave the tenant. */
+  name: string;
+  /** A suspended tenant is refused at the door; its data is kept (UX-076). */
+  state: "active" | "suspended";
+  /** When the tenant was registered (RFC 3339, UTC). */
+  createdAt: string;
+}
+
+/** The body that registers a tenant (UX-076). */
+export interface TenantRegistration {
+  /** The name of the new tenant. */
+  name: string;
+}
+
+/** The fields of a tenant an operator may change (UX-076). */
+export interface TenantUpdate {
+  /** A new name. */
+  name?: string;
+  /** Suspends or resumes the tenant. */
+  state?: "active" | "suspended";
+}
+
+/** The usage of a tenant in one calendar month, UTC (UX-076; decision 69). */
+export interface UsageView {
+  /** The calendar month, UTC, as YYYY-MM. */
+  month: string;
+  /** The most connections held at once in the month. */
+  connections: number;
+  /** The most documents open at once in the month. */
+  openDocuments: number;
+  /** The most commits made in one window in the month. */
+  commitRate: number;
+  /** The most room CPU milliseconds spent in one window. */
+  roomCpuBudget: number;
+  /** Storage used at the end of the month, or now for this month. */
+  storage: number;
+  /** The most export jobs run at once in the month. */
+  exportConcurrency: number;
+  /** Export minutes used in the month. */
+  exportMinutes: number;
+}
+
+/** A PDF sealing key of a tenant, public facts only (UX-076). */
+export interface SealingKeyView {
+  /** The key identifier. */
+  kid: string;
+  /** The algorithm the key signs with. */
+  alg: "ES256" | "EdDSA" | "RS256";
+  /** The thumbprint of the certificate that carries the public key. */
+  thumbprint: string;
+  /** The subject of that certificate. */
+  subject: string;
+  /** When the certificate expires (RFC 3339, UTC). */
+  notAfter: string;
+}
+
 /** The body of a legal hold (UX-080; 08 section 11; 13 section 10). */
 export interface HoldRequest {
   /** Why the document is held. Trimmed; at most 500 characters. */
@@ -2519,6 +2579,60 @@ export interface Operations {
     query: Record<string, never>;
     body: QuotaSettings;
     response: QuotaSettings;
+  };
+  /** GET /tenants: The tenants of the service, for an operator (UX-076). (13 §10; 06 §12) */
+  listTenants: {
+    method: "GET";
+    path: "/tenants";
+    params: Record<string, never>;
+    query: { cursor?: string; limit?: number };
+    body: never;
+    response: List<TenantView>;
+  };
+  /** POST /tenants: Registers a tenant; audited (UX-076). (13 §10; 06 §12) */
+  createTenant: {
+    method: "POST";
+    path: "/tenants";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: TenantRegistration;
+    response: TenantView;
+  };
+  /** GET /tenants/{tenantId}: One tenant, for an operator (UX-076). (13 §10; 06 §12) */
+  getTenant: {
+    method: "GET";
+    path: "/tenants/{tenantId}";
+    params: { tenantId: string };
+    query: Record<string, never>;
+    body: never;
+    response: TenantView;
+  };
+  /** PATCH /tenants/{tenantId}: Renames, suspends or resumes a tenant; audited (UX-076). (13 §10; 06 §12) */
+  updateTenant: {
+    method: "PATCH";
+    path: "/tenants/{tenantId}";
+    params: { tenantId: string };
+    query: Record<string, never>;
+    body: TenantUpdate;
+    response: TenantView;
+  };
+  /** GET /usage: The tenant usage in one calendar month, UTC; this month when none is given (UX-076). (06 §12; 13 §10) */
+  getTenantUsage: {
+    method: "GET";
+    path: "/usage";
+    params: Record<string, never>;
+    query: { month?: string };
+    body: never;
+    response: UsageView;
+  };
+  /** GET /sealing-keys: The PDF sealing keys of the tenant, public facts only (UX-076). (10 §6; 13 §10) */
+  listSealingKeys: {
+    method: "GET";
+    path: "/sealing-keys";
+    params: Record<string, never>;
+    query: { cursor?: string; limit?: number };
+    body: never;
+    response: List<SealingKeyView>;
   };
   /** POST /documents/{id}/holds: Places a legal hold on a document with a reason; audited (UX-080). (08 §11; 13 §10) */
   placeHold: {

@@ -6378,6 +6378,448 @@
         "x-dep-requires": "Service credential"
       }
     },
+    "/tenants": {
+      "get": {
+        "operationId": "listTenants",
+        "summary": "The tenants of the service, for an operator (UX-076).",
+        "description": "The tenants of the service, for an operator (UX-076). Requires: Operator credential (07 §12). Specified in 13 §10; 06 §12.",
+        "tags": [
+          "tenants"
+        ],
+        "security": [
+          {
+            "operatorCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TenantView"
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Opaque cursor of the next page; null on the last page (D14)."
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ],
+                  "$comment": "05 §6.1; gaps: G55; decisions: D14"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "13 §10; 06 §12",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Operator credential"
+      },
+      "post": {
+        "operationId": "createTenant",
+        "summary": "Registers a tenant; audited (UX-076).",
+        "description": "Registers a tenant; audited (UX-076). Requires: Operator credential (07 §12). Specified in 13 §10; 06 §12.",
+        "tags": [
+          "tenants"
+        ],
+        "security": [
+          {
+            "operatorCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantRegistration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantView"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "13 §10; 06 §12",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Operator credential",
+        "x-dep-codes": [
+          "idempotency_mismatch"
+        ]
+      }
+    },
+    "/tenants/{tenantId}": {
+      "get": {
+        "operationId": "getTenant",
+        "summary": "One tenant, for an operator (UX-076).",
+        "description": "One tenant, for an operator (UX-076). Requires: Operator credential (07 §12). Specified in 13 §10; 06 §12.",
+        "tags": [
+          "tenants"
+        ],
+        "security": [
+          {
+            "operatorCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The tenant identifier.",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "The tenant identifier."
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantView"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "13 §10; 06 §12",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Operator credential"
+      },
+      "patch": {
+        "operationId": "updateTenant",
+        "summary": "Renames, suspends or resumes a tenant; audited (UX-076).",
+        "description": "Renames, suspends or resumes a tenant; audited (UX-076). Requires: Operator credential (07 §12). Specified in 13 §10; 06 §12.",
+        "tags": [
+          "tenants"
+        ],
+        "security": [
+          {
+            "operatorCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The tenant identifier.",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "The tenant identifier."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantView"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "13 §10; 06 §12",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Operator credential"
+      }
+    },
+    "/usage": {
+      "get": {
+        "operationId": "getTenantUsage",
+        "summary": "The tenant usage in one calendar month, UTC; this month when none is given (UX-076).",
+        "description": "The tenant usage in one calendar month, UTC; this month when none is given (UX-076). Requires: Service credential (07 §12). Specified in 06 §12; 13 §10.",
+        "tags": [
+          "usage"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "The month, as YYYY-MM.",
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "description": "The month, as YYYY-MM."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageView"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "06 §12; 13 §10",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Service credential"
+      }
+    },
+    "/sealing-keys": {
+      "get": {
+        "operationId": "listSealingKeys",
+        "summary": "The PDF sealing keys of the tenant, public facts only (UX-076).",
+        "description": "The PDF sealing keys of the tenant, public facts only (UX-076). Requires: Service credential (07 §12). Specified in 10 §6; 13 §10.",
+        "tags": [
+          "sealing-keys"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SealingKeyView"
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Opaque cursor of the next page; null on the last page (D14)."
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ],
+                  "$comment": "05 §6.1; gaps: G55; decisions: D14"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "10 §6; 13 §10",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Service credential"
+      }
+    },
     "/documents/{id}/holds": {
       "post": {
         "operationId": "placeHold",
@@ -13908,6 +14350,188 @@
           }
         }
       },
+      "TenantView": {
+        "title": "TenantView",
+        "description": "A tenant (UX-076; 13 section 10).",
+        "$comment": "13 §10; 06 §12",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The tenant identifier, as the control plane assigns it.",
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "description": "The name the operator gave the tenant.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "state": {
+            "description": "A suspended tenant is refused at the door; its data is kept (UX-076).",
+            "type": "string",
+            "enum": [
+              "active",
+              "suspended"
+            ]
+          },
+          "createdAt": {
+            "description": "When the tenant was registered (RFC 3339, UTC).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "createdAt"
+        ]
+      },
+      "TenantRegistration": {
+        "title": "TenantRegistration",
+        "description": "The body that registers a tenant (UX-076).",
+        "$comment": "13 §10; 06 §12",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "The name of the new tenant.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "TenantUpdate": {
+        "title": "TenantUpdate",
+        "description": "The fields of a tenant an operator may change (UX-076).",
+        "$comment": "13 §10; 06 §12",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "A new name.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "state": {
+            "description": "Suspends or resumes the tenant.",
+            "type": "string",
+            "enum": [
+              "active",
+              "suspended"
+            ]
+          }
+        }
+      },
+      "UsageView": {
+        "title": "UsageView",
+        "description": "The usage of a tenant in one calendar month, UTC (UX-076; decision 69).",
+        "$comment": "06 §12; 13 §10",
+        "type": "object",
+        "properties": {
+          "month": {
+            "description": "The calendar month, UTC, as YYYY-MM.",
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+          },
+          "connections": {
+            "description": "The most connections held at once in the month.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "openDocuments": {
+            "description": "The most documents open at once in the month.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "commitRate": {
+            "description": "The most commits made in one window in the month.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "roomCpuBudget": {
+            "description": "The most room CPU milliseconds spent in one window.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "storage": {
+            "description": "Storage used at the end of the month, or now for this month.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "exportConcurrency": {
+            "description": "The most export jobs run at once in the month.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "exportMinutes": {
+            "description": "Export minutes used in the month.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "month",
+          "connections",
+          "openDocuments",
+          "commitRate",
+          "roomCpuBudget",
+          "storage",
+          "exportConcurrency",
+          "exportMinutes"
+        ]
+      },
+      "SealingKeyView": {
+        "title": "SealingKeyView",
+        "description": "A PDF sealing key of a tenant, public facts only (UX-076).",
+        "$comment": "10 §6; 13 §10",
+        "type": "object",
+        "properties": {
+          "kid": {
+            "description": "The key identifier.",
+            "type": "string",
+            "minLength": 1
+          },
+          "alg": {
+            "description": "The algorithm the key signs with.",
+            "type": "string",
+            "enum": [
+              "ES256",
+              "EdDSA",
+              "RS256"
+            ]
+          },
+          "thumbprint": {
+            "description": "The thumbprint of the certificate that carries the public key.",
+            "type": "string"
+          },
+          "subject": {
+            "description": "The subject of that certificate.",
+            "type": "string"
+          },
+          "notAfter": {
+            "description": "When the certificate expires (RFC 3339, UTC).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kid",
+          "alg",
+          "thumbprint",
+          "subject",
+          "notAfter"
+        ]
+      },
       "HoldRequest": {
         "title": "HoldRequest",
         "description": "The body of a legal hold (UX-080; 08 section 11; 13 section 10).",
@@ -17916,7 +18540,12 @@
       "serviceCredential": {
         "type": "http",
         "scheme": "bearer",
-        "description": "A service credential (05 §3.2): an API key, or a JWT with the type header `dep-svc+jwt`. How an API key is presented is not stated (G08); both are assumed to be bearer credentials (D18)."
+        "description": "A service credential (05 §3.2): an API key, or a JWT with the type header `dep-svc+jwt`. How an API key is presented is not stated (G08); both are assumed to be bearer credentials (D18). It is the tenant administrator credential: bound to one tenant, never valid for another (UX-076; decision 68)."
+      },
+      "operatorCredential": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An operator credential (UX-076; decision 68): for every tenant of the service, issued to the people and tools that run it. It manages tenants and is not a tenant administrator credential; a user token and a service credential are refused on its routes, and it is refused on theirs."
       }
     }
   }
