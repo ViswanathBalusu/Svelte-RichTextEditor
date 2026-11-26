@@ -27,6 +27,7 @@ import type { EquationDrawer } from '../equation-draw.ts';
 import { EQUATION_NODES } from '../equation-commands.ts';
 import { equationBlockView, equationNumbersPlugin, equationView } from './equation-view.ts';
 import { figureView } from './figure-view.ts';
+import { extensionBlockView } from './extension-view.ts';
 import { imageView } from './image-view.ts';
 import { preservedView } from './preserved-view.ts';
 import { coreKeys } from '../keys.ts';
@@ -516,6 +517,8 @@ export class EditorCore extends DocumentCore {
           // FE-139: the preserved atom's label, fallback picture and display size.
           preserved_block: preservedView('div', this.#assetImage),
           preserved_inline: preservedView('span', this.#assetImage),
+          // UX-058: the fallback picture of a custom block no extension draws.
+          extension_block: extensionBlockView(this.#assetImage),
           equation: equationView(this.#drawEquation),
           equation_block: equationBlockView(this.#drawEquation),
         },
