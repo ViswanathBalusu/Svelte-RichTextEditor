@@ -156,3 +156,95 @@ describe('the OpenAPI document: credentials of every route (PRO-002 criterion 3)
     expect(operations.map((o) => o.route).filter((r) => !covered.has(r))).toEqual([]);
   });
 });
+
+describe('the OpenAPI document: every route is complete (PRO-002 criterion 1)', () => {
+  // Routes that act without a body: the prose of 05 §6.2 and 12 §10 sends nothing with them.
+  const BODILESS = [
+    'POST /documents/{id}/regions/{rid}/lease',
+    'PUT /documents/{id}/regions/{rid}/lease',
+    'POST /comments/{cid}/reactions/{reaction}',
+    'POST /assets/{aid}/complete',
+    'POST /webhooks/{id}/ping',
+    'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
+    'POST /documents/{id}/workflow/send',
+    'POST /documents/{id}/workflow/correct',
+    'POST /documents/{id}/workflow/resume',
+    'POST /documents/{id}/workflow/remind',
+  ];
+  // The resources of 12 §10 (FRW-025, FRW-060, FRW-065), in the same document.
+  const FRW_ROUTES = [
+    'GET /documents/{id}/fields',
+    'GET /documents/{id}/field-values',
+    'PATCH /documents/{id}/field-values',
+    'GET /documents/{id}/workflow',
+    'PUT /documents/{id}/workflow',
+    'POST /documents/{id}/workflow/send',
+    'POST /documents/{id}/workflow/correct',
+    'POST /documents/{id}/workflow/resume',
+    'POST /documents/{id}/workflow/remind',
+    'POST /documents/{id}/workflow/void',
+    'GET /documents/{id}/workflow/participants/{pid}/consent',
+    'POST /documents/{id}/workflow/participants/{pid}/consent',
+    'POST /documents/{id}/workflow/participants/{pid}/verify',
+    'POST /documents/{id}/workflow/participants/{pid}/access-code',
+    'POST /documents/{id}/workflow/participants/{pid}/complete',
+    'POST /documents/{id}/workflow/participants/{pid}/decline',
+    'POST /documents/{id}/fields/{fid}/sign',
+    'GET /documents/{id}/workflow/evidence',
+    'GET /documents/{id}/workflow/final',
+    'GET /templates',
+    'POST /templates',
+    'GET /templates/{tid}',
+    'POST /bulk-sends',
+    'GET /bulk-sends/{bid}',
+    'GET /workflow/capture-settings',
+    'PUT /workflow/capture-settings',
+  ];
+  const publicRoutes = permissions.unmatrixedRoutes
+    .filter((r) => r.class === 'public')
+    .map((r) => r.route);
+
+  it('declares every path parameter of every route', () => {
+    for (const o of operations) {
+      const wanted = [...o.path.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+      const item = (openapi['paths'] as Record<string, Json>)[o.path]!;
+      const have = [
+        ...((item['parameters'] as Json[] | undefined) ?? []),
+        ...((o.op['parameters'] as Json[] | undefined) ?? []),
+      ].map((p) => deref(p)['name']);
+      for (const name of wanted) expect(have, `${o.route} ${name}`).toContain(name);
+    }
+  });
+
+  it('gives every route a success response and problem responses (ranges, decision 196)', () => {
+    for (const o of operations) {
+      const codes = Object.keys(o.responses);
+      expect(
+        codes.some((c) => /^(2XX|2\d\d)$/.test(c)),
+        `${o.route} success`,
+      ).toBe(true);
+      if (publicRoutes.includes(o.route)) continue;
+      expect(
+        codes.some((c) => c === '4XX' || /^4\d\d$/.test(c)),
+        `${o.route} 4XX`,
+      ).toBe(true);
+      expect(
+        codes.some((c) => c === '5XX' || /^5\d\d$/.test(c)),
+        `${o.route} 5XX`,
+      ).toBe(true);
+    }
+  });
+
+  it('gives every POST, PUT and PATCH a request body, but the routes that act without one', () => {
+    const missing = operations
+      .filter((o) => ['post', 'put', 'patch'].includes(o.method) && !('requestBody' in o.op))
+      .map((o) => o.route)
+      .sort();
+    expect(missing).toEqual([...BODILESS].sort());
+  });
+
+  it('holds the routes of 12 §10 in the same document', () => {
+    const have = new Set(operations.map((o) => o.route));
+    expect(FRW_ROUTES.filter((r) => !have.has(r))).toEqual([]);
+  });
+});
