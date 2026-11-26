@@ -91,15 +91,17 @@ export class AuditFeed {
   query(): string {
     if (this.#cursor === null)
       this.#from = this.#newest === null ? null : this.#newest - this.#overlapMs;
-    const params = new URLSearchParams();
+    const params: string[] = [];
+    const add = (name: string, value: string): void =>
+      void params.push(`${name}=${encodeURIComponent(value)}`);
     for (const key of ['document', 'actor', 'kind'] as const) {
       const v = this.#filter[key];
-      if (v !== undefined) params.set(key, v);
+      if (v !== undefined) add(key, v);
     }
-    if (this.#from !== null) params.set('from', new Date(Math.max(0, this.#from)).toISOString());
-    params.set('limit', String(this.#limit));
-    if (this.#cursor !== null) params.set('cursor', this.#cursor);
-    return params.toString();
+    if (this.#from !== null) add('from', new Date(Math.max(0, this.#from)).toISOString());
+    add('limit', String(this.#limit));
+    if (this.#cursor !== null) add('cursor', this.#cursor);
+    return params.join('&');
   }
 
   /**
