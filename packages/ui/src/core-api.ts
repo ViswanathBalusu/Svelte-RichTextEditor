@@ -1116,6 +1116,8 @@ export interface CoreApi {
   readonly fieldProperties?: FieldPropertiesService;
   /** The rules of the document and the builder's changes to them (FRW-024). Absent: no rules pane. */
   readonly rules?: RulesService;
+  /** The workflow's participants and their order (FRW-026). Absent: the roles pane lists none. */
+  readonly participants?: ParticipantsService;
   /** The send dialog's checks and the send action (FRW-028). Absent: no "send for completion" command. */
   readonly workflowSend?: WorkflowSendService;
   /** Adopting a signature and signing a field (FRW-045, FRW-046). Absent: signature fields cannot be signed here. */
@@ -1368,6 +1370,59 @@ export interface RulesService {
   remove(id: string): RuleChangeResult;
   /** Moves to the field with this key in the document; false when there is none. */
   showField(key: string): boolean;
+}
+
+/** A participant of the workflow as the participants list shows it (FRW-026; 12 §6.1). */
+export interface ParticipantItem {
+  readonly id: string;
+  /** The person's name as the owner or the host wrote it; null when none. */
+  readonly name: string | null;
+  /** The host's identifier of the person; null when none. There is no contact detail (13 §3). */
+  readonly sub: string | null;
+  readonly roles: readonly string[];
+  readonly kind: 'filler' | 'signer' | 'approver' | 'cc';
+  /** Equal values are parallel, ascending values are sequential (12 §6.1). */
+  readonly order: number;
+  readonly state: string | null;
+}
+
+/** What the participants form sends: a new participant, or the one it replaces when `id` is given. */
+export interface ParticipantInput {
+  readonly id?: string;
+  readonly name: string;
+  readonly sub: string;
+  readonly roles: readonly string[];
+  readonly kind: ParticipantItem['kind'];
+  readonly order: number;
+}
+
+export type ParticipantChangeResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      /**
+       * `not_draft`: the workflow has been sent. `stale`: someone else changed it and the list was
+       * read again. `invalid`: the values are not valid; `fields` names them.
+       */
+      readonly reason: 'read-only' | 'forbidden' | 'not_draft' | 'stale' | 'invalid' | 'failed';
+      readonly fields?: readonly string[];
+    };
+
+/**
+ * The participants of the document's workflow (FRW-026; 12 §6.1): read from the workflow resource,
+ * written to it with `If-Match` while the workflow is a draft. People a host wrote through the API
+ * appear without being entered again, and the list follows `wf.changed`.
+ */
+export interface ParticipantsService {
+  /** Reads the workflow; the pane host awaits it before it opens the pane. */
+  readonly prepare?: () => Promise<void>;
+  readonly participants: ReadView<readonly ParticipantItem[]>;
+  /** The workflow's state; null before the first read, `draft` for a document with no workflow yet. */
+  readonly state: ReadView<string | null>;
+  /** True while the caller has `manage` and the workflow is a draft. */
+  readonly canEdit: ReadView<boolean>;
+  save(input: ParticipantInput): Promise<ParticipantChangeResult>;
+  remove(id: string): Promise<ParticipantChangeResult>;
 }
 
 /**

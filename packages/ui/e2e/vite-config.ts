@@ -42,6 +42,7 @@ export function harnessConfig(): InlineConfig {
           index: join(harnessDir, 'index.html'),
           'field-properties': join(harnessDir, 'field-properties.html'),
           'rule-builder': join(harnessDir, 'rule-builder.html'),
+          participants: join(harnessDir, 'participants.html'),
         },
         output: {
           entryFileNames: 'assets/[name].js',

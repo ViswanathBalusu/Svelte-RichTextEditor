@@ -71,6 +71,7 @@ import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
 import { rulesService } from './rules.ts';
 import { signRequestWatch, signingService, type SigningSource } from './signing.ts';
+import { participantsService } from './participants.ts';
 import { workflowSendService, type WorkflowSendSource } from './workflow-send.ts';
 import { fieldPropertiesService } from './field-properties.ts';
 import { mathEditorService } from './math-editor.ts';
@@ -420,6 +421,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
 
   // The send dialog and the lock banner (FRW-028, FRW-029): made once, so that one service follows the workflow.
   const workflowSend = options.workflow ? workflowSendService(core, options.workflow) : null;
+  // The participants of the workflow and their order (FRW-026): the roles pane lists and edits them.
+  const participants = options.workflow ? participantsService(core, options.workflow) : null;
   // The adoption and signing step (FRW-045, FRW-046): a signature field the participant activated.
   const signing = options.signing ? signingService(core, options.signing) : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
@@ -707,6 +710,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(options.exports ? { exports: options.exports } : {}),
       // The send dialog (FRW-028): the pre-send checks and the send action.
       ...(workflowSend ? { workflowSend } : {}),
+      ...(participants ? { participants } : {}),
       ...(threads ? { threads } : {}),
       ...(signing ? { signing } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
@@ -957,6 +961,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       stopKeyboardInset?.();
       stopKeyboardInset = null;
       workflowSend?.dispose?.();
+      participants?.dispose();
       signing?.dispose?.();
       fillActions?.dispose();
       workflowCompleteListeners.clear();
