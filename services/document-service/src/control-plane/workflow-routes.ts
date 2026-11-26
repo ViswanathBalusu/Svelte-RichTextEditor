@@ -59,6 +59,7 @@ import { checkIfMatch } from './http.ts';
 import { json, notModified, type Kit } from './kit.ts';
 import { guard, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
+import { askPolicyHook } from './policy-hook-gate.ts';
 import type { BodyViolation } from './problems.ts';
 import {
   NO_WORKFLOW_ETAG,
@@ -184,10 +185,19 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     const doc = ctx.params['id']!;
     const workflows = store();
     guard(ctx.caller, 'manage', doc);
-    await liveDocument(ctx, doc);
+    const record = await liveDocument(ctx, doc);
     const ref = k.refOf(ctx, doc);
     const current = await workflows.read(ctx.caller.tenant, doc);
     if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+
+    // The tenant's data-loss prevention hook is asked before the send starts (UX-086). A send is
+    // this route; the target is `workflow`. A deny or an unanswered hook refuses it, audited.
+    await askPolicyHook(d, ctx, {
+      document: doc,
+      action: 'send',
+      target: 'workflow',
+      classification: record.label ?? null,
+    });
 
     // The document as it stands, whole: a checklist over a projection would miss what the caller
     // may not read (ADR 0019).

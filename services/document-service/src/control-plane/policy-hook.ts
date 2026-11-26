@@ -6,14 +6,12 @@
  * target and the classification label, signed in the same way as a webhook delivery (05 section 7;
  * `webhook-signing.ts`), so the host verifies it with the same verifier. It also reads the answer.
  *
- * Not built here, and kept out on purpose:
- * - the sender: it needs the egress path (BE-056, PRO-071) and a timeout; the timeout and the
- *   outcome when the hook does not answer are an open question, so no default is chosen here;
- * - the calls in the export and send paths, and the audit of a refusal;
- * - where a tenant registers a hook (open question).
+ * The sender is `policy-hook-client.ts`. The calls in the export and send paths, and the audit of
+ * a refusal, are in `policy-hook-gate.ts`. Where a tenant registers a hook is an open
+ * question; the server takes one hook through `ServiceParts.policyHook`.
  *
  * `decisionOf` returns null for an answer of any other shape. What the service does with null is
- * the caller's decision, and is left open with the timeout.
+ * the caller's decision: it refuses (owner decision 122).
  */
 import { type SignedHeaders, signDelivery } from './webhook-signing.ts';
 
