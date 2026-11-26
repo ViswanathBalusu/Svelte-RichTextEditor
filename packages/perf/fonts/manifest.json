@@ -176,6 +176,38 @@
       "origin": "TeX Live 2025 (texmf-dist)",
       "bytes": 4723208,
       "sha256": "f9ddf31bd655549a70bca23ac12bdb3b6a3e8814e404119951719b561ccb365b"
+    },
+    {
+      "file": "files/Amiri-Regular.ttf",
+      "alias": "Amiri",
+      "family": "Amiri",
+      "subfamily": "Regular",
+      "weight": 400,
+      "style": "normal",
+      "role": "arabic",
+      "version": "Version 1.000",
+      "copyright": "Copyright 2010-2022 The Amiri Project Authors (https://github.com/aliftype/amiri).",
+      "licence": "OFL-1.1",
+      "licenceFile": "licences/amiri-OFL.txt",
+      "origin": "TeX Live 2025 (texmf-dist)",
+      "bytes": 453396,
+      "sha256": "b092096eb992aebe59084b0cb5cf0015ae82c7e76b0aac5e7d60ae5113af5f54"
+    },
+    {
+      "file": "files/HindMadurai-Regular.otf",
+      "alias": "Hind Madurai",
+      "family": "Hind Madurai",
+      "subfamily": "Regular",
+      "weight": 400,
+      "style": "normal",
+      "role": "tamil",
+      "version": "Version 1.001;PS 1.0;hotconv 1.0.86;makeotf.lib2.5.63406; ttfautohint (v1.5.33-1714) -l 8 -r 50 -G 200 -x 13 -D latn -f taml -w G -W -c -X \"\"",
+      "copyright": "Copyright (c) 2015 Indian Type Foundry (info@indiantypefoundry.com)",
+      "licence": "OFL-1.1",
+      "licenceFile": "licences/hindmadurai-LICENSE.txt",
+      "origin": "TeX Live 2025 (texmf-dist)",
+      "bytes": 171012,
+      "sha256": "c2a4167e7c89ab935f039f306b61034a3811b2e5a25e264127e9db7855ae5765"
     }
   ]
 }

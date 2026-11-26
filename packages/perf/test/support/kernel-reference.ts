@@ -206,21 +206,49 @@ const CJK_LINES = [
   '漢字とかなの混ざった行、「括弧」と句読点。',
 ];
 const HANGUL_LINES = ['한글 문장입니다. 대한민국의 수도는 서울입니다.'];
+// WASM-015: complex scripts. The language is part of the case, because a font may have a language
+// system of its own (Amiri has one for Arabic).
+const ARABIC_LINES = [
+  'السلام عليكم ورحمة الله وبركاته',
+  'ببب تتت ثثث',
+  'كَتَبَ الْوَلَدُ الدَّرْسَ ١٢٣',
+];
+const TAMIL_LINES = ['வணக்கம் உலகம்', 'கொடு கோடு கௌரவம் கெடு', 'ஸ்ரீ க்ஷ தமிழ்நாடு'];
 const SIZES_TWIPS = [200, 240, 280, 11 * 20 + 10];
 const SETTINGS: Array<{ language: string; features: string }> = [
   { language: '', features: '' },
   { language: 'pl', features: 'kern=0,liga=0' },
 ];
+const settingsOf = (role: string): Array<{ language: string; features: string }> =>
+  role === 'arabic'
+    ? [
+        { language: '', features: '' },
+        { language: 'ar', features: '' },
+      ]
+    : role === 'tamil'
+      ? [
+          { language: '', features: '' },
+          { language: 'ta', features: '' },
+        ]
+      : SETTINGS;
 
 /** The shaping cases: each face with lines of its own script, at several sizes and settings. */
 export function shapingCases(kernel: LayoutKernel): ShapingCase[] {
   const cases: ShapingCase[] = [];
   for (const face of fontManifest.fonts) {
     const lines =
-      face.role === 'cjk' ? CJK_LINES : face.role === 'hangul' ? HANGUL_LINES : LATIN_LINES;
+      face.role === 'cjk'
+        ? CJK_LINES
+        : face.role === 'hangul'
+          ? HANGUL_LINES
+          : face.role === 'arabic'
+            ? ARABIC_LINES
+            : face.role === 'tamil'
+              ? TAMIL_LINES
+              : LATIN_LINES;
     const alias = faceAlias(face);
     for (const sizeTwips of SIZES_TWIPS)
-      for (const { language, features } of SETTINGS)
+      for (const { language, features } of settingsOf(face.role))
         for (const text of lines)
           cases.push({
             face: face.sha256,

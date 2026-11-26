@@ -27,6 +27,10 @@ const noto = `${texlive}/texmf-dist/fonts/truetype/google/noto`;
 const notoLicence = `${texlive}/texmf-dist/doc/fonts/noto/LICENSE_OFL.txt`;
 const harano = `${texlive}/texmf-dist/fonts/opentype/public/haranoaji`;
 const haranoLicence = `${texlive}/texmf-dist/doc/fonts/haranoaji/LICENSE`;
+const amiri = `${texlive}/texmf-dist/fonts/truetype/public/amiri`;
+const amiriLicence = `${texlive}/texmf-dist/doc/fonts/amiri/OFL.txt`;
+const hindMadurai = `${texlive}/texmf-dist/fonts/opentype/public/hindmadurai`;
+const hindMaduraiLicence = `${texlive}/texmf-dist/doc/fonts/hindmadurai/LICENSE.TXT`;
 
 interface Source {
   path: string;
@@ -71,6 +75,26 @@ const sources: Source[] = [
     role: 'cjk',
     origin: texliveOrigin,
     licenceFile: haranoLicence,
+  },
+  // WASM-015: one Arabic face and one Tamil face (an Indic script), both under the OFL, for the
+  // comparison of the kernel's shaping with HarfBuzz.
+  {
+    path: `${amiri}/Amiri-Regular.ttf`,
+    alias: 'Amiri',
+    weight: 400,
+    style: 'normal',
+    role: 'arabic',
+    origin: texliveOrigin,
+    licenceFile: amiriLicence,
+  },
+  {
+    path: `${hindMadurai}/HindMadurai-Regular.otf`,
+    alias: 'Hind Madurai',
+    weight: 400,
+    style: 'normal',
+    role: 'tamil',
+    origin: texliveOrigin,
+    licenceFile: hindMaduraiLicence,
   },
   // No Hangul face: the only one on the development machine, NanumGothic 3.020 in Windows' fonts,
   // names "NHN Corporation" as its licence (name ID 13), not the OFL, so its redistribution in
