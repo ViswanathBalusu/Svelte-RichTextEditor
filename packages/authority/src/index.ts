@@ -183,6 +183,7 @@ export {
   type ThreadRequest,
 } from './room/room.ts';
 export * from './room/types.ts';
+export { commitStampIdentity, type CommitStampIdentity } from './room/stamp.ts';
 export {
   cloneAnchor,
   findBlock,

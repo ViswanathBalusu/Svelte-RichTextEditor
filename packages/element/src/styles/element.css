@@ -598,7 +598,39 @@ table.de-suggest-gone {
   outline-color: rgb(1, 2, 3);
 }
 
+/* The signature and initials button (FRW-048 criterion 4): its state is the words on it; the border
+   and the mark repeat the state without colour (a solid line and a tick when signed, a dashed line
+   when it waits for the signer, a dotted line when it is not for this participant). */
+.de-sign-button {
+  border: 1px solid currentColor;
+}
+
+.de-sign-button[data-state='open'] {
+  border-style: dashed;
+}
+
+.de-sign-button[data-state='signed']::before {
+  content: '\2713\00a0';
+}
+
+.de-sign-button[data-state='other'],
+.de-sign-button[data-state='closed'] {
+  border-style: dotted;
+}
+
 @media (forced-colors: active) {
+  .de-sign-button {
+    forced-color-adjust: auto;
+    border-color: ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+  }
+
+  .de-sign-button:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+
   .de-region {
     border-inline-start-color: CanvasText;
   }

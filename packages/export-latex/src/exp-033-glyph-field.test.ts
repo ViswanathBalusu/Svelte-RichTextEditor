@@ -3,8 +3,9 @@
  * fonts lack is reported with the field's identifier. The converter's glyph check (EXP-026,
  * `fonts/check.ts`) receives the field id as the block id of the diagnostic. The severity follows
  * EXP-026: an error in a final export, a warning in a preview. The criterion says "a warning"; the
- * final-export error is EXP-026's rule and is recorded in the story Notes, not decided here. The
- * width case of criterion 6 is not tested: the converter does not measure widths.
+ * final-export error is EXP-026's rule (the accepted default; the criterion's wording says so in
+ * the story). The width case is not measured by the converter: the class logs it and the worker
+ * reports `field_too_wide` (`exp-033-field-width.compile.test.ts`).
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
