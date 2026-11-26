@@ -131,6 +131,8 @@ export function exportRequestKey(parts: {
   suggestionAccess?: unknown;
   /** The comment threads of a comments: margin export (EXP-084): they change without a commit. */
   commentThreads?: unknown;
+  /** The pictures an html export carries (EXP-087): identifier to hash and type. */
+  assets?: unknown;
 }): string {
   return createHash('sha256')
     .update(
@@ -149,6 +151,7 @@ export function exportRequestKey(parts: {
         ...(parts.classification ? { classification: parts.classification } : {}),
         ...(parts.suggestionAccess ? { suggestionAccess: parts.suggestionAccess } : {}),
         ...(parts.commentThreads ? { commentThreads: parts.commentThreads } : {}),
+        ...(parts.assets ? { assets: parts.assets } : {}),
       }),
       'utf8',
     )

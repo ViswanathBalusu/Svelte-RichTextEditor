@@ -46,6 +46,35 @@ function editScopesOf(a: Access): string[] {
   return out.sort();
 }
 
+/**
+ * The ready assets of doc that content names through an sset attribute (EXP-087): identifier
+ * to hash and type. An asset that is not ready, or was uploaded for another document, is left out.
+ */
+export async function exportAssets(
+  d: Kit['d'],
+  tenant: string,
+  doc: string,
+  content: unknown,
+): Promise<Record<string, { sha256: string; mediaType: string }>> {
+  const ids = new Set<string>();
+  const stack: unknown[] = [content];
+  while (stack.length > 0 && ids.size < 2000) {
+    const n = stack.pop() as { attrs?: Record<string, unknown>; content?: unknown[] } | null;
+    if (!n || typeof n !== 'object') continue;
+    const a = n.attrs?.['asset'];
+    if (typeof a === 'string') ids.add(a);
+    if (Array.isArray(n.content)) stack.push(...n.content);
+  }
+  const out: Record<string, { sha256: string; mediaType: string }> = {};
+  if (!d.assetRegistry || ids.size === 0) return out;
+  for (const r of await d.assetRegistry.many(tenant, [...ids].sort())) {
+    if (r.state !== 'ready' || r.doc !== doc || r.sha256 === null || r.contentType === null)
+      continue;
+    out[r.id] = { sha256: r.sha256, mediaType: r.contentType };
+  }
+  return out;
+}
+
 export function exportRoutes(k: Kit): Record<string, Handler> {
   const { d, rest, refOf, liveDocument } = k;
   const policy = d.exportPolicy ?? EXPORT_POLICY_DEFAULTS;
@@ -208,6 +237,13 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       options['comments'] === 'margin' && (body.target === 'pdf' || body.target === 'tex')
         ? await commentThreadsAt(d, { ref, seq, doc: content.doc, view })
         : null;
+    // The pictures of an html export travel with the page (EXP-087 criterion 6): the ready assets
+    // of this document that the readable content names, by identifier, with their hash and type.
+    // The worker reads the bytes by hash; an asset of another document is never named.
+    const assets =
+      body.target === 'html'
+        ? await exportAssets(d, ctx.caller.tenant, doc, projectContent(view, content.doc))
+        : null;
     const kind = options['profile'] === 'preview' ? PREVIEW_KIND : EXPORT_KIND;
     const cacheKey = exportRequestKey({
       tenant: ctx.caller.tenant,
@@ -222,6 +258,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       classification: record.label ?? null,
       suggestionAccess,
       commentThreads,
+      assets,
     });
     const now = d.now();
     const payload = {
@@ -237,6 +274,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       classVersion: policy.classVersion,
       ...(suggestionAccess ? { suggestionAccess } : {}),
       ...(commentThreads ? { commentThreads } : {}),
+      ...(assets && Object.keys(assets).length > 0 ? { assets } : {}),
       ...exportView(view),
     };
     const accepted = (job: JobRecord) =>

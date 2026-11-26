@@ -206,7 +206,10 @@ function pictureHtml(ctx: Ctx, asset: string | null, alt: string, blockId: strin
   }
   let path = ctx.pictures.get(asset);
   if (path === undefined) {
-    path = `assets/${asset.replace(/[^A-Za-z0-9._-]/g, '_')}`;
+    // The extension a caller gives (`{ extension: '.png' }`) keeps the file openable on its own.
+    const given = (ctx.assets[asset] as { extension?: unknown } | null | undefined)?.extension;
+    const extension = typeof given === 'string' && /^\.[a-z0-9]{1,5}$/.test(given) ? given : '';
+    path = `assets/${asset.replace(/[^A-Za-z0-9._-]/g, '_')}${extension}`;
     ctx.pictures.set(asset, path);
   }
   return `<img src="${escapeHtml(destinationOf(path))}" alt="${altText}">`;

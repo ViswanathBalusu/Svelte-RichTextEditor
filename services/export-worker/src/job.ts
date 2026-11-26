@@ -26,6 +26,7 @@ import {
   htmlText,
   readCertificateFacts,
   markdownText,
+  tar,
   texArchive,
   type CertificateFacts,
   type Diagnostic,
@@ -147,6 +148,12 @@ export interface ExportHandlerDeps {
     files: Readonly<Record<string, string | Uint8Array>>,
     opts: SandboxOptions,
   ) => Promise<CompileResult>;
+  /**
+   * The bytes of a final asset by its SHA-256 (AssetStore.getFinal; EXP-087 criterion 6). Absent:
+   * no picture travels with an html export, and each is written as its alternative text with the
+   * warning image_asset_missing.
+   */
+  assetBytes?: (tenant: string, sha256: string) => Promise<Uint8Array | null>;
   /** The image that compiles; its identifier goes into the result manifest. */
   image?: string;
   imageId?: (image: string) => Promise<string | null>;
@@ -190,6 +197,12 @@ export const CDM_OUTPUT_FILE = 'output.json';
 /** The file of the `html` target under the job's prefix (EXP-087; docs/adr/0371-w2-exp-087-html-job.md). */
 export const HTML_OUTPUT_FILE = 'output.html';
 
+/**
+ * The `html` target with pictures: one archive holding `index.html` and `assets/`, the paths the
+ * writer wrote in `src` (EXP-087 criterion 6; docs/adr/0371-w2-exp-087-html-job.md).
+ */
+export const HTML_ARCHIVE_FILE = 'output.tar';
+
 /** The file of the `md` target under the job's prefix (EXP-088). */
 export const MD_OUTPUT_FILE = 'output.md';
 
@@ -215,6 +228,38 @@ interface Payload {
   suggestionAccess: SuggestionAccess | null;
   /** The comment threads at the exported seq (EXP-084), written by the control plane; or none. */
   commentThreads: CommentThread[];
+  /** The ready assets of the document that the exported content names, by identifier (EXP-087). */
+  assets: Record<string, { sha256: string; mediaType: string }>;
+}
+
+/** The picture types an HTML page shows, and the file extension each gets in the archive. */
+const HTML_PICTURES: Readonly<Record<string, string>> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+};
+
+/** The assets of a payload, or invalid when they are not the shape the control plane writes. */
+function readAssets(v: unknown): Payload['assets'] | 'invalid' {
+  if (v === undefined || v === null) return {};
+  if (typeof v !== 'object' || Array.isArray(v)) return 'invalid';
+  const out: Payload['assets'] = Object.create(null) as Payload['assets'];
+  const entries = Object.entries(v);
+  if (entries.length > 2000) return 'invalid';
+  for (const [id, a] of entries) {
+    const o = (typeof a === 'object' && a !== null ? a : {}) as Record<string, unknown>;
+    if (
+      id.length > 64 ||
+      typeof o['sha256'] !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(o['sha256']) ||
+      typeof o['mediaType'] !== 'string' ||
+      o['mediaType'].length > 100
+    )
+      return 'invalid';
+    out[id] = { sha256: o['sha256'], mediaType: o['mediaType'] };
+  }
+  return out;
 }
 
 /** The comment threads of a payload, or invalid when they are not the shape the control plane writes. */
@@ -331,11 +376,18 @@ function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
       'internal',
       'the comment threads of the job are not the shape the control plane writes',
     );
+  const assets = readAssets(p['assets']);
+  if (assets === 'invalid')
+    throw new JobFailure(
+      'internal',
+      'the assets of the job are not the shape the control plane writes',
+    );
   return {
     sealing,
     certificate,
     suggestionAccess,
     commentThreads,
+    assets,
     doc: p['doc'],
     target: p['target'],
     seq: p['seq'],
@@ -478,9 +530,8 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
 
     // The HTML target (09 §11; EXP-087): the direct writer reads the projected envelope. It needs no
     // font and no sandbox. The writer's diagnostics are the job's, so a construct HTML cannot
-    // express is named in the result (criterion 4). The worker reads no picture bytes, so every
-    // picture is written as its alternative text with `image_asset_missing`; the packaging of
-    // pictures (criterion 6) waits for that read.
+    // express is named in the result (criterion 4). Pictures travel with the page when the worker
+    // can read the asset bytes (deps.assetBytes; criterion 6).
     if (payload.target === 'html') {
       const htmlContent = await contentAt(
         deps.stores,
@@ -502,14 +553,49 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         { tenant, doc: payload.doc },
         payload.seq,
       );
-      const html = htmlText(htmlEnvelope, {
-        suggestions: htmlPlan.plan.suggestions,
-        ...(payload.suggestionAccess ? { suggestionAccess: payload.suggestionAccess } : {}),
-        ...(htmlContent.title !== null ? { title: htmlContent.title } : {}),
-        // The classification marking (EXP-089): before and after the content, when there is a label.
-        classification: htmlContent.classification,
-      });
-      const htmlDiagnostics: Diagnostic[] = [...htmlPlan.plan.diagnostics, ...html.diagnostics];
+      // The pictures (EXP-087 criterion 6): the control plane named the ready assets of this
+      // document that the content uses; the bytes are read by hash and checked against it. A
+      // picture of a type a page cannot show, or whose bytes are missing or do not match, stays
+      // out of the writer's list and so is written as its alternative text with
+      // `image_asset_missing`.
+      const pictures: Record<string, { extension: string }> = {};
+      const pictureBytes = new Map<string, Uint8Array>();
+      const pictureProblems: Diagnostic[] = [];
+      if (deps.assetBytes) {
+        for (const [id, a] of Object.entries(payload.assets)) {
+          const extension = HTML_PICTURES[a.mediaType];
+          if (extension === undefined) continue;
+          const bytes = await deps.assetBytes(tenant, a.sha256);
+          if (bytes === null || createHash('sha256').update(bytes).digest('hex') !== a.sha256) {
+            pictureProblems.push({
+              severity: 'warning',
+              code: 'image_asset_missing',
+              blockId: null,
+              message: `the bytes of a picture (asset ${id.slice(0, 40).replace(/[^A-Za-z0-9_-]/g, '')}) are not in the store or do not match their hash; its alternative text is written instead`,
+            });
+            continue;
+          }
+          pictures[id] = { extension };
+          pictureBytes.set(id, bytes);
+        }
+        stopIfCancelled(ctx);
+      }
+      const html = htmlText(
+        htmlEnvelope,
+        {
+          suggestions: htmlPlan.plan.suggestions,
+          ...(payload.suggestionAccess ? { suggestionAccess: payload.suggestionAccess } : {}),
+          ...(htmlContent.title !== null ? { title: htmlContent.title } : {}),
+          // The classification marking (EXP-089): before and after the content, when there is a label.
+          classification: htmlContent.classification,
+        },
+        pictures,
+      );
+      const htmlDiagnostics: Diagnostic[] = [
+        ...htmlPlan.plan.diagnostics,
+        ...pictureProblems,
+        ...html.diagnostics,
+      ];
       if (!html.ok)
         throw failed(
           'unsupported_feature',
@@ -518,15 +604,32 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         );
       stopIfCancelled(ctx);
       await ctx.report('converting', 50);
-      await deps.outputs.putExport(
-        tenant,
-        job.id,
-        HTML_OUTPUT_FILE,
-        html.bytes,
-        'text/html; charset=utf-8',
-      );
+      // With no picture the output is the page itself; with pictures it is an archive of
+      // `index.html` and the files the page names (the writer's `assets` list).
+      const used = html.assets.filter((p) => pictureBytes.has(p.asset));
+      let htmlFile = HTML_OUTPUT_FILE;
+      if (used.length === 0) {
+        await deps.outputs.putExport(
+          tenant,
+          job.id,
+          HTML_OUTPUT_FILE,
+          html.bytes,
+          'text/html; charset=utf-8',
+        );
+      } else {
+        htmlFile = HTML_ARCHIVE_FILE;
+        const files = new Map<string, Uint8Array>([['index.html', html.bytes]]);
+        for (const p of used) files.set(p.path, pictureBytes.get(p.asset)!);
+        await deps.outputs.putExport(
+          tenant,
+          job.id,
+          HTML_ARCHIVE_FILE,
+          tar(files),
+          'application/x-tar',
+        );
+      }
       const htmlOut: ExportOutputs = {
-        output: HTML_OUTPUT_FILE,
+        output: htmlFile,
         pages: null,
         layout: null,
         converged: null,
