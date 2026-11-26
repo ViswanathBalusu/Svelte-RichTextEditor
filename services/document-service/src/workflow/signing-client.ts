@@ -62,6 +62,8 @@ export type SigningAttempt =
       readonly timestamped: true;
       /** The time of the seal's time-stamp token (`genTime`), from the authority's clock. */
       readonly timestampTime: Date;
+      /** The end of the newest time-stamp's validity, ms since the epoch; the first renewal is due before it. */
+      readonly expiresAtMs?: number;
       readonly profile: 'B-LT' | 'B-LTA';
       /** Present when appearances were asked for. */
       readonly appearances?: AppearanceReport;
@@ -184,6 +186,7 @@ interface Wire {
   profile?: unknown;
   timestamped?: unknown;
   timestampTime?: unknown;
+  expiresAtMs?: unknown;
   appearances?: unknown;
 }
 
@@ -286,6 +289,9 @@ export class HttpSigningClient implements SigningClient, BatchAnchorClient {
       sealedHash,
       timestamped: true,
       timestampTime: when,
+      ...(typeof wire.expiresAtMs === 'number' && Number.isSafeInteger(wire.expiresAtMs)
+        ? { expiresAtMs: wire.expiresAtMs }
+        : {}),
       profile: wire.profile,
       ...(reportOf(wire.appearances) ? { appearances: reportOf(wire.appearances)! } : {}),
     };

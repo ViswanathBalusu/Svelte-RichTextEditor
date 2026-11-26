@@ -6,8 +6,8 @@
  *     {"tenant", "documentId", "seq", "pdfSha256", "compileSha256": [a, b], "seal"?, "pdf": base64}
  *
  * It answers 200 with `{"ok": true, "pdf": base64, "sealedSha256", "profile", "timestamped": true,
- * "timestampTime", "sealedAt", "keyId", "keyOwner"}`, or an error status with `{"ok": false,
- * "code", "retryable"}`. `GET /healthz` answers 200 and touches nothing else.
+ * "timestampTime", "expiresAtMs"?, "sealedAt", "keyId", "keyOwner"}`, or an error status with
+ * `{"ok": false, "code", "retryable"}`. `GET /healthz` answers 200 and touches nothing else.
  *
  *     POST /v1/anchor     (FRW-054 criterion 3)
  *     {"tenant", "documentId", "workflow", "seq", "chainHead"}
@@ -369,6 +369,7 @@ export function createSigningServer(service: SigningService, opts: HttpOptions):
         profile: out.profile,
         timestamped: true,
         timestampTime: out.timestampTime.toISOString(),
+        ...(out.expiresAtMs !== undefined ? { expiresAtMs: out.expiresAtMs } : {}),
         sealedAt: out.sealedAt.toISOString(),
         keyId: out.keyId,
         keyOwner: out.keyOwner,

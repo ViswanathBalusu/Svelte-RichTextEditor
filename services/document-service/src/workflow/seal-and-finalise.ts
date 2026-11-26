@@ -79,6 +79,8 @@ export type SealAndFinaliseOutcome =
       readonly attempts: number;
       /** The time in the seal's time-stamp token: the third party's time. */
       readonly timestampTime: Date;
+      /** The end of the newest time-stamp's validity, when the signing service said (FRW-056). */
+      readonly expiresAtMs?: number;
       /** What was drawn at the fields and what was not, when appearances were asked for. */
       readonly appearances?: AppearanceReport;
       readonly final: Extract<FinaliseSealedOutcome, { readonly ok: true }>;
@@ -138,6 +140,7 @@ export async function sealAndFinalise(
         sealed: true,
         attempts,
         timestampTime: out.timestampTime,
+        ...(out.expiresAtMs !== undefined ? { expiresAtMs: out.expiresAtMs } : {}),
         ...(out.appearances ? { appearances: out.appearances } : {}),
         final,
       };

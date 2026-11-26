@@ -10,9 +10,11 @@
 // key (`renewalJobId` of the document and the expiry), which the signing service must answer with
 // the time-stamp it already made rather than append a second one.
 //
-// Not built here: the signing service that makes the time-stamp (`RenewalSigner` is its port), the
-// incremental update of the PDF, and the scheduler that enqueues the job before each expiry. The
-// PostgreSQL store is `src/workflow/renewal-state-pg.ts` (migration 0068).
+// The signing service makes the time-stamp (`RenewalSigner` is its port; `sealedRenewalSigner` in
+// `src/workflow/extend-sealed.ts` is the implementation). The scheduled task that enqueues the job
+// before each expiry is `scheduleRenewals` in `src/workflow/renewal-schedule.ts`. The PostgreSQL
+// store is `src/workflow/renewal-state-pg.ts` (migration 0068); the in-memory one is
+// `renewal-state-memory.ts`.
 import { createHash, randomUUID } from 'node:crypto';
 import {
   applyRenewalResult,

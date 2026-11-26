@@ -146,6 +146,11 @@ export type SealOutcome =
       readonly profile: PadesProfile;
       /** The time of the signature's time-stamp token (`genTime`): the seal's time. */
       readonly timestampTime: Date;
+      /**
+       * The end of the newest time-stamp's validity (the authority certificate's `notAfter`), ms
+       * since the epoch: when the first renewal is due (FRW-056). Absent when it cannot be read.
+       */
+      readonly expiresAtMs?: number;
       /** The service's clock when it sealed: the time in `/M`. */
       readonly sealedAt: Date;
       readonly keyId: string;
@@ -170,6 +175,18 @@ const RETRYABLE: ReadonlySet<SealFailureCode> = new Set([
 ]);
 
 const sha256Hex = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex');
+
+/** `expiresAtMs` from the authority certificate (first) of a time-stamp token; nothing if unreadable. */
+function expiryOf(certs: readonly Uint8Array[]): { expiresAtMs?: number } {
+  const der = certs[0];
+  if (der === undefined) return {};
+  try {
+    const t = certificateOf(der).notAfter.value.getTime();
+    return Number.isFinite(t) ? { expiresAtMs: t } : {};
+  } catch {
+    return {};
+  }
+}
 
 /** The PAdES level a `finalisation.seal` value names, or null for a value the service does not know. */
 export function profileOf(seal: string | undefined): PadesProfile | null {
@@ -432,6 +449,7 @@ export class SigningService {
         sealedSha256,
         profile,
         timestampTime: result.timestampTime,
+        ...expiryOf(result.tokenCertificates),
         sealedAt,
         keyId: key.keyId,
         keyOwner: key.owner,

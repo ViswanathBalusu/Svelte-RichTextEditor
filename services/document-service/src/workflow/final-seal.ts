@@ -35,6 +35,7 @@ import { ANCHOR_FILE_FORMAT, type AnchorStore } from './anchor-store.ts';
 import { finalExportJobId } from './final-export-start.ts';
 import type { AppearanceRequest } from './signing-client.ts';
 import { raiseWorkflowEvents } from './raise-events.ts';
+import { recordFirstExpiry, type RenewalRegistry } from './renewal-schedule.ts';
 import type { WorkflowResourceView } from './workflow-resource.ts';
 import {
   sealAndFinalise,
@@ -60,6 +61,13 @@ export interface FinalSealDeps extends SealAndFinaliseDeps {
     workflow: WorkflowResourceView,
     job: JobRecord,
   ) => Promise<AppearanceRequest | undefined>;
+  /**
+   * Where the end of the seal's time-stamp is recorded for the renewal schedule (FRW-056 criterion
+   * 2). Absent: the seal is not renewed by the schedule.
+   */
+  readonly renewals?: Pick<RenewalRegistry, 'start'>;
+  /** Told when recording the first expiry failed; the seal stands. */
+  readonly renewalFailed?: (ref: DocRef, error: unknown) => void;
 }
 
 export type FinalSealOutcome =
@@ -170,6 +178,13 @@ export class FinalSealer {
       }
       // The workflow is finalised by now: the host hears of it first, whatever follows.
       await raiseWorkflowEvents(deps, ref, run.final.resource, run.final.control, run.final.raised);
+      // The end of the seal's time-stamp is recorded for the renewal schedule (FRW-056 criterion
+      // 2). A failure here is not a reason to undo the seal: the renewal then has no start, and
+      // the operator sees it in the log of the hook.
+      if (deps.renewals)
+        await recordFirstExpiry(deps.renewals, ref.tenant, ref.doc, run.expiresAtMs).catch((e) =>
+          deps.renewalFailed?.(ref, e),
+        );
       // What was not drawn is on record for the operator and the owner (FRW-057 criterion 6). It is
       // written after the events, so that a slow or failing audit store cannot delay or lose them.
       if (run.appearances && run.appearances.diagnostics.length > 0)

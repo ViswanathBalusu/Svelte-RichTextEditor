@@ -135,6 +135,16 @@ import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
 import type { ConsentTextStore } from './workflow/consent-service.ts';
 import { sweepTenant } from './workflow/schedule-sweep.ts';
 import { FinalSealer } from './workflow/final-seal.ts';
+import { PgRenewalStore } from './workflow/renewal-state-pg.ts';
+import { MemoryRenewalStore } from './workflow/renewal-state-memory.ts';
+import { scheduleRenewals, type RenewalRegistry } from './workflow/renewal-schedule.ts';
+import {
+  RENEWAL_KIND,
+  renewalHandler,
+  type RenewalStore,
+} from './control-plane/jobs/workflow-renewal.ts';
+import { sealedRenewalSigner } from './workflow/extend-sealed.ts';
+import { finalExportJobId } from './workflow/final-export-start.ts';
 import { appearanceRequestFor } from './workflow/appearances.ts';
 import { MemoryAnchorStore, type AnchorStore } from './workflow/anchor-store.ts';
 import {
@@ -379,6 +389,11 @@ export interface ServiceParts {
   captureSettings?: CaptureSettingsPort;
   /** The sealed final PDFs (FRW-054): `GET /documents/{id}/workflow/final` reads them. Absent: the route is not offered. */
   sealedPdfs?: SealedPdfStore;
+  /**
+   * The end of each sealed document's newest time-stamp, for its renewal (FRW-056). Absent: no
+   * renewal is scheduled.
+   */
+  renewals?: RenewalRegistry & RenewalStore;
   /** The signed, time-stamped chain heads at completion, written once (FRW-054 criterion 3). */
   anchors?: AnchorStore;
   /** The registered access codes of workflow participants and their attempt counters (FRW-039). */
@@ -482,6 +497,11 @@ export interface StartOptions {
     retry: { attempts: number; delaysMs: readonly number[] };
     retainMs: number;
     sleep?: (ms: number) => Promise<void>;
+    /**
+     * The renewal of the seal's time-stamp (FRW-056): the lead time and the claim time, ms. Absent,
+     * or without `parts.renewals`: no renewal is scheduled.
+     */
+    renewal?: { leadMs: number; claimMs: number };
   };
   /**
    * The hourly anchoring of chain heads (HIS-036; ADR 0409): the signing service's client and how
@@ -708,6 +728,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     workflows: new PgWorkflowResourceStore(pool, { now }),
     templates: new PgTemplateStore(pool),
     reminders: new PgReminderStore(pool),
+    renewals: new PgRenewalStore(pool),
     evidence: new PgEvidenceLedger(pool, { now }),
     captureSettings: new PgCaptureSettingsStore(pool, { now }),
     accessCodes: new PgAccessCodeStore(pool),
@@ -772,6 +793,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     evidence: new MemoryEvidenceLedger(now, (tenant) => capture.settingsOf(tenant)),
     captureSettings: capture,
     sealedPdfs: new MemorySealedPdfStore(),
+    renewals: new MemoryRenewalStore(),
     anchors: new MemoryAnchorStore(),
     accessCodes: new MemoryAccessCodeStore(),
     quotaAdmin: quotaAdminOver(
@@ -1280,8 +1302,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
           }),
           retry: { attempts: config.sealing.attempts, delaysMs: config.sealing.delaysMs },
           retainMs: config.sealing.retentionDays * 24 * 60 * 60 * 1000,
+          ...(config.sealing.renewal ? { renewal: config.sealing.renewal } : {}),
         }
       : null);
+  const renewalSetup = sealSetup?.renewal && parts.renewals ? sealSetup.renewal : null;
   let sealer: FinalSealer | null = null;
   if (sealSetup) {
     if (!parts.workflows || !parts.sealedPdfs || !parts.anchors)
@@ -1305,6 +1329,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
       objects: parts.objects,
       queue: parts.queue,
       events,
+      // The end of the seal's time-stamp, for its renewal (FRW-056).
+      ...(renewalSetup && parts.renewals
+        ? {
+            renewals: parts.renewals,
+            renewalFailed: (ref: { tenant: string; doc: string }, e: unknown) =>
+              logger.error({
+                event: 'workflow.renewal.start_failed',
+                tenant: ref.tenant,
+                doc: ref.doc,
+                ...errorFields(e),
+              }),
+          }
+        : {}),
       // The visible appearances at the signature and initials fields (FRW-057).
       ...(parts.evidence
         ? {
@@ -1336,6 +1373,37 @@ export async function startService(opts: StartOptions): Promise<Service> {
     });
   }
   const sealing = sealer;
+  // The renewal of the seal's time-stamp (FRW-056 criterion 2): the job, and below the scheduled
+  // task that queues it before each expiry.
+  if (sealSetup && renewalSetup && parts.renewals && parts.workflows && parts.sealedPdfs) {
+    const workflows = parts.workflows;
+    runnerFor({
+      [RENEWAL_KIND]: renewalHandler({
+        store: parts.renewals,
+        signer: sealedRenewalSigner(
+          {
+            workflows,
+            sealed: parts.sealedPdfs,
+            signing: sealSetup.signing,
+            now,
+            retainMs: sealSetup.retainMs,
+          },
+          // The `seq` the PDF was compiled at is on the final export job, which names it for the
+          // signing service's audit.
+          async (tenant, doc) => {
+            const w = await workflows.read(tenant, doc);
+            const id = w === null ? null : finalExportJobId({ tenant, doc }, w);
+            const job = id === null ? null : await parts.queue.get(tenant, id);
+            const seq = job?.payload['seq'];
+            return typeof seq === 'number' && Number.isSafeInteger(seq) && seq >= 0 ? seq : 0;
+          },
+        ),
+        leadMs: renewalSetup.leadMs,
+        claimMs: renewalSetup.claimMs,
+        now,
+      }),
+    });
+  }
   const runSeal = (ref: { tenant: string; doc: string }): Promise<unknown> =>
     sealing === null
       ? Promise.resolve(null)
@@ -1687,6 +1755,28 @@ export async function startService(opts: StartOptions): Promise<Service> {
               }
               return sealed;
             },
+          } satisfies ScheduledTask,
+        ]
+      : []),
+    // The renewal of the seal's time-stamp (FRW-056 criterion 2): queues one `workflow.renewal`
+    // job for each sealed document whose newest time-stamp ends within the lead time.
+    ...(renewalSetup && parts.renewals
+      ? [
+          {
+            name: 'workflow.renewal.schedule',
+            everyMs: 60 * 60 * 1000,
+            forTenant: async (tenant: string) =>
+              (
+                await scheduleRenewals(
+                  {
+                    registry: parts.renewals!,
+                    queue: parts.queue,
+                    leadMs: renewalSetup.leadMs,
+                    now,
+                  },
+                  tenant,
+                )
+              ).queued.length,
           } satisfies ScheduledTask,
         ]
       : []),

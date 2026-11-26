@@ -191,6 +191,16 @@ export interface SealingSettings {
   delaysMs: number[];
   /** How long the stored sealed bytes are retained, days from the seal. */
   retentionDays: number;
+  /**
+   * The renewal of the seal's time-stamp (12 §8.2 step 5; FRW-056). Absent: no renewal is
+   * scheduled. Neither number has a default, as the specification gives none.
+   */
+  renewal?: {
+    /** How long before an expiry the renewal is queued, ms (`DOCEDIT_RENEWAL_LEAD_DAYS`). */
+    leadMs: number;
+    /** How long a run holds the claim on an expiry, ms (`DOCEDIT_RENEWAL_CLAIM_MS`). */
+    claimMs: number;
+  };
 }
 
 /** The settings of the webhook dispatcher and its egress proxy (server.ts composes them). */
@@ -350,6 +360,10 @@ function sealingSettings(env: NodeJS.ProcessEnv): SealingSettings | null {
       throw new Error(`${name} must be an integer of at least ${min}`);
     return n;
   };
+  // The renewal of the time-stamp: both settings or neither (FRW-056).
+  const leadDays = env['DOCEDIT_RENEWAL_LEAD_DAYS'];
+  const claimMs = env['DOCEDIT_RENEWAL_CLAIM_MS'];
+  const wantsRenewal = (leadDays ?? '') !== '' || (claimMs ?? '') !== '';
   return {
     url: url.replace(/\/+$/, ''),
     credential: need('DOCEDIT_SEAL_CREDENTIAL'),
@@ -357,6 +371,14 @@ function sealingSettings(env: NodeJS.ProcessEnv): SealingSettings | null {
     attempts: num('DOCEDIT_SEAL_ATTEMPTS', 1),
     delaysMs: delays,
     retentionDays: num('DOCEDIT_SEAL_RETENTION_DAYS', 1),
+    ...(wantsRenewal
+      ? {
+          renewal: {
+            leadMs: num('DOCEDIT_RENEWAL_LEAD_DAYS', 1) * 24 * 60 * 60 * 1000,
+            claimMs: num('DOCEDIT_RENEWAL_CLAIM_MS', 1),
+          },
+        }
+      : {}),
   };
 }
 
