@@ -341,6 +341,8 @@ As an integrating developer, I want the specification, the integration guide and
 
 ### FND-014 Requirements traceability
 
+**Notes (lane w5, 2026-11-26):** Still blocked; nothing ticked. Checked again against `docs/owner-decisions-2026-11-15.md`: none of decisions 1 to 224 chooses a site generator, a Markdown renderer or an API documentation generator, and its closing paragraph (line 255) still lists "a Markdown renderer" among the new third-party libraries not yet asked, so the bulk acceptance of defaults (196 to 220) does not cover it. A search of `node_modules` finds no renderer or typedoc that is a dependency of this workspace (`markdown-it` is only a dev dependency of eslint's own tooling). Writing a renderer here would decide the question silently. needsDependency: a Markdown renderer and an API documentation generator, to be named by the owner. Nothing in the other two criteria has changed (the integration guide is still `apps/reference-host/docs/integration-guide.md`; `scripts/release` builds no site).
+
 | Type | Phase | Size | Priority | Persona |
 |---|---|---|---|---|
 | enabler | 1a | S | could | Project owner |
