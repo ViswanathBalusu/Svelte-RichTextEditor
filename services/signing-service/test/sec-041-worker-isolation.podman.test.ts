@@ -156,11 +156,7 @@ describe.skipIf(!enabled)('the workers cannot reach the signing service (SEC-041
     // Wait until the service answers, from its own network.
     const end = Date.now() + 60_000;
     for (;;) {
-      const out = await probe(
-        EXPORT_IMAGE,
-        NET_SIGNING,
-        `IP=${ip}; ${status('worker-secret')}`,
-      );
+      const out = await probe(EXPORT_IMAGE, NET_SIGNING, `IP=${ip}; ${status('worker-secret')}`);
       if (out.startsWith('HTTP/1.1')) break;
       if (Date.now() > end) throw new Error(`the signing container did not answer: ${out}`);
       await new Promise((r) => setTimeout(r, 500));
@@ -169,7 +165,8 @@ describe.skipIf(!enabled)('the workers cannot reach the signing service (SEC-041
 
   afterAll(async () => {
     await sh(['rm', '-f', NAME]).catch(() => undefined);
-    for (const n of [NET_SIGNING, NET_WORK]) await sh(['network', 'rm', '-f', n]).catch(() => undefined);
+    for (const n of [NET_SIGNING, NET_WORK])
+      await sh(['network', 'rm', '-f', n]).catch(() => undefined);
     rmSync(dir, { recursive: true, force: true });
   }, 120_000);
 

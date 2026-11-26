@@ -515,16 +515,13 @@
         "sec-028-expensive-commits.test.ts",
         "fuzz-time-limit.test.ts",
         "packages/authority/test/slow-input.test.ts",
-        "packages/authority/test/sec-028-throwing-commit.test.ts"
+        "packages/authority/test/sec-028-throwing-commit.test.ts",
+        "sec-028-worker-offload.test.ts"
       ],
       "open": [
         {
           "criterion": 1,
           "what": "expensive commits in volume from several channels while other rooms keep their acknowledgement latency"
-        },
-        {
-          "criterion": 3,
-          "what": "checkpoint serialisation, log replay, comparisons and conversions in worker threads during the attack"
         }
       ],
       "boundaries": ["element-to-service"],
@@ -538,27 +535,20 @@
       "builtBy": ["HIS-001", "HIS-002", "BE-081"],
       "provenBy": "SEC-029",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "history-tamper.test.ts",
         "sec-029-db-tamper.test.ts",
         "sec-029-changed-chain-head.test.ts",
         "sec-029-anchors.s3.test.ts",
         "sec-029-control-commits.test.ts",
-        "services/export-worker/src/sec-029-manifest-chain-head.pg.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 3,
-          "what": "each permission and workflow change as a control commit inside the chain"
-        },
-        {
-          "criterion": 5,
-          "what": "chain heads anchored in write-once storage, and what a rewrite before an anchor leaves undetected"
-        }
+        "services/export-worker/src/sec-029-manifest-chain-head.pg.test.ts",
+        "sec-029-workflow-control-commits.test.ts",
+        "sec-029-anchored-rewrite.pg.test.ts"
       ],
       "boundaries": ["element-to-service"],
-      "specRows": ["Forging history"]
+      "specRows": ["Forging history"],
+      "criteria": [1, 2, 3, 4, 5, 6]
     },
     {
       "id": "T-3.3-approved",
@@ -624,23 +614,19 @@
       "builtBy": ["EXP-042", "EXP-043", "EXP-044"],
       "provenBy": "SEC-033",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "latex-emitters.test.ts",
         "sec-033-contexts.test.ts",
         "sec-033-v-bullets.test.ts",
         "sec-033-w3-context-list.test.ts",
         "packages/export-latex/src/sec-033-hostile-text.compile.test.ts",
-        "services/export-worker/src/sec-033-unescaped.escape.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 1,
-          "what": "a fuzz target per emitter whose output is compiled and shown by the trace to run no unexpected control sequence"
-        }
+        "services/export-worker/src/sec-033-unescaped.escape.test.ts",
+        "packages/export-latex/src/sec-033-hostile-trace.compile.test.ts"
       ],
       "boundaries": ["service-to-workers"],
-      "specRows": ["typed emitters for every context in which a user's string can reach TeX"]
+      "specRows": ["typed emitters for every context in which a user's string can reach TeX"],
+      "criteria": [1, 2, 3, 4, 5]
     },
     {
       "id": "T-3.4-math-gate",
@@ -650,7 +636,7 @@
       "builtBy": ["EXP-049", "EXP-050"],
       "provenBy": "SEC-034",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "math-gate.test.ts",
         "math-commit-gate.test.ts",
@@ -660,14 +646,9 @@
         "packages/export-latex/src/sec-034-gate.compile.fuzz.test.ts",
         "services/export-worker/src/sec-034-region-equation.e2e.test.ts"
       ],
-      "open": [
-        {
-          "criterion": 5,
-          "what": "the end-to-end case: the strongest accepted equation built to cover a price in another region, checked by extracted text and rendered pixels"
-        }
-      ],
       "boundaries": ["service-to-workers"],
-      "specRows": ["a strict gate on math that also stops content painted outside its box"]
+      "specRows": ["a strict gate on math that also stops content painted outside its box"],
+      "criteria": [1, 2, 3, 4, 5, 6]
     },
     {
       "id": "T-3.4-sandbox",
@@ -823,10 +804,23 @@
       "builtBy": ["FRW-052"],
       "provenBy": "SEC-041",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "services/signing-service/test/sec-041-rotation.test.ts",
+        "services/signing-service/test/sec-041-worker-isolation.podman.test.ts"
+      ],
       "boundaries": ["service-to-signing"],
-      "specRows": ["Stolen signing key"]
+      "specRows": ["Stolen signing key"],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "no private key in the signing service memory, and signing in a hardware security module or a cloud key service (the module is the development emulator)"
+        },
+        {
+          "criterion": 2,
+          "what": "the import and indexer workers and the key service of the emulator, which are not separate deployables here"
+        }
+      ]
     },
     {
       "id": "T-3.6-tampered-pdf",
