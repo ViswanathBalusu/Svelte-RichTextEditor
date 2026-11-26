@@ -568,7 +568,7 @@ end
 -- the math nodes of an equation. In each line, the material from the start of an equation to its
 -- end (or from the start of the line, or to its end, where the line breaker broke inside it) is
 -- measured with the line's glue, and a PDF clip path of that box is put round it: `q ... W n`
--- before it and `Q` after it. Nothing here changes the line breaks or the offsets of EXP-055,
+-- before it and `Q` after it. The box is cut to the height and depth of the line. Nothing here changes the line breaks or the offsets of EXP-055,
 -- since the clip is made after the breaking and only adds whatsits.
 local function clip_literal(mode, data)
   PDF_LITERAL = PDF_LITERAL or node.subtype("pdf_literal")
@@ -602,6 +602,12 @@ local function clip_math(line, open)
   for _, seg in ipairs(segments) do
     if seg.first then
       local w, h, d = direct.dimensions(gset, gsign, gorder, seg.first, seg.stop)
+      -- The equation is also kept inside its line (SEC-034 criterion 5): where the line is shorter
+      -- than the equation (an exact line height, or a multiple below one), what lies above or below
+      -- the line is cut off and cannot be painted over the text of the lines around it.
+      local _, line_h, line_d = getwhd(line)
+      if h > line_h then h = line_h end
+      if d > line_d then d = line_d end
       local head = getlist(line)
       -- `q` is written where the stream's origin is the page's (mode 2, direct: no translation), so
       -- that the matching `Q` restores the origin that the backend believes in. The rectangle is
