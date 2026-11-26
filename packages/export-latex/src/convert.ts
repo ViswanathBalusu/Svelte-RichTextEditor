@@ -229,8 +229,14 @@ export async function convert(input: CdmEnvelope, options: ConvertOptions): Prom
   // The preflight is the one check of the document's own text and pictures (EXP-003, EXP-026, EXP-113).
   // A table in a multi-column section, a header or a footer is reported once, by the table writer
   // when it sets the box (tables.ts), so the job does not carry the same warning twice.
-  for (const w of preflight(envelope, options.fonts))
-    if (w.code !== 'table_cannot_span_pages')
+  // A row taller than a page, and a block in it that cannot be split, are likewise reported once,
+  // by the table writer that splits the row (`row_split`, `block_taller_than_page`; EXP-039).
+  for (const w of preflight(envelope, options.fonts, options.tableMeasure))
+    if (
+      w.code !== 'table_cannot_span_pages' &&
+      w.code !== 'row_taller_than_page' &&
+      w.code !== 'block_taller_than_page'
+    )
       diag(
         ctx,
         w.code === 'glyph_missing' && o.profile === 'final' ? 'error' : 'warning',

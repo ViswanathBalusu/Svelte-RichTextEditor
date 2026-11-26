@@ -6,6 +6,7 @@
 import type { CertificateFacts } from './certificate.ts';
 import type { CounterEffect } from '@docedit/model';
 import type { CodeRange } from './fonts/coverage.ts';
+import type { TableMeasure } from './table-measure.ts';
 
 /** A font file on the worker's read-only font path, named by its SHA-256 (09 §5). */
 export interface FontFace {
@@ -117,6 +118,12 @@ export interface ConvertOptions {
    * a warning and the compile goes on.
    */
   profile?: 'final' | 'preview';
+  /**
+   * The heights of the rows of the document's tables, from the editor's page layout (EXP-039;
+   * owner decision 114; `table-measure.ts`). With it a row taller than a page is split at paragraph
+   * boundaries; without it no row is split and none is reported.
+   */
+  tableMeasure?: TableMeasure;
   /** Document assets by identifier (EXP-014). An asset not listed is not attached. */
   assets?: Readonly<Record<string, AssetInput>>;
   /**

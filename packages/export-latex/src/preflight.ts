@@ -10,9 +10,11 @@
  *   §3.2), when the font manifest gives coverage.
  * - `image_without_alt`: a picture without alternative text (09 §13).
  *
- * A row taller than a page is not detected yet. Its height is to come from the editor's own page
- * layout, with no first compile pass (owner decision 114); EXP-039 has to give that measure to the
- * converter as well as to the editor, because both must get the same result from this function.
+ * - `row_taller_than_page` and `block_taller_than_page` (EXP-039): a table row taller than a page,
+ *   and a block in it that is taller than a page and cannot be split. They need the heights of the
+ *   editor's own page layout, with no first compile pass (owner decision 114), given as `measure`
+ *   (`table-measure.ts`); without it nothing is reported. The editor and the converter both pass
+ *   the measure and get the same result from this function.
  *
  * The editor calls it through `@docedit/export-latex/preflight`, which brings in this file, the
  * coverage reader and `@docedit/model` only (`packages/element/src/export-preflight.ts`).
@@ -26,9 +28,15 @@ import {
 } from '@docedit/model';
 import type { FontFace, FontManifest } from './bundle.ts';
 import { covers, mergeRanges, type CodeRange } from './fonts/coverage.ts';
+import { planRowSplit, type TableMeasure } from './table-measure.ts';
 
 export interface PreflightWarning {
-  readonly code: 'table_cannot_span_pages' | 'glyph_missing' | 'image_without_alt';
+  readonly code:
+    | 'table_cannot_span_pages'
+    | 'glyph_missing'
+    | 'image_without_alt'
+    | 'row_taller_than_page'
+    | 'block_taller_than_page';
   /** The block the occurrence is in: the table, the paragraph, the figure or the footnote's paragraph. */
   readonly blockId: string | null;
   readonly message: string;
@@ -51,7 +59,11 @@ function idOf(n: N | undefined): string | null {
   return typeof id === 'string' ? id : null;
 }
 
-export function preflight(envelope: CdmEnvelope, fonts?: FontManifest): PreflightWarning[] {
+export function preflight(
+  envelope: CdmEnvelope,
+  fonts?: FontManifest,
+  measure?: TableMeasure,
+): PreflightWarning[] {
   const doc = envelope.doc as unknown as N;
   const table = styleTable(doc as unknown as TreeNode);
   const out: PreflightWarning[] = [];
@@ -161,6 +173,34 @@ export function preflight(envelope: CdmEnvelope, fonts?: FontManifest): Prefligh
                 'a table in a multi-column section, a header or a footer is set as a box and cannot span pages (09 §3.2)',
             });
           const style = typeof b.attrs?.['style'] === 'string' ? b.attrs['style'] : null;
+          // A row taller than a page (EXP-039 criterion 4), from the editor's own layout (owner
+          // decision 114). Only a table that can span pages is split; the shared plan is the
+          // converter's, so both name the same row and the same blocks.
+          if (measure && place !== 'story' && columns() === 1) {
+            const headerRows = Number(b.attrs?.['headerRows'] ?? 0) || 0;
+            (b.content ?? []).forEach((row, r) => {
+              if (r < headerRows) return;
+              const cells = (row.content ?? []).map((c) => ({
+                cellId: idOf(c),
+                blocks: c.content ?? [],
+              }));
+              const plan = planRowSplit(measure, idOf(b), idOf(row), cells, idOf);
+              if (!plan) return;
+              out.push({
+                code: 'row_taller_than_page',
+                blockId: idOf(b),
+                message: `row ${r + 1} of table ${idOf(b) ?? '(no id)'} is taller than a page and will be split at paragraph boundaries (09 §3.2)`,
+              });
+              for (const u of plan.unsplittable) {
+                const blockId = idOf(cells[u.cell]?.blocks[u.index]);
+                out.push({
+                  code: 'block_taller_than_page',
+                  blockId,
+                  message: `block ${blockId ?? '(no id)'} in row ${r + 1} of table ${idOf(b) ?? '(no id)'} is taller than a page and cannot be split (09 §3.2)`,
+                });
+              }
+            });
+          }
           for (const row of b.content ?? [])
             for (const cell of row.content ?? []) blocks(cell.content, columns, 'cell', style);
           break;
