@@ -133,7 +133,7 @@ describe('EXP-102 criteria 3 and 5: fields, content controls and form fields are
     '<w:r><w:t xml:space="preserve">Page </w:t></w:r>' +
     '<w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple>' +
     '<w:fldSimple w:instr=" NUMPAGES "><w:r><w:t>9</w:t></w:r></w:fldSimple>' +
-    '<w:fldSimple w:instr=" SEQ Figure \* ARABIC "><w:r><w:t>3</w:t></w:r></w:fldSimple>' +
+    '<w:fldSimple w:instr=" SEQ Figure \\* ARABIC "><w:r><w:t>3</w:t></w:r></w:fldSimple>' +
     '<w:fldSimple w:instr=" XYZZY unknown "><w:r><w:t>cached</w:t></w:r></w:fldSimple>';
 
   it('fields are reported with a count, and the file is written back as it was', async () => {

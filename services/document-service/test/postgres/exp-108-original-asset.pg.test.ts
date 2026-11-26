@@ -139,7 +139,12 @@ describe.skipIf(skip !== null)('the original Word file stays with its document (
     expect(seq).toBeGreaterThan(0);
 
     // Criterion 4: the version of kind `import` names the original asset.
-    const versions = await h.parts.versions!.list(ref, { kind: 'import' });
+    // The hook of the settled job creates the version, a moment after the job reports completed.
+    let versions = await h.parts.versions!.list(ref, { kind: 'import' });
+    for (let i = 0; i < 200 && versions.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      versions = await h.parts.versions!.list(ref, { kind: 'import' });
+    }
     expect(versions).toHaveLength(1);
     expect(versions[0]!.note).toBe(`${ORIGINAL_NOTE} ${original}`);
 
