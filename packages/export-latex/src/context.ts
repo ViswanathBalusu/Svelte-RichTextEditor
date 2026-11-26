@@ -3,6 +3,7 @@
  * table and labels, ADR 0032), the output lines with the block that owns each one (map.json), and
  * the diagnostics. Nothing here reads a clock, a random source or the environment (EXP-002).
  */
+import type { DiagnosticCode } from './diagnostic-codes.ts';
 import type { DocumentLabels, StyleTable } from '@docedit/model';
 import type {
   AssetInput,
@@ -147,7 +148,7 @@ export interface BibEntry {
 export function diag(
   ctx: Ctx,
   severity: Diagnostic['severity'],
-  code: string,
+  code: DiagnosticCode,
   blockId: string | null,
   message: string,
 ): void {
@@ -157,7 +158,7 @@ export function diag(
 /** One warning per code for the whole document (approximations that repeat). */
 export function warnOnce(
   ctx: Ctx,
-  code: string,
+  code: DiagnosticCode,
   message: string,
   blockId: string | null = null,
 ): void {

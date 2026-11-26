@@ -15,6 +15,7 @@
  * Nothing here reads a file or a network resource; pictures are referenced by path under `assets/`
  * and the job writes them (criterion 6, not covered here).
  */
+import type { DiagnosticCode, PlainCode } from './diagnostic-codes.ts';
 import {
   computeLabels,
   outlineLevelOf,
@@ -109,7 +110,7 @@ export type DirectState = Pick<Ctx, 'diagnostics' | 'warned' | 'mode'>;
 export function note(
   ctx: DirectState,
   severity: Diagnostic['severity'],
-  code: string,
+  code: DiagnosticCode | PlainCode,
   message: string,
   blockId: string | null,
 ): void {

@@ -85,3 +85,11 @@ export type { AltTextReport } from './alt-report.ts';
 
 /** File names of the house class inside `class/`, in the order the bundle lists them. */
 export const CLASS_FILES = ['docedit.cls', 'docedit.lua'] as const;
+
+export {
+  DIAGNOSTIC_CODES,
+  DIAGNOSTIC_CODE_PATTERNS,
+  type DiagnosticCode,
+  type DiagnosticCodeInfo,
+  type PlainCode,
+} from './diagnostic-codes.ts';

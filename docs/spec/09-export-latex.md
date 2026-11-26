@@ -212,6 +212,8 @@ Interactive previews and user-requested exports use separate queues so a bulk ex
 
 The worker runs with file and line error messages enabled. The service parses the log with a bounded parser, treats it as hostile input (user text can imitate log lines), maps lines to blocks through `map.json`, and returns entries of the form `{ severity, code, blockId, message }`. Raw logs are available to document editors only.
 
+The codes are stable and listed in `spec/export/diagnostic-codes-1.json`, which carries the house class version it belongs to. The list holds the codes of the worker and those of the converter and the HTML and Markdown writers, each with its severity and a sentence; the open family `<mark>_plain` is listed as a pattern. It is generated from the two catalogues (`services/export-worker/src/diagnostics.ts` and `packages/export-latex/src/diagnostic-codes.ts`; `pnpm generate`), and a code that is not in the converter's catalogue does not compile.
+
 ### 9.3 Sandbox rules
 
 1. Workers compile only bundles produced by the converter. There is no feature for raw LaTeX blocks, custom preambles or uploaded packages.

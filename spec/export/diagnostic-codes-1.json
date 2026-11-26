@@ -4,179 +4,781 @@
   "classVersion": "0.2.18",
   "codes": [
     {
+      "code": "align_distribute",
+      "severity": "warning",
+      "message": "Distributed alignment is set as justified.",
+      "origin": "converter"
+    },
+    {
+      "code": "alignment_omitted",
+      "severity": "warning",
+      "message": "An alignment HTML or Markdown cannot express is written as the start alignment.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "asset_not_attached",
+      "severity": "warning",
+      "message": "A picture refers to an asset the job does not list; a placeholder is printed.",
+      "origin": "converter"
+    },
+    {
+      "code": "asset_not_ready",
+      "severity": "warning",
+      "message": "A picture refers to an asset that is not ready; a placeholder is printed.",
+      "origin": "converter"
+    },
+    {
+      "code": "asset_type_unsupported",
+      "severity": "warning",
+      "message": "A picture has a media type the typesetter does not place; a placeholder is printed.",
+      "origin": "converter"
+    },
+    {
+      "code": "bibliography_empty",
+      "severity": "info",
+      "message": "The bibliography has no entries.",
+      "origin": "converter"
+    },
+    {
+      "code": "bibliography_omitted",
+      "severity": "warning",
+      "message": "The generated bibliography is not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "block_suggestion_plain",
+      "severity": "info",
+      "message": "A suggested paragraph is written without a mark.",
+      "origin": "converter",
+      "note": "The Markdown writer."
+    },
+    {
+      "code": "block_taller_than_page",
+      "severity": "warning",
+      "message": "A block in a table row is taller than a page and cannot be split.",
+      "origin": "converter"
+    },
+    {
+      "code": "block_unsupported",
+      "severity": "warning",
+      "message": "A block of this type prints a placeholder.",
+      "origin": "converter"
+    },
+    {
+      "code": "bullet_replaced",
+      "severity": "info",
+      "message": "Bullet characters are written as a hyphen.",
+      "origin": "converter",
+      "note": "The Markdown writer."
+    },
+    {
       "code": "bundle_refused",
       "severity": "error",
-      "message": "The bundle did not come from the converter and was not compiled."
+      "message": "The bundle did not come from the converter and was not compiled.",
+      "origin": "worker"
+    },
+    {
+      "code": "caps_plain",
+      "severity": "warning",
+      "message": "Small capitals and all capitals are written as typed.",
+      "origin": "converter",
+      "note": "The HTML writer."
+    },
+    {
+      "code": "cell_content_omitted",
+      "severity": "warning",
+      "message": "A kind of content in a table cell is not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "citation_not_generated",
+      "severity": "warning",
+      "message": "A citation without a generated text is not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "citation_source_missing",
+      "severity": "warning",
+      "message": "A citation names a source the document does not define; it prints [?].",
+      "origin": "converter"
+    },
+    {
+      "code": "citation_style_unknown",
+      "severity": "warning",
+      "message": "The requested citation style is not known; the style of the document is used.",
+      "origin": "converter"
     },
     {
       "code": "class_error",
       "severity": "error",
-      "message": "The house class refused part of the document."
+      "message": "The house class refused part of the document.",
+      "origin": "worker"
+    },
+    {
+      "code": "colour_invalid",
+      "severity": "warning",
+      "message": "A colour is not six hexadecimal digits; none is written.",
+      "origin": "converter"
+    },
+    {
+      "code": "colour_not_written",
+      "severity": "warning",
+      "message": "A colour that is not a six-digit hexadecimal value is not written.",
+      "origin": "converter",
+      "note": "The HTML writer."
+    },
+    {
+      "code": "comment_detached",
+      "severity": "warning",
+      "message": "The range of a comment thread has no text left; it is listed at the end.",
+      "origin": "converter"
+    },
+    {
+      "code": "comment_not_in_margin",
+      "severity": "warning",
+      "message": "A comment thread stands where a margin note cannot be placed; it is listed at the end.",
+      "origin": "converter"
+    },
+    {
+      "code": "comments_truncated",
+      "severity": "warning",
+      "message": "Only the first comment threads, or the first messages of a thread, are printed.",
+      "origin": "converter"
+    },
+    {
+      "code": "continuous_break_geometry",
+      "severity": "warning",
+      "message": "A continuous section break that changes the page size or margins cannot be honoured; they stay until the next page section.",
+      "origin": "converter"
+    },
+    {
+      "code": "date_field_invalid",
+      "severity": "error",
+      "message": "A date field cannot be printed.",
+      "origin": "converter"
+    },
+    {
+      "code": "date_without_job_time",
+      "severity": "error",
+      "message": "A date field needs the job instant and time zone; it prints nothing.",
+      "origin": "converter"
+    },
+    {
+      "code": "enum_unknown",
+      "severity": "warning",
+      "message": "A value has no entry in the table of its kind; the default is used.",
+      "origin": "converter"
+    },
+    {
+      "code": "equation_as_code",
+      "severity": "warning",
+      "message": "Equations are written as LaTeX source in code, not rendered.",
+      "origin": "converter",
+      "note": "The Markdown writer."
+    },
+    {
+      "code": "equation_as_source",
+      "severity": "warning",
+      "message": "Equations are written as LaTeX source in code, not rendered.",
+      "origin": "converter",
+      "note": "The HTML writer."
+    },
+    {
+      "code": "extension_omitted",
+      "severity": "warning",
+      "message": "Host extension content is written as its fallback text, or not at all.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "fallback_asset_missing",
+      "severity": "warning",
+      "message": "An extension or preserved block names a fallback asset the job does not list; its fallback text is printed.",
+      "origin": "converter"
+    },
+    {
+      "code": "field_not_computed",
+      "severity": "warning",
+      "message": "A field is written from its cached result, or not at all.",
+      "origin": "converter"
     },
     {
       "code": "field_too_wide",
       "severity": "warning",
-      "message": "The value of a form field is wider than the field."
+      "message": "The value of a form field is wider than the field.",
+      "origin": "worker"
+    },
+    {
+      "code": "font_family_missing",
+      "severity": "warning",
+      "message": "A font family is not in the font manifest; the default family and the fallback chain are used.",
+      "origin": "converter"
+    },
+    {
+      "code": "font_family_not_written",
+      "severity": "warning",
+      "message": "A font family name outside the pattern of the model is not written.",
+      "origin": "converter",
+      "note": "The HTML writer."
     },
     {
       "code": "font_file_mismatch",
       "severity": "error",
-      "message": "A font file does not hash to the name the manifest gives it."
+      "message": "A font file does not hash to the name the manifest gives it.",
+      "origin": "worker"
     },
     {
       "code": "font_file_missing",
       "severity": "error",
-      "message": "A font of the manifest is not in the worker font directory."
+      "message": "A font of the manifest is not in the worker font directory.",
+      "origin": "worker"
+    },
+    {
+      "code": "font_server_use_not_permitted",
+      "severity": "warning",
+      "message": "A font family is not permitted for server-side use; it is used on screen only, and the PDF takes the default family and the fallback chain.",
+      "origin": "converter"
+    },
+    {
+      "code": "font_size_not_written",
+      "severity": "warning",
+      "message": "A font size outside 20 to 32760 twips is not written.",
+      "origin": "converter",
+      "note": "The HTML writer."
     },
     {
       "code": "font_substituted",
       "severity": "warning",
-      "message": "A font shape was replaced by another."
+      "message": "A font shape was replaced by another.",
+      "origin": "worker"
+    },
+    {
+      "code": "footnote_in_story",
+      "severity": "warning",
+      "message": "A footnote in a header or footer is not set.",
+      "origin": "converter"
+    },
+    {
+      "code": "footnote_paragraphs",
+      "severity": "warning",
+      "message": "Only the first paragraph of a footnote is set.",
+      "origin": "converter"
+    },
+    {
+      "code": "form_field_omitted",
+      "severity": "warning",
+      "message": "Form fields are not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "form_value_not_printed",
+      "severity": "warning",
+      "message": "The value of a form field is not printed.",
+      "origin": "converter"
+    },
+    {
+      "code": "formatting_suggestion_plain",
+      "severity": "info",
+      "message": "Formatting suggestions are written with their current formatting.",
+      "origin": "converter",
+      "note": "The Markdown writer."
+    },
+    {
+      "code": "glyph_missing",
+      "severity": "warning",
+      "message": "No font of the manifest has a character of the text.",
+      "origin": "converter",
+      "note": "An error in a final export (EXP-026), a warning in a preview."
+    },
+    {
+      "code": "headers_footers_omitted",
+      "severity": "warning",
+      "message": "Headers, footers and other stories are not written in HTML.",
+      "origin": "converter",
+      "note": "The HTML writer."
+    },
+    {
+      "code": "heading_level_clamped",
+      "severity": "warning",
+      "message": "Headings below level 6 are written as level 6.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "hidden_region_omitted",
+      "severity": "info",
+      "message": "A region the reader may not see is not written.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "hidden_text",
+      "severity": "warning",
+      "message": "Hidden text is left out of the PDF.",
+      "origin": "converter"
+    },
+    {
+      "code": "highlight_not_written",
+      "severity": "warning",
+      "message": "A highlight colour outside the model list is not written.",
+      "origin": "converter",
+      "note": "The HTML writer."
+    },
+    {
+      "code": "image_asset_missing",
+      "severity": "warning",
+      "message": "A picture is not in the document assets; its alternative text is written instead.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "image_without_alt",
+      "severity": "warning",
+      "message": "A picture has no alternative text.",
+      "origin": "converter"
+    },
+    {
+      "code": "inline_unsupported",
+      "severity": "warning",
+      "message": "An inline node of this type prints a placeholder.",
+      "origin": "converter"
+    },
+    {
+      "code": "language_unknown",
+      "severity": "warning",
+      "message": "A language has no entry; the document language, or English, is used.",
+      "origin": "converter"
     },
     {
       "code": "latex_error",
       "severity": "error",
-      "message": "LaTeX reported an error."
+      "message": "LaTeX reported an error.",
+      "origin": "worker"
     },
     {
       "code": "layout_invalid",
       "severity": "warning",
-      "message": "The layout report was invalid and is not used."
+      "message": "The layout report was invalid and is not used.",
+      "origin": "worker"
     },
     {
       "code": "limit_memory",
       "severity": "error",
-      "message": "The compile passed its memory limit."
+      "message": "The compile passed its memory limit.",
+      "origin": "worker"
     },
     {
       "code": "limit_output",
       "severity": "error",
-      "message": "The compile passed its output size limit."
+      "message": "The compile passed its output size limit.",
+      "origin": "worker"
     },
     {
       "code": "limit_pages",
       "severity": "error",
-      "message": "The document passed the page limit."
+      "message": "The document passed the page limit.",
+      "origin": "worker"
     },
     {
       "code": "limit_processes",
       "severity": "error",
-      "message": "The compile passed its process limit."
+      "message": "The compile passed its process limit.",
+      "origin": "worker"
     },
     {
       "code": "limit_time",
       "severity": "error",
-      "message": "The compile passed its time limit."
+      "message": "The compile passed its time limit.",
+      "origin": "worker"
     },
     {
       "code": "limit_workdir",
       "severity": "error",
-      "message": "The compile filled its working directory."
+      "message": "The compile filled its working directory.",
+      "origin": "worker"
+    },
+    {
+      "code": "line_break_in_text",
+      "severity": "info",
+      "message": "A line break inside a text is written as a space.",
+      "origin": "converter",
+      "note": "The Markdown writer."
+    },
+    {
+      "code": "link_refused",
+      "severity": "warning",
+      "message": "A link was printed as plain text.",
+      "origin": "converter"
+    },
+    {
+      "code": "link_scheme_dropped",
+      "severity": "warning",
+      "message": "A link to a scheme other than http, https, mailto or an in-document target is written as plain text.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "link_target_missing",
+      "severity": "warning",
+      "message": "An in-document link has no anchor; it is printed as text.",
+      "origin": "converter"
     },
     {
       "code": "log_truncated",
       "severity": "warning",
-      "message": "The output was truncated at a limit of the parser; later messages are not listed."
+      "message": "The output was truncated at a limit of the parser; later messages are not listed.",
+      "origin": "worker"
+    },
+    {
+      "code": "markup_pagination",
+      "severity": "info",
+      "message": "Suggestions are shown as markup, so the pagination differs from that of the accepted or rejected text.",
+      "origin": "converter"
+    },
+    {
+      "code": "math_refused",
+      "severity": "warning",
+      "message": "An equation did not pass the gate and was replaced by a placeholder.",
+      "origin": "converter"
+    },
+    {
+      "code": "merged_cells_flattened",
+      "severity": "warning",
+      "message": "Merged cells are written as separate cells.",
+      "origin": "converter",
+      "note": "The Markdown writer."
     },
     {
       "code": "missing_glyph",
       "severity": "error",
-      "message": "No font of the document has this character."
+      "message": "No font of the document has this character.",
+      "origin": "worker"
     },
     {
       "code": "option_ignored",
       "severity": "info",
-      "message": "An export option this worker does not know was ignored."
+      "message": "An export option this worker does not know was ignored.",
+      "origin": "worker"
     },
     {
       "code": "option_invalid",
       "severity": "error",
-      "message": "An export option has a value outside its schema."
+      "message": "An export option has a value outside its schema.",
+      "origin": "worker"
     },
     {
       "code": "option_unsupported",
       "severity": "error",
-      "message": "An export option is not supported yet."
+      "message": "An export option is not supported yet.",
+      "origin": "worker"
     },
     {
       "code": "overfull_line",
       "severity": "warning",
-      "message": "A line is wider than its column."
+      "message": "A line is wider than its column.",
+      "origin": "worker"
     },
     {
       "code": "package_error",
       "severity": "error",
-      "message": "A package of the house class reported an error."
+      "message": "A package of the house class reported an error.",
+      "origin": "worker"
     },
     {
       "code": "package_warning",
       "severity": "info",
-      "message": "A package of the house class gave a warning."
+      "message": "A package of the house class gave a warning.",
+      "origin": "worker"
+    },
+    {
+      "code": "page_break_omitted",
+      "severity": "warning",
+      "message": "Page and column breaks are not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "page_setup_missing",
+      "severity": "warning",
+      "message": "A page setup is missing; A4 with 1-inch margins, or the current setup, is used.",
+      "origin": "converter"
+    },
+    {
+      "code": "page_setup_omitted",
+      "severity": "warning",
+      "message": "Page setups are not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "paragraph_border_between",
+      "severity": "warning",
+      "message": "The between border of a paragraph is not drawn.",
+      "origin": "converter"
+    },
+    {
+      "code": "paragraph_layout_omitted",
+      "severity": "warning",
+      "message": "Spacing, indents, borders, shading, tab stops and page breaks of paragraphs are not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
     },
     {
       "code": "pdf_standard_substituted",
       "severity": "warning",
-      "message": "The PDF declares PDF/A-4f instead of PDF/A-4, because tagged PDF embeds files."
+      "message": "The PDF declares PDF/A-4f instead of PDF/A-4, because tagged PDF embeds files.",
+      "origin": "worker"
+    },
+    {
+      "code": "pending_suggestions",
+      "severity": "error",
+      "message": "The document has unresolved suggestions and the job sets no suggestions option.",
+      "origin": "converter"
+    },
+    {
+      "code": "preserved_formatting_omitted",
+      "severity": "warning",
+      "message": "Word formatting the model does not represent is not written in Markdown.",
+      "origin": "converter",
+      "note": "The Markdown writer."
+    },
+    {
+      "code": "preserved_omitted",
+      "severity": "warning",
+      "message": "Word content the model does not represent is not written in HTML.",
+      "origin": "converter",
+      "note": "The HTML writer."
     },
     {
       "code": "preview_one_pass",
       "severity": "info",
-      "message": "A preview runs one pass: page numbers in the table of contents and in references may be stale."
+      "message": "A preview runs one pass: page numbers in the table of contents and in references may be stale.",
+      "origin": "worker"
+    },
+    {
+      "code": "ref_unresolved",
+      "severity": "warning",
+      "message": "A reference field has a target without a label; it prints nothing.",
+      "origin": "converter"
     },
     {
       "code": "references_changed",
       "severity": "warning",
-      "message": "Page references changed in the last pass; page numbers may be stale."
+      "message": "Page references changed in the last pass; page numbers may be stale.",
+      "origin": "worker"
     },
     {
       "code": "references_not_converged",
       "severity": "warning",
-      "message": "Page references did not settle within the pass limit; page numbers may be wrong."
+      "message": "Page references did not settle within the pass limit; page numbers may be wrong.",
+      "origin": "worker"
+    },
+    {
+      "code": "row_split",
+      "severity": "warning",
+      "message": "A table row taller than a page is set as continuation rows, cut between blocks.",
+      "origin": "converter"
+    },
+    {
+      "code": "row_taller_than_page",
+      "severity": "warning",
+      "message": "A table row is taller than a page.",
+      "origin": "converter"
+    },
+    {
+      "code": "rtl_unsupported",
+      "severity": "warning",
+      "message": "Right-to-left paragraphs are set left to right.",
+      "origin": "converter"
     },
     {
       "code": "seal_pair_differs",
       "severity": "error",
-      "message": "The two compiles for sealing did not give the same PDF; nothing is sealed."
+      "message": "The two compiles for sealing did not give the same PDF; nothing is sealed.",
+      "origin": "worker"
     },
     {
       "code": "seal_pin_mismatch",
       "severity": "error",
-      "message": "The bundle is not the state the sealing export is pinned to; nothing was compiled."
+      "message": "The bundle is not the state the sealing export is pinned to; nothing was compiled.",
+      "origin": "worker"
+    },
+    {
+      "code": "span_taller_than_rows",
+      "severity": "warning",
+      "message": "A cell spans rows and holds content; heights are not measured, so the content may be taller than the rows.",
+      "origin": "converter"
+    },
+    {
+      "code": "standard_needs_tagging",
+      "severity": "warning",
+      "message": "PDF/UA-2 needs full tagging; only PDF/A-4f is declared.",
+      "origin": "converter"
+    },
+    {
+      "code": "stories_omitted",
+      "severity": "info",
+      "message": "Headers, footers and other stories are not written in Markdown.",
+      "origin": "converter",
+      "note": "The Markdown writer."
+    },
+    {
+      "code": "story_missing",
+      "severity": "warning",
+      "message": "A page setup names a header or footer story the document lacks.",
+      "origin": "converter"
+    },
+    {
+      "code": "style_chain_too_long",
+      "severity": "warning",
+      "message": "The chain of a style is too long to resolve.",
+      "origin": "converter"
+    },
+    {
+      "code": "style_cycle",
+      "severity": "warning",
+      "message": "The chain of a style loops.",
+      "origin": "converter"
+    },
+    {
+      "code": "style_missing",
+      "severity": "warning",
+      "message": "A style names a parent or a style the document lacks.",
+      "origin": "converter"
+    },
+    {
+      "code": "suggestion_not_permitted",
+      "severity": "warning",
+      "message": "A suggested deletion of a whole block does not pass the permission rules, so the block is kept.",
+      "origin": "converter"
+    },
+    {
+      "code": "suggestion_unverified",
+      "severity": "warning",
+      "message": "A suggestion mark names no suggestion or no author; its content is kept as it is.",
+      "origin": "converter"
     },
     {
       "code": "suggestions_unsupported",
       "severity": "error",
-      "message": "Documents with unresolved suggestions cannot be exported yet."
+      "message": "Documents with unresolved suggestions cannot be exported yet.",
+      "origin": "worker"
+    },
+    {
+      "code": "tab_approximate",
+      "severity": "warning",
+      "message": "A right or decimal tab in justified text is set approximately.",
+      "origin": "converter"
+    },
+    {
+      "code": "tab_stop_plain",
+      "severity": "warning",
+      "message": "Tab stops are written as a space.",
+      "origin": "converter",
+      "note": "The HTML writer."
+    },
+    {
+      "code": "table_cannot_span_pages",
+      "severity": "warning",
+      "message": "A table in a multi-column section, a header, a footer or a footnote is set as a box and cannot span pages.",
+      "origin": "converter"
+    },
+    {
+      "code": "table_style_plain",
+      "severity": "info",
+      "message": "Table styles are not written in HTML; the cells keep their own formatting.",
+      "origin": "converter",
+      "note": "The HTML writer."
     },
     {
       "code": "tenant_font_unavailable",
       "severity": "warning",
-      "message": "A font the tenant added is not used in this export."
+      "message": "A font the tenant added is not used in this export.",
+      "origin": "worker"
     },
     {
       "code": "tex_error",
       "severity": "error",
-      "message": "The typesetter stopped with an error."
+      "message": "The typesetter stopped with an error.",
+      "origin": "worker"
     },
     {
       "code": "tex_fatal",
       "severity": "error",
-      "message": "The compile stopped and produced no PDF."
+      "message": "The compile stopped and produced no PDF.",
+      "origin": "worker"
     },
     {
       "code": "tex_undefined",
       "severity": "error",
-      "message": "The typesetter met a command it does not know."
+      "message": "The typesetter met a command it does not know.",
+      "origin": "worker"
+    },
+    {
+      "code": "title_unknown",
+      "severity": "warning",
+      "message": "A title field has no document title from the job; it prints nothing.",
+      "origin": "converter"
+    },
+    {
+      "code": "toc_omitted",
+      "severity": "warning",
+      "message": "Tables of contents and lists of figures are generated; they are not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
     },
     {
       "code": "undefined_reference",
       "severity": "warning",
-      "message": "A reference has no target."
+      "message": "A reference has no target.",
+      "origin": "worker"
+    },
+    {
+      "code": "underline_plain",
+      "severity": "warning",
+      "message": "Underline is not written in Markdown; the text is written without it.",
+      "origin": "converter",
+      "note": "The Markdown writer."
+    },
+    {
+      "code": "unknown_block_omitted",
+      "severity": "warning",
+      "message": "A block of an unknown type is not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "unknown_inline_omitted",
+      "severity": "warning",
+      "message": "An inline node of an unknown type is not written in HTML or Markdown.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers."
+    },
+    {
+      "code": "unsupported_feature",
+      "severity": "error",
+      "message": "The document requires a feature this converter cannot read.",
+      "origin": "converter"
     },
     {
       "code": "view_unsupported",
       "severity": "error",
-      "message": "Exports of a view with hidden regions or values are not available yet."
+      "message": "Exports of a view with hidden regions or values are not available yet.",
+      "origin": "worker"
+    }
+  ],
+  "patterns": [
+    {
+      "pattern": "<mark>_plain",
+      "severity": "warning",
+      "message": "A text mark the writer does not write is left out; the text is written without it.",
+      "origin": "converter",
+      "note": "The HTML and Markdown writers. Fixed members: caps_plain, underline_plain, tab_stop_plain and table_style_plain are listed above."
     }
   ]
 }
