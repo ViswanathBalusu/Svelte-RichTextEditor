@@ -5106,12 +5106,24 @@ one or original. It is a
       return true;
     };
 
+    // Work made under another view token was made on another projection of the document (ADR 0019;
+    // FE-141 criterion 4): it is never applied here. A commit or queue written before the token was
+    // kept (no `view`) is put back as before.
+    const now = this.#sync.view ?? null;
+    const otherView = (made: string | null | undefined): boolean =>
+      made !== undefined && made !== now;
     const entry = plan.entry;
     let inflightBack = false;
     if (entry) {
       // The text of work that is set aside is read from the steps, which parse without a document.
       const steps = parse(entry.steps);
-      if (entry.base === here && steps && steps.length > 0 && applyAll(steps)) {
+      if (
+        !otherView(entry.view) &&
+        entry.base === here &&
+        steps &&
+        steps.length > 0 &&
+        applyAll(steps)
+      ) {
         const queued = this.#sync.queue;
         this.#sync = {
           ...this.#sync,
@@ -5133,7 +5145,7 @@ one or original. It is a
       const madeOn = plan.queueAt?.seq;
       const fits = entry ? inflightBack && madeOn === entry.base : madeOn === here;
       const steps = parse(plan.queue);
-      if (!(fits && steps && steps.length > 0 && applyAll(steps)))
+      if (!(fits && !otherView(plan.queueAt?.view) && steps && steps.length > 0 && applyAll(steps)))
         setAside(plan.queue, steps, null);
     }
     this.#publishSync();
