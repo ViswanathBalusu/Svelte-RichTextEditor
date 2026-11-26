@@ -1,13 +1,12 @@
 /**
- * EXP-035 (Node.js only): an extension node is typeset through its fallback. Criteria 1, 3 and 4
- * are tested here. Criterion 2 is not: a block's `fallbackText` is written through the `pdfString`
- * emitter (attributes.ts), not the `text` emitter the criterion names, so it stays open (story Notes).
+ * EXP-035 (Node.js only): an extension node is typeset through its fallback. Criterion 2 follows
+ * owner decision 210: a block's `fallbackText` goes through `pdfString`, an inline's through `text`.
  * Nothing compiles here.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { blockLines, doc, nid, para, run } from '../test/docs.ts';
+import { blockLines, decodeStrings, doc, nid, para, run } from '../test/docs.ts';
 
 const PNG_SHA = 'e'.repeat(64);
 const PNG_BYTES = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
