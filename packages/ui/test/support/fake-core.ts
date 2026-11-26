@@ -904,11 +904,12 @@ export class FakeCore implements CoreApi {
         // FE-129: the options of the dialog are held in `options`, with the CDM's defaults for a
         // value that is cleared; borders and shading are whole values.
         const own: Record<string, unknown> = {};
-        const rest: Record<string, unknown> = { ...patch };
+        const rest: Record<string, unknown> = Object.fromEntries(
+          Object.entries(patch).filter(([key]) => !OPTION_KEYS.includes(key)),
+        );
         for (const key of OPTION_KEYS) {
-          if (!(key in rest)) continue;
-          own[key] = rest[key] ?? OPTION_DEFAULTS[key];
-          delete rest[key];
+          if (key in patch)
+            own[key] = (patch as Record<string, unknown>)[key] ?? OPTION_DEFAULTS[key];
         }
         if ('borders' in own)
           own['borders'] = Object.fromEntries(
