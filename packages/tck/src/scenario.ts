@@ -31,6 +31,8 @@ export interface Needs {
   readonly testMode?: boolean;
   /** An origin registered for the kit's tenant (CORS and `Origin` checks). */
   readonly origin?: boolean;
+  /** A service credential of a second tenant (UX-076; `KitConfig.otherCredential`). */
+  readonly otherTenant?: boolean;
   /** Features the server must announce, beyond the profile's own. */
   readonly features?: readonly string[];
 }

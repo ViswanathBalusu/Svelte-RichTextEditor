@@ -120,6 +120,61 @@ function serviceRoutes(doc: string): Array<[string, string, unknown]> {
   ];
 }
 
+/** The operations of row 13 (07 §12), as the OpenAPI names them. */
+const SERVICE_OPERATIONS = [
+  'GET /retention',
+  'PUT /retention',
+  'GET /documents/{id}/retention',
+  'PUT /documents/{id}/retention',
+  'POST /documents/{id}/holds',
+  'DELETE /documents/{id}/holds/{holdId}',
+  'GET /holds',
+  'POST /tenant-fonts',
+  'DELETE /tenant-fonts/{sha256}',
+  'POST /users/erase',
+  'POST /documents/{id}/commits/{seq}/tombstone',
+  'POST /templates',
+  'GET /templates',
+  'GET /templates/{tid}',
+  'POST /bulk-sends',
+  'GET /bulk-sends/{bid}',
+  'POST /bundle-exports',
+  'GET /bundle-exports/{bid}',
+  'GET /workflow/capture-settings',
+  'PUT /workflow/capture-settings',
+  'GET /history-visibility',
+  'PUT /history-visibility',
+  'GET /documents/{id}/history-visibility',
+  'PUT /documents/{id}/history-visibility',
+  'GET /quotas',
+  'PUT /quotas',
+  'GET /origins',
+  'GET /keys',
+  'POST /origins',
+  'DELETE /origins/{origin}',
+  'POST /keys',
+  'DELETE /keys/{kid}',
+  'GET /usage',
+  'GET /sealing-keys',
+  'POST /documents/{id}/imports',
+  'PUT /documents/{id}/content',
+  'POST /documents/{id}/fork',
+  'POST /documents',
+  'GET /documents',
+  'GET /search',
+  'GET /audit',
+  'GET /webhooks',
+  'POST /webhooks',
+  'GET /webhooks/{id}',
+  'PATCH /webhooks/{id}',
+  'DELETE /webhooks/{id}',
+  'POST /webhooks/{id}/ping',
+  'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
+  'POST /tokens',
+  'POST /agents',
+  'POST /sessions/revoke',
+];
+
 /** A thread on a one-character range of the intro block, as a commenter would start it (05 §6.2). */
 function threadRequest(seq: number, doc: unknown) {
   const from = posIn(doc, IDS.intro);
@@ -343,59 +398,7 @@ export const AUTHZ: ProfileDef = {
       title: 'row 13: the routes of the service credential refuse every user token',
       spec: '07 §12 row 13; 05 §3.2, §6.2',
       covers: {
-        operations: [
-          'GET /retention',
-          'PUT /retention',
-          'GET /documents/{id}/retention',
-          'PUT /documents/{id}/retention',
-          'POST /documents/{id}/holds',
-          'DELETE /documents/{id}/holds/{holdId}',
-          'GET /holds',
-          'POST /tenant-fonts',
-          'DELETE /tenant-fonts/{sha256}',
-          'POST /users/erase',
-          'POST /documents/{id}/commits/{seq}/tombstone',
-          'POST /templates',
-          'GET /templates',
-          'GET /templates/{tid}',
-          'POST /bulk-sends',
-          'GET /bulk-sends/{bid}',
-          'POST /bundle-exports',
-          'GET /bundle-exports/{bid}',
-          'GET /workflow/capture-settings',
-          'PUT /workflow/capture-settings',
-          'GET /history-visibility',
-          'PUT /history-visibility',
-          'GET /documents/{id}/history-visibility',
-          'PUT /documents/{id}/history-visibility',
-          'GET /quotas',
-          'PUT /quotas',
-          'GET /origins',
-          'GET /keys',
-          'POST /origins',
-          'DELETE /origins/{origin}',
-          'POST /keys',
-          'DELETE /keys/{kid}',
-          'GET /usage',
-          'GET /sealing-keys',
-          'POST /documents/{id}/imports',
-          'PUT /documents/{id}/content',
-          'POST /documents/{id}/fork',
-          'POST /documents',
-          'GET /documents',
-          'GET /search',
-          'GET /audit',
-          'GET /webhooks',
-          'POST /webhooks',
-          'GET /webhooks/{id}',
-          'PATCH /webhooks/{id}',
-          'DELETE /webhooks/{id}',
-          'POST /webhooks/{id}/ping',
-          'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
-          'POST /tokens',
-          'POST /agents',
-          'POST /sessions/revoke',
-        ],
+        operations: SERVICE_OPERATIONS,
         errors: ['forbidden'],
       },
       async run(ctx) {
@@ -470,6 +473,335 @@ export const AUTHZ: ProfileDef = {
             body,
           );
         }
+      },
+    }),
+    a({
+      id: 'anonymous',
+      title: 'rows 13 and 14: every administration route refuses a caller with no valid credential',
+      spec: '07 §12 rows 13, 14; 05 §3.2, §5.8; UX-076',
+      covers: {
+        operations: [
+          ...SERVICE_OPERATIONS,
+          'GET /tenants',
+          'POST /tenants',
+          'GET /tenants/{tenantId}',
+          'PATCH /tenants/{tenantId}',
+        ],
+      },
+      async run(ctx) {
+        const doc = await ctx.document();
+        const tenant = uuid7();
+        const routes: Array<[string, string, unknown]> = [
+          ...serviceRoutes(doc),
+          ['GET', '/tenants', undefined],
+          ['POST', '/tenants', { name: 'kit' }],
+          ['GET', `/tenants/${tenant}`, undefined],
+          ['PATCH', `/tenants/${tenant}`, { state: 'suspended' }],
+        ];
+        // No credential at all, and a credential nobody issued.
+        for (const token of [undefined, `dsk_${uuid7()}_${uuid7()}_not-a-secret`]) {
+          const who = token === undefined ? 'no credential' : 'an unissued credential';
+          for (const [method, path, body] of routes) {
+            const what = `${method} ${path} with ${who}`;
+            const res = await ctx.service.as(token, method, path, {
+              ...(body !== undefined ? { body } : {}),
+              headers: { 'if-match': '*' },
+            });
+            const p = problemOf(res, what);
+            check(
+              (p.code === 'unauthenticated' && res.status === 401) ||
+                (p.code === 'forbidden' && res.status === 403),
+              `${what}: refused as unauthenticated (401) or forbidden (403)`,
+              'unauthenticated 401 or forbidden 403',
+              `${p.code} ${res.status}`,
+            );
+          }
+        }
+      },
+    }),
+    a({
+      id: 'other-tenant',
+      title:
+        'a service credential of another tenant sees, changes and opens nothing of this tenant',
+      spec: '07 §12 rows 13, 14; 05 §3.2; 10 §5; UX-076',
+      needs: { otherTenant: true },
+      covers: {
+        operations: [
+          'GET /documents',
+          'GET /documents/{id}',
+          'GET /documents/{id}/content',
+          'PUT /documents/{id}/content',
+          'DELETE /documents/{id}',
+          'POST /documents/{id}/fork',
+          'POST /documents/{id}/imports',
+          'POST /documents/{id}/commits/{seq}/tombstone',
+          'GET /documents/{id}/retention',
+          'PUT /documents/{id}/retention',
+          'GET /documents/{id}/history-visibility',
+          'PUT /documents/{id}/history-visibility',
+          'POST /documents/{id}/holds',
+          'DELETE /documents/{id}/holds/{holdId}',
+          'GET /holds',
+          'GET /audit',
+          'GET /usage',
+          'GET /keys',
+          'DELETE /keys/{kid}',
+          'GET /origins',
+          'DELETE /origins/{origin}',
+          'GET /webhooks',
+          'GET /webhooks/{id}',
+          'PATCH /webhooks/{id}',
+          'DELETE /webhooks/{id}',
+          'POST /webhooks/{id}/ping',
+          'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
+          'POST /tokens',
+          'POST /sessions/revoke',
+          'GET /tenants',
+          'GET /tenants/{tenantId}',
+          'PATCH /tenants/{tenantId}',
+        ],
+      },
+      async run(ctx) {
+        const other = ctx.config.otherCredential!;
+        check(
+          other !== ctx.config.credential,
+          'the second credential is not the kit tenant’s own',
+          'a different credential',
+          'the same credential',
+        );
+        const doc = await ctx.document();
+        const { token: owner, sub: ownerSub } = await ctx.token('owner', { [doc]: 'owner' });
+        const opened = (what: string) =>
+          succeeds(ctx, owner, 'GET', `/documents/${doc}/content`, what);
+        await opened('the kit tenant reads its document before the calls');
+
+        // A caller of another tenant is refused or told nothing exists, never answered.
+        const denied = async (
+          token: string,
+          method: string,
+          path: string,
+          what: string,
+          body?: unknown,
+        ) => {
+          const res = await ctx.service.as(token, method, path, {
+            ...(body !== undefined ? { body } : {}),
+            headers: { 'if-match': '*' },
+          });
+          const p = problemOf(res, what);
+          check(
+            ['forbidden', 'not_found', 'unauthenticated'].includes(p.code),
+            `${what}: refused or not found, never answered`,
+            'forbidden, not_found or unauthenticated',
+            `${p.code} ${res.status}`,
+          );
+        };
+
+        // The kit tenant's documents, by identifier.
+        const docRoutes: Array<[string, string, unknown]> = [
+          ['GET', `/documents/${doc}`, undefined],
+          ['GET', `/documents/${doc}/content`, undefined],
+          ['GET', `/documents/${doc}/retention`, undefined],
+          ['PUT', `/documents/${doc}/retention`, { mode: 'keep_all' }],
+          ['GET', `/documents/${doc}/history-visibility`, undefined],
+          ['PUT', `/documents/${doc}/history-visibility`, { setting: 'all' }],
+          ['POST', `/documents/${doc}/holds`, { reason: 'kit' }],
+          ['POST', `/documents/${doc}/fork`, { atSeq: 0 }],
+          ['POST', `/documents/${doc}/imports`, { asset: uuid7(), format: 'docx' }],
+          ['PUT', `/documents/${doc}/content`, { cdm: 1, requires: [], doc: {} }],
+          ['POST', `/documents/${doc}/commits/1/tombstone`, {}],
+          ['DELETE', `/documents/${doc}`, undefined],
+        ];
+        for (const [method, path, body] of docRoutes)
+          await denied(
+            other,
+            method,
+            path,
+            `${method} ${path} with another tenant's credential`,
+            body,
+          );
+
+        // A hold of the kit tenant cannot be released by another tenant.
+        const hold = await ctx.service.call('POST', `/documents/${doc}/holds`, {
+          body: { reason: 'kit: cross-tenant check' },
+        });
+        const holdId =
+          hold.status === 201 ? (hold.json as { id?: unknown } | undefined)?.id : undefined;
+        if (typeof holdId === 'string') {
+          await denied(
+            other,
+            'DELETE',
+            `/documents/${doc}/holds/${holdId}`,
+            'DELETE /documents/{id}/holds/{holdId} with the credential of another tenant',
+          );
+          const held = await ctx.service.call('GET', '/holds');
+          check(
+            held.text.includes(holdId),
+            'the hold is still in force',
+            holdId,
+            held.text.slice(0, 200),
+          );
+          await ctx.service.call('DELETE', `/documents/${doc}/holds/${holdId}`);
+        }
+
+        // A user token the other tenant mints for the kit tenant's document opens nothing.
+        const minted = await ctx.service.as(other, 'POST', '/tokens', {
+          body: { sub: ctx.sub('intruder'), docs: { [doc]: 'owner' } },
+        });
+        if (minted.status === 200 || minted.status === 201) {
+          const t = (minted.json as { token?: unknown } | undefined)?.token;
+          check(typeof t === 'string', 'a minted token', 'a token', minted.text.slice(0, 200));
+          await denied(
+            t as string,
+            'GET',
+            `/documents/${doc}/content`,
+            'content with a foreign token',
+          );
+        }
+
+        // Lists show none of the kit tenant's data.
+        const lists = [
+          '/documents',
+          '/audit',
+          '/holds',
+          '/webhooks',
+          '/keys',
+          '/origins',
+          '/usage',
+        ];
+        const mine = new Map<string, string>();
+        for (const path of lists) {
+          const own = await ctx.service.call('GET', path);
+          if (own.status === 200) mine.set(path, own.text);
+        }
+        const kitKeys = [...(mine.get('/keys') ?? '').matchAll(/"kid"\s*:\s*"([^"]+)"/g)].map(
+          (m) => m[1]!,
+        );
+        for (const path of lists) {
+          const res = await ctx.service.as(other, 'GET', path);
+          if (res.status !== 200) continue;
+          const text = res.text;
+          check(
+            !text.includes(doc),
+            `GET ${path}: no document of the kit tenant`,
+            'absent',
+            text.slice(0, 200),
+          );
+          for (const kid of kitKeys)
+            check(!text.includes(kid), `GET ${path}: no key of the kit tenant`, 'absent', kid);
+          if (ctx.config.origin)
+            check(
+              !text.includes(ctx.config.origin),
+              `GET ${path}: no origin of the kit tenant`,
+              'absent',
+              ctx.config.origin,
+            );
+        }
+
+        // The kit tenant's keys and origins, by their own identifiers.
+        for (const kid of kitKeys)
+          await denied(
+            other,
+            'DELETE',
+            `/keys/${encodeURIComponent(kid)}`,
+            `DELETE /keys/${kid} with another tenant's credential`,
+          );
+        if (ctx.config.origin)
+          await denied(
+            other,
+            'DELETE',
+            `/origins/${encodeURIComponent(ctx.config.origin)}`,
+            'DELETE /origins/{origin} with the credential of another tenant',
+          );
+        for (const path of ['/keys', '/origins']) {
+          const now = await ctx.service.call('GET', path);
+          if (mine.has(path))
+            equal(now.text, mine.get(path)!, `GET ${path}: the kit tenant's list is unchanged`);
+        }
+
+        // Another tenant's revocation names a subject of its own tenant only.
+        await ctx.service.as(other, 'POST', '/sessions/revoke', { body: { sub: ownerSub } });
+
+        // Webhooks: the kit tenant's subscription cannot be read, changed, pinged or deleted.
+        const created = await ctx.service.call('POST', '/webhooks', {
+          body: {
+            url: `https://hooks.example.test/kit/${ctx.config.run}/other-tenant`,
+            events: ['dep.document.created.v1'],
+          },
+        });
+        if (created.status === 404 || created.status === 501) {
+          ctx.note('the server keeps no webhook subscriptions: the webhook half was not run');
+        } else {
+          const sub = (created.json as { id?: unknown } | undefined)?.id;
+          check(
+            created.status === 201 && typeof sub === 'string',
+            'a subscription for the kit tenant',
+            '201 with an id',
+            `HTTP ${created.status} ${created.text.slice(0, 200)}`,
+          );
+          const id = sub as string;
+          try {
+            const listed = await ctx.service.as(other, 'GET', '/webhooks');
+            if (listed.status === 200)
+              check(
+                !listed.text.includes(id),
+                'GET /webhooks lists none of the kit tenant',
+                'absent',
+                id,
+              );
+            for (const [method, path, body] of [
+              ['GET', `/webhooks/${id}`, undefined],
+              ['PATCH', `/webhooks/${id}`, { events: [] }],
+              ['POST', `/webhooks/${id}/ping`, undefined],
+              ['POST', `/webhooks/${id}/deliveries/${uuid7()}/replay`, undefined],
+              ['DELETE', `/webhooks/${id}`, undefined],
+            ] as Array<[string, string, unknown]>)
+              await denied(
+                other,
+                method,
+                path,
+                `${method} ${path} with another tenant's credential`,
+                body,
+              );
+            const audit = await ctx.service.as(other, 'GET', '/audit');
+            if (audit.status === 200)
+              check(
+                !audit.text.includes(id),
+                'GET /audit shows no change of the kit tenant',
+                'absent',
+                id,
+              );
+            await succeeds(
+              ctx,
+              ctx.config.credential,
+              'GET',
+              `/webhooks/${id}`,
+              'the subscription is still there',
+            );
+          } finally {
+            const current = await ctx.service.call('GET', `/webhooks/${id}`);
+            await ctx.service.call('DELETE', `/webhooks/${id}`, {
+              headers: { 'if-match': current.headers.get('etag') ?? '*' },
+            });
+          }
+        }
+
+        // The tenant routes need an operator credential, whoever holds the service credential.
+        const tenant = uuid7();
+        for (const [method, path, body] of [
+          ['GET', '/tenants', undefined],
+          ['GET', `/tenants/${tenant}`, undefined],
+          ['PATCH', `/tenants/${tenant}`, { state: 'suspended' }],
+        ] as Array<[string, string, unknown]>)
+          await refused(
+            ctx,
+            other,
+            method,
+            path,
+            `${method} ${path} with another tenant's credential`,
+            body,
+          );
+
+        await opened('the kit tenant still reads its document after the calls');
       },
     }),
     a({

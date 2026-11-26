@@ -15,7 +15,8 @@
  *
  * Which picture types the service accepts is its own rule; this module does not filter by type.
  */
-import type { AssetsPort as BackendAssetsPort } from '@docedit/protocol';
+import type { AssetsPort as BackendAssetsPort, QuotaKind } from '@docedit/protocol';
+import { quotaOf } from './errors.ts';
 import type {
   AssetImage,
   AssetImageLookup,
@@ -124,6 +125,17 @@ export function assetImageLookup(
   };
 }
 
+/** The kinds of quota the service names (05 §5.8; owner decision 110). */
+const QUOTA_KINDS: readonly QuotaKind[] = [
+  'connections',
+  'openDocuments',
+  'commitRate',
+  'roomCpuBudget',
+  'storage',
+  'exportConcurrency',
+  'exportMinutes',
+];
+
 /** The engine's assets port over the backend's, for the document `docId`. */
 export function pictureAssets(port: BackendAssetsPort, docId: string): AssetsPort {
   return {
@@ -149,7 +161,9 @@ export function pictureAssets(port: BackendAssetsPort, docId: string): AssetsPor
       } catch (e) {
         const message =
           e instanceof Error && e.message ? e.message : 'The picture was not accepted.';
-        return { ok: false, message };
+        const named = quotaOf(e);
+        const quota = QUOTA_KINDS.find((k) => k === named);
+        return { ok: false, message, ...(quota === undefined ? {} : { quota }) };
       }
     },
   };

@@ -23,7 +23,8 @@ const usage = `usage: docedit-tck [--discovery <url>] [--authority-service <url>
                    [--json <file>] [--text <file>] [--timeout <ms>] [--scenario-timeout <ms>]
                    [--fuzz-ms <ms>] [--seed <n>] [--runs <n>] [--credential-env <name>] [--credential-file <file>] [--quiet]
 One of --discovery and --authority-service is required. The authority service's bearer token comes from DEP_TCK_AUTHORITY_TOKEN.
-The service credential comes from DEP_TCK_CREDENTIAL unless --credential-env or --credential-file says otherwise.`;
+The service credential comes from DEP_TCK_CREDENTIAL unless --credential-env or --credential-file says otherwise.
+A second tenant's service credential in DEP_TCK_OTHER_CREDENTIAL (optional) turns on the cross-tenant scenarios of the authz profile.`;
 
 function fail(message: string): never {
   console.error(`${message}\n${usage}`);
@@ -101,6 +102,9 @@ const report = await runKit({
   credential: credential ?? '',
   testMode: args['test-mode'] === true,
   ...(args.origin ? { origin: args.origin } : {}),
+  ...(process.env['DEP_TCK_OTHER_CREDENTIAL']
+    ? { otherCredential: process.env['DEP_TCK_OTHER_CREDENTIAL'] }
+    : {}),
   ...(args['receiver-host'] || args['receiver-port'] || args['receiver-url']
     ? {
         receiver: {

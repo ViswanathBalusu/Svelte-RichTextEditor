@@ -13,6 +13,7 @@ import {
   newApiKey,
   startService,
   type Service,
+  type StartOptions,
 } from '@docedit/document-service';
 import type { HostConfig, TokenMode } from '../src/lib/server/config.ts';
 import { SEED_DIR } from '../src/lib/server/config.ts';
@@ -43,10 +44,24 @@ export function hostKeyPair(kid = 'host-test-1'): {
 }
 
 export async function startHarness(
-  opts: { tokenMode?: TokenMode; tokenSeconds?: number } = {},
+  opts: {
+    tokenMode?: TokenMode;
+    tokenSeconds?: number;
+    /** More options for the service, for a test that needs its sealing or job handlers (UX-099). */
+    service?: Partial<Omit<StartOptions, 'config'>>;
+    /** Settings of the service over the test defaults (for the job loop's pace, for example). */
+    serviceConfig?: Partial<NonNullable<StartOptions['config']>>;
+  } = {},
 ): Promise<Harness> {
   const service = await startService({
-    config: { ...configFromEnv({}), port: 0, workers: 1, serviceId: SERVICE_ID },
+    ...(opts.service ?? {}),
+    config: {
+      ...configFromEnv({}),
+      port: 0,
+      workers: 1,
+      serviceId: SERVICE_ID,
+      ...(opts.serviceConfig ?? {}),
+    },
   });
   const tenant = randomUUID();
   await service.parts.registry.putTenant(tenant, 'reference host test');

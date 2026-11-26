@@ -14,7 +14,7 @@
  */
 import { ALLOWED_STEP_TYPES } from '@docedit/authority';
 import { isRedactionMarker, type JsonValue } from '@docedit/model/definition';
-import type { Access, Capability } from '@docedit/protocol';
+import type { Access, Capability, QuotaKind } from '@docedit/protocol';
 import type { Node } from 'prosemirror-model';
 import { Plugin, PluginKey, type Transaction } from 'prosemirror-state';
 import { AttrStep, ReplaceAroundStep, ReplaceStep, type Step } from 'prosemirror-transform';
@@ -33,6 +33,8 @@ export interface Refusal {
   readonly scopes: readonly string[];
   /** How many suggestions a suggestion-resolving command skipped (FE-047 criterion 6), when it counts them. */
   readonly count?: number;
+  /** The quota a refused upload reached, when the service named it (UX-078 criterion 3). */
+  readonly quota?: QuotaKind;
 }
 
 export interface GuardContext {

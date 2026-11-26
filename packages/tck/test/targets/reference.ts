@@ -19,6 +19,8 @@ export interface StartedTarget {
   readonly name: string;
   readonly discovery: string;
   readonly credential: string;
+  /** A service credential of a second tenant, for the cross-tenant scenarios (UX-076). */
+  readonly otherCredential?: string;
   readonly origin: string;
   readonly testMode: boolean;
   /** Recent output of the process, for failure reports. */
@@ -41,6 +43,9 @@ export async function startReference(opts: ReferenceOptions = {}): Promise<Start
   const tenant = randomUUID();
   const keyId = randomUUID();
   const secret = randomBytes(32).toString('base64url');
+  const otherTenant = randomUUID();
+  const otherKeyId = randomUUID();
+  const otherSecret = randomBytes(32).toString('base64url');
   const dir = mkdtempSync(join(tmpdir(), 'docedit-tck-'));
   const seedFile = join(dir, 'tenants.json');
   writeFileSync(
@@ -58,6 +63,18 @@ export async function startReference(opts: ReferenceOptions = {}): Promise<Start
             },
           ],
           origins: [KIT_ORIGIN],
+        },
+        {
+          id: otherTenant,
+          name: 'second tenant of the kit',
+          apiKeys: [
+            {
+              id: otherKeyId,
+              secretSha256: createHash('sha256').update(otherSecret, 'utf8').digest('hex'),
+              label: 'tck-other',
+            },
+          ],
+          origins: ['https://other.tck.example'],
         },
       ],
     }),
@@ -114,6 +131,7 @@ export async function startReference(opts: ReferenceOptions = {}): Promise<Start
     name: 'reference service',
     discovery: `${url}/.well-known/dep`,
     credential: `dsk_${tenant}_${keyId}_${secret}`,
+    otherCredential: `dsk_${otherTenant}_${otherKeyId}_${otherSecret}`,
     origin: KIT_ORIGIN,
     testMode: false,
     logs: () => lines.join('\n'),

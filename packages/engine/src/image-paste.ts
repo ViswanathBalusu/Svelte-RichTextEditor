@@ -18,6 +18,7 @@
  * `chooseClipboard`), with the assets port that `attach` or the configuration gives it; the element
  * adapts the backend's port (packages/element/src/assets.ts).
  */
+import type { QuotaKind } from '@docedit/protocol';
 import type { EditorState, Transaction } from 'prosemirror-state';
 
 /** The largest size of a picture side in twips, as the `image` node allows (I7). */
@@ -39,7 +40,7 @@ export interface StoredImage {
 
 export type UploadOutcome =
   | { readonly ok: true; readonly image: StoredImage }
-  | { readonly ok: false; readonly message: string };
+  | { readonly ok: false; readonly message: string; readonly quota?: QuotaKind };
 
 /** The assets port (10 §3.1): the upload and its validation are the asset service's. */
 export interface AssetsPort {
@@ -58,6 +59,8 @@ export type ImagePasteResult =
       readonly ok: false;
       readonly reason: 'read-only' | 'upload-failed' | 'invalid-size';
       readonly message?: string;
+      /** The quota the service named when it refused the upload (UX-078 criterion 3). */
+      readonly quota?: QuotaKind;
     };
 
 const isSize = (v: unknown): v is number =>
@@ -77,7 +80,12 @@ export async function pasteImage(
   if (!options.writable(host.state().selection.from)) return { ok: false, reason: 'read-only' };
   const outcome = await port.upload(image);
   if (!outcome.ok) {
-    return { ok: false, reason: 'upload-failed', message: outcome.message };
+    return {
+      ok: false,
+      reason: 'upload-failed',
+      message: outcome.message,
+      ...(outcome.quota === undefined ? {} : { quota: outcome.quota }),
+    };
   }
   const { asset, widthTwips, heightTwips } = outcome.image;
   if (!isSize(widthTwips) || !isSize(heightTwips)) {

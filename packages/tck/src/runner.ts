@@ -58,6 +58,8 @@ export function unmetNeeds(s: ScenarioDef, target: Target): string | null {
     return 'needs the server test-mode switch (05 §11; PRO-109)';
   if (n.origin && !target.config.origin)
     return 'needs an origin registered for the kit tenant (--origin)';
+  if (n.otherTenant && !target.config.otherCredential)
+    return 'needs a service credential of a second tenant (DEP_TCK_OTHER_CREDENTIAL)';
   const missing = (n.features ?? []).filter((f) => !target.features.has(f));
   if (missing.length) return `the target does not announce ${missing.join(', ')}`;
   return null;

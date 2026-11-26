@@ -7,11 +7,17 @@
  * `NoticeTracker` compares successive values of the core's `refusal` and `recovered` views and
  * reports what is new: a refusal whose `n` changed, and items added to the recovered list.
  */
-import type { RecoveredEdits, RefusalNotice, ReplaceNotice, TrimNotice } from '../core-api.ts';
+import type {
+  QuotaWaitNotice,
+  RecoveredEdits,
+  RefusalNotice,
+  ReplaceNotice,
+  TrimNotice,
+} from '../core-api.ts';
 import type { StringKey } from '../i18n/en-GB.ts';
 
 export interface Notice {
-  readonly kind: 'refusal' | 'rejection' | 'trimmed' | 'replaced' | 'glyph';
+  readonly kind: 'refusal' | 'rejection' | 'trimmed' | 'replaced' | 'glyph' | 'quota';
   /** The message, in plain words. */
   readonly key: StringKey;
   /** For rejections: the number of items set aside in this change. */
@@ -74,11 +80,40 @@ export function rejectionKey(reason: string): StringKey {
   return REJECTIONS[reason] ?? 'notice.rejected.other';
 }
 
+const QUOTA_KINDS: ReadonlySet<string> = new Set([
+  'connections',
+  'openDocuments',
+  'commitRate',
+  'roomCpuBudget',
+  'storage',
+  'exportConcurrency',
+  'exportMinutes',
+]);
+
+/** The message for a quota kind the service named (06 §12; owner decision 110). */
+export function quotaKey(kind: QuotaWaitNotice['quota']): StringKey {
+  return `notice.quota.${kind}` as StringKey;
+}
+
+/**
+ * The quota an export request was refused for, from the port error the backend threw (a
+ * `quota_exceeded` refusal that names it in `details.quota`, 05 §5.8; owner decision 110), or null.
+ * Only the two quotas an export can reach are returned (UX-078 criterion 3).
+ */
+export function exportQuotaOf(error: unknown): 'exportConcurrency' | 'exportMinutes' | null {
+  if (error === null || typeof error !== 'object') return null;
+  const own = (error as { quota?: unknown }).quota;
+  const details = (error as { details?: { quota?: unknown } | null }).details;
+  const kind = typeof own === 'string' ? own : details?.quota;
+  return kind === 'exportConcurrency' || kind === 'exportMinutes' ? kind : null;
+}
+
 export class NoticeTracker {
   #refusal: number | null;
   #recovered: number;
   #trimmed: number | null;
   #replaced: number | null;
+  #quota: number | null = null;
   #serial = 0;
 
   constructor(
@@ -92,6 +127,22 @@ export class NoticeTracker {
     this.#recovered = recovered?.count ?? 0;
     this.#trimmed = trimmed?.n ?? null;
     this.#replaced = replaced?.n ?? null;
+  }
+
+  /**
+   * A notice for a commit the service refused for a quota it named (UX-078 criterion 3), or null.
+   * It names the kind of quota and no document, person or number. The first value is told when it
+   * differs from what was there when the shell started; null (the wait is over) is not news.
+   */
+  quota(next: QuotaWaitNotice | null | undefined): Notice | null {
+    if (!next || typeof next.n !== 'number' || next.n === this.#quota) return null;
+    this.#quota = next.n;
+    return {
+      kind: 'quota',
+      key: quotaKey(next.quota),
+      count: 1,
+      serial: ++this.#serial,
+    };
   }
 
   /**
@@ -148,6 +199,14 @@ export class NoticeTracker {
         serial: ++this.#serial,
         action: 'showReferences',
       };
+    }
+    // A picture the service refused for a quota it named says which quota (UX-078 criterion 3).
+    if (
+      next.reason === 'upload-failed' &&
+      next.quota !== undefined &&
+      QUOTA_KINDS.has(next.quota)
+    ) {
+      return { kind: 'quota', key: quotaKey(next.quota), count: 1, serial: ++this.#serial };
     }
     const key: StringKey =
       workflowLocked && next.reason === 'read-only'

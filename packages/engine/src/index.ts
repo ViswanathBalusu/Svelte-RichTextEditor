@@ -88,6 +88,7 @@ export type {
   InsertResult,
   ModeState,
   PageSetupArgs,
+  QuotaWait,
   ReplaceNotice,
   ReplaceReport,
   StatusSummary,

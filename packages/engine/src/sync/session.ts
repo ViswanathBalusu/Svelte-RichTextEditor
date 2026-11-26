@@ -25,6 +25,7 @@ import type {
   ChannelState,
   Content,
   Limits,
+  QuotaKind,
   RemoteCommit,
   Resume,
   SyncChannel,
@@ -85,7 +86,13 @@ export type SyncEvent =
    * (06 §8, database unavailable). The commit stays in the journal and is sent again; `ok` is true
    * again once a commit of ours is acknowledged, refused for another reason or set aside (FE-008).
    */
-  | { type: 'service'; ok: boolean };
+  | { type: 'service'; ok: boolean }
+  /**
+   * Our commit was refused with `quota_exceeded` and will be sent again after the delay the service
+   * gave: `quota` names the quota (06 §12; owner decision 110). It is null again once a commit of ours
+   * is acknowledged, refused for another reason or set aside (UX-078 criterion 3).
+   */
+  | { type: 'quota'; quota: QuotaKind | null };
 
 export type ConnectionStatus = 'online' | 'reconnecting' | 'offline';
 
@@ -363,6 +370,14 @@ export class SyncSession {
     this.#host.event({ type: 'service', ok });
   }
 
+  #quota: QuotaKind | null = null;
+
+  #setQuota(quota: QuotaKind | null): void {
+    if (this.#quota === quota) return;
+    this.#quota = quota;
+    this.#host.event({ type: 'quota', quota });
+  }
+
   #setStatus(status: ConnectionStatus, reason: string): void {
     if (this.#status === status) return;
     this.#status = status;
@@ -514,6 +529,8 @@ export class SyncSession {
         if (!ours) return 'done';
         this.#failures++;
         this.#setServiceOk(r.code !== 'unavailable');
+        if (!(r.action === 'retry' && r.code === 'quota_exceeded' && r.quota !== undefined))
+          this.#setQuota(null);
         // A `rebase` whose head the client has already reached failed on commits the room holds
         // but has not stored yet (its tentative state, 04 §5): resubmitting at once fails again.
         // Wait for the next commit, or a growing delay, whichever comes first (ADR 0038).
@@ -697,6 +714,7 @@ export class SyncSession {
       case 'resend':
         // The server's delay, and never sooner than the backoff of repeated failures.
         this.#resendAt = this.#clock.now() + Math.max(a.afterMs, this.#backoff());
+        if (a.quota !== undefined) this.#setQuota(a.quota);
         return;
       case 'read-only':
         host.setReadOnly(true);
@@ -707,12 +725,14 @@ export class SyncSession {
         return;
       case 'discarded':
         this.#setServiceOk(true);
+        this.#setQuota(null);
         host.event({ type: 'discarded', items: a.items });
         this.#recordRecovered(a.items);
         return;
       case 'acknowledged':
         this.#failures = 0;
         this.#setServiceOk(true);
+        this.#setQuota(null);
         this.#journalDrop(a.id);
         host.event({ type: 'acknowledged', id: a.id, seq: a.seq });
         return;

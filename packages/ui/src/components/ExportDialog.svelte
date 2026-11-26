@@ -27,6 +27,7 @@
   import type { StringKey } from '../i18n/en-GB.ts';
   import { live } from '../live.ts';
   import Dialog from './Dialog.svelte';
+  import { exportQuotaOf } from '../shell/notices.ts';
 
   interface Props {
     exports?: ExportService | undefined;
@@ -74,6 +75,8 @@
 
   let job = $state.raw<ExportJobView | null>(null);
   let failedToStart = $state(false);
+  /** The quota the service named when it refused to start the export (UX-078 criterion 3). */
+  let startQuota: 'exportConcurrency' | 'exportMinutes' | null = $state(null);
   let stop: (() => void) | null = null;
   let announced: string | null = null;
   let gone = $state<string | null>(null);
@@ -160,6 +163,7 @@
     }
     if (!chosen || !exports || pending) return;
     failedToStart = false;
+    startQuota = null;
     gone = null;
     moved = null;
     let options: ExportOptions =
@@ -199,8 +203,9 @@
     try {
       const { jobId } = await exports.request(to, options);
       follow(jobId);
-    } catch {
+    } catch (error) {
       failedToStart = true;
+      startQuota = exportQuotaOf(error);
     }
   }
 
@@ -414,7 +419,9 @@
     </section>
   {/if}
   {#if failedToStart}
-    <p class="de-error" role="alert">{tr.t('export.failed.start')}</p>
+    <p class="de-error" role="alert" data-export="start-failed">
+      {#if startQuota === null}{tr.t('export.failed.start')}{:else if startQuota === 'exportMinutes'}{tr.t('export.failed.quota.exportMinutes')}{:else}{tr.t('export.failed.quota.exportConcurrency')}{/if}
+    </p>
   {/if}
   {#if saved}
     <p>
