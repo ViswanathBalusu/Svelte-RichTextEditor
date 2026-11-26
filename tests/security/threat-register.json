@@ -182,17 +182,12 @@
       "builtBy": ["FE-008", "FE-009"],
       "provenBy": "SEC-007",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "packages/element/e2e/sec-007-wire-storage.spec.ts",
         "packages/element/e2e/sec-007-wire-scan.spec.ts",
-        "packages/element/e2e/sec-007-token-scan.spec.ts"
-      ],
-      "open": [
-        {
-          "criterion": 2,
-          "what": "the network log of a session scanned for the token in every address, an asset read address included"
-        }
+        "packages/element/e2e/sec-007-token-scan.spec.ts",
+        "packages/element/e2e/sec-006-007-assets.spec.ts"
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Token theft"]
