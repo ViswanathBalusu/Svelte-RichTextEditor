@@ -1227,12 +1227,25 @@ export class DocEditorElement extends Base {
     return printTypesetPdf({
       source,
       access: session?.access ?? null,
-      printPdf: (url) => printPdfAtUrl(url, this.#root),
+      printPdf: (url) =>
+        printPdfAtUrl(url, this.#root, {
+          viewerUrl: this.#config.pdfViewerUrl ?? new URL(VIEWER_PAGE, import.meta.url).href,
+        }),
       onError: (detail) => this.#emit('de-error', detail),
       // The job's reports reach the host as `de-export-*` events, as for `requestExport` (FE-073
       // criterion 4): a failed job raises `de-export-failed` and then `de-error`. A replaced session raises nothing.
       onExportEvent: (event) => {
-        if (this.#session === session) this.#emit(event.name, event.detail);
+        if (this.#session !== session) return;
+        this.#emit(event.name, event.detail);
+        // The shell shows the preparation in its live region (FE-073 criterion 1, "with progress").
+        if (event.name === 'de-export-progress') {
+          const p = event.detail.progress;
+          this.#live.announce(
+            p === null
+              ? 'Preparing the PDF to print.'
+              : `Preparing the PDF to print, ${String(Math.round(p * 100))} per cent.`,
+          );
+        }
       },
     });
   }
