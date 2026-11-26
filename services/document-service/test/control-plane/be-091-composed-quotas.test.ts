@@ -311,7 +311,7 @@ describe('BE-091 criterion 2: measuring another tenant while one is at its quota
     expect(busyMs).toBeLessThan(idleMs * 3 + 25);
   });
 
-  it('leaves the other tenant at its idle latency while the first retries at its quota, within 1.5 times the slower idle run plus 5 ms',async () => {
+  it('leaves the other tenant at its idle latency while the first retries at its quota, within 1.5 times the slower idle run plus 5 ms', async () => {
     // The first test floods as fast as one loop can, so both tenants fight for the same event
     // loop. Here tenant A behaves as a client that honours `retryAfterMs` but is impatient: it
     // retries after at most 20 ms (50 attempts a second, all refused). Tenant B is timed in three

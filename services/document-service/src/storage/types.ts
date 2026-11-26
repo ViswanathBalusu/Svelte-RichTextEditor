@@ -124,6 +124,8 @@ export interface CommitMetaRow {
   /** Server time, Unix milliseconds. */
   time: number;
   origin: string;
+  /** The agent identifier of a commit made on an agent connection (ADR 0234 A1). */
+  agent?: string;
   scopes: string[];
   /**
    * The access revision the commit was checked against. A room reads it for the commit at its
