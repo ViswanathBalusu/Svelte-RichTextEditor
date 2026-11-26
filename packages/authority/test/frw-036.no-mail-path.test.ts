@@ -17,6 +17,14 @@ const FORBIDDEN =
 /** Import, export-from, require and dynamic-import specifiers in a source file. */
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\(\s*)['"]([^'"]+)['"]/g;
 
+/**
+ * The reference host's own client for the development mail sink of its demo stack (UX-098; owner
+ * decision 131): a host sends its own mail, which is the half of the criterion that the platform does
+ * not. It is a module of the reference host, reached only by relative import, and it speaks to a
+ * relay on the local machine. Nothing else may name one.
+ */
+const HOST_MAIL_CLIENTS = new Set(['apps/reference-host/src/lib/server/smtp.ts']);
+
 const SOURCE_EXT = /\.(?:ts|tsx|js|mjs|cjs|mts|cts)$/;
 const IS_TEST = /\.test\.[cm]?[jt]sx?$|[/\\]test[/\\]|[/\\]__tests__[/\\]/;
 
@@ -94,8 +102,13 @@ describe('no mail or SMS path in the workflow service (FRW-036 criterion 3)', ()
     const hits: string[] = [];
     for (const file of sources) {
       const text = readFileSync(file, 'utf8');
-      for (const m of text.matchAll(SPECIFIER))
-        if (FORBIDDEN.test(m[1]!)) hits.push(`${relative(ROOT, file)}: ${m[1]}`);
+      for (const m of text.matchAll(SPECIFIER)) {
+        if (!FORBIDDEN.test(m[1]!)) continue;
+        const target = m[1]!.startsWith('.') ? resolve(dirname(file), m[1]!) : null;
+        if (target !== null && HOST_MAIL_CLIENTS.has(relative(ROOT, target).replaceAll('\\', '/')))
+          continue;
+        hits.push(`${relative(ROOT, file)}: ${m[1]}`);
+      }
     }
     expect(hits).toEqual([]);
   });
