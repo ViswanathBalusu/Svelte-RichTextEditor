@@ -224,6 +224,35 @@ test.describe('the editable page view (FE-101)', () => {
     expect(confirmed).toBe(true);
   });
 
+  test('a control in the page view shows the accessible web view with the same content, and another comes back (FE-099 criterion 4)', async ({
+    page,
+  }) => {
+    await desktopPointer(page);
+    await openEmbed(page);
+    await mountEditor(page, { attributes: { view: 'print' } });
+    await expect.poll(async () => (await facts(page)).lines).toBeGreaterThan(0);
+    await page.locator(`${editor} .de-page-view .de-line`).first().click();
+    await page.keyboard.type('Zed');
+    await expect.poll(async () => (await bodyText(page)).includes('Zed')).toBe(true);
+    const typed = await bodyText(page);
+
+    const toWeb = page.locator(`${editor} .de-view-switch`);
+    await expect(toWeb).toHaveText('Use the accessible web layout');
+    await toWeb.click();
+    await expect.poll(async () => (await facts(page)).views).toBe(0);
+    expect((await facts(page)).label).toBe('Web layout');
+    expect(await bodyText(page)).toBe(typed);
+    // The web view takes the focus and the text typed in the page view is there to continue.
+    await page.keyboard.type('Y');
+    await expect.poll(async () => (await bodyText(page)).includes('ZedY')).toBe(true);
+
+    const toPrint = page.locator(`${editor} .de-view-switch`);
+    await expect(toPrint).toHaveText('Use the page layout');
+    await toPrint.click();
+    await expect.poll(async () => (await facts(page)).text.includes('ZedY')).toBe(true);
+    expect((await facts(page)).label).toBe('Page layout');
+  });
+
   test('a shortcut sets a mark and the text typed after it carries it (FE-098 criteria 1 and 6)', async ({
     page,
   }) => {
