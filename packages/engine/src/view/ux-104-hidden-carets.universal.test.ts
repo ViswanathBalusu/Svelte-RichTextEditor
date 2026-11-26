@@ -41,7 +41,9 @@ async function open(service: MockService, docId: string, sub: string) {
 describe.skipIf(!isBrowser)('no caret or name flag in hidden content (UX-104 criterion 3)', () => {
   it('draws nobody for a peer in the hidden region, and draws the peer once it is in the body', async () => {
     const service = new MockService();
-    const docId = service.createDocument(spikeDocument());
+    const docId = service.createDocument(
+      spikeDocument() as Parameters<MockService['createDocument']>[0],
+    );
 
     const host = document.createElement('div');
     host.style.position = 'relative';
