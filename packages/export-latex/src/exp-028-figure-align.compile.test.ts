@@ -7,9 +7,10 @@
  * alternative text; they go through the same `\DEfig` macro and the same alignment code as a real
  * picture. A plain paragraph gives the left edge of the text.
  *
- * What this does not settle: whether `align` should also move the caption. The caption is set by
- * its own style here, as in the editor's layout (`packages/layout/src/flow.ts`); that question is
- * the owner's (ADR 0223, decision 12), so the test asserts nothing about the caption's position.
+ * Owner decision 149 (docs/owner-decisions-2026-11-15.md, ADR 0223 decision 12): `align` is the
+ * picture's alone. The caption is set by its own style, as in the editor's layout
+ * (`packages/layout/src/flow.ts`), and does not move; the test asserts that the three captions
+ * start at the same x.
  *
  * The test skips when `sandboxReady()` reports that sandboxed compiles cannot run here (EXP-070).
  */
@@ -109,6 +110,14 @@ describe.skipIf(!ready)(
       const first = wordBox(bbox, '\\[figure:');
       expect(first).not.toBeNull();
       expect(Math.abs(first!.xMin - edge.xMin)).toBeLessThan(6);
+
+      // Owner decision 149 (ADR 0223, decision 12): `align` is the picture's alone, so the caption
+      // does not move. The three captions start at the same x whatever their figure's align.
+      const captionStarts = [
+        ...bbox.matchAll(/<word xMin="([^"]*)"[^>]*>Caption<\/word>/g),
+      ].map((m) => Number(m[1]));
+      expect(captionStarts).toHaveLength(3);
+      expect(Math.max(...captionStarts) - Math.min(...captionStarts)).toBeLessThan(1);
     }, 300_000);
   },
 );

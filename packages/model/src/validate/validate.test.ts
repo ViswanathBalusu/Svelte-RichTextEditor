@@ -42,6 +42,27 @@ describe('model.validate()', () => {
     expect(r.valid).toBe(true);
   });
 
+  it('does not report a document that defines none of the built-in styles (ADR 0018; owner decision 7)', () => {
+    // The built-in styles are available to every document, not present in every document: a
+    // document defines the ones it uses. This one defines `Normal`, which `settings` names as the
+    // default style (a name that resolves to nothing is I4), and none of the other built-ins; no
+    // paragraph names another.
+    const doc = clone();
+    const definitions = doc['doc'].content[0];
+    definitions.content = definitions.content.filter(
+      (n: Json) => n['type'] !== 'style_def' || n['attrs'].id === 'Normal',
+    );
+    const clear = (n: Json): void => {
+      if (n['type'] === 'paragraph') n['attrs'].style = null;
+      for (const c of n['content'] ?? []) clear(c);
+    };
+    clear(doc['doc']);
+    const r = validate(doc, ctx);
+    expect(defs(doc).filter((n) => n['type'] === 'style_def')).toHaveLength(1);
+    expect(r.violations.filter((v) => v.invariant === 'I1')).toEqual([]);
+    expect(r.violations).toEqual([]);
+  });
+
   it('reports what the context did not let it check', () => {
     const r = validate(example);
     expect(r.valid).toBe(true);

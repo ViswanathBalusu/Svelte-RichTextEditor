@@ -557,6 +557,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'insertRecovered',
         'discardRecovered',
         'setLanguage',
+        'setParagraphFormat',
         'paragraphStyle',
         'characterStyle',
         'tableStyle',
@@ -583,6 +584,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
           return core.setImageAlt(a.asset, a.alt);
         }
         if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
+        // The ruler and the paragraph dialog (UX-102): the args are the patch of indents and tab
+        // stops; the core checks every value and the user's right to change the paragraphs.
+        if (name === 'setParagraphFormat') {
+          if (args === null || typeof args !== 'object' || Array.isArray(args)) return false;
+          return core.run('setParagraphFormat', {
+            paragraphFormat: args as Readonly<Record<string, unknown>>,
+          });
+        }
         // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
         // puts it on the selection through the guards; neither takes an argument.
         if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
@@ -666,6 +675,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // Page thumbnails (UX-021): the state is null until a view with pages is shown.
       pages: pages.service,
       language: core.language,
+      // The indents and tab stops at the selection, for the ruler and the paragraph dialog (UX-102).
+      paragraphFormat: core.paragraphFormat,
       // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
       // port `proofing.get().available` is false and the shell shows no proofing control.
       // The assistant pane, offered only while the backend's assistant port is attached (UX-045).

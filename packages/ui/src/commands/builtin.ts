@@ -242,7 +242,15 @@ export interface ShellCommandHost1b {
   applyFormat(): boolean;
   /** Opens a dialog of the shell. */
   openDialog(
-    name: 'language' | 'region' | 'export' | 'comment' | 'version' | 'send' | 'crossReference',
+    name:
+      | 'language'
+      | 'region'
+      | 'export'
+      | 'comment'
+      | 'version'
+      | 'send'
+      | 'crossReference'
+      | 'paragraph',
   ): boolean;
   zoom(step: 'in' | 'out' | 'reset'): boolean;
   setMode(mode: EditorMode): boolean;
@@ -574,6 +582,18 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       needs: 'setLanguage',
       contextMenu: ['text', 'table'],
       run: () => host.openDialog('language'),
+    },
+    // The paragraph dialog (UX-102 criterion 3; FE-129): the keyboard form of every ruler drag.
+    'format.paragraph': {
+      id: 'format.paragraph',
+      label: 'command.format.paragraph',
+      group: 'format',
+      enabled: 'canEditSelection',
+      changesContent: true,
+      capability: 'character-and-paragraph-formatting',
+      needs: 'setParagraphFormat',
+      contextMenu: ['text'],
+      run: () => host.openDialog('paragraph'),
     },
     // A reference to a heading, a numbered paragraph, a caption, an equation or a bookmark (FE-134
     // criterion 2): opens the dialog that lists the targets the core gives.

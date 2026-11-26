@@ -136,6 +136,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `format.painter` | format-painter |
 | `format.applyFormat` | format-painter |
 | `format.language` | character-and-paragraph-formatting |
+| `format.paragraph` | character-and-paragraph-formatting |
 | `insert.crossReference` | editing |
 | `insert.region` | regions-and-permissions |
 | `history.nameVersion` | version-history |

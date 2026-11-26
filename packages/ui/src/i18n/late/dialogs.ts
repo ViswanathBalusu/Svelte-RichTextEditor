@@ -18,6 +18,28 @@ export const EN_GB_DIALOGS = {
   'dialog.language.invalid': 'This is not a valid language tag.',
   'dialog.language.default': 'Use the language of the document',
   'dialog.altText.title': 'Alternative text for the picture',
+  // The paragraph dialog and the ruler (UX-102).
+  'dialog.paragraph.title': 'Paragraph',
+  'dialog.paragraph.left': 'Left indent (cm)',
+  'dialog.paragraph.right': 'Right indent (cm)',
+  'dialog.paragraph.firstLine': 'First-line indent (cm; negative for a hanging indent)',
+  'dialog.paragraph.mixed': 'The selected paragraphs differ. A blank field keeps each as it is.',
+  'dialog.paragraph.invalid': 'Enter a length in centimetres within the page.',
+  'dialog.paragraph.tabs': 'Tab stops',
+  'dialog.paragraph.tabs.none': 'No tab stops.',
+  'dialog.paragraph.tabs.add': 'Add a tab stop',
+  'dialog.paragraph.tabs.position': 'Tab stop {n}: position (cm)',
+  'dialog.paragraph.tabs.align': 'Tab stop {n}: alignment',
+  'dialog.paragraph.tabs.leader': 'Tab stop {n}: leader',
+  'dialog.paragraph.tabs.remove': 'Remove tab stop {n}',
+  'ruler.label': 'Ruler',
+  'ruler.tab': 'Tab stop, {align}',
+  'ruler.value': '{name}: {value} cm',
+  'ruler.margins':
+    'The PDF has margins of {left} cm on the left and {right} cm on the right. The ruler measures from the left edge of the text.',
+  'ruler.hint':
+    'Click the ruler to add a tab stop. Arrow keys move a marker, Delete removes a tab stop. The Paragraph dialog sets the same values.',
+  'ruler.dialog': 'Paragraph…',
   'dialog.altText.field': 'Describe the picture',
   'dialog.altText.hint':
     'Say what the picture shows, for people who cannot see it. If you leave it for later, the accessibility checker lists the picture.',
