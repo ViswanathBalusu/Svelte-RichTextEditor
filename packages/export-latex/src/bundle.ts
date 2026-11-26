@@ -91,6 +91,45 @@ export type Renderer = 'node' | 'harf';
 export type LayoutLevel = 'off' | 'block' | 'line';
 export type Suggestions = 'accept' | 'reject' | 'markup';
 
+/** One message of a comment thread: the author as a display name, and the text (EXP-084). */
+export interface CommentMessage {
+  readonly author: string;
+  readonly text: string;
+}
+
+/**
+ * A comment thread at the exported seq (EXP-084; ADR 0228 decision 1; docs/adr/0428). Threads are
+ * not in the document (03 section 4; 07 section 6): the control plane maps each range to the seq,
+ * finds the paragraph it starts in and reads the words it covers, and the converter only places
+ * the note. It never reads a user identity: `author` is a display name the service resolved.
+ */
+export interface CommentThread {
+  readonly id: string;
+  /** The identifier of the paragraph the note stands beside (the one the range starts in). */
+  readonly block: string;
+  /** A resolved thread: left out of the margin (owner decision 52). */
+  readonly done?: boolean;
+  /** The range lost all its text, or cannot be placed at this seq: listed, not anchored. */
+  readonly detached?: boolean;
+  /** The words the comment is about, shortened by the service; shown above the messages. */
+  readonly quote?: string;
+  /** The root message first, then the replies. */
+  readonly messages: readonly CommentMessage[];
+}
+
+/**
+ * What the exporter needs to check a suggestion against the permission rules (09 §10; owner decision
+ * 111; docs/adr/0370-w2-exp-081-unverifiable-suggestion-marks.md): the owner of each suggestion
+ * identifier and the scopes where the requester holds `edit`. Accepting a suggestion changes the
+ * content, so it needs `edit` there (07 §5.2 P1); the suggester's own grant does not count (P4).
+ */
+export interface SuggestionAccess {
+  /** Suggestion identifier to the user (or import label) that owns it. */
+  readonly owners: Readonly<Record<string, string>>;
+  /** Scopes (`body`, `region:<id>`) where the requester has `edit`, or `all` for a service credential. */
+  readonly edit: 'all' | readonly string[];
+}
+
 export interface ConvertOptions {
   fonts: FontManifest;
   /** The class files, read by the caller: `docedit.cls` and `docedit.lua` (09 §2). */
@@ -146,6 +185,21 @@ export interface ConvertOptions {
    * diagnostic `pending_suggestions`, and the bundle shows the text as if all were rejected.
    */
   suggestions?: Suggestions;
+  /**
+   * `margin` (09 section 10) prints the open comment threads of `commentThreads` in the right
+   * margin; `none` (the default) prints none. A thread that cannot stand beside its paragraph (a
+   * detached range, a paragraph in a table cell, a heading, a header or a hidden paragraph) is
+   * listed at the end of the document with a warning (EXP-084).
+   */
+  comments?: 'none' | 'margin';
+  /** The threads at the exported `seq`, written by the control plane (EXP-084). */
+  commentThreads?: readonly CommentThread[];
+  /**
+   * The owners of the suggestion identifiers and the requester's grants (owner decision 111). With
+   * it, a whole-block deletion is honoured under `accept` only if it passes (EXP-081). Absent: the
+   * converter cannot check and honours the deletion, as before; the service always supplies it.
+   */
+  suggestionAccess?: SuggestionAccess;
   /**
    * The document's classification label (EXP-089; owner decision 51): printed as text in the
    * header and the footer of every page. Absent or empty: no marking. The label joins the

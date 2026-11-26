@@ -62,6 +62,7 @@ const pool = createPool({ connectionString: config.databaseUrl!, connectionTimeo
 pool.on('error', () => {});
 const grants = new PgGrantStore(pool);
 const objects = new S3ObjectStore(config.s3!);
+const assetStore = new ObjectAssetStore(objects);
 const logs = new PgLogStore(pool, { permissions: (ref) => grants.current(ref) });
 const worker = createExportWorker({
   queue: new PgJobQueue(pool),
@@ -73,7 +74,9 @@ const worker = createExportWorker({
       documents: new PgDocumentStore(pool),
       chainHeadAt: (ref, seq) => logs.chainHeadAt(ref, seq),
     },
-    outputs: new ObjectAssetStore(objects),
+    outputs: assetStore,
+    // The pictures of an html export (EXP-087 criterion 6): final assets are read by their hash.
+    assetBytes: (tenant, sha256) => assetStore.getFinal(tenant, sha256),
     fonts: () => imageFontManifest(IMAGE),
     // EXP-047 criterion 2: every face of the manifest must be a file of the image under its hash,
     // or the job fails with font_file_missing or font_file_mismatch before it converts.

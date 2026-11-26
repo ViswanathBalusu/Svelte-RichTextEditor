@@ -7,6 +7,7 @@ import type { DocumentLabels, StyleTable } from '@docedit/model';
 import type {
   AssetInput,
   ConvertOptions,
+  CommentThread,
   Diagnostic,
   FontFamily,
   Redaction,
@@ -51,6 +52,7 @@ export interface Resolved {
   readonly profile: 'final' | 'preview';
   readonly fields: 'flatten' | 'blank';
   readonly suggestions: Suggestions | null;
+  readonly comments: 'none' | 'margin';
 }
 
 export interface FamilyInfo {
@@ -116,6 +118,8 @@ export interface Ctx {
   readonly markedStyles: Map<string, number>;
   /** Mutable state of the flow: the setup number and column count of the current page section. */
   readonly state: { columns: number; setup: number };
+  /** The comment threads to place by paragraph, and the ones placed (EXP-084). */
+  readonly comments: { byBlock: Map<string, CommentThread[]>; placed: Set<string> };
 }
 
 export interface CitationTexts {

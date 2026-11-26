@@ -23,7 +23,7 @@ import {
   type CdmEnvelope,
   type TreeNode,
 } from '@docedit/model';
-import type { Diagnostic } from './bundle.ts';
+import type { Diagnostic, SuggestionAccess } from './bundle.ts';
 import type { J, Mark } from './context.ts';
 import { url } from './emit.ts';
 import { settleSuggestions } from './suggestions.ts';
@@ -32,6 +32,8 @@ import type { DocumentWriter, WriterInput } from './writer.ts';
 export interface MarkdownOptions {
   /** How suggestions are shown (09 §10). A missing value with suggestions present is an error. */
   readonly suggestions?: 'accept' | 'reject' | 'markup' | null;
+  /** The owners of the suggestion identifiers and the requester's grants (EXP-081). */
+  readonly suggestionAccess?: SuggestionAccess | null;
   /**
    * The document's classification label (EXP-089). Markdown has no pages, so the marking is a line
    * of its own before and a line after the content.
@@ -665,7 +667,12 @@ export function markdownText(
   assets: Readonly<Record<string, unknown>> = {},
 ): MarkdownOutput {
   const settled: Diagnostic[] = [];
-  const doc = settleSuggestions(envelope.doc as unknown as J, options.suggestions ?? null, settled);
+  const doc = settleSuggestions(
+    envelope.doc as unknown as J,
+    options.suggestions ?? null,
+    settled,
+    options.suggestionAccess ?? undefined,
+  );
   const table = styleTable(doc as unknown as TreeNode);
   const labels = computeLabels(doc as unknown as TreeNode, { table });
   const ctx: Ctx = {

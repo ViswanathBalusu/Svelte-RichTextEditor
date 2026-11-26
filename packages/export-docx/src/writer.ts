@@ -76,13 +76,17 @@ import {
   xmlSafe,
 } from './writer-xml.ts';
 import {
+  ANCHOR_NODE,
   COMMENT_PARTS,
+  type AnchorMarker,
   type CommentPlan,
   type CommentThread,
   anchorEnds,
   anchorStarts,
   commentsExtendedXml,
   commentsXml,
+  rangeOf,
+  weaveAnchors,
   planComments,
 } from './writer-comments.ts';
 import {
@@ -1086,20 +1090,33 @@ class DirectWriter {
       });
     }
     const pPr = itemsXml(mergeContainer(PPR, values, [], this.ctx, extras), this.ns);
+    // Comment threads anchored to this paragraph in the document body (EXP-093, criterion 4). A
+    // thread with a range (a start and an end: positions in the paragraph's inline content) is anchored
+    // to exactly that text (owner decision 102); one without covers the whole paragraph.
+    const threads = pc.name === 'word/document.xml' ? (this.comments.byBlock.get(id) ?? []) : [];
+    const markers: AnchorMarker[] = [];
+    const wholeStarts: number[] = [];
+    for (const t of threads) {
+      const range = rangeOf(this.comments.threads[t]!.thread);
+      if (range === null) wholeStarts.push(t);
+      else
+        markers.push(
+          { offset: range.from, raw: anchorStarts(this.comments, t) },
+          { offset: range.to, raw: anchorEnds(this.comments, t) },
+        );
+    }
     const inner = await this.inlineXml(
-      n.content ?? [],
+      weaveAnchors(n.content ?? [], markers),
       pc,
       { ...cx, blockSuggestions: block, seqBlock: id },
       rp,
     );
     const bookmark = this.refBookmarks.get(`node:${id}`);
     const content = this.bookmarked(bookmark, `${leading}${inner}`);
-    // Comment threads anchored to this paragraph in the document body (EXP-093, criterion 4).
-    const threads = pc.name === 'word/document.xml' ? (this.comments.byBlock.get(id) ?? []) : [];
     if (!threads.length) return el('w:p', {}, pPr ? el('w:pPr', {}, pPr) : '', content);
     for (const t of threads) this.commentUsed.add(t);
-    const starts = threads.map((t) => anchorStarts(this.comments, t)).join('');
-    const ends = threads.map((t) => anchorEnds(this.comments, t)).join('');
+    const starts = wholeStarts.map((t) => anchorStarts(this.comments, t)).join('');
+    const ends = wholeStarts.map((t) => anchorEnds(this.comments, t)).join('');
     return el('w:p', {}, pPr ? el('w:pPr', {}, pPr) : '', `${starts}${content}${ends}`);
   }
 
@@ -1446,6 +1463,13 @@ class DirectWriter {
     let i = 0;
     while (i < content.length) {
       const node = content[i]!;
+      // A comment anchor woven in by weaveAnchors: closes an open revision and is written as is.
+      if (node.type === ANCHOR_NODE) {
+        close();
+        out.push(String(node.attrs?.['raw'] ?? ''));
+        i++;
+        continue;
+      }
       const marks = effective(node);
       const rm = marksToValues(marks);
       if (
