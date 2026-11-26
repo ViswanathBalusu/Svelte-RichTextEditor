@@ -250,6 +250,11 @@ export class WebhookSubscriptions {
     };
   }
 
+  /** The tenant's subscriptions as views, without secrets, for the tenant export (UX-088). */
+  async viewsOf(tenant: string): Promise<SubscriptionView[]> {
+    return (await this.#store.list(tenant)).map(view);
+  }
+
   /** `GET /webhooks`: the caller's subscriptions, without secrets. */
   async list(caller: Caller): Promise<Answer> {
     requireServiceCredential(caller);

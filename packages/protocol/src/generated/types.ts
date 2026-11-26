@@ -1105,6 +1105,62 @@ export interface Hold {
   placedAt: string;
 }
 
+/** The body of a bundle export (UX-087, UX-088). */
+export interface BundleExportRequest {
+  /** A discovery export (a document, some documents or the tenant, with the evidence) or a tenant export (everything the tenant owns). */
+  kind: "discovery" | "tenant";
+  /** The documents a discovery export covers; absent, it covers the whole tenant. A tenant export names none. */
+  documents?: string[];
+  /** How many documents one part holds; the service has a default. */
+  maxDocumentsPerPart?: number;
+}
+
+/** A bundle export: a job that writes the parts of a discovery or tenant bundle (UX-087, UX-088). */
+export interface BundleExport {
+  id: string;
+  kind: "discovery" | "tenant";
+  state: "queued" | "running" | "completed" | "failed" | "cancelled";
+  /** Percent of the documents written. */
+  progress: number;
+  /** Set when `state` is `completed`. */
+  result?: {
+    /** How many documents the bundle covers. */
+    documents: number;
+    /** What the bundle holds, to compare with the stored data. */
+    counts: {
+      documents: number;
+      commits: number;
+      threads: number;
+      comments: number;
+      versions: number;
+      grants: number;
+    };
+    index: {
+      name: string;
+      sha256: string;
+      size: number;
+      /** A short-lived signed URL of `parts.json`. */
+      url: string;
+    };
+    parts: Array<{
+      name: string;
+      sha256: string;
+      size: number;
+      documents: number;
+      /** A short-lived signed URL of the part (a tar archive). */
+      url: string;
+    }>;
+    /** When the URLs stop working. */
+    expiresAt: string;
+  };
+  error?: {
+    code: ErrorCode;
+    message: string;
+  };
+  createdAt: string;
+  finishedAt?: string;
+}
+
 /** A font file and its licence declaration (BE-048). */
 export interface TenantFontRequest {
   /** The file name, for the administrator only. */
@@ -2669,6 +2725,24 @@ export interface Operations {
     query: { cursor?: string; limit?: number };
     body: never;
     response: List<Hold>;
+  };
+  /** POST /bundle-exports: Starts a job that writes a discovery or tenant export bundle in parts; audited (UX-087, UX-088). Answers 202. (13 §10; 08 §12) */
+  createBundleExport: {
+    method: "POST";
+    path: "/bundle-exports";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: BundleExportRequest;
+    response: BundleExport;
+  };
+  /** GET /bundle-exports/{bid}: State, progress and, when finished, the parts and their signed URLs (UX-087, UX-088). (13 §10; 08 §12) */
+  getBundleExport: {
+    method: "GET";
+    path: "/bundle-exports/{bid}";
+    params: { bid: string };
+    query: Record<string, never>;
+    body: never;
+    response: BundleExport;
   };
   /** POST /users/erase: Erases a person: deletes their mapping row, display name and read markers; the log does not change; audited (HIS-038). A person in a document under legal hold is erased after the release (owner decision 38). An unknown `sub` is `not_found`. (08 §13; 13 §10) */
   erasePerson: {

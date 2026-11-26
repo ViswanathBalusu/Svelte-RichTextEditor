@@ -207,6 +207,8 @@ describe('the OpenAPI document: every route is complete (PRO-002 criterion 1)', 
     'GET /templates/{tid}',
     'POST /bulk-sends',
     'GET /bulk-sends/{bid}',
+    'POST /bundle-exports',
+    'GET /bundle-exports/{bid}',
     'GET /workflow/capture-settings',
     'PUT /workflow/capture-settings',
   ];

@@ -51,6 +51,9 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
       'webhooks',
       'keys',
       'origins',
+      'tenants',
+      'tenants',
+      'bundle-exports',
       'bulk-sends',
       'templates',
     ]);

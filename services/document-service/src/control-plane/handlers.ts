@@ -71,6 +71,7 @@ import { quotaRoutes } from './quota-admin-routes.ts';
 import { usageRoutes } from './usage-routes.ts';
 import { registryRoutes } from './registry-routes.ts';
 import { auditSegmentRoutes } from './audit-segment-route.ts';
+import { bundleExportRoutes } from './bundle-export.ts';
 import { suggestionRoutes } from './suggestion-routes.ts';
 import { historyVisibilityRoutes } from './history-visibility-routes.ts';
 import { retentionRoutes } from './retention-routes.ts';
@@ -907,6 +908,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...captureSettingsRoutes(k),
     ...templateRoutes(k),
     ...bulkSendRoutes(k),
+    ...bundleExportRoutes(k),
     getFonts,
   };
 }

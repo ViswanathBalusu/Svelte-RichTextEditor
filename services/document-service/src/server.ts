@@ -172,6 +172,7 @@ import { MemoryIdempotencyStore, type IdempotencyStore } from './control-plane/i
 import { PgIdempotencyStore } from './control-plane/idempotency-pg.ts';
 import { PgJobQueue } from './control-plane/jobs/pg.ts';
 import { MemoryJobQueue, type JobQueue, type JobRecord } from './control-plane/jobs/queue.ts';
+import { BUNDLE_EXPORT_KIND, bundleExportHandler } from './control-plane/bundle-export.ts';
 import { JobRunner, type JobHandler, type JobHooks } from './control-plane/jobs/runner.ts';
 import {
   DRIVERS,
@@ -1334,6 +1335,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
   // reads the control plane's dependencies when a job runs; they are built after the runners.
   let bulkSendDeps: HandlerDeps | null = null;
   if (parts.templates) runnerFor({ [BULK_SEND_KIND]: bulkSendHandler(() => bulkSendDeps) });
+  // The discovery and tenant export bundles (UX-087, UX-088): the job reads the control plane's stores.
+  runnerFor({ [BUNDLE_EXPORT_KIND]: bundleExportHandler(() => bulkSendDeps) });
 
   const exportHandlers: Record<string, JobHandler> = { ...(opts.jobHandlers ?? {}) };
   if (exportHandlers[EXPORT_KIND] && !exportHandlers[PREVIEW_KIND])
