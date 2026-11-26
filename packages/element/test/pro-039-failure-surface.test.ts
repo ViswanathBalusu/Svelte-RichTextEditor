@@ -213,7 +213,7 @@ describe('Session reports a failed load to the host (criteria 2 to 4)', () => {
       expect(session.phase).toBe('failed');
       expect(host.events.map((e) => e.name)).toEqual(['de-error']);
       expect((host.events[0]!.detail as { code: string; fatal: boolean }).fatal).toBe(true);
-      expect(failures).toEqual([{ code, retryAfterMs: retryAfterMs ?? null }]);
+      expect(failures).toEqual([{ code, retryAfterMs: retryAfterMs ?? null, quota: null }]);
       // Nothing is retried: the backend was asked for once.
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(opened()).toBe(1);

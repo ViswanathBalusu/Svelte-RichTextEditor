@@ -111,7 +111,10 @@ function operation(op: OperationDef, o: SchemaOptions): JsonSchema {
     summary: op.summary,
     description,
     tags: [tagOf(op)],
-    security: op.security.map((c) => ({ [c === 'user' ? 'userToken' : 'serviceCredential']: [] })),
+    security: op.security.map((c) => ({
+      [c === 'user' ? 'userToken' : c === 'operator' ? 'operatorCredential' : 'serviceCredential']:
+        [],
+    })),
     parameters,
   };
   if (op.body) out['requestBody'] = { required: true, content: json(toSchema(op.body, o)) };
@@ -366,7 +369,13 @@ export function generateOpenApi(
           type: 'http',
           scheme: 'bearer',
           description:
-            'A service credential (05 §3.2): an API key, or a JWT with the type header `dep-svc+jwt`. How an API key is presented is not stated (G08); both are assumed to be bearer credentials (D18).',
+            'A service credential (05 §3.2): an API key, or a JWT with the type header `dep-svc+jwt`. How an API key is presented is not stated (G08); both are assumed to be bearer credentials (D18). It is the tenant administrator credential: bound to one tenant, never valid for another (UX-076; decision 68).',
+        },
+        operatorCredential: {
+          type: 'http',
+          scheme: 'bearer',
+          description:
+            'An operator credential (UX-076; decision 68): for every tenant of the service, issued to the people and tools that run it. It manages tenants and is not a tenant administrator credential; a user token and a service credential are refused on its routes, and it is refused on theirs.',
         },
       },
     },

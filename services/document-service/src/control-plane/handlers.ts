@@ -68,6 +68,7 @@ import { admitRestCommit } from './live-quota-rest.ts';
 import { ApiError } from './problems.ts';
 import { projectRegionTitle, readerView } from './visibility.ts';
 import { quotaRoutes } from './quota-admin-routes.ts';
+import { usageRoutes } from './usage-routes.ts';
 import { registryRoutes } from './registry-routes.ts';
 import { auditSegmentRoutes } from './audit-segment-route.ts';
 import { suggestionRoutes } from './suggestion-routes.ts';
@@ -895,6 +896,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...auditSegmentRoutes(k),
     ...suggestionRoutes(k),
     ...quotaRoutes(k),
+    ...usageRoutes(k),
     ...registryRoutes(k),
     ...holdRoutes(k),
     ...tenantFontRoutes(k),

@@ -21,6 +21,8 @@ export const PENDING: Readonly<Record<string, string>> = {
     'a change of access under read restrictions (G103; PRO-130); the perm-read profile runs when a server announces them',
   'field sync.reject.rule': 'rules of phase 2 (FRW-020)',
   'field sync.reject.retryAfterMs': `a spent CPU budget (04 §12): ${FAULTS}`,
+  'field error.quota': `only quota refusals carry it (owner decision 110): ${FAULTS}`,
+  'field sync.reject.quota': `only quota refusals carry it (owner decision 110): ${FAULTS}`,
   'field event.rev': 'what rev counts is not stated (G48)',
   'field event.data': 'the members of data per event are not stated (G48)',
   'field wf.changed.rev': WORKFLOW,

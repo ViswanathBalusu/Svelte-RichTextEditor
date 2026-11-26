@@ -336,7 +336,7 @@
     {
       "row": 13,
       "id": "service",
-      "operation": "Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds",
+      "operation": "Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds, usage, sealing keys",
       "requirement": { "kind": "service" },
       "conditions": [],
       "routes": [
@@ -370,6 +370,8 @@
         "DELETE /origins/{origin}",
         "POST /keys",
         "DELETE /keys/{kid}",
+        "GET /usage",
+        "GET /sealing-keys",
         "POST /documents/{id}/imports",
         "PUT /documents/{id}/content",
         "POST /documents/{id}/fork",
@@ -387,6 +389,20 @@
         "POST /tokens",
         "POST /agents",
         "POST /sessions/revoke"
+      ],
+      "messages": []
+    },
+    {
+      "row": 14,
+      "id": "operator",
+      "operation": "Tenants: register, read, rename, suspend, resume",
+      "requirement": { "kind": "operator" },
+      "conditions": ["a service credential and a user token are refused"],
+      "routes": [
+        "GET /tenants",
+        "POST /tenants",
+        "GET /tenants/{tenantId}",
+        "PATCH /tenants/{tenantId}"
       ],
       "messages": []
     }

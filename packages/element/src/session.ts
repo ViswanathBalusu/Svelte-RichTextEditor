@@ -46,7 +46,7 @@ import {
 } from '@docedit/engine/headless';
 import { pictureAssets } from './assets.ts';
 import { type IdbJournal, openIdbJournal } from './journal-idb.ts';
-import { AUTH_CODES, codeOf, messageOf, retryAfterMsOf } from './errors.ts';
+import { AUTH_CODES, codeOf, messageOf, quotaOf, retryAfterMsOf } from './errors.ts';
 import type { FailureInfo } from './failure.ts';
 import { manifestFamilyLookup, readOnce, registerManifestFonts } from './font-loader.ts';
 import type { HostApi } from './host-api.ts';
@@ -684,7 +684,7 @@ export class Session {
       message: `${phase}: ${messageOf(e)}`,
       fatal: true,
     });
-    this.#options.host.failed?.({ code, retryAfterMs: retryAfterMsOf(e) });
+    this.#options.host.failed?.({ code, retryAfterMs: retryAfterMsOf(e), quota: quotaOf(e) });
   }
 
   /** Focus moves into the editing surface, if one is mounted. */

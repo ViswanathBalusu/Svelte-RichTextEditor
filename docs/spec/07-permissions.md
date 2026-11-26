@@ -172,7 +172,8 @@ An approval is bound to what was approved: the state record holds the `seq` and 
 | Restore a document, grants, region state or policy, break a lease, workflow actions, fetch the evidence bundle (audited), delete | `manage` |
 | Acquire a lease | `edit` in that region |
 | Export | `view`, unless restricted with `no-export`; raw compile logs need `edit` |
-| Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds | Service credential |
+| Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds, usage, sealing keys | Service credential |
+| Tenants: register, read, rename, suspend, resume | Operator credential (owner decision 68); a service credential and a user token are refused |
 
 Every row has negative tests in the conformance kit.
 

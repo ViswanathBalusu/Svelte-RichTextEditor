@@ -24,6 +24,7 @@
  */
 import type { Metrics } from './metrics.ts';
 import type { QuotaDimension, QuotaSettings } from './quotas.ts';
+import type { UsageRecorder } from './usage.ts';
 
 /** Where the values come from: the quota store, read at each decision. */
 export interface QuotaSource {
@@ -68,6 +69,8 @@ export interface LiveQuotaOptions {
   quotas: QuotaSource;
   metrics?: Metrics;
   now?: () => number;
+  /** Told the peaks the gate sees, for the usage figures (UX-078 criterion 2). Absent: none kept. */
+  usage?: UsageRecorder;
   /** The sliding window of the commit rate and the CPU budget, in milliseconds (a whole number above 0). */
   windowMs: number;
   /** The retry delay for a count quota, in milliseconds (a whole number above 0). */
@@ -90,6 +93,7 @@ export class LiveQuotas {
   readonly #quotas: QuotaSource;
   readonly #metrics: Metrics | undefined;
   readonly #now: () => number;
+  readonly #usage: UsageRecorder | undefined;
   readonly #windowMs: number;
   readonly #countRetryMs: number;
   readonly #tenants = new Map<string, TenantState>();
@@ -100,6 +104,7 @@ export class LiveQuotas {
     this.#quotas = opts.quotas;
     this.#metrics = opts.metrics;
     this.#now = opts.now ?? Date.now;
+    this.#usage = opts.usage;
     this.#windowMs = opts.windowMs;
     this.#countRetryMs = opts.countRetryMs;
   }
@@ -138,6 +143,7 @@ export class LiveQuotas {
         retryAfterMs: this.#countRetryMs,
       });
     s.connections += 1;
+    this.#usage?.peak(tenant, 'connections', s.connections);
     return { ok: true };
   }
 
@@ -167,6 +173,7 @@ export class LiveQuotas {
         retryAfterMs: this.#countRetryMs,
       });
     s.docs.set(doc, 1);
+    this.#usage?.peak(tenant, 'openDocuments', s.docs.size);
     return { ok: true };
   }
 
@@ -219,6 +226,11 @@ export class LiveQuotas {
     const s = this.#state(tenant);
     this.#prune(s, now);
     s.cpu.push({ at: now, ms });
+    this.#usage?.peak(
+      tenant,
+      'roomCpuBudget',
+      s.cpu.reduce((sum, e) => sum + e.ms, 0),
+    );
   }
 
   /** One commit of a tenant (`commitRate`, commits per window). */
@@ -237,6 +249,7 @@ export class LiveQuotas {
       });
     }
     s.commits.push(now);
+    this.#usage?.peak(tenant, 'commitRate', s.commits.length);
     return { ok: true };
   }
 
@@ -260,6 +273,11 @@ export class LiveQuotas {
       });
     }
     s.cpu.push({ at: now, ms });
+    this.#usage?.peak(
+      tenant,
+      'roomCpuBudget',
+      s.cpu.reduce((sum, e) => sum + e.ms, 0),
+    );
     return { ok: true };
   }
 }

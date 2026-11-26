@@ -31,7 +31,7 @@ describe('the machine-readable definition in spec/ (PRM-001 criterion 6; PRM-056
     ).toBe(await pretty(buildPermissionsArtifact()));
   });
 
-  it('holds the 13 rows of 07 §12, in order, with their operation, routes, messages and requirement', () => {
+  it('holds the 14 rows of 07 §12, in order, with their operation, routes, messages and requirement', () => {
     const section = spec07.slice(
       spec07.indexOf('## 12. Authorisation matrix'),
       spec07.indexOf('## 13.'),
@@ -40,7 +40,7 @@ describe('the machine-readable definition in spec/ (PRM-001 criterion 6; PRM-056
       .split('\n')
       .filter((l) => l.startsWith('| ') && !l.startsWith('| Operation') && !l.startsWith('|---'))
       .map((l) => l.split('|')[1]!.trim());
-    expect(rows).toHaveLength(13);
+    expect(rows).toHaveLength(14);
     expect(MATRIX.map((r) => r.operation)).toEqual(rows);
     expect(MATRIX.map((r) => r.row)).toEqual(rows.map((_, i) => i + 1));
     for (const r of MATRIX)
@@ -58,7 +58,7 @@ describe('the machine-readable definition in spec/ (PRM-001 criterion 6; PRM-056
       matrix: unknown[];
       operations: unknown[];
     };
-    expect(artifact.matrix).toHaveLength(13);
+    expect(artifact.matrix).toHaveLength(14);
     expect(artifact.operations).toHaveLength(OPERATIONS.length);
   });
 });

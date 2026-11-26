@@ -1,5 +1,5 @@
 /**
- * The authorisation matrix of 07 §12 as data (PRM-056): for each of its 13 rows the operation, the
+ * The authorisation matrix of 07 §12 as data (PRM-056): for each of its 14 rows the operation, the
  * DEP routes and messages it covers, and what it requires. Guards evaluate a row with `authorise`
  * and keep no copy of a requirement. Routes the matrix has no row for are listed with a documented
  * classification instead: `public` (no credential), `fields` (12 §10, whose requirements 12 states)
@@ -20,7 +20,9 @@ export type Requirement =
   /** `manage`, a document-level capability (07 §2). */
   | { kind: 'manage'; operations: readonly OperationId[] }
   /** A service credential (05 §3.2); a user token never becomes one. */
-  | { kind: 'service' };
+  | { kind: 'service' }
+  /** An operator credential (UX-076; owner decision 68): for every tenant; neither a user token nor a service credential becomes one. */
+  | { kind: 'operator' };
 
 export interface MatrixRow {
   /** Position in 07 §12, from 1. */
@@ -188,7 +190,7 @@ export const MATRIX: readonly MatrixRow[] = [
     row: 13,
     id: 'service',
     operation:
-      'Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds',
+      'Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds, usage, sealing keys',
     requirement: { kind: 'service' },
     conditions: [],
     routes: [
@@ -234,6 +236,9 @@ export const MATRIX: readonly MatrixRow[] = [
       'DELETE /origins/{origin}',
       'POST /keys',
       'DELETE /keys/{kid}',
+      // The tenant's usage in a calendar month and its PDF sealing keys, read with a service credential (UX-076).
+      'GET /usage',
+      'GET /sealing-keys',
       'POST /documents/{id}/imports',
       'PUT /documents/{id}/content',
       'POST /documents/{id}/fork',
@@ -251,6 +256,20 @@ export const MATRIX: readonly MatrixRow[] = [
       'POST /tokens',
       'POST /agents',
       'POST /sessions/revoke',
+    ],
+    messages: [],
+  },
+  {
+    row: 14,
+    id: 'operator',
+    operation: 'Tenants: register, read, rename, suspend, resume',
+    requirement: { kind: 'operator' },
+    conditions: ['a service credential and a user token are refused'],
+    routes: [
+      'GET /tenants',
+      'POST /tenants',
+      'GET /tenants/{tenantId}',
+      'PATCH /tenants/{tenantId}',
     ],
     messages: [],
   },
@@ -321,7 +340,7 @@ export const UNMATRIXED_ROUTES: readonly RouteClassification[] = [
 ];
 
 export interface MatrixContext {
-  credential: 'user' | 'service';
+  credential: 'user' | 'service' | 'operator';
   /** The caller's effective access (user tokens). */
   access?: Access;
   /** Rows 4 and 5: the scopes the target covers. */
@@ -348,6 +367,10 @@ export function authorise(rowId: string, ctx: MatrixContext): MatrixVerdict {
   const row = MATRIX.find((r) => r.id === rowId);
   if (!row) return { ok: false, reason: `no matrix row ${rowId}` };
   const req = row.requirement;
+  if (req.kind === 'operator')
+    return ctx.credential === 'operator'
+      ? { ok: true }
+      : { ok: false, reason: 'needs an operator credential' };
   if (req.kind === 'service')
     return ctx.credential === 'service'
       ? { ok: true }
