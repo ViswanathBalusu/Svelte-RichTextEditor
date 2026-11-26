@@ -4074,6 +4074,208 @@
         ]
       }
     },
+    "/tenant-fonts": {
+      "post": {
+        "operationId": "addTenantFont",
+        "summary": "Adds a font file for the tenant with a licence declaration. The file is checked in the sandbox and stored under the tenant by its hash; a file that fails is refused and nothing is published (BE-048).",
+        "description": "Adds a font file for the tenant with a licence declaration. The file is checked in the sandbox and stored under the tenant by its hash; a file that fails is refused and nothing is published (BE-048). Requires: Service credential (07 §12). Specified in 06 §12; 13 §10.",
+        "tags": [
+          "tenant-fonts"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantFontRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantFont"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "06 §12; 13 §10",
+        "x-dep-owner": "BE",
+        "x-dep-requires": "Service credential"
+      }
+    },
+    "/tenant-fonts/{sha256}": {
+      "get": {
+        "operationId": "getTenantFont",
+        "summary": "The file of a font the tenant added, for any user or service of the tenant. Another tenant gets not_found, even for the same hash (BE-048).",
+        "description": "The file of a font the tenant added, for any user or service of the tenant. Another tenant gets not_found, even for the same hash (BE-048). Specified in 06 §12; 13 §10.",
+        "tags": [
+          "tenant-fonts"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sha256",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The SHA-256 of the font file.",
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64
+            },
+            "description": "The SHA-256 of the font file."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantFontFile"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "06 §12; 13 §10",
+        "x-dep-owner": "BE"
+      },
+      "delete": {
+        "operationId": "removeTenantFont",
+        "summary": "Removes a font the tenant added and its file; audited. Exports that use it fall back to the fallback chain with a warning (BE-048; EXP-048).",
+        "description": "Removes a font the tenant added and its file; audited. Exports that use it fall back to the fallback chain with a warning (BE-048; EXP-048). Requires: Service credential (07 §12). Specified in 06 §12; 13 §10.",
+        "tags": [
+          "tenant-fonts"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sha256",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The SHA-256 of the font file.",
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64
+            },
+            "description": "The SHA-256 of the font file."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantFont"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "06 §12; 13 §10",
+        "x-dep-owner": "BE",
+        "x-dep-requires": "Service credential"
+      }
+    },
     "/webhooks": {
       "get": {
         "operationId": "listWebhooks",
@@ -12240,6 +12442,14 @@
           "certificate": {
             "description": "Append the certificate of completion (12).",
             "type": "boolean"
+          },
+          "layout": {
+            "description": "What the compile reports of the layout (09 §7.1). `lines` asks for line starts, for page-break reconciliation in the page view (L1); it is refused with `forbidden` unless the tenant has enabled page-break reconciliation, which is off by default (06 §10; BE-051). Default `blocks`.",
+            "type": "string",
+            "enum": [
+              "blocks",
+              "lines"
+            ]
           }
         }
       },
@@ -13162,6 +13372,150 @@
           "reason",
           "placedBy",
           "placedAt"
+        ]
+      },
+      "TenantFontRequest": {
+        "title": "TenantFontRequest",
+        "description": "A font file and its licence declaration (BE-048).",
+        "$comment": "06 §12; 13 §10",
+        "type": "object",
+        "properties": {
+          "filename": {
+            "description": "The file name, for the administrator only.",
+            "type": "string",
+            "maxLength": 255
+          },
+          "mime": {
+            "description": "The declared type of the file.",
+            "type": "string",
+            "enum": [
+              "font/ttf",
+              "font/otf",
+              "font/woff2"
+            ]
+          },
+          "content": {
+            "description": "The font file, base64.",
+            "type": "string",
+            "minLength": 1
+          },
+          "licence": {
+            "description": "The licence declaration the administrator makes for the file.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "serverUse": {
+            "description": "Whether the licence allows the font on a server, so in a PDF. A font without it is shown on screen only and replaced in the PDF (decision 62).",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mime",
+          "content",
+          "licence",
+          "serverUse"
+        ]
+      },
+      "TenantFont": {
+        "title": "TenantFont",
+        "description": "A font a tenant added (BE-048).",
+        "$comment": "06 §12; 13 §10",
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "description": "The SHA-256 of the file, lower-case hex.",
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "family": {
+            "description": "The family name the font file declares.",
+            "type": "string",
+            "minLength": 1
+          },
+          "style": {
+            "description": "The face.",
+            "type": "string",
+            "enum": [
+              "regular",
+              "bold",
+              "italic",
+              "boldItalic"
+            ]
+          },
+          "format": {
+            "description": "The format found in the file.",
+            "type": "string",
+            "enum": [
+              "truetype",
+              "opentype",
+              "woff2"
+            ]
+          },
+          "bytes": {
+            "description": "The size of the file.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "licence": {
+            "description": "The licence declaration.",
+            "type": "string",
+            "minLength": 1
+          },
+          "serverUse": {
+            "description": "Whether the declaration allows server-side use.",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "Where the file is read, with a credential of the tenant.",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "sha256",
+          "family",
+          "style",
+          "format",
+          "bytes",
+          "licence",
+          "serverUse",
+          "url"
+        ]
+      },
+      "TenantFontFile": {
+        "title": "TenantFontFile",
+        "description": "The file of a font a tenant added (BE-048).",
+        "$comment": "06 §12",
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "description": "The SHA-256 of the file.",
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "mime": {
+            "description": "The type of the file.",
+            "type": "string",
+            "enum": [
+              "font/ttf",
+              "font/otf",
+              "font/woff2"
+            ]
+          },
+          "content": {
+            "description": "The font file, base64.",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "sha256",
+          "mime",
+          "content"
         ]
       },
       "ErasePersonRequest": {

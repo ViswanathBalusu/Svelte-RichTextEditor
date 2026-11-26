@@ -191,6 +191,7 @@ What the editor does when its own layout disagrees with a reported break is defi
 | `pdfStandard` | For example `ua-2`, `a-4` |
 | `locale`, `timeZone` | For dates and language-dependent text. Defaults: `locale` is the document's language (`settings.lang`), else `en-GB`; `timeZone` is `UTC` (owner decision 148). The job records the values it used in `manifest.json` |
 | `certificate` | Append the certificate of completion (12) |
+| `layout` | `blocks` (default) or `lines`. `lines` asks the compile for line starts, for page-break reconciliation (level L1, section 7). It is refused with `forbidden` unless the tenant has enabled page-break reconciliation, which is off by default (06, section 10) |
 
 Interactive previews and user-requested exports use separate queues so a bulk export cannot starve previews. Each tenant has a concurrency limit and a monthly budget of compile minutes. Preview compiles run only while someone is looking at a view that needs them (06, section 10).
 

@@ -264,11 +264,12 @@ export async function recordRevision(
   ref: DocRef,
   state: PermissionState,
   actor: string,
+  transition: string | null = null,
 ): Promise<void> {
   await c.query(
-    `INSERT INTO grant_history (doc_id, rev, tenant_id, state, changed_by, changed_at)
-     VALUES ($1, $2, $3, $4::jsonb, $5, now())`,
-    [ref.doc, state.revision, ref.tenant, JSON.stringify(toJson(state)), actor],
+    `INSERT INTO grant_history (doc_id, rev, tenant_id, state, changed_by, changed_at, transition_key)
+     VALUES ($1, $2, $3, $4::jsonb, $5, now(), $6)`,
+    [ref.doc, state.revision, ref.tenant, JSON.stringify(toJson(state)), actor, transition],
   );
 }
 
@@ -362,6 +363,15 @@ export class PgGrantStore implements GrantStore {
   ): Promise<PermissionState> {
     try {
       return await inTenant(this.#pool, ref.tenant, async (c) => {
+        // A transition repeated after a stop finds the revision its first attempt raised (FRW-030).
+        if (opts.transition !== undefined) {
+          const done = await c.query<{ rev: string; state: StoredState }>(
+            'SELECT rev, state FROM grant_history WHERE doc_id = $1 AND transition_key = $2',
+            [ref.doc, opts.transition],
+          );
+          const found = done.rows[0];
+          if (found) return fromJson(int(found.rev), found.state);
+        }
         // The revision first: the row lock waits for any log write that holds it for share.
         const r = await c.query<{ rev: string }>(
           `UPDATE grant_revisions
@@ -384,7 +394,7 @@ export class PgGrantStore implements GrantStore {
         }
         await applyPermissionRows(c, ref, change, opts.actor);
         const state = await readPermissions(c, ref.doc);
-        await recordRevision(c, ref, state, opts.actor);
+        await recordRevision(c, ref, state, opts.actor, opts.transition ?? null);
         // The audit entry commits with the change or not at all (BE-014 criterion 3).
         await insertAuditEvent(c, {
           id: uuid7(),

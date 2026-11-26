@@ -71,6 +71,7 @@ import { suggestionRoutes } from './suggestion-routes.ts';
 import { historyVisibilityRoutes } from './history-visibility-routes.ts';
 import { retentionRoutes } from './retention-routes.ts';
 import { holdRoutes } from './hold-routes.ts';
+import { tenantFontRoutes } from './tenant-font-routes.ts';
 import { eraseRoutes } from './erase-routes.ts';
 import { tombstoneRoutes } from './tombstone-routes.ts';
 import { searchRoutes } from './search-routes.ts';
@@ -767,10 +768,18 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
 
   const getFonts: Handler = async (ctx) => {
     const catalogue = d.fonts?.() ?? emptyCatalogue();
-    const etag = fontsEtag(catalogue.manifest);
-    const headers = { ETag: etag, 'Cache-Control': 'no-cache' };
+    // The shared catalogue and the tenant's own faces, for every user of the tenant (BE-048; decision 95).
+    const manifest = d.tenantFonts
+      ? await d.tenantFonts.manifest(ctx.caller.tenant, catalogue)
+      : catalogue.manifest;
+    const etag = fontsEtag(manifest);
+    // The answer differs by tenant, so a shared cache must not keep it.
+    const headers = {
+      ETag: etag,
+      'Cache-Control': d.tenantFonts ? 'private, no-cache' : 'no-cache',
+    };
     if (notModified(ctx, etag)) return { status: 304, headers };
-    return json(200, catalogue.manifest, headers);
+    return json(200, manifest, headers);
   };
 
   // History reads (lists, diffs, attribution) are served from the read replica when one is
@@ -839,6 +848,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...quotaRoutes(k),
     ...registryRoutes(k),
     ...holdRoutes(k),
+    ...tenantFontRoutes(k),
     ...eraseRoutes(k),
     ...tombstoneRoutes(k),
     ...searchRoutes(k),

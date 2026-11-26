@@ -94,6 +94,7 @@ Settings, not measurements; each can be overridden (`createAssetWorker({ limits 
 | Setting | Default |
 |---|---|
 | `imageMaxBytes`, `svgMaxBytes`, `docxMaxBytes` | 20 MiB, 4 MiB, 64 MiB |
+| `fontMaxBytes`, `fontMaxTables`, `fontMaxExpandedBytes` (fonts a tenant adds, BE-048; ADR 0424) | 8 MiB, 64, 32 MiB |
 | `maxPixels`, `maxDimension` | 20 000 000, 16 384 |
 | `maxDecodeMiB` (decoder memory estimate) | 448 |
 | `maxFrames`, `maxTotalFramePixels` | 500, 200 000 000 |

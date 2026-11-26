@@ -86,7 +86,8 @@ That combination is the position. Pagination is not a differentiator, because ev
   - The host alone invites and authenticates workflow participants.
 - **Decided by the owner on 2026-11-15** (`docs/owner-decisions-2026-11-15.md`):
   - The production backend is written in Rust or C#, and Rust is preferred if nothing blocks it (SPK-009). The Node.js service stays as the reference service. A backend in another language reaches the authority, the rules and the model through the authority service (05, section 10), so ADR 0016 stands: the authority, the rules and the model stay in TypeScript whatever the backend language.
-- **Undecided** (`docs/spec/11-roadmap.md` section 10): the project's names; whether the page view must reproduce Word's pagination for imported documents (at the page-view gate); jurisdictions and the sealing party; whether the first customers need the editable page view.
+  - The first jurisdictions are the European Union and the United States, both from the start. The operator seals by default, and a tenant's own key and certificate are used where the tenant supplies them (SPK-011; decisions 13 and 14). The launch level stays a simple electronic signature plus a seal; the language rule below still applies. Development uses a software key emulator and a self-signed test certificate with a local time-stamp authority (decisions 221 to 223); the production key location, certificate and time-stamp provider are not decided.
+- **Undecided** (`docs/spec/11-roadmap.md` section 10): the project's names; whether the page view must reproduce Word's pagination for imported documents (at the page-view gate); whether the first customers need the editable page view.
 
 ## Brand Commitments
 
