@@ -636,7 +636,12 @@ export class SimClient {
               m === 'suggest' ? [ins()] : [],
             );
             tr.insert(spot.pos, tab);
-            tr.addNodeMark(spot.pos, m === 'edit' && b % 4 === 3 ? ins() : del());
+            const mark = m === 'edit' && b % 4 === 3 ? ins() : del();
+            tr.addNodeMark(spot.pos, mark);
+            // Where one may edit, a third of the marked tabs are unmarked again in the same
+            // commit. Case 11 only finds a marked tab to unmark by chance, and a run of 300
+            // schedules could end without a stored `removeNodeMark` (hosted run 45864375181).
+            if (m === 'edit' && b % 6 === 1) tr.removeNodeMark(spot.pos, mark);
             break;
           }
           const $p = doc.resolve(spot.pos);
