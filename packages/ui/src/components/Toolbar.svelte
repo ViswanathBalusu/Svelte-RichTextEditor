@@ -82,7 +82,11 @@
       }
     });
     if (moreButton && !moreButton.hidden) {
-      const w = outerWidth(moreButton);
+      // The button's own width. Its start margin is `auto`, which the browser resolves to all the
+      // room that is left, so `outerWidth` would count that room as part of the button: each pass
+      // would then reserve more, show fewer commands and leave more room, until the row was nearly
+      // empty with the rest of the commands in the menu.
+      const w = moreButton.getBoundingClientRect().width;
       if (w > 0) widths.set('|more', w);
     }
     const known = list.map((item) => widths.get(widthKey(item)) ?? 0);
