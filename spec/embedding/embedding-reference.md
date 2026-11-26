@@ -93,6 +93,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | Identifier | Group | Capability | Keys | Other names |
 |---|---|---|---|---|
 | `document.export` | page | export-pdf |  |  |
+| `document.import` | page | host-panels-and-commands |  |  |
 | `document.print` | page | export-pdf |  |  |
 | `document.share` | header | sharing |  |  |
 | `edit.discardRecovered` | edit | recovery-journal |  |  |

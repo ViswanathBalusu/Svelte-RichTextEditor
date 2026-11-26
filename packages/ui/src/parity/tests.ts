@@ -486,6 +486,19 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/e2e/prm-035-grants.spec.ts', kind: 'playwright' },
     ],
   ],
+  // Shipped when UX-050 to UX-055 closed (2026-11-26): commands, panels, status items and client
+  // filters of host extensions, in the shell and in the real element with the reference host's sample.
+  [
+    'host-panels-and-commands',
+    [
+      { path: 'packages/ui/test/extension-commands.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/extension-contributions.test.ts', kind: 'unit' },
+      { path: 'packages/ui/e2e/extension-contributions.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-055-import-filters.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-050-extensions.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-050-sample-extension.spec.ts', kind: 'playwright' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);

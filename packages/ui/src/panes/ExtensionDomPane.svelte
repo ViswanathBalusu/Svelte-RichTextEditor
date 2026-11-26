@@ -12,8 +12,8 @@
   import type { PaneProps } from '../shell/panes.ts';
 
   interface Props extends PaneProps {
-    /** Draws the panel into `container`; may return the function that removes what it drew. */
-    mount: (container: HTMLElement) => (() => void) | void;
+    /** Draws the panel into the container; a function it returns removes what it drew; anything else is ignored. */
+    mount: (container: HTMLElement) => unknown;
     /** Receives a problem the extension's `mount` raised. */
     onError?: (error: unknown) => void;
   }
@@ -23,7 +23,7 @@
   function draw(node: HTMLElement) {
     try {
       const done = props.mount(node);
-      return typeof done === 'function' ? done : undefined;
+      return typeof done === 'function' ? (done as () => void) : undefined;
     } catch (error) {
       props.onError?.(error);
       return undefined;

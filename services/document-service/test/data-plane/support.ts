@@ -91,6 +91,8 @@ interface TokenSpec {
   restrict?: readonly string[];
   /** The `access_since` claim as Unix milliseconds (08 §9; the `since_access` gate). */
   accessSince?: number;
+  /** The agent of a verified agent token (ADR 0234 A1): the connection then carries it. */
+  agent?: string;
 }
 
 /** Tokens as opaque strings mapped to identities, in place of signed JWTs (BE-012 is A2's). */

@@ -1576,6 +1576,10 @@
       "capability": "export-pdf"
     },
     {
+      "id": "document.import",
+      "capability": "host-panels-and-commands"
+    },
+    {
       "id": "document.print",
       "capability": "export-pdf"
     },
