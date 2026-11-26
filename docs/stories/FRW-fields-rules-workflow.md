@@ -2201,6 +2201,8 @@ As a maintainer, I want a default retention period for evidence, so that the pur
 
 **Notes:** Lane w4 (2026-11-18). Criterion 1 stays open: the owner's rule fixes the default and its relation to a hold (the hold keeps the evidence; it never outlives the document), but names no range a tenant may choose. ADR 0394 item 5 proposes no tenant period in version 1 and says what a period would be if the owner wants one; nothing is decided. Criterion 3 needs counsel (FRW-087), which has not taken place; ADR 0394 item 6 only names it.
 
+**Notes (lane w4, 2026-11-26, checked again):** Criteria 1 and 2 are ticked on decisions 31, 38 and 197. Criterion 3 asks for agreement with counsel on the legal basis and the tenant-facing wording; no decision in the owner's files records that review, and an agent cannot supply it. It stays unticked.
+
 ### FRW-085 Decide whether comments are switched off during a workflow
 
 | Type | Phase | Size | Priority | Persona |
