@@ -120,6 +120,10 @@ export const PROTOCOL_FEATURES: readonly string[] = [
   // Region leases (07 §10; PRM-043): on by default, as owner decision 190 says of the reference
   // service. The lease routes of the control plane answer `not_found` when it is switched off.
   'leases',
+  // Comment threads and history (07 §6; 08): on by default with leases, as owner decision 190 says
+  // of the reference service (ADR 0315). A service that is given a feature list announces only that.
+  'comments',
+  'history',
   // The room refuses a fill the rules hide or disable and a commit with rules that do not compile
   // (12 §5; FRW-019, FRW-020).
   'rules',

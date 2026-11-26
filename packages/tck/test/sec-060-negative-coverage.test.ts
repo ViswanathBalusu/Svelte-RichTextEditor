@@ -210,17 +210,17 @@ describe('SEC-060 every authorisation row and every error code has a negative te
   });
 
   it('keeps the codes of a profile that has landed out of the tagged fallback (criterion 5)', () => {
-    // Today no workflow profile has scenarios, so workflow_active is accepted through its tag.
+    // No workflow profile has scenarios, but the registry profile provokes workflow_active itself
+    // (PRO-115 criterion 3), so the code counts as provoked and the tag is not needed.
     expect(e.landedProfiles.has('workflow')).toBe(false);
-    expect(e.provokedCodes.has('workflow_active')).toBe(false);
-    // When the profile lands the tag no longer counts: the kit must provoke the code.
-    const landed = negativeCoverageFailures({
-      ...e,
-      landedProfiles: new Set([...e.landedProfiles, 'workflow']),
-    });
-    expect(landed).toEqual([
-      'code workflow_active belongs to the workflow profile, which has landed: provoke it there',
-    ]);
+    expect(e.provokedCodes.has('workflow_active')).toBe(true);
+    // When the profile lands, the code is still provoked, so nothing is missing.
+    expect(
+      negativeCoverageFailures({
+        ...e,
+        landedProfiles: new Set([...e.landedProfiles, 'workflow']),
+      }),
+    ).toEqual([]);
     // field_invalid and conflict belong to the fields profile, which has landed, and the kit
     // provokes both.
     expect(e.landedProfiles.has('fields')).toBe(true);
