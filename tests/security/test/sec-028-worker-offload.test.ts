@@ -19,7 +19,6 @@
  */
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { threadId, Worker } from 'node:worker_threads';
-import { cdmSchema } from '@docedit/model/prosemirror';
 import { Transform } from 'prosemirror-transform';
 import { uuid7 } from '@docedit/model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
