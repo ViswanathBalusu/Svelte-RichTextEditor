@@ -51,6 +51,7 @@
     'setMark',
     'insertExtensionBlock',
     'updateExtensionBlock',
+    'insertExtensionInline',
   ] as const;
 
   const api: Record<string, unknown> = {};

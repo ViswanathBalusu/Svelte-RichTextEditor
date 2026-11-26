@@ -125,6 +125,7 @@ const METHODS: Readonly<Record<string, MethodSpec>> = {
   setMark: { kind: 'write', args: [isRange, isString, optional(isObject)] },
   insertExtensionBlock: { kind: 'write', args: [isRange, isObject] },
   updateExtensionBlock: { kind: 'write', args: [isString, isObject] },
+  insertExtensionInline: { kind: 'write', args: [isRange, isObject] },
 };
 
 /** Reads the envelope of a request, or null when it does not match the schema. */
