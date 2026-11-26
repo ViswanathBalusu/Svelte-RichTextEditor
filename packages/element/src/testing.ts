@@ -66,7 +66,18 @@ export async function openPdfViewer(
   container.className = 'de-pdf';
   container.setAttribute('part', 'sidebar');
   internalsOf(el).root.append(container);
-  const { viewer, pages, worker } = await editor.shell.pdf.open(container, source);
+  // A browser holds back the drawing of a frame of another origin that is out of the viewport, so
+  // the viewer would not answer. The ruler (UX-102) moved this section below the fold of the test
+  // pages; a reader scrolls it into view to read it, as soon as the frame is in it.
+  const scroll = new MutationObserver(() => container.scrollIntoView({ block: 'nearest' }));
+  scroll.observe(container, { childList: true });
+  let result;
+  try {
+    result = await editor.shell.pdf.open(container, source);
+  } finally {
+    scroll.disconnect();
+  }
+  const { viewer, pages, worker } = result;
   const state = viewerStates.get(el) ?? [];
   state.push(viewer);
   viewerStates.set(el, state);
