@@ -3327,6 +3327,8 @@ As a maintainer, I want the element tested inside React, Angular, Vue, SvelteKit
 
 **Notes (lane w1, 2026-11-18):** criterion 3 is now ticked (see Evidence): a Svelte 5 host rendered with `svelte/server` and hydrated, in three browsers. The hydration of the other frameworks (React, Vue, Angular, SvelteKit with its router) is not run, which is part of criterion 1. Criterion 1 stays unticked: React, Vue and Angular are not installed in the workspace (only `@sveltejs/kit`, used by `apps/reference-host`), and this lane may not add dependencies. Needed: `react` and `react-dom`, `vue`, `@angular/core` with its build tooling, each as a dev dependency of `packages/element` (or of a host package under `apps/`). SvelteKit's host (`apps/reference-host`) belongs to another lane, and its end-to-end run needs the demo stack.
 
+**Notes (lane w1, 2026-11-26):** nothing new could be ticked. Criterion 1 needs React, Vue and Angular (and SvelteKit's router in the element's own demo), none of which is a dependency of `packages/element`; this lane may not add dependencies (needsDependency: `react`, `react-dom`, `vue`, `@angular/core` with its build tooling, each at an exact version, owner's approval needed). The owner's decisions file (2026-11-15 to 2026-11-18) does not settle the framework hosts. Status: blocked.
+
 ### FE-125 Run strict content security policy and Trusted Types pages
 
 | Type | Phase | Size | Priority | Persona |
