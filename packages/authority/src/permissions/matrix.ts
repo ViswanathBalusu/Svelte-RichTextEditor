@@ -199,6 +199,9 @@ export const MATRIX: readonly MatrixRow[] = [
       'POST /documents/{id}/holds',
       'DELETE /documents/{id}/holds/{holdId}',
       'GET /holds',
+      // Fonts a tenant adds (BE-048; owner decisions 62, 94, 95): add and remove with a service credential.
+      'POST /tenant-fonts',
+      'DELETE /tenant-fonts/{sha256}',
       // The erasure of a person (08 §13; HIS-038 criterion 6): a service credential.
       'POST /users/erase',
       // Replacing one commit's payload with a tombstone (08 §13; HIS-040): a service credential.
@@ -283,6 +286,10 @@ export const UNMATRIXED_ROUTES: readonly RouteClassification[] = [
   open('DELETE /exports/{jid}', 'deleting an export: no row'),
   open('GET /imports/{jid}', 'reading an import job: no row'),
   open('GET /fonts', 'the font manifest: no row'),
+  open(
+    'GET /tenant-fonts/{sha256}',
+    'a font file the tenant added: the tenant is the scope, no document',
+  ),
   fields('GET /documents/{id}/fields', '12 §10'),
   fields('GET /documents/{id}/field-values', '12 §10; values projected per reader (ADR 0019)'),
   fields('PATCH /documents/{id}/field-values', '12 §9 prefill: a server-authored commit'),

@@ -141,6 +141,8 @@ const ENDPOINT_REVIEW: Record<string, EndpointEntry> = {
   getExport: { kind: 'exercised', test: SURFACES_FILE, path: '/exports/' },
   getImport: { kind: 'swept' },
   getFonts: { kind: 'swept' },
+  // BE-048: a font file of the tenant; named by its hash, scoped to the tenant, no document in view.
+  getTenantFont: { kind: 'swept' },
   listFields: { kind: 'exercised', test: SURFACES_FILE, path: '/fields' },
   getFieldValues: { kind: 'exercised', test: SURFACES_FILE, path: '/field-values?seq=' },
   getWorkflow: { kind: 'swept' },
@@ -151,6 +153,7 @@ const KNOWN_SWEPT = [
   'getDocument',
   'getImport',
   'getFonts',
+  'getTenantFont',
   'getWorkflow',
   'getWorkflowEvidence',
   'getWorkflowFinal',
