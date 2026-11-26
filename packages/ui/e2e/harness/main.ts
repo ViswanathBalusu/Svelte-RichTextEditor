@@ -1127,8 +1127,8 @@ const harness = {
   grantSaves: () => need().core.grants?.saves ?? [],
   /** What the check-out control asked the leases service to do (PRM-043). */
   leaseCalls: () => [...(need().core.leases?.calls ?? [])],
-    /** The region states the pane set (PRM-048 criterion 4). */
-    stateCalls: () => [...need().core.stateCalls],
+  /** The region states the pane set (PRM-048 criterion 4). */
+  stateCalls: () => [...need().core.stateCalls],
   /** Makes the next check-out fail as a service would refuse it (PRM-043). */
   refuseNextLease: (code: 'conflict' | 'forbidden') => void (need().core.leases!.refuseNext = code),
   /** The comment threads port (UX-028, UX-031): what was asked for, and what the core reports. */

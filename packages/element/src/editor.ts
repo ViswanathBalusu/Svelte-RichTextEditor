@@ -761,7 +761,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // the pane shows the list it has read; the server checks the right, not a tag.
       ...(port?.setRegionState
         ? {
-            setRegionState: async (region: string, state: RegionSummary['state']): Promise<void> => {
+            setRegionState: async (
+              region: string,
+              state: RegionSummary['state'],
+            ): Promise<void> => {
               await port.setRegionState!(options.docId, region, state, { ifMatch: '*' });
             },
           }
