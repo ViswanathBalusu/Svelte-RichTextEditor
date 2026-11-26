@@ -213,6 +213,9 @@ export const MATRIX: readonly MatrixRow[] = [
       // Bulk sends (12 §9; FRW-063): started and read with a service credential.
       'POST /bulk-sends',
       'GET /bulk-sends/{bid}',
+      // The tenant's evidence capture setting (12 §7; FRW-042), with a service credential.
+      'GET /workflow/capture-settings',
+      'PUT /workflow/capture-settings',
       // Who sees full history, per tenant and per document (08 §9; HIS-025), with a service credential.
       'GET /history-visibility',
       'PUT /history-visibility',

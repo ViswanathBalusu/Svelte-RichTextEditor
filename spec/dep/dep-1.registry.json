@@ -1801,6 +1801,36 @@
       "owner": "FRW"
     },
     {
+      "operationId": "getWorkflowCaptureSettings",
+      "method": "GET",
+      "path": "/workflow/capture-settings",
+      "security": [
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "12 §7, §10; 13 §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "setWorkflowCaptureSettings",
+      "method": "PUT",
+      "path": "/workflow/capture-settings",
+      "security": [
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "12 §7, §10; 13 §10",
+      "owner": "FRW"
+    },
+    {
       "operationId": "getWorkflowEvidence",
       "method": "GET",
       "path": "/documents/{id}/workflow/evidence",

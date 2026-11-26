@@ -293,6 +293,23 @@ export const FRW_SHAPES: readonly NamedShape[] = [
     ),
   },
   {
+    name: 'WorkflowCaptureSettings',
+    owner: FRW,
+    shape: obj(
+      {
+        captureNetworkIdentity: req(
+          bool(),
+          'Whether the IP address and the user agent of a participant are recorded in their evidence. On by default; off keeps neither (12 §7). A change applies to events after it; evidence already stored is not rewritten.',
+        ),
+      },
+      {
+        doc: 'The tenant setting for network identity capture in workflow evidence (12 §7; FRW-042).',
+        spec: '12 §7, §10; 13 §10',
+        gaps: ['G95'],
+      },
+    ),
+  },
+  {
     name: 'WorkflowPlaceholder',
     owner: FRW,
     shape: obj(

@@ -66,6 +66,7 @@ import type { Views } from './visibility.ts';
 import type { AccessCodeStore } from '../workflow/access-code-store.ts';
 import type { ConsentTextStore } from '../workflow/consent-service.ts';
 import type { EvidenceLedger } from '../workflow/evidence-ledger.ts';
+import type { CaptureSettingsPort } from '../workflow/capture-settings.ts';
 import type { SealedPdfStore } from '../workflow/sealed-store.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import type { TemplateStore } from '../workflow/template-store.ts';
@@ -189,6 +190,8 @@ export interface HandlerDeps {
   consentTexts?: ConsentTextStore;
   /** The workflow evidence ledger (FRW-041), where attempts at an access code are recorded. */
   evidence?: EvidenceLedger;
+  /** The tenant's network-capture setting of `/workflow/capture-settings` (FRW-042). Absent: not offered. */
+  captureSettings?: CaptureSettingsPort;
   /** The sealed final PDFs (FRW-054). Absent: `GET /documents/{id}/workflow/final` is not offered. */
   sealedPdfs?: SealedPdfStore;
   /**

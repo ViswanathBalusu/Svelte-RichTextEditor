@@ -8372,6 +8372,141 @@
         ]
       }
     },
+    "/workflow/capture-settings": {
+      "get": {
+        "operationId": "getWorkflowCaptureSettings",
+        "summary": "The tenant setting for IP address and user agent capture in workflow evidence; on when none is set (12 §7; FRW-042). The path is assumed (ADR 0426, proposed).",
+        "description": "The tenant setting for IP address and user agent capture in workflow evidence; on when none is set (12 §7; FRW-042). The path is assumed (ADR 0426, proposed). Requires: Service credential (07 §12). Only when the server announces the feature `workflow`. Specified in 12 §7, §10; 13 §10.",
+        "tags": [
+          "workflow"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowCaptureSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §7, §10; 13 §10",
+        "x-dep-owner": "FRW",
+        "x-dep-requires": "Service credential",
+        "x-dep-feature": "workflow",
+        "x-dep-gaps": [
+          "G95"
+        ]
+      },
+      "put": {
+        "operationId": "setWorkflowCaptureSettings",
+        "summary": "Switches IP address and user agent capture in workflow evidence on or off for the tenant; audited with actor and time, and applies to later events only (12 §7; FRW-042). The path is assumed (ADR 0426, proposed).",
+        "description": "Switches IP address and user agent capture in workflow evidence on or off for the tenant; audited with actor and time, and applies to later events only (12 §7; FRW-042). The path is assumed (ADR 0426, proposed). Requires: Service credential (07 §12). Only when the server announces the feature `workflow`. Specified in 12 §7, §10; 13 §10.",
+        "tags": [
+          "workflow"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowCaptureSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowCaptureSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §7, §10; 13 §10",
+        "x-dep-owner": "FRW",
+        "x-dep-requires": "Service credential",
+        "x-dep-feature": "workflow",
+        "x-dep-gaps": [
+          "G95"
+        ]
+      }
+    },
     "/documents/{id}/workflow/evidence": {
       "get": {
         "operationId": "getWorkflowEvidence",
@@ -14265,6 +14400,21 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "WorkflowCaptureSettings": {
+        "title": "WorkflowCaptureSettings",
+        "description": "The tenant setting for network identity capture in workflow evidence (12 §7; FRW-042).",
+        "$comment": "12 §7, §10; 13 §10; gaps: G95",
+        "type": "object",
+        "properties": {
+          "captureNetworkIdentity": {
+            "description": "Whether the IP address and the user agent of a participant are recorded in their evidence. On by default; off keeps neither (12 §7). A change applies to events after it; evidence already stored is not rewritten.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "captureNetworkIdentity"
         ]
       },
       "WorkflowPlaceholder": {

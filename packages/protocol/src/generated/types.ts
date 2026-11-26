@@ -1242,6 +1242,12 @@ export interface WorkflowAccessCode {
   code: string;
 }
 
+/** The tenant setting for network identity capture in workflow evidence (12 §7; FRW-042). */
+export interface WorkflowCaptureSettings {
+  /** Whether the IP address and the user agent of a participant are recorded in their evidence. On by default; off keeps neither (12 §7). A change applies to events after it; evidence already stored is not rewritten. */
+  captureNetworkIdentity: boolean;
+}
+
 /** A workflow request or response the prose does not define. Placeholder. */
 export type WorkflowPlaceholder = { [key: string]: unknown };
 
@@ -2674,6 +2680,24 @@ export interface Operations {
     query: Record<string, never>;
     body: WorkflowPlaceholder;
     response: WorkflowPlaceholder;
+  };
+  /** GET /workflow/capture-settings: The tenant setting for IP address and user agent capture in workflow evidence; on when none is set (12 §7; FRW-042). The path is assumed (ADR 0426, proposed). (12 §7, §10; 13 §10) */
+  getWorkflowCaptureSettings: {
+    method: "GET";
+    path: "/workflow/capture-settings";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: never;
+    response: WorkflowCaptureSettings;
+  };
+  /** PUT /workflow/capture-settings: Switches IP address and user agent capture in workflow evidence on or off for the tenant; audited with actor and time, and applies to later events only (12 §7; FRW-042). The path is assumed (ADR 0426, proposed). (12 §7, §10; 13 §10) */
+  setWorkflowCaptureSettings: {
+    method: "PUT";
+    path: "/workflow/capture-settings";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: WorkflowCaptureSettings;
+    response: WorkflowCaptureSettings;
   };
   /** GET /documents/{id}/workflow/evidence: The evidence record (12 §7). The method is assumed. (12 §10) */
   getWorkflowEvidence: {

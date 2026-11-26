@@ -4800,6 +4800,21 @@
         "code"
       ]
     },
+    "WorkflowCaptureSettings": {
+      "title": "WorkflowCaptureSettings",
+      "description": "The tenant setting for network identity capture in workflow evidence (12 §7; FRW-042).",
+      "$comment": "12 §7, §10; 13 §10; gaps: G95",
+      "type": "object",
+      "properties": {
+        "captureNetworkIdentity": {
+          "description": "Whether the IP address and the user agent of a participant are recorded in their evidence. On by default; off keeps neither (12 §7). A change applies to events after it; evidence already stored is not rewritten.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "captureNetworkIdentity"
+      ]
+    },
     "WorkflowPlaceholder": {
       "title": "WorkflowPlaceholder",
       "description": "A workflow request or response the prose does not define. Placeholder.",

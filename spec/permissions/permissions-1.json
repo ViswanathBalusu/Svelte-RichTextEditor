@@ -340,6 +340,8 @@
         "GET /templates/{tid}",
         "POST /bulk-sends",
         "GET /bulk-sends/{bid}",
+        "GET /workflow/capture-settings",
+        "PUT /workflow/capture-settings",
         "GET /history-visibility",
         "PUT /history-visibility",
         "GET /documents/{id}/history-visibility",
