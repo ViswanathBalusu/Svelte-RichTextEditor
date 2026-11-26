@@ -409,6 +409,11 @@ export interface SealResult {
   timestampTime: Date;
   /** The size of the signature's CMS in bytes (the room it needs in `/Contents`). */
   cmsBytes: number;
+  /**
+   * The certificates of the newest time-stamp token (DER), the authority's first: of the document
+   * time-stamp for B-LTA, else of the signature time-stamp. Their `notAfter` is when renewal is due.
+   */
+  tokenCertificates: readonly Uint8Array[];
 }
 
 export async function sealPdf(input: Uint8Array, opts: SealOptions): Promise<SealResult> {
@@ -448,7 +453,13 @@ export async function sealPdf(input: Uint8Array, opts: SealOptions): Promise<Sea
   const tsInfo = timestampInfo(tsToken);
 
   if (opts.profile === 'B-T')
-    return { pdf, steps, timestampTime: tsInfo.genTime, cmsBytes: cms.length };
+    return {
+      pdf,
+      steps,
+      timestampTime: tsInfo.genTime,
+      cmsBytes: cms.length,
+      tokenCertificates: tsInfo.certificates,
+    };
 
   // 2. The validation data (B-LT).
   if (!opts.validationData) throw new PdfError('B-LT needs validation data');
@@ -462,7 +473,13 @@ export async function sealPdf(input: Uint8Array, opts: SealOptions): Promise<Sea
   steps.push({ name: 'validation data (DSS, B-LT)', length: pdf.length });
 
   if (opts.profile === 'B-LT')
-    return { pdf, steps, timestampTime: tsInfo.genTime, cmsBytes: cms.length };
+    return {
+      pdf,
+      steps,
+      timestampTime: tsInfo.genTime,
+      cmsBytes: cms.length,
+      tokenCertificates: tsInfo.certificates,
+    };
 
   // 3. The document time-stamp over everything so far, the DSS included (B-LTA).
   const stamped = await addDocumentTimestamp(pdf, {
@@ -471,7 +488,14 @@ export async function sealPdf(input: Uint8Array, opts: SealOptions): Promise<Sea
     contentsBytes: room,
   });
   steps.push({ name: 'document time-stamp (B-LTA)', length: stamped.length });
-  return { pdf: stamped, steps, timestampTime: tsInfo.genTime, cmsBytes: cms.length };
+  const newest = lastTimestamp(stamped);
+  return {
+    pdf: stamped,
+    steps,
+    timestampTime: tsInfo.genTime,
+    cmsBytes: cms.length,
+    tokenCertificates: newest?.certificates ?? tsInfo.certificates,
+  };
 }
 
 /**

@@ -14,7 +14,7 @@
 import { SUGGESTION_HOSTS } from '@docedit/model/definition';
 import { color, lit, tex, type Tex } from './emit.ts';
 import { diag, type Ctx, type J, type Mark } from './context.ts';
-import type { Diagnostic, Suggestions } from './bundle.ts';
+import type { Diagnostic, SuggestionAccess, Suggestions } from './bundle.ts';
 
 /** Insertions in markup: blue, underlined. The colours are a proposed default (ADR 0142), not a decision. */
 const INSERT_COLOUR: Tex = color('#1F5FAD') ?? lit('1F5FAD');
@@ -92,6 +92,19 @@ function verifiable(m: Mark): boolean {
   return typeof id === 'string' && id !== '' && typeof user === 'string' && user !== '';
 }
 
+/**
+ * Whether a block deletion passes the permission rules (09 §10; owner decision 111): the identifier
+ * has a known owner and it is the mark's author, and the requester holds `edit` in the block's
+ * scope. A suggester's own grant to suggest never accepts a suggestion (07 §5.2 P4).
+ */
+function permitted(m: Mark, scope: string, access: SuggestionAccess): boolean {
+  const id = m.attrs?.['id'];
+  const user = m.attrs?.['user'];
+  if (typeof id !== 'string' || typeof user !== 'string') return false;
+  if (!Object.hasOwn(access.owners, id) || access.owners[id] !== user) return false;
+  return access.edit === 'all' || access.edit.includes(scope);
+}
+
 /** The identifier of the block that holds a node, for a diagnostic: the nearest one that has one. */
 function holderOf(parents: readonly (string | null)[]): string | null {
   for (let i = parents.length - 1; i >= 0; i--) if (parents[i]) return parents[i]!;
@@ -109,10 +122,20 @@ function holderOf(parents: readonly (string | null)[]): string | null {
  *   The editor does the same when it rejects the suggestion (`resolveSuggestions`, FE-047).
  *   Under `accept` and `markup` the `fmt` stays as it is: the current formatting is shown.
  */
-export function settleSuggestions(doc: J, mode: Suggestions | null, diagnostics: Diagnostic[]): J {
+export function settleSuggestions(
+  doc: J,
+  mode: Suggestions | null,
+  diagnostics: Diagnostic[],
+  access?: SuggestionAccess,
+): J {
   const revert = mode === null || mode === 'reject';
   const reported = new Set<string>();
-  const visit = (node: J, parents: (string | null)[], inherited: readonly Mark[]): J => {
+  const visit = (
+    node: J,
+    parents: (string | null)[],
+    inherited: readonly Mark[],
+    scope: string,
+  ): J => {
     let marks = node.marks;
     let attrs = node.attrs;
     // A paragraph, a row and a table keep their suggestions in `suggest` (03 §5; owner decision 92).
@@ -147,6 +170,27 @@ export function settleSuggestions(doc: J, mode: Suggestions | null, diagnostics:
           });
         }
       }
+      if (mode === 'accept' && access && SUGGESTION_HOSTS.includes(node.type)) {
+        const refused = marks.filter((m) => m.type === 'del' && !permitted(m, scope, access));
+        if (refused.length > 0) {
+          marks = marks.filter((m) => !refused.includes(m));
+          const block = holderOf([
+            ...parents,
+            typeof node.attrs?.['id'] === 'string' ? (node.attrs['id'] as string) : null,
+          ]);
+          const key = `permission\u0000${block ?? ''}\u0000${node.type}`;
+          if (!reported.has(key)) {
+            reported.add(key);
+            diagnostics.push({
+              severity: 'warning',
+              code: 'suggestion_not_permitted',
+              blockId: block,
+              message:
+                'a suggested deletion of a whole block does not pass the permission rules (its owner is not known, or the requester may not edit here), so the block is kept (09 §10)',
+            });
+          }
+        }
+      }
       if (revert) {
         const fmts = marks.filter((m) => m.type === 'fmt' && isRecord(m.attrs?.['before']));
         const last = fmts[fmts.length - 1];
@@ -174,7 +218,8 @@ export function settleSuggestions(doc: J, mode: Suggestions | null, diagnostics:
       const extra = inherited.filter((m) => !have.includes(m.type));
       if (extra.length > 0) marks = [...(marks ?? []), ...extra];
     }
-    const content = node.content?.map((c) => visit(c, [...parents, id], below));
+    const inside = node.type === 'region' && id ? 'region:' + id : scope;
+    const content = node.content?.map((c) => visit(c, [...parents, id], below, inside));
     const changed =
       marks !== node.marks ||
       attrs !== node.attrs ||
@@ -189,5 +234,5 @@ export function settleSuggestions(doc: J, mode: Suggestions | null, diagnostics:
     if (content) out.content = content;
     return out;
   };
-  return visit(doc, [], []);
+  return visit(doc, [], [], 'body');
 }

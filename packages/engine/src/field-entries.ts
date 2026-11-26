@@ -69,6 +69,8 @@ export interface FieldRole {
 export interface FieldStatus {
   readonly id: string;
   readonly key: string;
+  /** The field's kind (	ext, signature, initials, ...); the signing ceremony counts the signature kinds. */
+  readonly kind: string;
   readonly label: string;
   readonly required: boolean;
   readonly filled: boolean;
@@ -333,6 +335,7 @@ export class FieldEntries {
       const status: FieldStatus = {
         id,
         key: info.key,
+        kind: info.kind,
         label: typeof label === 'string' && label !== '' ? label : info.key,
         required: info.required === true,
         filled: !isEmptyValue(info, value),

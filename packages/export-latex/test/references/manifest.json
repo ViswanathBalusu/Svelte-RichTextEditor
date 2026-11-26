@@ -9,7 +9,10 @@
         "tagging": "on",
         "pdfStandard": "ua-2+a-4f"
       },
-      "flavours": ["ua2", "4f"],
+      "flavours": [
+        "ua2",
+        "4f"
+      ],
       "corpus": "form-fields",
       "sha256": "c2dd07c7e9b12ac726c065fc2eee85a08bac6b0ec0bce236f05a26114383b1b0"
     },
@@ -21,7 +24,10 @@
         "tagging": "on",
         "pdfStandard": "ua-2+a-4f"
       },
-      "flavours": ["ua2", "4f"],
+      "flavours": [
+        "ua2",
+        "4f"
+      ],
       "corpus": "pages-1",
       "sha256": "e704e6f373f7e903e274870e3009660e86ee1e17a2d502218e18bdabaf8e6adf"
     },
@@ -33,11 +39,15 @@
         "tagging": "on",
         "pdfStandard": "ua-2+a-4f"
       },
-      "flavours": ["4f"],
+      "flavours": [
+        "4f"
+      ],
       "corpus": "pages-20",
-      "without": ["cjk.*"],
-      "sha256": "5d1ce2d3397943f72e259d4bdb486afe3a043d51a707aa08145681d4a0d5d093",
-      "note": "fails PDF/UA-2 (veraPDF 8.2.5.26, tables shall be regular, 4 checks) on the tables with row and column spans; only PDF/A-4f is checked"
+      "without": [
+        "cjk.*"
+      ],
+      "note": "fails PDF/UA-2 (veraPDF 8.2.5.26, tables shall be regular, 4 checks) on the tables with row and column spans; only PDF/A-4f is checked",
+      "sha256": "89373350b6cfcd3135117f3074088ebc1c8b1cbd8694fb5025eea5e911ac79e5"
     },
     {
       "file": "exp-114-s4-01p-ua2-a4f.pdf",
@@ -47,7 +57,10 @@
         "tagging": "on",
         "pdfStandard": "ua-2+a-4f"
       },
-      "flavours": ["ua2", "4f"],
+      "flavours": [
+        "ua2",
+        "4f"
+      ],
       "sha256": "23c6729ef2c870c79e9f94ca321911f49c28b6c25daabe5ed33eb9ece343f24c"
     },
     {
@@ -58,7 +71,10 @@
         "tagging": "on",
         "pdfStandard": "ua-2+a-4f"
       },
-      "flavours": ["ua2", "4f"],
+      "flavours": [
+        "ua2",
+        "4f"
+      ],
       "sha256": "738400d3e9faa36477ff84083c9b0ede44ee3ce89e32bd549098bee78dd95c4c"
     },
     {
@@ -70,7 +86,10 @@
         "pdfStandard": "ua-2+a-4f",
         "suggestions": "markup"
       },
-      "flavours": ["ua2", "4f"],
+      "flavours": [
+        "ua2",
+        "4f"
+      ],
       "sha256": "104398404649d57b82aa75650a7edabbdd8d8f83079391e58fca9fcc5a01ae27"
     }
   ]

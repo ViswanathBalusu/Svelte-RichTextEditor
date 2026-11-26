@@ -74,6 +74,11 @@ import {
   type SigningHarnessLog,
   type SigningHarnessMode,
 } from './frw-045-signing-port.ts';
+import {
+  consentService,
+  type ConsentHarnessLog,
+  type ConsentHarnessMode,
+} from './frw-044-consent-port.ts';
 
 const violations: string[] = [];
 document.addEventListener('securitypolicyviolation', (e) => {
@@ -90,6 +95,10 @@ let pagesHandle: ReturnType<typeof fakePages> | null = null;
 /** What the adoption and signing step asked of its service (FRW-045, FRW-046). */
 const signingLog: SigningHarnessLog = { adopts: [], signs: [], dismissed: 0 };
 let signingHandle: ReturnType<typeof signingService> | null = null;
+/** What the consent step asked of its service (FRW-044). */
+const consentLog: ConsentHarnessLog = { loads: 0, accepts: 0, declines: [] };
+/** What finishing asked of its service (FRW-048). */
+const completionLog = { completes: 0 };
 const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
@@ -129,6 +138,8 @@ export interface MountOptions {
   status?: StatusSummary;
   presence?: PresencePeer[];
   features?: string[];
+  /** True: the backend announces neither `fields` nor `workflow` (FRW-065 criterion 3). */
+  withoutFieldPorts?: boolean;
   counts?: ShellCounts;
   /** `host`: the directory above; `failing`: every call rejects; `none`: no resolveUsers. */
   people?: 'host' | 'failing' | 'none';
@@ -138,6 +149,10 @@ export interface MountOptions {
   send?: SendHarnessMode;
   /** The adoption and signing step's service of FRW-045 and FRW-046: see harness/frw-045-signing-port.ts; absent: none. */
   signing?: SigningHarnessMode;
+  /** The consent step before signing (FRW-044), with signing: see harness/frw-044-consent-port.ts; absent: no step. */
+  consent?: ConsentHarnessMode;
+  /** Finishing the participant's part (FRW-048): the service answers completed, invalid (2 fields), or not active. */
+  completion?: 'ok' | 'invalid' | 'inactive';
   /** The field properties service of FRW-073: one field, `tenant.name`, that this person may change. */
   fieldProperties?: boolean;
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
@@ -640,9 +655,13 @@ function mountShell(options: MountOptions = {}): void {
     ...(options.access ? { access: options.access } : {}),
     ...(options.status ? { status: options.status } : {}),
     ...(options.presence ? { presence: options.presence } : {}),
-    ...(options.features || options.comments
-      ? { features: [...(options.features ?? []), ...(options.comments ? ['comments'] : [])] }
-      : {}),
+    // The backend of the harness announces the `fields` and `workflow` features unless a run says
+    // otherwise (`withoutFieldPorts`): the field and workflow controls need them (FRW-065).
+    features: [
+      ...(options.withoutFieldPorts ? [] : ['fields', 'workflow']),
+      ...(options.features ?? []),
+      ...(options.comments ? ['comments'] : []),
+    ],
     ...(options.comments ? { threads: true } : {}),
     ...(options.review ? { review: true } : {}),
     ...(options.counts ? { counts: options.counts } : {}),
@@ -735,7 +754,27 @@ function mountShell(options: MountOptions = {}): void {
     signingLog.signs.length = 0;
     signingLog.dismissed = 0;
     signingHandle = signingService(options.signing, signingLog);
+    if (options.consent) {
+      consentLog.loads = 0;
+      consentLog.accepts = 0;
+      consentLog.declines.length = 0;
+      Object.assign(signingHandle, { consent: consentService(options.consent, consentLog) });
+    }
     Object.assign(core, { signing: signingHandle });
+    if (options.completion) {
+      const answer = options.completion;
+      completionLog.completes = 0;
+      Object.assign(core, {
+        completion: {
+          complete: async () => {
+            completionLog.completes++;
+            if (answer === 'invalid') return { ok: false, reason: 'invalid', count: 2 };
+            if (answer === 'inactive') return { ok: false, reason: 'not_active' };
+            return { ok: true };
+          },
+        },
+      });
+    }
   }
   if (options.accessCode) {
     accessCodeLog.length = 0;
@@ -1196,6 +1235,8 @@ const harness = {
   setSendState: (next: string | null) => sendHandle?.setState(next),
   /** What the adoption and signing step asked of its service (FRW-045), and a field the participant activates (FRW-046). */
   signingLog: () => JSON.parse(JSON.stringify(signingLog)) as SigningHarnessLog,
+  consentLog: () => JSON.parse(JSON.stringify(consentLog)) as ConsentHarnessLog,
+  completionLog: () => ({ ...completionLog }),
   activateSignature: (field: {
     id: string;
     key: string;

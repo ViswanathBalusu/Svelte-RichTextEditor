@@ -41,6 +41,12 @@ export interface StoredComment {
   editedAt: number | null;
   /** The people (`sub`) who hold each reaction, in the order they reacted (UX-033; ADR 0424). */
   reactions?: Record<string, string[]>;
+  /**
+   * The comment's own sequence number in its document (PRO-058; owner decision 73; ADR 0428),
+   * given by the store when the comment is stored. Absent on a comment not stored yet, and on one
+   * stored before the numbers existed.
+   */
+  seq?: number;
 }
 
 /** The reactions after `user` took or left `reaction`; the map is not changed, and an empty list is dropped. */
@@ -128,8 +134,13 @@ export interface ThreadStore {
   delete(tenant: string, id: string): Promise<boolean>;
   /** Changes the state or the assignee; undefined when there is no such thread. */
   update(tenant: string, id: string, change: ThreadChange): Promise<StoredThread | undefined>;
-  /** Adds a comment to a thread; false when there is no such thread. */
+  /**
+   * Adds a comment to a thread; false when there is no such thread. The comment is given the next
+   * sequence number of its document; read it back with `get`.
+   */
   addComment(tenant: string, threadId: string, comment: StoredComment): Promise<boolean>;
+  /** The highest comment sequence number given in the document; 0 when it has had no comment. */
+  commentHead(ref: DocRef): Promise<number>;
   /** Where a live comment is; undefined for a deleted or unknown one. */
   findComment(tenant: string, cid: string): Promise<CommentLocation | undefined>;
   /** Replaces a live comment's body and sets its edit time; undefined when there is none. */
@@ -170,6 +181,26 @@ interface CommentRow {
   created_at: Date;
   edited_at: Date | null;
   reactions?: Record<string, string[]> | null;
+  seq?: string | number | null;
+}
+
+/** The sequence number of a comment row, or none for a row stored before the numbers existed. */
+const seqOf = (row: { seq?: string | number | null }): { seq?: number } =>
+  row.seq === null || row.seq === undefined ? {} : { seq: Number(row.seq) };
+
+/**
+ * The next comment sequence number of a document, inside the caller's transaction. The upsert
+ * takes the row lock of the counter, so two comments made at once get two numbers, in the order
+ * their transactions commit.
+ */
+async function nextCommentSeq(c: PoolClient, tenant: string, doc: string): Promise<number> {
+  const r = await c.query<{ last: string }>(
+    `insert into comment_counters (doc_id, tenant_id, last) values ($1, $2, 1)
+     on conflict (doc_id) do update set last = comment_counters.last + 1
+     returning last`,
+    [doc, tenant],
+  );
+  return Number(r.rows[0]!.last);
 }
 
 /** Threads and comments in PostgreSQL, under the tenant's row-level security. */
@@ -200,9 +231,10 @@ export class PgThreadStore implements ThreadStore {
           new Date(thread.createdAt),
         ],
       );
+      const seq = await nextCommentSeq(c, ref.tenant, ref.doc);
       await c.query(
-        `insert into comments (id, tenant_id, thread_id, author, body, created_at)
-         values ($1, $2, $3, $4, $5, $6)`,
+        `insert into comments (id, tenant_id, thread_id, author, body, created_at, seq)
+         values ($1, $2, $3, $4, $5, $6, $7)`,
         [
           thread.comment.id,
           ref.tenant,
@@ -210,6 +242,7 @@ export class PgThreadStore implements ThreadStore {
           thread.comment.author,
           JSON.stringify(thread.comment.body),
           new Date(thread.comment.createdAt),
+          seq,
         ],
       );
       return {
@@ -222,9 +255,24 @@ export class PgThreadStore implements ThreadStore {
         createdBy: thread.createdBy,
         createdAt: thread.createdAt,
         rangeSeq: range === null ? null : thread.rangeSeq,
-        comments: [thread.comment],
+        comments: [{ ...thread.comment, seq }],
       };
     });
+  }
+
+  commentHead(ref: DocRef): Promise<number> {
+    return inTenant(
+      this.#pool,
+      ref.tenant,
+      async (c) => {
+        const r = await c.query<{ last: string }>(
+          'select last from comment_counters where doc_id = $1',
+          [ref.doc],
+        );
+        return r.rows[0] === undefined ? 0 : Number(r.rows[0].last);
+      },
+      { readOnly: true },
+    );
   }
 
   get(tenant: string, id: string): Promise<StoredThread | undefined> {
@@ -293,11 +341,14 @@ export class PgThreadStore implements ThreadStore {
   addComment(tenant: string, threadId: string, comment: StoredComment): Promise<boolean> {
     if (!isUuid(threadId)) return Promise.resolve(false);
     return inTenant(this.#pool, tenant, async (c) => {
-      const t = await c.query('select 1 from threads where id = $1', [threadId]);
-      if ((t.rowCount ?? 0) === 0) return false;
+      const t = await c.query<{ doc_id: string }>('select doc_id from threads where id = $1', [
+        threadId,
+      ]);
+      if (t.rows[0] === undefined) return false;
+      const seq = await nextCommentSeq(c, tenant, t.rows[0].doc_id);
       await c.query(
-        `insert into comments (id, tenant_id, thread_id, author, body, created_at)
-         values ($1, $2, $3, $4, $5, $6)`,
+        `insert into comments (id, tenant_id, thread_id, author, body, created_at, seq)
+         values ($1, $2, $3, $4, $5, $6, $7)`,
         [
           comment.id,
           tenant,
@@ -305,6 +356,7 @@ export class PgThreadStore implements ThreadStore {
           comment.author,
           JSON.stringify(comment.body),
           new Date(comment.createdAt),
+          seq,
         ],
       );
       return true;
@@ -412,7 +464,7 @@ export class PgThreadStore implements ThreadStore {
     const row = r.rows[0];
     if (!row) return undefined;
     const cs = await c.query<CommentRow>(
-      `select id, author, body, created_at, edited_at, reactions from comments
+      `select id, author, body, created_at, edited_at, reactions, seq from comments
         where thread_id = $1 and deleted_at is null order by created_at, id`,
       [id],
     );
@@ -433,6 +485,7 @@ export class PgThreadStore implements ThreadStore {
         createdAt: millis(x.created_at) ?? 0,
         editedAt: millis(x.edited_at),
         ...(hasReactions(x.reactions) ? { reactions: x.reactions! } : {}),
+        ...seqOf(x),
       })),
     };
   }
@@ -454,10 +507,24 @@ export class MemoryThreadStore implements ThreadStore {
       createdBy: thread.createdBy,
       createdAt: thread.createdAt,
       rangeSeq: 'range' in thread.target ? thread.rangeSeq : null,
-      comments: [{ ...thread.comment }],
+      comments: [{ ...thread.comment, seq: this.#next(ref.tenant, ref.doc) }],
     };
     this.#threads.set(MemoryThreadStore.#key(ref.tenant, thread.id), stored);
     return MemoryThreadStore.#copy(stored);
+  }
+
+  /** The last comment sequence number given, by tenant and document. */
+  readonly #last = new Map<string, number>();
+
+  #next(tenant: string, doc: string): number {
+    const key = JSON.stringify([tenant, doc]);
+    const n = (this.#last.get(key) ?? 0) + 1;
+    this.#last.set(key, n);
+    return n;
+  }
+
+  async commentHead(ref: DocRef): Promise<number> {
+    return this.#last.get(JSON.stringify([ref.tenant, ref.doc])) ?? 0;
   }
 
   /** Identifiers of comments that were soft-deleted; their rows stay in the thread, out of reads. */
@@ -497,7 +564,7 @@ export class MemoryThreadStore implements ThreadStore {
   async addComment(tenant: string, threadId: string, comment: StoredComment): Promise<boolean> {
     const t = this.#threads.get(MemoryThreadStore.#key(tenant, threadId));
     if (t === undefined) return false;
-    t.comments.push({ ...comment });
+    t.comments.push({ ...comment, seq: this.#next(tenant, t.docId) });
     return true;
   }
 

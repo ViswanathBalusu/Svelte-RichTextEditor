@@ -60,7 +60,9 @@ export function isBareIdentifierOperation(o: {
 export function bareRoutes(): BareRoute[] {
   return DEP1.operations.filter(isBareIdentifierOperation).map((o) => {
     const resource = o.path.split('/')[1] ?? '';
-    const known = BY_RESOURCE[resource];
+    const known = o.path.includes('/reactions/')
+      ? { feature: 'reactions', scenario: 'reactions.identifiers' }
+      : BY_RESOURCE[resource];
     return {
       operation: `${o.method} ${o.path}`,
       ...(known ?? {

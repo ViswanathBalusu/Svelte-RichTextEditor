@@ -53,8 +53,14 @@ export interface PageViewOptions {
   readonly host: { attachPageView(hooks: PageViewHooks): PageViewHandle };
   /** The element the view is appended to (the shell's body frame). */
   readonly parent: HTMLElement;
-  /** The accessible name of the input bridge. */
+  /** The accessible name of the input bridge (and of the read-only pages). */
   readonly label: string;
+  /**
+   * Paint the pages and nothing else (FE-095): no input bridge in the page, no caret, no keys and
+   * no pointer handling, so the browser's own selection and copy work on the painted text. The
+   * core is a version's (`VersionView`), which refuses every change.
+   */
+  readonly readOnly?: boolean;
   /** Runs a registry shortcut for a key event; true when one ran (FE-098 criterion 6). */
   readonly shortcut?: (event: KeyboardEvent) => boolean;
   /** An unrecoverable error of the layout or the painter: the element falls back to the web view. */
@@ -156,8 +162,14 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
   let layout: IncrementalLayout = incrementalLayout(providers);
 
   const root = doc.createElement('div');
+  const readOnly = options.readOnly === true;
   root.className = 'de-page-view';
-  root.dataset['view'] = 'print';
+  root.dataset['view'] = readOnly ? 'read' : 'print';
+  if (readOnly) {
+    root.dataset['readonly'] = 'true';
+    root.setAttribute('role', 'document');
+    root.setAttribute('aria-label', options.label);
+  }
   const scroller = doc.createElement('div');
   scroller.className = 'de-page-scroller';
   const bridge = doc.createElement('textarea');
@@ -170,7 +182,9 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
   bridge.setAttribute('autocorrect', 'off');
   bridge.setAttribute('aria-label', options.label);
   bridge.setAttribute('aria-multiline', 'true');
-  root.append(scroller, bridge);
+  // A read-only view has no bridge: nothing in the page takes input or focus (FE-095).
+  if (readOnly) root.append(scroller);
+  else root.append(scroller, bridge);
   options.parent.append(root);
 
   let tree: LayoutTree | null = null;
@@ -362,7 +376,7 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
   }
 
   function paintCaret(): void {
-    if (tree === null) return;
+    if (tree === null || readOnly) return;
     const pages = mountedPages();
     for (const el of pages)
       el?.querySelectorAll('.de-caret, .de-selection').forEach((n) => n.remove());
@@ -373,6 +387,7 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
 
   /** Scrolls so that the caret is inside the scroller, and places the bridge on it. */
   function followCaret(reveal: boolean): void {
+    if (readOnly) return;
     const sel = selection();
     if (tree === null || sel === null) return;
     const g = caretGeometry(tree, sel.head, span);
@@ -678,26 +693,33 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
     target.addEventListener(name, listener);
     return () => target.removeEventListener(name, listener);
   };
-  const stops = [
-    on(bridge, 'keydown', onKeyDown),
-    on(bridge, 'beforeinput', onBeforeInput),
-    on(bridge, 'input', onInput),
-    on(bridge, 'compositionstart', onCompositionStart),
-    on(bridge, 'compositionend', onCompositionEnd),
-    on(bridge, 'copy', onCopy),
-    on(bridge, 'cut', onCut),
-    on(bridge, 'paste', onPaste),
-    on(scroller, 'pointerdown', onPointerDown),
-    on(scroller, 'pointermove', onPointerMove),
-    on(scroller, 'pointerup', onPointerUp),
-    on(scroller, 'scroll', () => {
-      if (tree !== null) {
-        paintCaret();
-        followCaret(false);
-        followPage();
-      }
-    }),
-  ];
+  const stops = readOnly
+    ? [
+        // No key, input or pointer handler: the browser selects and copies the painted text itself.
+        on(scroller, 'scroll', () => {
+          if (tree !== null) followPage();
+        }),
+      ]
+    : [
+        on(bridge, 'keydown', onKeyDown),
+        on(bridge, 'beforeinput', onBeforeInput),
+        on(bridge, 'input', onInput),
+        on(bridge, 'compositionstart', onCompositionStart),
+        on(bridge, 'compositionend', onCompositionEnd),
+        on(bridge, 'copy', onCopy),
+        on(bridge, 'cut', onCut),
+        on(bridge, 'paste', onPaste),
+        on(scroller, 'pointerdown', onPointerDown),
+        on(scroller, 'pointermove', onPointerMove),
+        on(scroller, 'pointerup', onPointerUp),
+        on(scroller, 'scroll', () => {
+          if (tree !== null) {
+            paintCaret();
+            followCaret(false);
+            followPage();
+          }
+        }),
+      ];
   // A face that arrives after the first layout changes the widths: lay out again (FE-064). The font
   // set is the page's own, so the listener is held only while the element is not suspended (FE-005).
   const fonts = doc.fonts;
@@ -755,7 +777,9 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
 
   return {
     root,
-    focus: () => bridge.focus({ preventScroll: true }),
+    focus: () => {
+      if (!readOnly) bridge.focus({ preventScroll: true });
+    },
     status: () => status,
     flush: () => {
       relayout = true;

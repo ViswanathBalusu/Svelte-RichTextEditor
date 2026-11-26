@@ -176,6 +176,12 @@ export const SEQ_INPUTS: readonly SeqInput[] = [
     note: 'stores the caller own marker and reads nothing; the marker only moves forward (HIS-027 criterion 2)',
   },
   {
+    where: 'PUT /documents/{id}/read-marker',
+    field: 'body.commentSeq',
+    rule: 'exempt',
+    note: 'a comment sequence number, not a position in the log; it only moves the caller own comment marker and reads nothing (PRO-058; decision 73)',
+  },
+  {
     where: 'POST /documents',
     field: 'body.templateSeq',
     rule: 'state',

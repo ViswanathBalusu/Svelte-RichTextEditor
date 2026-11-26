@@ -72,6 +72,8 @@ export function familyOf(ctx: Ctx, name: string | null, blockId: string | null):
   if (name === null) return ctx.defaultFamily;
   const f = ctx.families.get(name) ?? ctx.families.get(substituteKey(name));
   if (f) return f;
+  // A family the job may not load is named once, by the converter (`font_server_use_not_permitted`).
+  if (ctx.screenOnlyFamilies.has(name)) return ctx.defaultFamily;
   diag(
     ctx,
     'warning',

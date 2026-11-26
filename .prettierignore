@@ -21,3 +21,6 @@ packages/tck/fixtures/
 packages/engine/test/clipboard-corpus/
 # The reference host demo stack writes its own setup files here (git-ignored, never formatted).
 apps/reference-host/.stack/
+# Goldens the tests write with JSON.stringify and compare byte for byte (FE-094, EXP-114).
+packages/painter/golden/
+packages/export-latex/test/references/manifest.json

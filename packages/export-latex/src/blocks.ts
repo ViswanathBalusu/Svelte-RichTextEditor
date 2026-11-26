@@ -30,6 +30,7 @@ import {
   join,
   lit,
   pdfString,
+  placeholderLabel,
   tex,
   text,
   url,
@@ -48,6 +49,7 @@ import { mathGate } from './math/gate.ts';
 import { familyOf, paragraphFormat } from './props.ts';
 import { closeLists, endGap, gap, newFlow, type Flow } from './flow.ts';
 import { sectionBreak } from './page.ts';
+import { marginNote } from './comments.ts';
 import { suggestionHides } from './suggestions.ts';
 import { table } from './tables.ts';
 
@@ -207,7 +209,10 @@ export function paragraph(ctx: Ctx, flow: Flow, p: J): void {
     const anchor = id ? blockAnchor(ctx, `node:${id}`) : EMPTY;
     const mark = styleMark(ctx, r.styleId, p.content);
     const caption = captionEntries(ctx, id, p.content, n);
-    const pre = join([anchor, mark, caption]);
+    // A note in the margin stands beside the paragraph's first line (EXP-084); a heading's own
+    // argument is moved into the table of contents and the bookmarks, so its note follows it.
+    const note = heading || flow.place !== 'body' ? EMPTY : marginNote(ctx, id);
+    const pre = join([anchor, mark, caption, note]);
     if (heading) {
       const lvl = Math.min(9, Math.max(1, r.outlineLevel!));
       const lab = label ? labelTex(ctx, r, label, st) : EMPTY;
@@ -219,6 +224,8 @@ export function paragraph(ctx: Ctx, flow: Flow, p: J): void {
       for (const b of body) line(ctx, tex`${b}%`);
       line(ctx, t('}'));
       for (const d of st.deferred) line(ctx, d);
+      const headingNote = flow.place === 'body' ? marginNote(ctx, id) : EMPTY;
+      if (headingNote !== EMPTY) line(ctx, headingNote);
     } else if (isList) {
       const top = flow.lists[flow.lists.length - 1];
       const margin = p0.indentLeft;
@@ -305,7 +312,7 @@ function figure(ctx: Ctx, flow: Flow, node: J): void {
     const picture =
       file && w !== null && h !== null
         ? imageBox(ctx, file, w, h, alt ?? '')
-        : tex`\DEph{${pdfString(alt ? `[figure: ${alt}]` : '[figure]')}}`;
+        : tex`\DEph{${pdfString(placeholderLabel(alt ? `[figure: ${alt}]` : '[figure]'))}}`;
     let captionTex: Tex = EMPTY;
     if (caption) {
       const styleId = ctx.table.styles.has('Caption') ? 'Caption' : null;
@@ -449,7 +456,7 @@ export function block(ctx: Ctx, flow: Flow, node: J): void {
           gap(ctx, flow, null);
           const picture = file
             ? imageBox(ctx, file, w, h, fb ?? '')
-            : tex`\DEph{${pdfString(fb ?? '[content]')}}`;
+            : tex`\DEph{${pdfString(placeholderLabel(fb ?? '[content]'))}}`;
           line(ctx, tex`\DEfig{${int(n)}}{0}{0}{${picture}}{}`);
         });
         flow.prev = null;

@@ -76,6 +76,8 @@ const CATALOGUE: Record<string, 'probed' | 'not-served'> = {
   'POST /threads/{tid}/comments': 'probed',
   'PATCH /comments/{cid}': 'probed',
   'DELETE /comments/{cid}': 'probed',
+  'POST /comments/{cid}/reactions/{reaction}': 'probed',
+  'DELETE /comments/{cid}/reactions/{reaction}': 'probed',
   'GET /webhooks/{id}': 'probed',
   'PATCH /webhooks/{id}': 'probed',
   'DELETE /webhooks/{id}': 'probed',
@@ -291,6 +293,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             { body: [{ type: 'text', text: 'changed' }] },
           ],
           ['DELETE', `/v1/comments/${cidB}`, '/v1/comments/', cidB],
+          ['POST', `/v1/comments/${cidB}/reactions/thumbsUp`, '/v1/comments/', cidB],
+          ['DELETE', `/v1/comments/${cidB}/reactions/thumbsUp`, '/v1/comments/', cidB],
         ];
         for (const [method, path, prefix, id, body] of probes) {
           const absent = (suffix: string) => prefix + missing + suffix;
@@ -342,6 +346,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           ['POST', `/v1/threads/${tidB}/comments`, { body: [{ type: 'text', text: 'injected' }] }],
           ['PATCH', `/v1/comments/${cidB}`, { body: [{ type: 'text', text: 'injected' }] }],
           ['DELETE', `/v1/comments/${cidB}`],
+          ['POST', `/v1/comments/${cidB}/reactions/thumbsUp`],
           ['GET', `/v1/imports/${impB}`],
         ];
         for (const [method, path, body] of attacks) {
@@ -446,7 +451,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         for (const route of participant) {
           const [method, template] = route.split(' ') as [string, string];
           const path = '/v1' + withId(template, { id: docB, pid: 'participant-1' });
-          const r = await h.call(method, path, { token: tokenA, body: {} });
+          const r = await h.call(method, path, {
+            token: tokenA,
+            ...(method === 'GET' ? {} : { body: {} }),
+          });
           // The routes a participant token uses answer a user token as an unknown route would.
           expect([403, 404], `${route}`).toContain(r.status);
           noData(r.json);

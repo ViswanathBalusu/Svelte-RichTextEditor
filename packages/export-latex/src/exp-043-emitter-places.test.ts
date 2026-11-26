@@ -15,6 +15,8 @@
  * `KNOWN_OTHER_ROUTE` lists the places that are written, safely, by another emitter than the table
  * names; the test fails when one of them changes, so the list cannot go stale. It is empty.
  */
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ATTRIBUTE_EMITTERS } from './attributes.ts';
 import { kvValue } from './emit.ts';
@@ -124,6 +126,20 @@ describe('EXP-043 criterion 4: every place of the attribute table goes through i
   it('has a probe for every pdfString, kvValue and url entry of the table, and no stale one', () => {
     expect(Object.keys(PLACES).sort()).toEqual(TABLE.map(([k]) => k).sort());
     for (const k of Object.keys(KNOWN_OTHER_ROUTE)) expect(Object.keys(PLACES)).toContain(k);
+  });
+
+  it('writes a string command and a link target only where an emitter makes them (source search)', () => {
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const sources = readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+    expect(sources).toContain('emit.ts');
+    for (const f of sources) {
+      const text = readFileSync(dir + f, 'utf8');
+      // `\DEstr{` is the form `pdfString` writes; nothing else builds it.
+      if (f !== 'emit.ts') expect(text, `${f} builds \\DEstr`).not.toMatch(/\\DEstr\{/);
+      // A `\DEhref` target is the `tex` of the `url` emitter and nothing else.
+      for (const m of text.matchAll(/\\DEhref\{(\$\{[^}]*\}|[^}]*)\}/g))
+        expect(m[1], `${f} writes a \\DEhref target`).toBe('${u.tex}');
+    }
   });
 
   it.each(TABLE)('%s is written only in the form of %s', async (key, emitter) => {

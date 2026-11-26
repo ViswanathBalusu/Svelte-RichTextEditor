@@ -31,6 +31,40 @@ export interface PageColumnInfo {
   readonly marginRight: number;
 }
 
+export type ParagraphBorderSide = 'top' | 'bottom' | 'left' | 'right' | 'between';
+export type ParagraphBorderStyle = 'none' | 'single' | 'double' | 'dotted' | 'dashed' | 'thick';
+
+/** One border of a paragraph (03 §4.5): width in eighths of a point, space in twentieths. */
+export interface ParagraphBorderInfo {
+  readonly style: ParagraphBorderStyle;
+  readonly width?: number;
+  readonly color?: string | null;
+  readonly space?: number;
+}
+
+/**
+ * The other options of the paragraph dialog (FE-129 criterion 6): what `setParagraphFormat` sets
+ * besides the indents and tab stops. Each value is the first selected paragraph's own, with the
+ * CDM's default when it sets none; `mixed` names the options the selected paragraphs do not share.
+ */
+export interface ParagraphOptionsInfo {
+  readonly align: 'start' | 'center' | 'end' | 'justify' | 'distribute';
+  readonly spaceBefore: number;
+  readonly spaceAfter: number;
+  readonly lineSpacing: number;
+  readonly lineRule: 'multiple' | 'exact' | 'atLeast';
+  readonly keepNext: boolean;
+  readonly keepLines: boolean;
+  readonly pageBreakBefore: boolean;
+  readonly widowControl: boolean;
+  readonly contextualSpacing: boolean;
+  /** The sides that have a border, by side; a side with none is absent. */
+  readonly borders: Readonly<Partial<Record<ParagraphBorderSide, ParagraphBorderInfo>>>;
+  /** The fill colour (`#RRGGBB`) of the shading; null for none. */
+  readonly shading: string | null;
+  readonly mixed: readonly string[];
+}
+
 export interface ParagraphFormatInfo {
   /** How many paragraphs the selection covers. */
   readonly count: number;
@@ -48,6 +82,8 @@ export interface ParagraphFormatInfo {
   readonly page: PageColumnInfo | null;
   /** Whether `setParagraphFormat` may change these paragraphs now. */
   readonly editable: boolean;
+  /** Alignment, spacing, keep rules, borders and shading, for the paragraph dialog. */
+  readonly options: ParagraphOptionsInfo;
 }
 
 const ALIGNS: readonly unknown[] = ['left', 'center', 'right', 'decimal'];
@@ -102,6 +138,76 @@ export function pageColumnAt(state: EditorState, pos: number): PageColumnInfo | 
   };
 }
 
+const OWN_ALIGNS = ['start', 'center', 'end', 'justify', 'distribute'] as const;
+const OWN_RULES = ['multiple', 'exact', 'atLeast'] as const;
+const BORDER_STYLES: readonly unknown[] = ['none', 'single', 'double', 'dotted', 'dashed', 'thick'];
+const BORDER_SIDES: readonly ParagraphBorderSide[] = ['top', 'bottom', 'left', 'right', 'between'];
+
+/** The borders a paragraph stores, as sides that have one (a side of style `none` has none). */
+export function bordersOf(
+  attrs: Readonly<Record<string, unknown>>,
+): Partial<Record<ParagraphBorderSide, ParagraphBorderInfo>> {
+  const value = attrs['borders'];
+  const out: Partial<Record<ParagraphBorderSide, ParagraphBorderInfo>> = {};
+  if (value === null || typeof value !== 'object') return out;
+  for (const side of BORDER_SIDES) {
+    const b = (value as Record<string, unknown>)[side];
+    if (b === null || typeof b !== 'object') continue;
+    const { style, width, color, space } = b as Record<string, unknown>;
+    if (!BORDER_STYLES.includes(style) || style === 'none') continue;
+    out[side] = {
+      style: style as ParagraphBorderStyle,
+      ...(typeof width === 'number' ? { width } : {}),
+      ...(typeof color === 'string' || color === null ? { color } : {}),
+      ...(typeof space === 'number' ? { space } : {}),
+    };
+  }
+  return out;
+}
+
+function shadingOf(attrs: Readonly<Record<string, unknown>>): string | null {
+  const s = attrs['shading'];
+  if (s === null || typeof s !== 'object') return null;
+  const fill = (s as Record<string, unknown>)['fill'];
+  return typeof fill === 'string' ? fill : null;
+}
+
+/** The options of the paragraph dialog of the selected paragraphs (see `ParagraphOptionsInfo`). */
+export function paragraphOptionsInfo(
+  paragraphs: readonly { node: PMNode }[],
+): ParagraphOptionsInfo {
+  const of = (attrs: Readonly<Record<string, unknown>>) => {
+    const pick = <T>(v: unknown, allowed: readonly T[], fallback: T): T =>
+      allowed.includes(v as T) ? (v as T) : fallback;
+    const flag = (key: string, fallback: boolean): boolean =>
+      typeof attrs[key] === 'boolean' ? (attrs[key] as boolean) : fallback;
+    return {
+      align: pick(attrs['align'], OWN_ALIGNS, 'start'),
+      spaceBefore: length(attrs['spaceBefore']),
+      spaceAfter: length(attrs['spaceAfter']),
+      lineSpacing:
+        typeof attrs['lineSpacing'] === 'number' && Number.isInteger(attrs['lineSpacing'])
+          ? attrs['lineSpacing']
+          : 1000,
+      lineRule: pick(attrs['lineRule'], OWN_RULES, 'multiple'),
+      keepNext: flag('keepNext', false),
+      keepLines: flag('keepLines', false),
+      pageBreakBefore: flag('pageBreakBefore', false),
+      widowControl: flag('widowControl', true),
+      contextualSpacing: flag('contextualSpacing', false),
+      borders: bordersOf(attrs),
+      shading: shadingOf(attrs),
+    } as const;
+  };
+  const all = paragraphs.map(({ node }) => of(node.attrs));
+  const first = all[0] ?? of({});
+  const mixed = (Object.keys(first) as (keyof typeof first)[]).filter((key) => {
+    const was = JSON.stringify(first[key]);
+    return all.some((o) => JSON.stringify(o[key]) !== was);
+  });
+  return { ...first, mixed };
+}
+
 /** The format of the selected paragraphs, or null when the selection covers no paragraph. */
 export function paragraphFormatInfo(
   state: EditorState,
@@ -128,5 +234,6 @@ export function paragraphFormatInfo(
     defaultTabStop: defaultTabStopOf(state.doc),
     page: pageColumnAt(state, state.selection.from),
     editable,
+    options: paragraphOptionsInfo(paragraphs),
   };
 }

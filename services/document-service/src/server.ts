@@ -77,6 +77,7 @@ import type {
   WebhookSubscriptions,
 } from './control-plane/webhook-subscriptions.ts';
 import { composeWebhooks, type WebhookOverrides } from './control-plane/webhook-composition.ts';
+import type { SecretStore } from './control-plane/secret-store.ts';
 import type { WebhookDispatcher } from './control-plane/webhook-dispatcher.ts';
 import { abandonedUploadsTask } from './control-plane/asset-sweep.ts';
 import {
@@ -121,12 +122,25 @@ import {
   type WorkflowResourceStore,
 } from './workflow/workflow-resource.ts';
 import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
+import { PgRenewalStore } from './workflow/renewal-state-pg.ts';
+import { MemoryRenewalStore } from './workflow/renewal-state-memory.ts';
+import { sealedRenewalSigner } from './workflow/extend-sealed.ts';
+import type { RenewalRegistry } from './workflow/renewal-schedule.ts';
+import {
+  RENEWAL_KIND,
+  renewalHandler,
+  renewalScheduleTask,
+  type RenewalDueSource,
+  type RenewalStore,
+} from './control-plane/jobs/workflow-renewal.ts';
 import { MemoryTemplateStore, type TemplateStore } from './workflow/template-store.ts';
 import { PgTemplateStore } from './workflow/template-store-pg.ts';
 import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-store.ts';
 import { PgReminderStore } from './workflow/reminder-store-pg.ts';
 import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-ledger.ts';
 import { PgEvidenceLedger } from './workflow/evidence-ledger-pg.ts';
+import { MemoryCaptureSettings, type CaptureSettingsPort } from './workflow/capture-settings.ts';
+import { PgCaptureSettingsStore } from './workflow/capture-settings-pg.ts';
 import { MemorySealedPdfStore, type SealedPdfStore } from './workflow/sealed-store.ts';
 import { MemoryAccessCodeStore, type AccessCodeStore } from './workflow/access-code-store.ts';
 import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
@@ -304,6 +318,12 @@ export interface ServiceParts {
    * Absent: an in-memory store, and `webhooks` is built over it.
    */
   webhookStore?: SubscriptionStore;
+  /**
+   * Where the webhook secrets are kept (BE-057 criterion 6; owner decision 70): a port with an
+   * encrypted table (`EncryptedTableSecretStore`) as the default adapter, or an operator's secret
+   * manager. Absent: in memory.
+   */
+  secretStore?: SecretStore;
   /** The retention policies of `/retention` (UX-080). Absent: the routes are not offered. */
   retention?: RetentionService;
   /** The history visibility settings of /history-visibility (HIS-025). Absent: not offered. */
@@ -373,8 +393,12 @@ export interface ServiceParts {
   reminders?: ReminderStore;
   /** The workflow evidence ledger (FRW-041): evidence in its own workflow table, hashes for the chain. */
   evidence?: EvidenceLedger;
+  /** The tenant's network-capture setting (FRW-042). Absent: the administration routes are not offered. */
+  captureSettings?: CaptureSettingsPort;
   /** The sealed final PDFs (FRW-054): `GET /documents/{id}/workflow/final` reads them. Absent: the route is not offered. */
   sealedPdfs?: SealedPdfStore;
+  /** The expiry of each sealed PDF's newest time-stamp, for the renewal task (FRW-056, BE-052). */
+  renewals?: RenewalStore & RenewalDueSource & RenewalRegistry;
   /** The signed, time-stamped chain heads at completion, written once (FRW-054 criterion 3). */
   anchors?: AnchorStore;
   /** The registered access codes of workflow participants and their attempt counters (FRW-039). */
@@ -480,6 +504,13 @@ export interface StartOptions {
     sleep?: (ms: number) => Promise<void>;
   };
   /**
+   * The renewal of time-stamps on sealed PDFs (FRW-056, BE-052): the lead time before an expiry at
+   * which the renewal starts, and how long a run's claim on an expiry holds. Settings with no
+   * default (the spec gives none). Default: `config.sealing.renewal`. It needs sealing and
+   * `parts.renewals`; without any of them nothing is scheduled.
+   */
+  renewal?: { leadMs: number; claimMs: number };
+  /**
    * The hourly anchoring of chain heads (HIS-036; ADR 0409): the signing service's client and how
    * long a record is retained in write-once storage. Default: built from `config.sealing` (the
    * signing service of `DOCEDIT_SEAL_*`) and `config.anchorRetentionDays`; with neither, no head is
@@ -560,6 +591,46 @@ function withTestHooks(
   return config.testMode && !features.includes('test-hooks')
     ? [...features, 'test-hooks']
     : features;
+}
+
+/**
+ * The features of the fields, rules and workflow epic that this composition implements and that are
+ * announced only then (12 §10; 05 §2; FRW-065 criterion 2). `rules` is the data plane's own (the
+ * room enforces the rules fixtures) and `fields` is the CDM feature the data plane announces; here
+ * are the three that depend on what the service is composed of:
+ *
+ * - `workflow`: the workflow resource (`parts.workflows`).
+ * - `sign`: the signing ceremony, which the sign route offers when it has the workflow store, the
+ *   evidence ledger, the consent texts, the asset registry and the outbox.
+ * - `seal`: the sealing of the final PDF, which needs the signing service (`sealing`) and the
+ *   write-once stores; a service without them leaves a completed workflow `completed`.
+ */
+function workflowFeatures(
+  parts: Partial<
+    Pick<
+      ServiceParts,
+      | 'workflows'
+      | 'evidence'
+      | 'consentTexts'
+      | 'assetRegistry'
+      | 'outbox'
+      | 'sealedPdfs'
+      | 'anchors'
+    >
+  >,
+  sealing: boolean,
+): string[] {
+  return [
+    ...(parts.workflows ? ['workflow'] : []),
+    ...(parts.workflows &&
+    parts.evidence &&
+    parts.consentTexts &&
+    parts.assetRegistry &&
+    parts.outbox
+      ? ['sign']
+      : []),
+    ...(sealing && parts.workflows && parts.sealedPdfs && parts.anchors ? ['seal'] : []),
+  ];
 }
 
 /**
@@ -702,9 +773,11 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
       now,
     }),
     workflows: new PgWorkflowResourceStore(pool, { now }),
+    renewals: new PgRenewalStore(pool),
     templates: new PgTemplateStore(pool),
     reminders: new PgReminderStore(pool),
     evidence: new PgEvidenceLedger(pool, { now }),
+    captureSettings: new PgCaptureSettingsStore(pool, { now }),
     accessCodes: new PgAccessCodeStore(pool),
     quotaAdmin: quotaAdminOver(
       new PgQuotaStore(pool, (tenant) =>
@@ -737,6 +810,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
   const store = new MemoryStore();
   const audit = new MemoryAudit();
   const visibility = new MemoryVisibilityStore();
+  const capture = new MemoryCaptureSettings(audit, now);
   return {
     logs: store,
     ownership: store,
@@ -763,8 +837,10 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     workflows: new MemoryWorkflowResourceStore(),
     templates: new MemoryTemplateStore(),
     reminders: new MemoryReminderStore(),
-    evidence: new MemoryEvidenceLedger(now),
+    evidence: new MemoryEvidenceLedger(now, (tenant) => capture.settingsOf(tenant)),
+    captureSettings: capture,
     sealedPdfs: new MemorySealedPdfStore(),
+    renewals: new MemoryRenewalStore(),
     anchors: new MemoryAnchorStore(),
     accessCodes: new MemoryAccessCodeStore(),
     quotaAdmin: quotaAdminOver(
@@ -986,6 +1062,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         now,
         logger,
         ...(parts.webhookStore ? { store: parts.webhookStore } : {}),
+        ...(parts.secretStore ? { secrets: parts.secretStore } : {}),
         ...(parts.webhooks ? { routes: parts.webhooks } : {}),
         ...(opts.webhooks ? { overrides: opts.webhooks } : {}),
       })
@@ -1156,7 +1233,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
             config.externalWorkers
               ? ['assets']
               : []),
-            ...(parts.workflows ? ['workflow'] : []),
+            ...workflowFeatures(parts, Boolean(opts.finalSealing ?? config.sealing)),
           ]),
         ],
       ),
@@ -1275,6 +1352,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
           retainMs: config.sealing.retentionDays * 24 * 60 * 60 * 1000,
         }
       : null);
+  // The renewal of time-stamps (FRW-056): the job that makes one renewal, and the scheduled task
+  // that enqueues it for each chain whose newest time-stamp expires within the lead time.
+  const renewalSetup =
+    sealSetup && parts.renewals ? (opts.renewal ?? config.sealing?.renewal ?? null) : null;
   let sealer: FinalSealer | null = null;
   if (sealSetup) {
     if (!parts.workflows || !parts.sealedPdfs || !parts.anchors)
@@ -1298,6 +1379,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
       objects: parts.objects,
       queue: parts.queue,
       events,
+      // The end of the seal's time-stamp, for its renewal (FRW-056).
+      ...(renewalSetup && parts.renewals
+        ? {
+            renewals: parts.renewals,
+            renewalFailed: (ref: { tenant: string; doc: string }, e: unknown) =>
+              logger.error({
+                event: 'workflow.renewal.start_failed',
+                tenant: ref.tenant,
+                doc: ref.doc,
+                ...errorFields(e),
+              }),
+          }
+        : {}),
       // The visible appearances at the signature and initials fields (FRW-057).
       ...(parts.evidence
         ? {
@@ -1329,6 +1423,40 @@ export async function startService(opts: StartOptions): Promise<Service> {
     });
   }
   const sealing = sealer;
+  let renewalTask: ScheduledTask | null = null;
+  if (sealSetup && renewalSetup && parts.renewals && parts.workflows && parts.sealedPdfs) {
+    const workflows = parts.workflows;
+    runnerFor({
+      [RENEWAL_KIND]: renewalHandler({
+        store: parts.renewals,
+        signer: sealedRenewalSigner(
+          {
+            workflows,
+            sealed: parts.sealedPdfs,
+            signing: sealSetup.signing,
+            now,
+            retainMs: sealSetup.retainMs,
+          },
+          // The `seq` the workflow completed at: the last participant's completion.
+          async (tenant, doc) =>
+            Math.max(
+              0,
+              ...((await workflows.read(tenant, doc))?.participants ?? []).map(
+                (p) => p.completedSeq ?? 0,
+              ),
+            ),
+        ),
+        leadMs: renewalSetup.leadMs,
+        claimMs: renewalSetup.claimMs,
+        now,
+      }),
+    });
+    renewalTask = renewalScheduleTask({
+      source: parts.renewals,
+      queue: parts.queue,
+      leadMs: renewalSetup.leadMs,
+    });
+  }
   const runSeal = (ref: { tenant: string; doc: string }): Promise<unknown> =>
     sealing === null
       ? Promise.resolve(null)
@@ -1617,6 +1745,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
           }),
         ]
       : []),
+    // The renewal of time-stamps before they expire (FRW-056): not a task that deletes.
+    ...(renewalTask ? [renewalTask] : []),
     ...(checkpointThinning ? [checkpointThinningTask(checkpointThinning)] : []),
     // Thinning of old payloads for tenants and documents whose policy says so (HIS-032); the
     // scheduler hands the task the documents under a legal hold, and the task leaves them alone.
@@ -1793,7 +1923,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         // `exports` only when a compile worker can serve the queue (ADR 0054; `exports.states`).
         ...(exportHandlers[EXPORT_KIND] || config.externalWorkers ? ['exports'] : []),
         ...(assetWorker || config.externalWorkers ? ['assets'] : []),
-        ...(parts.workflows ? ['workflow'] : []),
+        ...workflowFeatures(parts, Boolean(opts.finalSealing ?? config.sealing)),
       ]),
     ],
   );
@@ -1924,6 +2054,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.accessCodes ? { accessCodes: parts.accessCodes } : {}),
     ...(parts.consentTexts ? { consentTexts: parts.consentTexts } : {}),
     ...(parts.evidence ? { evidence: parts.evidence } : {}),
+    ...(parts.captureSettings ? { captureSettings: parts.captureSettings } : {}),
     ...(parts.sealedPdfs ? { sealedPdfs: parts.sealedPdfs } : {}),
     ...(sealing ? { sealing: true } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),

@@ -130,6 +130,7 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'takeLayoutDirty'
       // UX-102: the paragraph format at the selection, for the ruler (a read view of the core).
       | 'paragraphFormat'
+      | 'tableSize'
       // UX-038: the setting, and the call that turns it on or off (a user with `manage`).
       | 'trackedForEveryone'
       | 'setTrackedForEveryone'

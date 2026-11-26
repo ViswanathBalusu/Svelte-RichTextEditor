@@ -27,6 +27,13 @@ export interface JournalEntry extends OutgoingCommit {
    * one was written before this field and is sent for anyone.
    */
   readonly user?: string;
+  /**
+   * The view token of the `ch.opened` the commit was made under (ADR 0019; D28): the reader's
+   * visibility class. `null` when the channel had none. The next visit puts the commit back only when
+   * its own view token is the same; work made under another projection goes to recovered edits
+   * (FE-141 criterion 4). Absent in entries written before this field: the commit is put back.
+   */
+  readonly view?: string | null;
 }
 
 /** The confirmed document the queue of unsent steps was made on. */
@@ -35,6 +42,8 @@ export interface QueueAt {
   readonly incarnation: string;
   /** The signed-in user the queue was made by (see `JournalEntry.user`). */
   readonly user?: string;
+  /** The view token the queue was made under (see `JournalEntry.view`). */
+  readonly view?: string | null;
 }
 
 /** What the journal holds for one document. */
@@ -110,6 +119,7 @@ export function memoryJournal(): JournalPort & { readonly size: number } {
             seq: at.seq,
             incarnation: at.incarnation,
             ...(at.user === undefined ? {} : { user: at.user }),
+            ...(at.view === undefined ? {} : { view: at.view }),
           });
         else queueAts.delete(docId);
       }

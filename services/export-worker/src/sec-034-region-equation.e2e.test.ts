@@ -8,10 +8,14 @@
  * point). Each word of region B's price sentence must have ink in its box, and no other word on
  * the page may overlap it.
  *
- * Finding (2026-11-13): the pixel check fails for the strongest equation. Its nested radicals are
- * typeset taller than their line and paint over the headings and paragraphs above and below
- * (`it.fails` below records the gap; the text check passes). The criterion stays unticked until the
- * class keeps an inline equation inside its line box (see the story Notes and ADR 0346).
+ * Finding (2026-11-13, lane V-SEC-033-048): the equation's glyphs, nested radicals among them, were
+ * typeset taller than their line and painted over the headings and paragraphs around it. Fixed
+ * (lane w8, 2026-11-26): `clip_math` of the class (packages/export-latex/class/docedit.lua) cuts an
+ * inline equation to the height and depth of its line, so nothing of it is painted outside the line.
+ * The pixel check is a comparison with the same page set with a plain `x` for the equation: each
+ * word of region B's price sentence has the ink it has there. (The text layer is not the check: the
+ * boxes `pdftotext -bbox` gives for a radical sign still overlap neighbouring words after the cut,
+ * though nothing is painted there.)
  *
  * The equation is placed in the document envelope, not sent over a room. The commit-time gate for
  * the same kind of equation is covered by SEC-034 criterion 1 (services/document-service and
@@ -181,14 +185,12 @@ function inkInside(img: Pixels, b: Word): number {
   return ink;
 }
 
-/** Boxes overlap by more than half a point on both axes. */
-const overlaps = (a: Word, b: Word): boolean =>
-  a.x0 < b.x1 - 0.5 && b.x0 < a.x1 - 0.5 && a.y0 < b.y1 - 0.5 && b.y0 < a.y1 - 0.5;
-
 describe.skipIf(!ready.ok || !pdftotextAvailable())(
   `SEC-034 criterion 5: region A equation cannot hide region B (${ready.reason})`,
   () => {
     let pdf: Uint8Array;
+    /** The same page with `x` for the equation: what region B looks like without the attack. */
+    let control: Uint8Array;
     let price: string;
     let flat: string;
     let dir: string;
@@ -206,6 +208,13 @@ describe.skipIf(!ready.ok || !pdftotextAvailable())(
       );
       log = r.compile.log.slice(-2000);
       if (r.compile.ok) pdf = r.compile.pdf!;
+      const c = await runExport(
+        withEquationInRegionA('x').env,
+        fonts,
+        { tagging: 'off', pdfStandard: 'none', layout: 'block' },
+        { kind: 'sandbox' },
+      );
+      if (c.compile.ok) control = c.compile.pdf!;
       if (pdf) flat = squash(pdfText(pdf, { first: 1, last: 1 }) ?? '');
       dir = mkdtempSync(join(tmpdir(), 'docedit-sec034-'));
     }, 300_000);
@@ -221,27 +230,36 @@ describe.skipIf(!ready.ok || !pdftotextAvailable())(
       expect(flat).toContain(price);
     });
 
-    // Known gap, recorded as `it.fails`: the equation's glyphs overlap region B's words on the
-    // rendered page (the text check above still passes). When the class keeps the equation inside
-    // its line, this test passes and `it.fails` turns it red: then make it `it` and tick the
-    // criterion.
-    it.fails("keeps region B's price words free of other glyphs on the rendered page", () => {
-      // pdftotext does not keep the price sentence in one run of boxes (the equation's glyphs
-      // and the headings interleave with it), so the price words are taken where they occur
-      // once on the page. Each has ink in its box, and no other word of the page overlaps it.
-      const words = pageWords(pdf, dir);
-      const unique = price
-        .split(' ')
-        .map((w) => words.filter((x) => x.text === w))
-        .filter((hits) => hits.length === 1)
-        .map((hits) => hits[0]!);
-      expect(unique.length, 'price words found once on the page').toBeGreaterThanOrEqual(8);
-      const img = renderPage(pdf, dir);
-      for (const box of unique) {
-        expect(inkInside(img, box), `ink under "${box.text}"`).toBeGreaterThan(0);
-        const clash = words.find((w) => w !== box && overlaps(box, w));
-        expect(clash?.text ?? null, `"${box.text}" overlapped`).toBeNull();
+    // The pixel half. Each word of the price sentence that occurs once on the page has ink in its
+    // box, and the same ink as on the page set with a plain `x`: nothing is painted over it, and
+    // nothing of it is hidden. The words are matched by their text, since the equation may change
+    // where the line breaks fall.
+    it("shows region B's price words with the ink they have without the equation", () => {
+      expect(control, 'the control compiled').toBeDefined();
+      const attackWords = pageWords(pdf, dir);
+      const controlWords = pageWords(control, dir);
+      const attackImg = renderPage(pdf, dir);
+      const controlImg = renderPage(control, dir);
+      const once = (words: Word[], t: string): Word | null => {
+        const hits = words.filter((x) => x.text === t);
+        return hits.length === 1 ? hits[0]! : null;
+      };
+      let compared = 0;
+      for (const t of price.split(' ')) {
+        const a = once(attackWords, t);
+        const c = once(controlWords, t);
+        if (!a || !c) continue;
+        compared++;
+        const inkA = inkInside(attackImg, a);
+        const inkC = inkInside(controlImg, c);
+        expect(inkC, `ink under "${t}" in the control`).toBeGreaterThan(0);
+        expect(inkA, `ink under "${t}"`).toBeGreaterThan(0);
+        expect(
+          Math.abs(inkA - inkC),
+          `ink under "${t}": ${inkA} against ${inkC}`,
+        ).toBeLessThanOrEqual(Math.max(3, Math.round(inkC * 0.1)));
       }
+      expect(compared, 'price words found once on both pages').toBeGreaterThanOrEqual(8);
     });
 
     afterAll(() => {

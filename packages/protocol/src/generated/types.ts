@@ -638,9 +638,10 @@ export interface ForkRequest {
   atSeq: number;
 }
 
-/** The caller's last seen `seq`; it only moves forward (08 §10). */
+/** The caller's last seen `seq`; it only moves forward (08 §10). `commentSeq` is the last comment sequence number the caller has seen (a comment has a sequence number of its own in its document; owner decision 73); it moves forward on its own and is answered only when the request names it. */
 export interface ReadMarker {
   seq: number;
+  commentSeq?: number;
 }
 
 /** Where a client should open its channel (06 §2.1). A hint only: it grants nothing. */
@@ -1273,6 +1274,24 @@ export interface WorkflowReason {
 export interface WorkflowAccessCode {
   /** The access code: registered by the host for a participant, and submitted by the participant to verify. It is never stored or returned in the clear. */
   code: string;
+}
+
+/** The consent text and the participant’s acceptance of it (12 §6.1, §8.1 step 1; FRW-044). */
+export interface WorkflowConsentText {
+  /** The identifier of the consent text the workflow names. */
+  textId: string;
+  /** The version of the text. */
+  version: number;
+  /** The text the service holds for that identifier and version, to be shown in full before any signing action. */
+  text: string;
+  /** The server time of the acceptance on record for this very text (ISO 8601), or null when the participant has not accepted it. */
+  acceptedAt: string | null;
+}
+
+/** The tenant setting for network identity capture in workflow evidence (12 §7; FRW-042). */
+export interface WorkflowCaptureSettings {
+  /** Whether the IP address and the user agent of a participant are recorded in their evidence. On by default; off keeps neither (12 §7). A change applies to events after it; evidence already stored is not rewritten. */
+  captureNetworkIdentity: boolean;
 }
 
 /** A workflow request or response the prose does not define. Placeholder. */
@@ -2734,6 +2753,33 @@ export interface Operations {
     query: Record<string, never>;
     body: WorkflowPlaceholder;
     response: WorkflowPlaceholder;
+  };
+  /** GET /documents/{id}/workflow/participants/{pid}/consent: The consent text the workflow names, for the participant it is bound to, with the time of their acceptance of it or null (12 §8.1 step 1; FRW-044). The method is assumed (ADR 0427, proposed). (12 §8.1, §10) */
+  getParticipantConsent: {
+    method: "GET";
+    path: "/documents/{id}/workflow/participants/{pid}/consent";
+    params: { id: string; pid: string };
+    query: Record<string, never>;
+    body: never;
+    response: WorkflowConsentText;
+  };
+  /** GET /workflow/capture-settings: The tenant setting for IP address and user agent capture in workflow evidence; on when none is set (12 §7; FRW-042). The path is assumed (ADR 0426, proposed). (12 §7, §10; 13 §10) */
+  getWorkflowCaptureSettings: {
+    method: "GET";
+    path: "/workflow/capture-settings";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: never;
+    response: WorkflowCaptureSettings;
+  };
+  /** PUT /workflow/capture-settings: Switches IP address and user agent capture in workflow evidence on or off for the tenant; audited with actor and time, and applies to later events only (12 §7; FRW-042). The path is assumed (ADR 0426, proposed). (12 §7, §10; 13 §10) */
+  setWorkflowCaptureSettings: {
+    method: "PUT";
+    path: "/workflow/capture-settings";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: WorkflowCaptureSettings;
+    response: WorkflowCaptureSettings;
   };
   /** GET /documents/{id}/workflow/evidence: The evidence record (12 §7). The method is assumed. (12 §10) */
   getWorkflowEvidence: {

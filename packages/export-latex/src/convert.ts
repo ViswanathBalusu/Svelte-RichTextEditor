@@ -20,6 +20,7 @@ import type { Bundle, BundleManifest, ConvertOptions, Diagnostic, SourceMap } fr
 import { bundleHashInput, canonicalJson } from './bundle-hash.ts';
 import { block, closeLists, flowBlocks, newFlow } from './blocks.ts';
 import { appendCertificate } from './certificate.ts';
+import { blockIds, planComments, unplacedComments } from './comments.ts';
 import { settleSuggestions } from './suggestions.ts';
 import { computeCitations } from './citations.ts';
 import {
@@ -51,10 +52,11 @@ import { mergeRanges, type CodeRange } from './fonts/coverage.ts';
 import { LANGUAGES } from './languages.ts';
 import { pageSetups, setupIndex, setupTex, storiesTex } from './page.ts';
 import { preflight } from './preflight.ts';
+import { serverFonts } from './server-fonts.ts';
 import { styleMacro, substituteKey } from './props.ts';
 
 /** The house class version (EXP-015): raised with every change to docedit.cls or docedit.lua. */
-export const CLASS_VERSION = '0.2.16';
+export const CLASS_VERSION = '0.2.18';
 
 /** A TeX Live image digest (EXP-073): `sha256:` and 64 lowercase hex digits. */
 export const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
@@ -134,7 +136,33 @@ function sourceMap(ctx: Ctx): SourceMap {
   };
 }
 
-export async function convert(input: CdmEnvelope, options: ConvertOptions): Promise<Bundle> {
+/**
+ * The family names a document uses: the `fontFamily` attribute of a style or a paragraph, and the
+ * value of a `fontFamily` mark.
+ */
+function namedFamilies(value: unknown, out: Set<string>): Set<string> {
+  if (Array.isArray(value)) for (const v of value) namedFamilies(v, out);
+  else if (value !== null && typeof value === 'object') {
+    const node = value as { type?: unknown; attrs?: { value?: unknown } };
+    if (node.type === 'fontFamily' && typeof node.attrs?.value === 'string')
+      out.add(node.attrs.value);
+    for (const [k, v] of Object.entries(value)) {
+      if (k === 'fontFamily' && typeof v === 'string') out.add(v);
+      else namedFamilies(v, out);
+    }
+  }
+  return out;
+}
+
+export async function convert(input: CdmEnvelope, requested: ConvertOptions): Promise<Bundle> {
+  // A family the administrator did not mark for server-side use is used on screen only (EXP-048;
+  // owner decision 62): the job does not load it, the fallback chain is used, and the family is
+  // named in a diagnostic when the document uses it.
+  const served = serverFonts(requested.fonts);
+  const options: ConvertOptions = served.excluded.length
+    ? { ...requested, fonts: served.fonts }
+    : requested;
+  const screenOnlyFamilies = new Set(served.excluded.map((f) => f.name));
   // The certificate of completion (FRW-050) is appended to the body before anything reads it, so
   // that the checks and the numbering see it like the rest of the document.
   const envelope = options.certificate
@@ -154,6 +182,7 @@ export async function convert(input: CdmEnvelope, options: ConvertOptions): Prom
     profile: options.profile ?? 'final',
     fields: options.fields ?? 'flatten',
     suggestions: options.suggestions ?? null,
+    comments: options.comments ?? 'none',
   } as const;
   const imageDigest = options.imageDigest ?? null;
   if (imageDigest !== null && !IMAGE_DIGEST_PATTERN.test(imageDigest))
@@ -161,6 +190,15 @@ export async function convert(input: CdmEnvelope, options: ConvertOptions): Prom
       'the image digest must be "sha256:" and 64 lowercase hex digits (EXP-073)',
     );
   const diagnostics: Diagnostic[] = [];
+  if (screenOnlyFamilies.size > 0)
+    for (const name of namedFamilies(envelope.doc, new Set<string>()))
+      if (screenOnlyFamilies.has(name))
+        diagnostics.push({
+          severity: 'warning',
+          code: 'font_server_use_not_permitted',
+          blockId: null,
+          message: `the font family "${name.slice(0, 64)}" is not permitted for server-side use; it is used on screen only, and the default family and the fallback chain are used in the PDF (09 §5)`,
+        });
   for (const feature of envelope.requires ?? []) {
     if (!SUPPORTED_FEATURES.includes(feature))
       diagnostics.push({
@@ -170,7 +208,12 @@ export async function convert(input: CdmEnvelope, options: ConvertOptions): Prom
         message: `the document requires "${feature}", which this converter cannot read (03 §2)`,
       });
   }
-  const doc = settleSuggestions(envelope.doc as unknown as J, o.suggestions, diagnostics);
+  const doc = settleSuggestions(
+    envelope.doc as unknown as J,
+    o.suggestions,
+    diagnostics,
+    options.suggestionAccess,
+  );
   const table = styleTable(doc as unknown as TreeNode);
   const labels = computeLabels(doc as unknown as TreeNode, {
     table,
@@ -189,6 +232,7 @@ export async function convert(input: CdmEnvelope, options: ConvertOptions): Prom
 
   const ctx: Ctx = {
     options,
+    screenOnlyFamilies,
     o,
     doc,
     table,
@@ -224,13 +268,21 @@ export async function convert(input: CdmEnvelope, options: ConvertOptions): Prom
     citations: { byNode: new Map(), entries: [] },
     markedStyles: new Map(),
     state: { columns: 1, setup: 0 },
+    comments: { byBlock: new Map(), placed: new Set() },
   };
+  planComments(ctx);
   for (const p of labels.problems) diag(ctx, 'warning', p.code, null, p.message);
   // The preflight is the one check of the document's own text and pictures (EXP-003, EXP-026, EXP-113).
   // A table in a multi-column section, a header or a footer is reported once, by the table writer
   // when it sets the box (tables.ts), so the job does not carry the same warning twice.
-  for (const w of preflight(envelope, options.fonts))
-    if (w.code !== 'table_cannot_span_pages')
+  // A row taller than a page, and a block in it that cannot be split, are likewise reported once,
+  // by the table writer that splits the row (`row_split`, `block_taller_than_page`; EXP-039).
+  for (const w of preflight(envelope, options.fonts, options.tableMeasure))
+    if (
+      w.code !== 'table_cannot_span_pages' &&
+      w.code !== 'row_taller_than_page' &&
+      w.code !== 'block_taller_than_page'
+    )
       diag(
         ctx,
         w.code === 'glyph_missing' && o.profile === 'final' ? 'error' : 'warning',
@@ -309,6 +361,7 @@ export async function convert(input: CdmEnvelope, options: ConvertOptions): Prom
   const flow = newFlow('body', null, null);
   for (const node of body?.content ?? []) block(ctx, flow, node);
   closeLists(ctx, flow, () => false);
+  for (const l of unplacedComments(ctx, blockIds(doc))) line(ctx, l);
   line(ctx, t('\\DEendsections'));
   const bodyOut = ctx.out;
   // Table of contents entries take the TOC1 to TOC9 styles when the document has them.
@@ -483,6 +536,7 @@ export async function convert(input: CdmEnvelope, options: ConvertOptions): Prom
       layout: o.layout,
       fields: o.fields,
       suggestions: o.suggestions ?? 'none',
+      ...(o.comments === 'margin' ? { comments: 'margin' } : {}),
       title: options.title ?? 'Document',
       timeZone: options.timeZone ?? '',
       instant: options.instant ?? '',

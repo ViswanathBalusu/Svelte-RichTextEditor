@@ -310,4 +310,71 @@ describe('BE-091 criterion 2: measuring another tenant while one is at its quota
     // is not a performance figure of the spec.
     expect(busyMs).toBeLessThan(idleMs * 3 + 25);
   });
+
+  it('leaves the other tenant at its idle latency while the first retries at its quota, within 1.5 times the slower idle run plus 5 ms', async () => {
+    // The first test floods as fast as one loop can, so both tenants fight for the same event
+    // loop. Here tenant A behaves as a client that honours `retryAfterMs` but is impatient: it
+    // retries after at most 20 ms (50 attempts a second, all refused). Tenant B is timed in three
+    // runs of the same size taken one after the other, idle, with A retrying, and idle again; the
+    // middle run must stay within 1.5 times the slower idle run plus 5 ms. On a machine shared
+    // with other work the two idle runs differ by 20 to 50 percent, so this shows that no
+    // coupling (a shared queue or lock) exists, not that the latency is equal to the microsecond.
+    // The tolerance is a test setting, not a figure of the specification.
+    const h = await node('memory');
+    const content = documentWithRegions();
+    const intro = insideAt(content['doc'], INTRO);
+    const docA = await h.createDocument({ content });
+    const tokenA = h.userToken({ [docA]: 'owner' });
+    const b = await secondTenant(h);
+    await putQuotas(h, { commitRate: 1 });
+
+    const cb = await connect(h);
+    await cb.hello(b.token);
+    expect((await cb.open(1, b.doc)).t).toBe('ch.opened');
+
+    const N = 200;
+    let base = 0;
+    const timeB = async (): Promise<number[]> => {
+      const out: number[] = [];
+      for (let i = 0; i < N; i += 1) {
+        const t0 = performance.now();
+        const r = await cb.submit(1, { base, steps: [insertText(intro, 'x')] });
+        out.push(performance.now() - t0);
+        expect(r.t).toBe('sync.ack');
+        base += 1;
+      }
+      return out;
+    };
+
+    await timeB(); // warm-up, not recorded
+    const idle1 = median(await timeB());
+    // Connected only now: a session that sends nothing for two heartbeat intervals is closed.
+    const a = await connect(h);
+    await a.hello(tokenA);
+    await a.open(1, docA);
+    expect((await a.submit(1, { base: 0, steps: [insertText(intro, 'a')] })).t).toBe('sync.ack');
+    let refusals = 0;
+    let stop = false;
+    const retrying = (async () => {
+      while (!stop) {
+        const r = await a.submit(1, { base: 1, steps: [insertText(intro, 'a')] });
+        if (r.t === 'sync.reject' && r.d?.code === 'quota_exceeded') {
+          refusals += 1;
+          const wait = Math.min(Number(r.d?.retryAfterMs ?? 20), 20);
+          await new Promise((resolve) => setTimeout(resolve, wait));
+        }
+      }
+    })();
+    const busy = median(await timeB());
+    stop = true;
+    await retrying;
+    a.close();
+    const idle2 = median(await timeB());
+
+    expect(refusals).toBeGreaterThan(0);
+    console.info(
+      `BE-091 criterion 2: tenant B median ack ${idle1.toFixed(3)} ms, then ${busy.toFixed(3)} ms while tenant A was refused ${refusals} times, then ${idle2.toFixed(3)} ms (${N} commits per run; one Node.js process, memory storage, loopback)`,
+    );
+    expect(busy).toBeLessThanOrEqual(Math.max(idle1, idle2) * 1.5 + 5);
+  });
 });

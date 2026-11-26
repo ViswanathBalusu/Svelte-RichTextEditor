@@ -24,7 +24,9 @@ import {
   type PrincipalInfo,
   type SearchPrincipals,
   type SyncChannel,
+  type SyncPort,
 } from '@docedit/protocol';
+import { classificationView, type NoticeSource } from './classification-shell.ts';
 import {
   App,
   PeopleDirectory,
@@ -59,6 +61,7 @@ import type { NormalConfig } from './config.ts';
 import { attachWithSwitches, shellWithSwitches, switchedModes } from './feature-switches.ts';
 import type { Connection, StatusDetail } from './events.ts';
 import { fillActionsService } from './fill-actions.ts';
+import { completionService } from './completion.ts';
 import { threadsService, type ThreadsSource } from './threads.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
@@ -105,6 +108,12 @@ export interface MountOptions {
    * `regions` read the shell offers the permissions pane; with its grants reads, the grant controls.
    */
   permissions?: PermissionsPort | null;
+  /**
+   * The session's metadata read and notices, when the backend has the read (UX-085 criterion 2).
+   * With them the status bar shows the document's classification label and follows
+   * `document.updated`; without them the core has no `classification` view and the bar shows none.
+   */
+  classification?: { document: NonNullable<SyncPort['document']>; notices: NoticeSource };
   /**
    * The export dialog's jobs (UX-101), when the backend has the exports port. Without it the shell
    * offers no export command.
@@ -440,7 +449,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The participants of the workflow and their order (FRW-026): the roles pane lists and edits them.
   const participants = options.workflow ? lazyParticipantsService(core, options.workflow) : null;
   // The adoption and signing step (FRW-045, FRW-046): a signature field the participant activated.
-  const signing = options.signing ? signingService(core, options.signing) : null;
+  // The consent step reads the participant's identifier from the workflow status, reported by the server.
+  const signing = options.signing
+    ? signingService(
+        core,
+        options.signing,
+        () => fillActions?.status.get()?.participant?.id ?? null,
+      )
+    : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
   const workflowCompleteListeners = new Set<() => void>();
   const fillActions = options.workflow
@@ -496,6 +512,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       focus: () => core.focus(),
       // The checker, the outline and the export diagnostics move to a block through this (UX-067 criterion 1).
       selectBlock: (id) => core.selectBlock(id),
+      // The export diagnostics tell a block that changed after the job's `seq` (EXP-065 criterion 3).
+      blockChangedSince: (id, seq) => core.blockChangedSince(id, seq),
       // The document as this reader holds it: the accessibility checker reads it (UX-066), so a
       // picture without alternative text is listed (FE-132 criterion 5).
       getContent: () => core.getContent(),
@@ -582,6 +600,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'discardRecovered',
         'setLanguage',
         'setParagraphFormat',
+        'setTableSize',
+        'moveBlockUp',
+        'moveBlockDown',
         'setTrackedForEveryone',
         'paragraphStyle',
         'characterStyle',
@@ -589,6 +610,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'createStyle',
         'changeStyle',
         'deleteStyle',
+        'insertCitation',
       ],
       runNamed: (name, args) => {
         if (name === 'showReferences') return core.showReferences();
@@ -608,6 +630,26 @@ export function mountEditor(options: MountOptions): MountedEditor {
           if (typeof a?.asset !== 'string' || typeof a.alt !== 'string') return false;
           return core.setImageAlt(a.asset, a.alt);
         }
+        // The citation dialog (FE-140 criterion 1): `{ items, mode? }`; the core checks the sources and
+        // the user's right to change the text.
+        if (name === 'insertCitation') {
+          const a = args as { items?: unknown; mode?: unknown } | undefined;
+          if (!Array.isArray(a?.items)) return false;
+          const mode = a.mode;
+          if (
+            mode !== undefined &&
+            mode !== 'normal' &&
+            mode !== 'narrative' &&
+            mode !== 'suppressAuthor'
+          )
+            return false;
+          return core.run('insertCitation', {
+            citation: {
+              items: a.items as never,
+              ...(mode === undefined ? {} : { mode }),
+            },
+          });
+        }
         if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
         // The ruler and the paragraph dialog (UX-102): the args are the patch of indents and tab
         // stops; the core checks every value and the user's right to change the paragraphs.
@@ -622,6 +664,25 @@ export function mountEditor(options: MountOptions): MountedEditor {
             paragraphFormat: args as Readonly<Record<string, unknown>>,
           });
         }
+        // The table size dialog (FE-104): `{ columnWidths?, rowHeight? }` in twips; the core checks
+        // every value and the user's right to change the table. The two move commands take no
+        // argument and change the place of the blocks at the selection.
+        if (name === 'setTableSize') {
+          if (args === null || typeof args !== 'object' || Array.isArray(args)) return false;
+          const a = args as { columnWidths?: unknown; rowHeight?: unknown };
+          const tableSize: { columnWidths?: number[]; rowHeight?: number | null } = {};
+          if (a.columnWidths !== undefined) {
+            if (!Array.isArray(a.columnWidths) || a.columnWidths.some((w) => typeof w !== 'number'))
+              return false;
+            tableSize.columnWidths = [...(a.columnWidths as number[])];
+          }
+          if (a.rowHeight !== undefined) {
+            if (a.rowHeight !== null && typeof a.rowHeight !== 'number') return false;
+            tableSize.rowHeight = a.rowHeight;
+          }
+          return core.run('setTableSize', { tableSize });
+        }
+        if (name === 'moveBlockUp' || name === 'moveBlockDown') return core.run(name);
         // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
         // puts it on the selection through the guards; neither takes an argument.
         if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
@@ -707,6 +768,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       language: core.language,
       // The indents and tab stops at the selection, for the ruler and the paragraph dialog (UX-102).
       paragraphFormat: core.paragraphFormat,
+      // The widths of the caret's table and its row height, for the table size dialog (FE-104).
+      tableSize: core.tableSize,
       // `settings.trackChanges` is `everyone` (UX-038): the mode switcher shows review with the reason.
       trackedForEveryone: core.trackedForEveryone,
       // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
@@ -760,6 +823,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(participants ? { participants } : {}),
       ...(threads ? { threads } : {}),
       ...(signing ? { signing } : {}),
+      // Finishing the participant's part (FRW-048): the fields are checked, then /complete is called.
+      ...(fillActions ? { completion: completionService(fillActions) } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
       ...(fillActions
         ? { accessCode: { submit: (code: string) => fillActions.verify(code) } }
@@ -788,6 +853,17 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
       // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
       permissions: core.permissions,
+      // The classification label of the status bar (UX-085 criterion 2): the document resource,
+      // read again at every `document.updated`.
+      ...(options.classification
+        ? {
+            classification: classificationView(
+              options.classification.document,
+              options.docId,
+              options.classification.notices,
+            ),
+          }
+        : {}),
       // The lock indicators of the regions the user cannot edit (PRM-026): the core shades them from
       // the access and draws the shell's words, which hold the names of the host's directory.
       setRegionLabels: (labels, defaults) => core.setRegionLabels(labels, defaults),

@@ -31,6 +31,8 @@ interface View<T> {
 /** A form field without its value, as the core's `fillFields()` lists it. */
 export interface FillFieldSource {
   readonly id: string;
+  /** The field's kind; optional here so that a core that does not say stays valid. */
+  readonly kind?: string;
   readonly label: string;
   readonly required: boolean;
   readonly filled: boolean;
@@ -67,6 +69,7 @@ export function fillView(
     if (copy === undefined) {
       copy = {
         id: f.id,
+        ...(f.kind !== undefined ? { kind: f.kind } : {}),
         label: f.label,
         required: f.required,
         filled: f.filled,

@@ -103,6 +103,8 @@ const KNOWN_PARAMS = [
   'seq',
   'deliveryId',
   'holdId',
+  // A name from a fixed set, not an identifier of tenant B (UX-033; ADR 0424).
+  'reaction',
 ];
 
 /** Client messages that take an identifier, and those that do not (05 §5). */
@@ -144,6 +146,7 @@ const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   registerAccessCode: 'has no such participant',
   // FRW-044: the handler exists, but this scenario composes no consent texts.
   participantConsent: 'this server keeps no consent texts',
+  getParticipantConsent: 'this server keeps no consent texts',
   // FRW-047: the handler exists; B's workflow has no participant in this scenario.
   participantComplete: 'has no such participant',
   signField: 'this server does not offer signing',
@@ -329,6 +332,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         ownerB,
       );
       ids['cid'] = made('comment', reply, reply.json?.id);
+      ids['reaction'] = 'thumbsUp';
       const version = await asB('POST', `/v1/documents/${ids['doc']}/versions`, { name: 'v1' });
       made('version', version, version.json?.name);
       const job = await asB('POST', `/v1/documents/${ids['doc']}/exports`, { target: 'pdf' });
@@ -450,6 +454,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         '/v1/quotas',
         '/v1/templates',
         '/v1/history-visibility',
+        '/v1/workflow/capture-settings',
       ];
       // Every operation without a path parameter that reads is in the list above.
       const reads = operations.filter((o) => o.params.length === 0 && o.method === 'GET');

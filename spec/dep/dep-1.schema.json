@@ -2515,11 +2515,16 @@
     },
     "ReadMarker": {
       "title": "ReadMarker",
-      "description": "The caller's last seen `seq`; it only moves forward (08 §10).",
+      "description": "The caller's last seen `seq`; it only moves forward (08 §10). `commentSeq` is the last comment sequence number the caller has seen (a comment has a sequence number of its own in its document; owner decision 73); it moves forward on its own and is answered only when the request names it.",
       "$comment": "05 §6.2; 08 §10; gaps: G70",
       "type": "object",
       "properties": {
         "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "commentSeq": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -4909,6 +4914,62 @@
       },
       "required": [
         "code"
+      ]
+    },
+    "WorkflowConsentText": {
+      "title": "WorkflowConsentText",
+      "description": "The consent text and the participant’s acceptance of it (12 §6.1, §8.1 step 1; FRW-044).",
+      "$comment": "12 §6.1, §8.1, §10; gaps: G95",
+      "type": "object",
+      "properties": {
+        "textId": {
+          "description": "The identifier of the consent text the workflow names.",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "description": "The version of the text.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "description": "The text the service holds for that identifier and version, to be shown in full before any signing action.",
+          "type": "string",
+          "minLength": 1
+        },
+        "acceptedAt": {
+          "description": "The server time of the acceptance on record for this very text (ISO 8601), or null when the participant has not accepted it.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "textId",
+        "version",
+        "text",
+        "acceptedAt"
+      ]
+    },
+    "WorkflowCaptureSettings": {
+      "title": "WorkflowCaptureSettings",
+      "description": "The tenant setting for network identity capture in workflow evidence (12 §7; FRW-042).",
+      "$comment": "12 §7, §10; 13 §10; gaps: G95",
+      "type": "object",
+      "properties": {
+        "captureNetworkIdentity": {
+          "description": "Whether the IP address and the user agent of a participant are recorded in their evidence. On by default; off keeps neither (12 §7). A change applies to events after it; evidence already stored is not rewritten.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "captureNetworkIdentity"
       ]
     },
     "WorkflowPlaceholder": {

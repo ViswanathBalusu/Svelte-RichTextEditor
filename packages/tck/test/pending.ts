@@ -10,6 +10,8 @@ const HISTORY = 'history resources of phase 2 (PRO-119)';
 const LEASES = 'leases of phase 2 (PRO-122)';
 
 export const PENDING: Readonly<Record<string, string>> = {
+  'operation GET /tenant-fonts/{sha256}':
+    'the kit adds no font file: a tenant font needs the asset worker font check, and the route is tested in services/document-service/test/control-plane/be-048-tenant-fonts.test.ts (BE-048)',
   'message sync.check': `sync.check is optional and follows a checkpoint (04 §13): ${FAULTS}`,
   'message wf.changed': WORKFLOW,
   'field error.retryAfterMs': `only rate-limited errors carry it: ${FAULTS}`,
@@ -29,12 +31,8 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation GET /documents/{id}/audit-segment': `the log segment for a third party (08 §12) is served and tested in the document service (HIS-037); a kit scenario follows with the history profile: ${HISTORY}`,
   'operation GET /documents/{id}/suggestions/{sid}/introduction': `the introducing commit of a suggestion (08 §14) is served and tested in the document service (HIS-042); a kit scenario follows with the history profile: ${HISTORY}`,
   'operation GET /documents/{id}/activity': `activity (08 §10): ${HISTORY}`,
-  'operation POST /agents':
-    'the agent registry and the agent token are served and tested in the document service (UX-046; ADR 0234 A); a kit scenario follows with an assistant feature, which 05 §2 does not announce yet',
   'operation GET /imports/{jid}':
     'imports take a service credential and arrive with EXP (G79; D16)',
-  'operation GET /tenant-fonts/{sha256}':
-    'a font file of the tenant is served and tested in the document service (BE-048); the kit has no scenario until the font manifest has a feature (G75)',
   'operation GET /fonts': 'the font manifest has no shape and no feature yet (G75; G06)',
   'operation GET /documents/{id}/workflow': WORKFLOW,
   'operation PUT /documents/{id}/workflow': WORKFLOW,
@@ -44,6 +42,7 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation POST /documents/{id}/workflow/remind': WORKFLOW,
   'operation POST /documents/{id}/workflow/void': WORKFLOW,
   'operation POST /documents/{id}/workflow/participants/{pid}/consent': WORKFLOW,
+  'operation GET /documents/{id}/workflow/participants/{pid}/consent': WORKFLOW,
   'operation POST /documents/{id}/workflow/participants/{pid}/access-code': WORKFLOW,
   'operation POST /documents/{id}/workflow/participants/{pid}/verify': WORKFLOW,
   'operation POST /documents/{id}/workflow/participants/{pid}/complete': WORKFLOW,
@@ -56,6 +55,8 @@ export const PENDING: Readonly<Record<string, string>> = {
   'error slow_consumer': `a client that stops reading: ${FAULTS}`,
   'error workflow_active': WORKFLOW,
   'error internal': FAULTS,
+  'event comment.reacted':
+    'the notice follows the reaction routes; the kit scenario of the reactions profile covers the routes and refusals only (UX-033; ADR 0424)',
   'event import.completed': 'imports arrive with EXP (G79; D16)',
   'event import.failed': 'imports arrive with EXP (G79; D16)',
 };

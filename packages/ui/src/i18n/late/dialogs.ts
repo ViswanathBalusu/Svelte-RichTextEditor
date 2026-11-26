@@ -24,7 +24,25 @@ export const EN_GB_DIALOGS = {
   'dialog.paragraph.right': 'Right indent (cm)',
   'dialog.paragraph.firstLine': 'First-line indent (cm; negative for a hanging indent)',
   'dialog.paragraph.mixed': 'The selected paragraphs differ. A blank field keeps each as it is.',
-  'dialog.paragraph.invalid': 'Enter a length in centimetres within the page.',
+  'dialog.paragraph.invalid':
+    'Check the fields marked invalid: a length is a number within the page, a colour is #RRGGBB.',
+  // The other options of the paragraph dialog (FE-129 criterion 6).
+  'dialog.paragraph.alignment': 'Alignment',
+  'dialog.paragraph.differs': '(differs)',
+  'dialog.paragraph.spaceBefore': 'Space before (pt)',
+  'dialog.paragraph.spaceAfter': 'Space after (pt)',
+  'dialog.paragraph.lineRule': 'Line spacing rule',
+  'dialog.paragraph.lineSpacing.lines': 'Line spacing (lines)',
+  'dialog.paragraph.lineSpacing.points': 'Line spacing (pt)',
+  'dialog.paragraph.rules': 'Keep and page rules',
+  'dialog.paragraph.rules.hint':
+    'These rules take effect in the PDF and the read view, not in the web view.',
+  'dialog.paragraph.borders': 'Borders',
+  'dialog.paragraph.borderField.style': '{side} border: style',
+  'dialog.paragraph.borderField.width': '{side} border: width (pt)',
+  'dialog.paragraph.borderField.color': '{side} border: colour (#RRGGBB, blank for automatic)',
+  'dialog.paragraph.borderField.space': '{side} border: distance from the text (pt)',
+  'dialog.paragraph.shading': 'Shading colour (#RRGGBB, blank for none)',
   'dialog.paragraph.tabs': 'Tab stops',
   'dialog.paragraph.tabs.none': 'No tab stops.',
   'dialog.paragraph.tabs.add': 'Add a tab stop',
@@ -32,6 +50,14 @@ export const EN_GB_DIALOGS = {
   'dialog.paragraph.tabs.align': 'Tab stop {n}: alignment',
   'dialog.paragraph.tabs.leader': 'Tab stop {n}: leader',
   'dialog.paragraph.tabs.remove': 'Remove tab stop {n}',
+  // The table size dialog (FE-104).
+  'dialog.tableSize.title': 'Table column widths and row height',
+  'dialog.tableSize.columns': 'Column widths',
+  'dialog.tableSize.column': 'Column {n} width (cm)',
+  'dialog.tableSize.row': 'Height of row {n} (cm)',
+  'dialog.tableSize.hint':
+    'Leave the row height blank for the height its text needs. A height you enter is the least the row has.',
+  'dialog.tableSize.invalid': 'Enter each length in centimetres, within the page.',
   'dialog.dictionary.title': 'Custom dictionary ({lang})',
   'dialog.dictionary.none': 'No words yet.',
   'dialog.dictionary.unavailable': 'The dictionary cannot be read now.',
@@ -84,6 +110,17 @@ export const EN_GB_DIALOGS = {
   'dialog.crossRef.hint':
     'The reference prints the number of its target and follows it when content moves. The page number shows in the PDF; the web view has no pages and shows the number.',
   'dialog.crossRef.insert': 'Insert',
+  // The citation dialog (FE-140 criterion 1).
+  'dialog.citation.title': 'Insert a citation',
+  'dialog.citation.empty': 'The document has no sources yet. Add one in the sources pane.',
+  'dialog.citation.sources': 'Sources to cite, in this order',
+  'dialog.citation.prefix': 'Prefix before {source}',
+  'dialog.citation.locator': 'Locator for {source}, such as a page',
+  'dialog.citation.suffix': 'Suffix after {source}',
+  'dialog.citation.mode': 'Citation mode',
+  'dialog.citation.hint':
+    'Tick each source to cite it. The text of the citation follows the document’s citation style.',
+  'dialog.citation.insert': 'Insert',
   'dialog.region.title': 'Make a region',
   'dialog.region.field': 'Title of the region',
   'dialog.region.hint':
@@ -145,6 +182,26 @@ export const EN_GB_DIALOGS = {
   'announce.signature.adopted': 'Signature adopted.',
   'announce.initials.adopted': 'Initials adopted.',
   'announce.signature.signed': 'Signed: {label}.',
+  'announce.signature.signedOf': 'Signed: {label}. {done} of {count} signed.',
+
+  // The consent step that comes first (FRW-044). The text itself is the service's.
+  'consent.title': 'Before you sign',
+  'consent.intro': 'Read this text in full. You can sign only after you accept it.',
+  'consent.region': 'Consent text',
+  'consent.loading': 'Loading the consent text.',
+  'consent.accept': 'I accept this text',
+  'consent.accepting': 'Recording your acceptance.',
+  'consent.decline': 'I decline',
+  'consent.decline.label': 'Why are you declining? The reason is sent to the sender.',
+  'consent.decline.confirm': 'Decline and stop',
+  'consent.decline.back': 'Go back to the text',
+  'consent.decline.problem': 'Say why you are declining first.',
+  'consent.declined': 'You declined. Nothing was signed.',
+  'consent.result.failed': 'The service did not answer. Try again.',
+  'consent.result.forbidden': 'This text cannot be accepted by you now.',
+  'consent.retry': 'Try again',
+  'announce.consent.accepted': 'Consent text accepted.',
+  'announce.consent.declined': 'Declined.',
 
   // The math editor (FE-070). The equation's LaTeX is content; the words around it are not.
   'dialog.math.title': 'Edit equation',

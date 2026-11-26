@@ -186,10 +186,12 @@ describe('the workflow port of backend-dep (FRW-035 criterion 6)', () => {
     expect(got.value.state).toBe('sent');
     expect(got.etag).toBe('"3"');
     await b.workflow!.act(docId, 'correct');
+    await b.workflow!.consent(docId, 'p 1');
     await b.workflow!.participant(docId, 'p 1', 'decline', { reason: 'No' });
     expect(w.calls.map((c) => c.replace(/Bearer .*/, 'Bearer ...'))).toEqual([
       `GET /v1/documents/${docId}/workflow Bearer ...`,
       `POST /v1/documents/${docId}/workflow/correct Bearer ...`,
+      `GET /v1/documents/${docId}/workflow/participants/p%201/consent Bearer ...`,
       `POST /v1/documents/${docId}/workflow/participants/p%201/decline Bearer ...`,
     ]);
     await b.close();

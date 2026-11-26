@@ -45,6 +45,7 @@ import { emptyDocument, regionNodeOf, regionsOfJson } from './content.ts';
 import { exportRoutes } from './export-routes.ts';
 import { fieldRoutes } from './field-routes.ts';
 import { workflowRoutes } from './workflow-routes.ts';
+import { captureSettingsRoutes } from './capture-settings-routes.ts';
 import { instantiateTemplate, templateRoutes } from './template-routes.ts';
 import { bulkSendRoutes } from './bulk-send.ts';
 import { historyListRoutes } from './history-list-route.ts';
@@ -874,6 +875,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...tombstoneRoutes(k),
     ...searchRoutes(k),
     ...workflowRoutes(k),
+    ...captureSettingsRoutes(k),
     ...templateRoutes(k),
     ...bulkSendRoutes(k),
     getFonts,

@@ -71,6 +71,10 @@ export type CommandName =
   | TableCommandName
   | 'setTableStyle'
   | 'sortTableRows'
+  // FE-104: the keyboard and dialog forms of dragging a column border, a row edge and a block.
+  | 'setTableSize'
+  | 'moveBlockUp'
+  | 'moveBlockDown'
   | 'resizeFigure'
   | 'setFigureLayout'
   | 'increaseIndent'
@@ -204,6 +208,11 @@ export interface CommandArgs {
   /** For `sortTableRows` (FE-131): the direction; `sortColumn` is the column, default the caret's. */
   sortDirection?: 'ascending' | 'descending';
   sortColumn?: number;
+  /** For `setTableSize` (FE-104): the column widths and the caret's row height, in twips. */
+  tableSize?: {
+    columnWidths?: readonly number[];
+    rowHeight?: number | null;
+  };
   /** For `resizeFigure` and `setFigureLayout` (FE-132): the figure's position in the document. */
   figurePos?: number;
   /** For `resizeFigure`: twips; the aspect ratio is kept unless `lockAspect` is false. */
@@ -309,6 +318,9 @@ export type CommandUnavailable =
   | 'empty-row'
   | 'single-cell'
   | 'not-merged'
+  | 'first-block'
+  | 'last-block'
+  | 'not-movable'
   | 'suggestion'
   | 'scheme-not-allowed'
   | 'malformed-link'
@@ -544,9 +556,13 @@ export type CoreQueryName =
   | 'hasNextEditableRegion'
   // UX-009: the selection has formatting to take; formatting was taken and may be put here.
   | 'canCopyFormat'
+  | 'canPasteFormat'
+  // FE-104: the table at the caret may be resized; the selection's blocks may change places.
+  | 'canSetTableSize'
+  | 'canMoveBlockUp'
+  | 'canMoveBlockDown'
   // UX-038: the user may switch settings.trackChanges (manage, and the document is not locked).
-  | 'canSetTrackedForEveryone'
-  | 'canPasteFormat';
+  | 'canSetTrackedForEveryone';
 
 /** `de-status.connection` (05 §8.1), plus `detached` before any channel is attached. */
 export type ConnectionState = 'detached' | 'online' | 'reconnecting' | 'offline';
@@ -1038,6 +1054,12 @@ export interface DocumentApi {
   closePanel(): void;
   /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
   selectBlock(id: string): boolean;
+  /**
+   * Whether a block changed in the confirmed document after the commit `seq` (EXP-065 criterion 3):
+   * null when the core cannot tell (the block is gone or hidden from this reader, or `seq` is older
+   * than the first commit the core followed).
+   */
+  blockChangedSince(id: string, seq: number): boolean | null;
   /** Selects the text of the suggestion with this identifier and scrolls it into view; false when it cannot (FRW-028). */
   selectSuggestion(id: string): boolean;
   /** The pre-send checks over the visible document, given the roles each participant holds; empty when all pass (FRW-028). */

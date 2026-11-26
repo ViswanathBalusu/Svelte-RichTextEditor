@@ -5,7 +5,9 @@
 import { formatTimestamp, uuid7 } from '@docedit/model';
 import type { CreateExportRequest, ExportJob } from '@docedit/protocol';
 import { objectKeys } from '../objects/store.ts';
-import { hasSuggestions } from './content.ts';
+import type { Access } from '@docedit/authority';
+import { hasSuggestions, suggestionOwners } from './content.ts';
+import { commentThreadsAt } from './export-comments.ts';
 import {
   EXPORT_KIND,
   EXPORT_PRIORITIES,
@@ -18,7 +20,7 @@ import {
   type ExportOutputs,
   type ExportPolicy,
 } from './exports.ts';
-import { readerConnectionOn, refuseSeqBelowGate } from './gate.ts';
+import { accessOf, readerConnectionOn, refuseSeqBelowGate, regionInfosOfJson } from './gate.ts';
 import { checkIfMatch } from './http.ts';
 import { MAX_START_GAP_MS, type JobRecord } from './jobs/queue.ts';
 import { withQueueProof } from './job-proof.ts';
@@ -35,6 +37,43 @@ export const EXPORT_POLICY_DEFAULTS: ExportPolicy = {
   classVersion: 'unknown',
   tenantConcurrency: null,
 };
+
+/** The scopes where an access holds `edit`, as the exporter names them (`body`, `region:<id>`). */
+function editScopesOf(a: Access): string[] {
+  const out: string[] = [];
+  if (a.body.has('edit')) out.push('body');
+  for (const [id, caps] of a.regions) if (caps.has('edit')) out.push(`region:${id}`);
+  return out.sort();
+}
+
+/**
+ * The ready assets of `doc` that `content` names through an `asset` attribute (EXP-087): identifier
+ * to hash and type. An asset that is not ready, or was uploaded for another document, is left out.
+ */
+export async function exportAssets(
+  d: Kit['d'],
+  tenant: string,
+  doc: string,
+  content: unknown,
+): Promise<Record<string, { sha256: string; mediaType: string }>> {
+  const ids = new Set<string>();
+  const stack: unknown[] = [content];
+  while (stack.length > 0 && ids.size < 2000) {
+    const n = stack.pop() as { attrs?: Record<string, unknown>; content?: unknown[] } | null;
+    if (!n || typeof n !== 'object') continue;
+    const a = n.attrs?.['asset'];
+    if (typeof a === 'string') ids.add(a);
+    if (Array.isArray(n.content)) stack.push(...n.content);
+  }
+  const out: Record<string, { sha256: string; mediaType: string }> = {};
+  if (!d.assetRegistry || ids.size === 0) return out;
+  for (const r of await d.assetRegistry.many(tenant, [...ids].sort())) {
+    if (r.state !== 'ready' || r.doc !== doc || r.sha256 === null || r.contentType === null)
+      continue;
+    out[r.id] = { sha256: r.sha256, mediaType: r.contentType };
+  }
+  return out;
+}
 
 export function exportRoutes(k: Kit): Record<string, Handler> {
   const { d, rest, refOf, liveDocument } = k;
@@ -168,17 +207,43 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       seq === head.seq ? headDoc : await d.content.rebuild(ref, head.incarnation, seq);
     // The requester's class is that of their reads: a participant named by `wfp` exports with the
     // roles the workflow gives them (FRW-038).
-    const view = readerView(
-      d.views,
-      identity && role && !full ? await readerConnectionOn(d, ctx.caller, doc) : null,
-      content.doc,
-      perms,
-    );
+    const readerConn =
+      identity && role && !full ? await readerConnectionOn(d, ctx.caller, doc) : null;
+    const view = readerView(d.views, readerConn, content.doc, perms);
     if (options['suggestions'] === undefined && hasSuggestions(projectContent(view, content.doc)))
       throw new ApiError(
         'pending_suggestions',
         'the content has unresolved suggestions; set options.suggestions',
       );
+    // `accept` changes the content, so a whole-block deletion is honoured only for a requester who
+    // may edit there (09 §10; EXP-081; owner decision 111). The worker gets the owners of the
+    // suggestion identifiers and the requester's `edit` scopes, and the key names both.
+    const suggestionAccess =
+      options['suggestions'] === 'accept'
+        ? {
+            owners: suggestionOwners(content.doc),
+            edit:
+              readerConn === null
+                ? ('all' as const)
+                : editScopesOf(
+                    accessOf(readerConn, regionInfosOfJson(content.doc), perms, d.now()),
+                  ),
+          }
+        : null;
+    // `margin` prints the open comment threads at the exported `seq` (EXP-084). They are not in the
+    // document, so the job carries them; they are part of the request key, since a comment can
+    // be added without a commit.
+    const commentThreads =
+      options['comments'] === 'margin' && (body.target === 'pdf' || body.target === 'tex')
+        ? await commentThreadsAt(d, { ref, seq, doc: content.doc, view })
+        : null;
+    // The pictures of an `html` export travel with the page (EXP-087 criterion 6): the ready assets
+    // of this document that the readable content names, by identifier, with their hash and type.
+    // The worker reads the bytes by hash; an asset of another document is never named.
+    const assets =
+      body.target === 'html'
+        ? await exportAssets(d, ctx.caller.tenant, doc, projectContent(view, content.doc))
+        : null;
     const kind = options['profile'] === 'preview' ? PREVIEW_KIND : EXPORT_KIND;
     const cacheKey = exportRequestKey({
       tenant: ctx.caller.tenant,
@@ -191,6 +256,9 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       full: full || ctx.caller.kind === 'service',
       classVersion: policy.classVersion,
       classification: record.label ?? null,
+      suggestionAccess,
+      commentThreads,
+      assets,
     });
     const now = d.now();
     const payload = {
@@ -204,6 +272,9 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       full: full || ctx.caller.kind === 'service',
       profile: kind === PREVIEW_KIND ? 'preview' : 'final',
       classVersion: policy.classVersion,
+      ...(suggestionAccess ? { suggestionAccess } : {}),
+      ...(commentThreads ? { commentThreads } : {}),
+      ...(assets && Object.keys(assets).length > 0 ? { assets } : {}),
       ...exportView(view),
     };
     const accepted = (job: JobRecord) =>

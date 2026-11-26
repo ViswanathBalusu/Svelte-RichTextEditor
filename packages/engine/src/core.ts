@@ -293,6 +293,8 @@ import { type AltRequest, setAltText } from './alt-text.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
 import { setParagraphFormat } from './paragraph-format.ts';
+import { moveBlock, moveBlockRefusal } from './move-block.ts';
+import { setTableSize, tableSizeInfo, type TableSizeInfo, tableSizeRefusal } from './table-size.ts';
 import { paragraphFormatInfo, type ParagraphFormatInfo } from './paragraph-format-info.ts';
 import { DEFAULT_MAPPING_HISTORY, PresenceClient, toConfirmed } from './presence.ts';
 import { type SearchMatch, findMatches } from './search.ts';
@@ -545,6 +547,9 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'hasNextEditableRegion',
   'canCopyFormat',
   'canPasteFormat',
+  'canSetTableSize',
+  'canMoveBlockUp',
+  'canMoveBlockDown',
   'canSetTrackedForEveryone',
 ];
 
@@ -574,6 +579,10 @@ const COMMANDS: readonly CommandName[] = [
   'splitCell',
   'setTableStyle',
   'sortTableRows',
+  // `setTableSize` takes its sizes as an argument, so only `queryCommand` with them answers.
+  'setTableSize',
+  'moveBlockUp',
+  'moveBlockDown',
   'resizeFigure',
   'setFigureLayout',
   'increaseIndent',
@@ -604,6 +613,9 @@ const BLOCK_ONLY_COMMANDS: ReadonlySet<CommandName> = new Set<CommandName>([
   'markRegion',
   'setRegionPolicy',
   'renameRegion',
+  // FE-104: a block moved by a command is a change suggestion mode cannot record either.
+  'moveBlockUp',
+  'moveBlockDown',
 ]);
 
 const AUTHORING: ReadonlySet<CommandName> = new Set<CommandName>([
@@ -901,6 +913,8 @@ export class DocumentCore implements DocumentApi {
    * dialog (UX-102); null when the selection covers no paragraph.
    */
   readonly paragraphFormat: ReadValue<ParagraphFormatInfo | null>;
+  /** The widths of the caret's table and its row height, for the table size dialog (FE-104); null outside a table. */
+  readonly tableSize: ReadValue<TableSizeInfo | null>;
   readonly #words = new WordCounter(
     () => countBodyWords(this.#state.doc),
     (n) => this.words.set(n),
@@ -991,6 +1005,18 @@ export class DocumentCore implements DocumentApi {
   readonly #schema: Schema;
   #state: EditorState;
   #sync: SyncState;
+  /**
+   * Which blocks the confirmed commits changed (EXP-065 criterion 3; `blockChangedSince`): `marks`
+   * holds, for a block identifier, the confirmed `seq` at which the document last differed in or
+   * around it; `floor` is the first `seq` this core followed, and anything older cannot be told.
+   */
+  #blockChanges: {
+    incarnation: string;
+    seq: number;
+    floor: number;
+    doc: PMNode;
+    marks: Map<string, number>;
+  } | null = null;
   /** The confirmed document `regionTitles` was last computed from. */
   #titledDoc: PMNode | null = null;
   /**
@@ -1123,6 +1149,7 @@ export class DocumentCore implements DocumentApi {
     this.trackedForEveryone = new ReadValue<boolean>(false, Object.is, hub);
     this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.paragraphFormat = new ReadValue<ParagraphFormatInfo | null>(null, sameJson, hub);
+    this.tableSize = new ReadValue<TableSizeInfo | null>(null, sameJson, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.altRequest = new ReadValue<AltRequest | null>(null, sameJson, hub);
     this.glyphNotice = new ReadValue<GlyphNotice | null>(null, sameJson, hub);
@@ -1701,6 +1728,8 @@ export class DocumentCore implements DocumentApi {
           this.queryCommand('setParagraphFormat', { paragraphFormat: { indentLeft: 0 } }).enabled,
         ),
       );
+      // The widths of the caret's table and its row height, for the table size dialog (FE-104).
+      this.tableSize.set(tableSizeInfo(state, this.#locked()));
       this.access.set(this.#accessSummary());
       if (last?.doc !== state.doc) this.#refreshFind();
       this.revision.set(this.revision.get() + 1);
@@ -1785,6 +1814,12 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('copyFormat').enabled;
       case 'canPasteFormat':
         return this.queryCommand('pasteFormat').enabled;
+      case 'canSetTableSize':
+        return this.queryCommand('setTableSize').enabled;
+      case 'canMoveBlockUp':
+        return this.queryCommand('moveBlockUp').enabled;
+      case 'canMoveBlockDown':
+        return this.queryCommand('moveBlockDown').enabled;
       case 'canSetTrackedForEveryone':
         return !this.#locked() && (this.#accessValue?.caps.includes('manage') ?? false);
       default:
@@ -1814,6 +1849,35 @@ export class DocumentCore implements DocumentApi {
       if (this.queryCommand('insertField', { field: { kind: 'text' } }).enabled) return null;
       return formFieldCount(this.#state) >= FIELD_LIMITS.fields ? 'fieldLimit' : null;
     }
+    if (name === 'canSetTableSize' || name === 'canMoveBlockUp' || name === 'canMoveBlockDown') {
+      // FE-104: the shell states the reason of the command as `reason.query.<code>`.
+      const state = this.queryCommand(
+        name === 'canSetTableSize'
+          ? 'setTableSize'
+          : name === 'canMoveBlockUp'
+            ? 'moveBlockUp'
+            : 'moveBlockDown',
+      );
+      if (state.enabled) return null;
+      switch (state.reason) {
+        case 'first-block':
+          return 'firstBlock';
+        case 'last-block':
+          return 'lastBlock';
+        case 'not-in-table':
+          return 'notInTable';
+        case 'not-movable':
+          return 'notMovable';
+        case 'read-only':
+          return 'locked';
+        case 'suggestion':
+          return 'suggestion';
+        case 'no-access':
+          return 'noEdit';
+        default:
+          return null;
+      }
+    }
     if (name !== 'canMarkRegion') return null;
     const state = this.queryCommand('markRegion', { title: REGION_QUERY_TITLE });
     if (state.enabled) return null;
@@ -1827,8 +1891,86 @@ export class DocumentCore implements DocumentApi {
     return 'blocks';
   }
 
+  /**
+   * Records which blocks a step of the confirmed document touched (EXP-065 criterion 3). A jump of
+   * several commits is credited to its last `seq`, so a block may be reported as changed a little
+   * early, never late. A new incarnation, or a `seq` that goes back, starts the record again.
+   */
+  #trackBlockChanges(): void {
+    const s = this.#sync;
+    if (s.incarnation === '') return;
+    const t = this.#blockChanges;
+    if (!t || t.incarnation !== s.incarnation || s.seq < t.seq) {
+      this.#blockChanges = {
+        incarnation: s.incarnation,
+        seq: s.seq,
+        floor: s.seq,
+        doc: s.confirmed,
+        marks: new Map(),
+      };
+      return;
+    }
+    if (s.confirmed === t.doc) {
+      t.seq = s.seq;
+      return;
+    }
+    // The same `seq` with another document is the load finishing, not a commit.
+    if (s.seq === t.seq) {
+      t.doc = s.confirmed;
+      return;
+    }
+    const before = t.doc;
+    const after = s.confirmed;
+    const start = before.content.findDiffStart(after.content);
+    if (start !== null && start !== undefined) {
+      const end = before.content.findDiffEnd(after.content);
+      const mark = (doc: PMNode, from: number, to: number): void => {
+        const size = doc.content.size;
+        const a = Math.max(0, Math.min(from, size));
+        const b = Math.max(a, Math.min(to, size));
+        const note = (n: PMNode): void => {
+          const id = n.attrs['id'];
+          if (typeof id === 'string') t.marks.set(id, s.seq);
+        };
+        doc.nodesBetween(a, b, (n) => {
+          note(n);
+          return true;
+        });
+        const $a = doc.resolve(a);
+        for (let d = $a.depth; d > 0; d--) note($a.node(d));
+      };
+      mark(after, start, end ? end.b : start);
+      mark(before, start, end ? end.a : start);
+    }
+    t.doc = after;
+    t.seq = s.seq;
+  }
+
+  /**
+   * Whether a block has changed in the confirmed document after the commit `seq` (EXP-065
+   * criterion 3; ui `CoreApi.blockChangedSince`). Null when this core cannot tell: the block is not
+   * in the document, the reader may not view it (ADR 0019), or `seq` is older than the first commit
+   * this core followed. The unconfirmed work of this reader is not counted until it is confirmed.
+   */
+  blockChangedSince(id: string, seq: number): boolean | null {
+    const t = this.#blockChanges;
+    if (!t || seq < t.floor) return null;
+    const doc = this.#state.doc;
+    let at = -1;
+    doc.descendants((node, pos) => {
+      if (at >= 0) return false;
+      const type = node.type.name;
+      if (type === 'defs' || type === 'story' || type === 'footnote') return false;
+      if (node.isBlock && node.attrs['id'] === id) at = pos;
+      return at < 0;
+    });
+    if (at < 0 || !this.#canView(this.#scopeIn(doc, at))) return null;
+    return (t.marks.get(id) ?? -1) > seq;
+  }
+
   #publishSync(): void {
     const s = this.#sync;
+    this.#trackBlockChanges();
     this.confirmedSeq.set(s.seq);
     if (s.confirmed !== this.#titledDoc) {
       this.#titledDoc = s.confirmed;
@@ -2712,6 +2854,10 @@ export class DocumentCore implements DocumentApi {
       return args.sortDirection === undefined
         ? null
         : sortTableRows(args.sortDirection, args.sortColumn);
+    if (name === 'setTableSize')
+      return args.tableSize === undefined ? null : setTableSize(args.tableSize);
+    if (name === 'moveBlockUp' || name === 'moveBlockDown')
+      return moveBlock(name === 'moveBlockUp' ? 'up' : 'down');
     if (name === 'resizeFigure')
       return args.figurePos === undefined || args.figureSize === undefined
         ? null
@@ -3068,7 +3214,8 @@ export class DocumentCore implements DocumentApi {
       return this.#refuseSuggestedSpan();
     // FE-131 criterion 4: a sort under suggestion mode is unavailable (ADR 0365, proposed), and it
     // is refused as a span change is: with the `suggestion` reason and no change.
-    if (name === 'sortTableRows' && this.#suggestsTable()) return this.#refuseSuggestedSpan();
+    if ((name === 'sortTableRows' || name === 'setTableSize') && this.#suggestsTable())
+      return this.#refuseSuggestedSpan();
     if (BLOCK_ONLY_COMMANDS.has(name) && this.queryCommand(name, args).reason === 'suggestion') {
       // FE-044 criterion 5: refused with the reason, and the document does not change.
       this.#refused({
@@ -3831,6 +3978,30 @@ one or original. It is a
         name === 'setTableStyle'
           ? tableStyleRefusal(state, args?.tableStyle ?? null)
           : sortRefusal(state, args?.sortColumn);
+      return refusal === null
+        ? { enabled: true, active: false }
+        : { enabled: false, active: false, reason: refusal };
+    }
+    if (name === 'setTableSize') {
+      // Column widths and row height (FE-104 criterion 1): a lock first, then the table and the values.
+      if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
+      if (this.#suggestsTable()) return { enabled: false, active: false, reason: 'suggestion' };
+      if (args?.tableSize === undefined) {
+        // Without values the question is whether a table is at the caret and may be changed.
+        const open = tableSizeInfo(state, false);
+        return open?.editable
+          ? { enabled: true, active: false }
+          : { enabled: false, active: false, reason: open === null ? 'not-in-table' : 'no-access' };
+      }
+      const refusal = tableSizeRefusal(state, args.tableSize);
+      return refusal === null
+        ? { enabled: true, active: false }
+        : { enabled: false, active: false, reason: refusal };
+    }
+    if (name === 'moveBlockUp' || name === 'moveBlockDown') {
+      // Moving blocks (FE-104 criterion 3): a lock first, then the selection's place among its siblings.
+      if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
+      const refusal = moveBlockRefusal(state, name === 'moveBlockUp' ? 'up' : 'down');
       return refusal === null
         ? { enabled: true, active: false }
         : { enabled: false, active: false, reason: refusal };
@@ -5001,12 +5172,24 @@ one or original. It is a
       return true;
     };
 
+    // Work made under another view token was made on another projection of the document (ADR 0019;
+    // FE-141 criterion 4): it is never applied here. A commit or queue written before the token was
+    // kept (no `view`) is put back as before.
+    const now = this.#sync.view ?? null;
+    const otherView = (made: string | null | undefined): boolean =>
+      made !== undefined && made !== now;
     const entry = plan.entry;
     let inflightBack = false;
     if (entry) {
       // The text of work that is set aside is read from the steps, which parse without a document.
       const steps = parse(entry.steps);
-      if (entry.base === here && steps && steps.length > 0 && applyAll(steps)) {
+      if (
+        !otherView(entry.view) &&
+        entry.base === here &&
+        steps &&
+        steps.length > 0 &&
+        applyAll(steps)
+      ) {
         const queued = this.#sync.queue;
         this.#sync = {
           ...this.#sync,
@@ -5028,7 +5211,7 @@ one or original. It is a
       const madeOn = plan.queueAt?.seq;
       const fits = entry ? inflightBack && madeOn === entry.base : madeOn === here;
       const steps = parse(plan.queue);
-      if (!(fits && steps && steps.length > 0 && applyAll(steps)))
+      if (!(fits && !otherView(plan.queueAt?.view) && steps && steps.length > 0 && applyAll(steps)))
         setAside(plan.queue, steps, null);
     }
     this.#publishSync();

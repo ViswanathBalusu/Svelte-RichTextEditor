@@ -1424,6 +1424,14 @@
       "capability": "editing"
     },
     {
+      "id": "edit.moveBlockUp",
+      "capability": "editing"
+    },
+    {
+      "id": "edit.moveBlockDown",
+      "capability": "editing"
+    },
+    {
       "id": "insert.field.text",
       "capability": "fields-and-forms"
     },
@@ -1552,8 +1560,16 @@
       "capability": "character-and-paragraph-formatting"
     },
     {
+      "id": "table.size",
+      "capability": "editing"
+    },
+    {
       "id": "insert.crossReference",
       "capability": "editing"
+    },
+    {
+      "id": "insert.citation",
+      "capability": "citations"
     },
     {
       "id": "insert.region",

@@ -271,10 +271,21 @@ export type CoreQueryName =
  *   document has room for another region (PRM-033);
  * - `hasNextEditableRegion`: a region after the caret, in document order, where the user has
  *   `edit` (PRM-027);
- * - `canInsertField`: a field may be inserted at the selection (FRW-072).
+ * - `canInsertField`: a field may be inserted at the selection (FRW-072);
+ * - `canSetTableSize`: the caret is in a table whose column widths and row height may be changed
+ *   (FE-104);
+ * - `canMoveBlockUp`, `canMoveBlockDown`: the blocks at the selection have a sibling above or below
+ *   to change places with, in a scope the user may change (FE-104).
  */
 export type CoreQueryName1b =
-  'canCopyFormat' | 'canPasteFormat' | 'canMarkRegion' | 'hasNextEditableRegion' | 'canInsertField';
+  | 'canCopyFormat'
+  | 'canPasteFormat'
+  | 'canMarkRegion'
+  | 'hasNextEditableRegion'
+  | 'canInsertField'
+  | 'canSetTableSize'
+  | 'canMoveBlockUp'
+  | 'canMoveBlockDown';
 
 /**
  * Named commands of phase 1b, run through `runNamed` and declared in `commandNames` (ADR 0052).
@@ -301,14 +312,25 @@ export type CoreQueryName1b =
  *   on, in its caption sequence (FE-134 criterion 1);
  * - `insertCrossReference`: `{ target, format? }`, a target of `referenceTargets` and `null` or
  *   `page` as the format; inserts a `ref` field at the caret (FE-134 criterion 2);
+ * - `insertCitation`: `{ items, mode? }`, items of `{ source, prefix?, suffix?, locator? }` for sources of the
+ *   `sources` service and the mode `normal`, `narrative` or `suppressAuthor`; inserts a citation at the
+ *   caret through the guards (FE-140 criterion 1);
  * - `setParagraphFormat`: a patch of `indentLeft`, `indentRight`, `indentFirstLine` (twips) and
  *   `tabs` (the whole list, or null for none) for the selected paragraphs; the ruler and the
  *   paragraph dialog both run it (UX-102 criterion 2; FE-129);
+ * - `setTableSize`: `{ columnWidths?, rowHeight? }` in twips for the caret's table: the width of
+ *   every column and the height of the caret's row, or null for the natural height (FE-104);
+ * - `moveBlockUp`, `moveBlockDown`: none; the blocks at the selection change places with the block
+ *   above or below (FE-104);
  * - `setTrackedForEveryone`: `{ on }`; switches `settings.trackChanges` between `everyone` and `off`,
  *   for a user with `manage` only (UX-038; owner decision 118).
  */
 export type CoreCommandName =
+  | 'insertCitation'
   | 'setParagraphFormat'
+  | 'setTableSize'
+  | 'moveBlockUp'
+  | 'moveBlockDown'
   | 'setTrackedForEveryone'
   | 'copyFormat'
   | 'pasteFormat'
@@ -495,6 +517,41 @@ export interface TabStopView {
   readonly leader: 'none' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' | 'heavy';
 }
 
+export type ParagraphBorderSideView = 'top' | 'bottom' | 'left' | 'right' | 'between';
+
+/** One border of a paragraph (03 §4.5): width in eighths of a point, space in twentieths. */
+export interface ParagraphBorderView {
+  readonly style: 'none' | 'single' | 'double' | 'dotted' | 'dashed' | 'thick';
+  readonly width?: number;
+  readonly color?: string | null;
+  readonly space?: number;
+}
+
+/**
+ * The options of the paragraph dialog besides indents and tab stops (FE-129 criterion 6). Each
+ * value is the first selected paragraph's own, with the CDM's default when it sets none; `mixed`
+ * names the options the selected paragraphs do not share.
+ */
+export interface ParagraphOptionsView {
+  readonly align: 'start' | 'center' | 'end' | 'justify' | 'distribute';
+  /** Twips. */
+  readonly spaceBefore: number;
+  readonly spaceAfter: number;
+  /** Thousandths of a line under `multiple`, twips under `exact` and `atLeast`. */
+  readonly lineSpacing: number;
+  readonly lineRule: 'multiple' | 'exact' | 'atLeast';
+  readonly keepNext: boolean;
+  readonly keepLines: boolean;
+  readonly pageBreakBefore: boolean;
+  readonly widowControl: boolean;
+  readonly contextualSpacing: boolean;
+  /** The sides that have a border; a side with none is absent. */
+  readonly borders: Readonly<Partial<Record<ParagraphBorderSideView, ParagraphBorderView>>>;
+  /** The fill colour (`#RRGGBB`) of the shading; null for none. */
+  readonly shading: string | null;
+  readonly mixed: readonly string[];
+}
+
 /**
  * The indents and tab stops of the paragraphs at the selection, for the ruler and the paragraph
  * dialog (UX-102; 13 §2). Lengths are twips, as the document stores them. A value the selected
@@ -518,6 +575,24 @@ export interface ParagraphFormatView {
     readonly marginRight: number;
   } | null;
   /** Whether the paragraphs may be changed now. */
+  readonly editable: boolean;
+  /** Alignment, spacing, keep rules, borders and shading; absent when the core gives none. */
+  readonly options?: ParagraphOptionsView;
+}
+
+/**
+ * The table at the caret, for the table size dialog (FE-104; 03 §4.3). Lengths are twips, as the
+ * document stores them.
+ */
+export interface TableSizeView {
+  /** The width of every column. */
+  readonly columnWidths: readonly number[];
+  /** The height of the caret's row, or null for its natural height. */
+  readonly rowHeight: number | null;
+  /** The caret's row and column, zero based. */
+  readonly row: number;
+  readonly column: number;
+  /** Whether the sizes may be changed now. */
   readonly editable: boolean;
 }
 
@@ -817,6 +892,8 @@ export interface LeasesService {
 /** A field of the document as fill mode shows it (FRW-076, FRW-077, FRW-078). */
 export interface FillField {
   readonly id: string;
+  /** The field's kind (signature, initials, 	ext, ...); absent when the core does not say. */
+  readonly kind?: string;
   /** The field's `label`: document content. */
   readonly label: string;
   readonly required: boolean;
@@ -1038,6 +1115,8 @@ export interface CoreApi {
    * paragraph. Absent: the shell offers no ruler and no paragraph dialog.
    */
   readonly paragraphFormat?: ReadView<ParagraphFormatView | null>;
+  /** The widths of the caret's table and its row height, for the table size dialog (FE-104); null outside a table. */
+  readonly tableSize?: ReadView<TableSizeView | null>;
   /** The document's default language (`settings.lang`), a BCP 47 tag; null when not set. */
   readonly language?: ReadView<string | null>;
   /**
@@ -1161,6 +1240,8 @@ export interface CoreApi {
   readonly workflowSend?: WorkflowSendService;
   /** Adopting a signature and signing a field (FRW-045, FRW-046). Absent: signature fields cannot be signed here. */
   readonly signing?: SigningService;
+  /** Finishing the participant's part (FRW-048, FRW-071). Absent: the Finish control runs the named command only. */
+  readonly completion?: CompletionService;
   /** Submits the participant's access code (FRW-039). Absent: the bar shows no code input. */
   readonly accessCode?: AccessCodeService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
@@ -1566,8 +1647,59 @@ export interface SignRequest {
   readonly role: string | null;
 }
 
+/** The consent text the workflow names, as the service holds it, and the acceptance on record (FRW-044). */
+export interface ConsentView {
+  readonly textId: string;
+  readonly version: number;
+  /** The text in full: the service's, never the client's. */
+  readonly text: string;
+  /** The server time of the acceptance on record for this text, or null. */
+  readonly acceptedAt: string | null;
+}
+
+export type ConsentLoadOutcome =
+  | { readonly ok: true; readonly consent: ConsentView }
+  /** `none`: this participant has no consent text to accept (the workflow names none, or the kind accepts none). */
+  | { readonly ok: false; readonly reason: 'none' | 'failed' };
+
+export type ConsentAcceptOutcome =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'failed' | 'forbidden' };
+
+export type ConsentDeclineOutcome =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'reason_required' | 'failed' };
+
+/** The first step of the ceremony: the consent text, its acceptance and the way out (FRW-044; FRW-033). */
+export interface ConsentService {
+  /** Reads the text and whether it was accepted (`GET .../consent`). */
+  load(): Promise<ConsentLoadOutcome>;
+  /** Records the acceptance (`POST .../consent`); the service holds the text and takes the hash and time. */
+  accept(): Promise<ConsentAcceptOutcome>;
+  /** Declines instead (`POST .../decline`); a reason is required (FRW-033). */
+  decline(reason: string): Promise<ConsentDeclineOutcome>;
+}
+
+/** How many of the participant's signature and initials fields are signed, of how many (FRW-048). */
+export interface SignProgress {
+  readonly signed: number;
+  readonly total: number;
+}
+
+/** What finishing the participant's part answered (FRW-048; FRW-071). */
+export type CompletionOutcome =
+  | { readonly ok: true }
+  /** Fields still need attention: the first has focus, and nothing was sent. */
+  | { readonly ok: false; readonly reason: 'invalid'; readonly count: number }
+  | { readonly ok: false; readonly reason: 'not_active' | 'failed' };
+
+/** Completes the participant's part (POST .../complete) after the fields are checked. */
+export interface CompletionService {
+  complete(): Promise<CompletionOutcome>;
+}
+
 /** The signing ceremony's adoption and sign steps over the backend (FRW-045, FRW-046). */
 export interface SigningService {
+  /** The consent step that comes before any signing action. Absent: the step is not shown. */
+  readonly consent?: ConsentService;
   /** The field the participant activated, until the step is closed. */
   readonly request: ReadView<SignRequest | null>;
   /** The adoption made earlier for this kind and kept for the rest of the visit; null when none. */
@@ -1581,6 +1713,12 @@ export interface SigningService {
   ): Promise<AdoptOutcome>;
   /** Asks the server to sign the field with the adoption (`POST /documents/{id}/fields/{fid}/sign`). */
   sign(fieldId: string, adoption: SignatureAdoption): Promise<SignOutcome>;
+  /**
+   * The participant's own signature and initials fields, signed of all, counting signedField as
+   * signed (the value arrives through the channel a moment after the sign call answers); null when the
+   * core cannot say.
+   */
+  progress?(signedField?: string): SignProgress | null;
   /** Closes the step without signing. */
   dismiss(): void;
   dispose?(): void;

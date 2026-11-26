@@ -32,7 +32,7 @@ import {
   type RunProperties,
   type TreeNode,
 } from '@docedit/model';
-import type { Diagnostic } from './bundle.ts';
+import type { Diagnostic, SuggestionAccess } from './bundle.ts';
 import type { J } from './context.ts';
 import { url } from './emit.ts';
 import { settleSuggestions } from './suggestions.ts';
@@ -48,6 +48,8 @@ import type { DocumentWriter, WriterInput } from './writer.ts';
 export interface HtmlOptions {
   /** How suggestions are shown (09 §10). A missing value with suggestions present is an error. */
   readonly suggestions?: 'accept' | 'reject' | 'markup' | null;
+  /** The owners of the suggestion identifiers and the requester's grants (EXP-081). */
+  readonly suggestionAccess?: SuggestionAccess | null;
   /** The document's title, written in `title`. */
   readonly title?: string | null;
   /**
@@ -204,7 +206,10 @@ function pictureHtml(ctx: Ctx, asset: string | null, alt: string, blockId: strin
   }
   let path = ctx.pictures.get(asset);
   if (path === undefined) {
-    path = `assets/${asset.replace(/[^A-Za-z0-9._-]/g, '_')}`;
+    // The extension a caller gives (`{ extension: '.png' }`) keeps the file openable on its own.
+    const given = (ctx.assets[asset] as { extension?: unknown } | null | undefined)?.extension;
+    const extension = typeof given === 'string' && /^\.[a-z0-9]{1,5}$/.test(given) ? given : '';
+    path = `assets/${asset.replace(/[^A-Za-z0-9._-]/g, '_')}${extension}`;
     ctx.pictures.set(asset, path);
   }
   return `<img src="${escapeHtml(destinationOf(path))}" alt="${altText}">`;
@@ -716,7 +721,12 @@ export function htmlText(
   assets: Readonly<Record<string, unknown>> = {},
 ): HtmlOutput {
   const settled: Diagnostic[] = [];
-  const doc = settleSuggestions(envelope.doc as unknown as J, options.suggestions ?? null, settled);
+  const doc = settleSuggestions(
+    envelope.doc as unknown as J,
+    options.suggestions ?? null,
+    settled,
+    options.suggestionAccess ?? undefined,
+  );
   const table = styleTable(doc as unknown as TreeNode);
   const labels = computeLabels(doc as unknown as TreeNode, { table });
   const base = resolveParagraph(table, {}, {});
