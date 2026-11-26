@@ -91,6 +91,32 @@ export type Renderer = 'node' | 'harf';
 export type LayoutLevel = 'off' | 'block' | 'line';
 export type Suggestions = 'accept' | 'reject' | 'markup';
 
+/** One message of a comment thread: the author as a display name, and the text (EXP-084). */
+export interface CommentMessage {
+  readonly author: string;
+  readonly text: string;
+}
+
+/**
+ * A comment thread at the exported seq (EXP-084; ADR 0228 decision 1; docs/adr/0428). Threads are
+ * not in the document (03 section 4; 07 section 6): the control plane maps each range to the seq,
+ * finds the paragraph it starts in and reads the words it covers, and the converter only places
+ * the note. It never reads a user identity: uthor is a display name the service resolved.
+ */
+export interface CommentThread {
+  readonly id: string;
+  /** The identifier of the paragraph the note stands beside (the one the range starts in). */
+  readonly block: string;
+  /** A resolved thread: left out of the margin (owner decision 52). */
+  readonly done?: boolean;
+  /** The range lost all its text, or cannot be placed at this seq: listed, not anchored. */
+  readonly detached?: boolean;
+  /** The words the comment is about, shortened by the service; shown above the messages. */
+  readonly quote?: string;
+  /** The root message first, then the replies. */
+  readonly messages: readonly CommentMessage[];
+}
+
 /**
  * What the exporter needs to check a suggestion against the permission rules (09 §10; owner decision
  * 111; docs/adr/0370-w2-exp-081-unverifiable-suggestion-marks.md): the owner of each suggestion
@@ -160,6 +186,16 @@ export interface ConvertOptions {
    * diagnostic `pending_suggestions`, and the bundle shows the text as if all were rejected.
    */
   suggestions?: Suggestions;
+  /**
+   * margin (09 section 10) prints the open comment threads of commentThreads in the right
+   * margin; 
+one (the default) prints none. A thread that cannot stand beside its paragraph (a
+   * detached range, a paragraph in a table cell, a heading, a header or a hidden paragraph) is
+   * listed at the end of the document with a warning (EXP-084).
+   */
+  comments?: 'none' | 'margin';
+  /** The threads at the exported seq, written by the control plane (EXP-084). */
+  commentThreads?: readonly CommentThread[];
   /**
    * The owners of the suggestion identifiers and the requester's grants (owner decision 111). With
    * it, a whole-block deletion is honoured under ccept only if it passes (EXP-081). Absent: the

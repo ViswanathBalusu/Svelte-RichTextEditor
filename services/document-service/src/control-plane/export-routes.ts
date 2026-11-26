@@ -7,6 +7,7 @@ import type { CreateExportRequest, ExportJob } from '@docedit/protocol';
 import { objectKeys } from '../objects/store.ts';
 import type { Access } from '@docedit/authority';
 import { hasSuggestions, suggestionOwners } from './content.ts';
+import { commentThreadsAt } from './export-comments.ts';
 import {
   EXPORT_KIND,
   EXPORT_PRIORITIES,
@@ -200,6 +201,13 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
                   ),
           }
         : null;
+    // margin prints the open comment threads at the exported seq (EXP-084). They are not in the
+    // document, so the job carries them; they are part of the request key, since a comment can
+    // be added without a commit.
+    const commentThreads =
+      options['comments'] === 'margin' && (body.target === 'pdf' || body.target === 'tex')
+        ? await commentThreadsAt(d, { ref, seq, doc: content.doc, view })
+        : null;
     const kind = options['profile'] === 'preview' ? PREVIEW_KIND : EXPORT_KIND;
     const cacheKey = exportRequestKey({
       tenant: ctx.caller.tenant,
@@ -213,6 +221,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       classVersion: policy.classVersion,
       classification: record.label ?? null,
       suggestionAccess,
+      commentThreads,
     });
     const now = d.now();
     const payload = {
@@ -227,6 +236,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       profile: kind === PREVIEW_KIND ? 'preview' : 'final',
       classVersion: policy.classVersion,
       ...(suggestionAccess ? { suggestionAccess } : {}),
+      ...(commentThreads ? { commentThreads } : {}),
       ...exportView(view),
     };
     const accepted = (job: JobRecord) =>

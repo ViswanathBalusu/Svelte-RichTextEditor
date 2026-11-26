@@ -129,6 +129,8 @@ export function exportRequestKey(parts: {
   classification?: string | null;
   /** What `accept` checks a block deletion against (EXP-081): the owners and the `edit` scopes. */
   suggestionAccess?: unknown;
+  /** The comment threads of a comments: margin export (EXP-084): they change without a commit. */
+  commentThreads?: unknown;
 }): string {
   return createHash('sha256')
     .update(
@@ -146,6 +148,7 @@ export function exportRequestKey(parts: {
         // Left out when there is no label, so the keys of unlabelled documents do not change.
         ...(parts.classification ? { classification: parts.classification } : {}),
         ...(parts.suggestionAccess ? { suggestionAccess: parts.suggestionAccess } : {}),
+        ...(parts.commentThreads ? { commentThreads: parts.commentThreads } : {}),
       }),
       'utf8',
     )

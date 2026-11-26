@@ -31,6 +31,8 @@ export type {
   Redaction,
   Renderer,
   SourceMap,
+  CommentMessage,
+  CommentThread,
   Suggestions,
   SuggestionAccess,
   Tagging,

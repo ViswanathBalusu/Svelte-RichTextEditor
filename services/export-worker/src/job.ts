@@ -30,6 +30,7 @@ import {
   type CertificateFacts,
   type Diagnostic,
   type FontManifest,
+  type CommentThread,
   type SuggestionAccess,
 } from '@docedit/export-latex';
 import {
@@ -212,6 +213,41 @@ interface Payload {
   certificate: CertificateFacts | null;
   /** The owners of the suggestion identifiers and the requester's grants (EXP-081); or null. */
   suggestionAccess: SuggestionAccess | null;
+  /** The comment threads at the exported seq (EXP-084), written by the control plane; or none. */
+  commentThreads: CommentThread[];
+}
+
+/** The comment threads of a payload, or invalid when they are not the shape the control plane writes. */
+function readCommentThreads(v: unknown): CommentThread[] | 'invalid' {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v) || v.length > 1000) return 'invalid';
+  const text = (x: unknown, max: number): x is string => typeof x === 'string' && x.length <= max;
+  const out: CommentThread[] = [];
+  for (const raw of v as unknown[]) {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return 'invalid';
+    const o = raw as Record<string, unknown>;
+    const messages = o['messages'];
+    if (!text(o['id'], 64) || !text(o['block'], 64) || !Array.isArray(messages)) return 'invalid';
+    if (messages.length > 200) return 'invalid';
+    if (o['quote'] !== undefined && !text(o['quote'], 1000)) return 'invalid';
+    if (o['done'] !== undefined && typeof o['done'] !== 'boolean') return 'invalid';
+    if (o['detached'] !== undefined && typeof o['detached'] !== 'boolean') return 'invalid';
+    const msgs: Array<{ author: string; text: string }> = [];
+    for (const m of messages as unknown[]) {
+      const mo = (typeof m === 'object' && m !== null ? m : {}) as Record<string, unknown>;
+      if (!text(mo['author'], 200) || !text(mo['text'], 20_000)) return 'invalid';
+      msgs.push({ author: mo['author'], text: mo['text'] });
+    }
+    out.push({
+      id: o['id'],
+      block: o['block'],
+      ...(o['quote'] !== undefined ? { quote: o['quote'] as string } : {}),
+      ...(o['done'] === true ? { done: true } : {}),
+      ...(o['detached'] === true ? { detached: true } : {}),
+      messages: msgs,
+    });
+  }
+  return out;
 }
 
 /** The access of a payload, or invalid when it is not the shape the control plane writes. */
@@ -289,10 +325,17 @@ function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
       'internal',
       'the suggestion access of the job is not the shape the control plane writes',
     );
+  const commentThreads = readCommentThreads(p['commentThreads']);
+  if (commentThreads === 'invalid')
+    throw new JobFailure(
+      'internal',
+      'the comment threads of the job are not the shape the control plane writes',
+    );
   return {
     sealing,
     certificate,
     suggestionAccess,
+    commentThreads,
     doc: p['doc'],
     target: p['target'],
     seq: p['seq'],
@@ -560,6 +603,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     stopIfCancelled(ctx);
     const planned = planJob(payload.options, documentLang(envelope), {
       certificateFacts: payload.certificate !== null,
+      marginComments: true,
     });
     if (!planned.ok)
       throw failed('validation_failed', 'an export option cannot be honoured', planned.diagnostics);
@@ -603,6 +647,10 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         fields: plan.fields,
         ...(plan.suggestions ? { suggestions: plan.suggestions } : {}),
         ...(payload.suggestionAccess ? { suggestionAccess: payload.suggestionAccess } : {}),
+        // The comment threads at the exported seq (EXP-084): the control plane wrote them.
+        ...(plan.comments === 'margin'
+          ? { comments: 'margin' as const, commentThreads: payload.commentThreads }
+          : {}),
         // The certificate of completion (FRW-050): facts the control plane wrote, never a client's.
         ...(payload.certificate ? { certificate: payload.certificate } : {}),
       },
