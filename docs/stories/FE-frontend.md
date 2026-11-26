@@ -3209,6 +3209,8 @@ Lane FE-118-130, round 5 (2026-11-13, nothing ticked). FND-007 defines the metri
 
 **Notes (lane w1, 2026-11-26):** nothing ticked and no new typing run. Decision 22 confirms the reference machine, but the recorded median (40 ms against 16 ms) still fails criterion 1, and criterion 2 needs the `docedit-reference` runner, which is not registered. Blocked on the typing work and the runner.
 
+**Notes (lane w1, 2026-11-26):** nothing new ticked. Criterion 3 needs the `docedit-reference` runner and a hosted run of `.github/workflows/perf.yml`, neither of which exists on this machine. Blocked on the runner.
+
 ## Frontend tests (02 §14)
 
 ### FE-121 Run the editing core in Node.js without a browser
