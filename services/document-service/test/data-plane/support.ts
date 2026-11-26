@@ -119,6 +119,7 @@ export class Tokens {
         role: spec.docs[first] ?? base.role,
         ...(spec.groups ? { groups: spec.groups } : {}),
         ...(spec.accessSince !== undefined ? { accessSince: spec.accessSince } : {}),
+        ...(spec.agent !== undefined ? { agent: spec.agent } : {}),
       },
       jti: uuid7(),
       expiresAt: issuedAt + (spec.expiresIn ?? 15 * 60_000),

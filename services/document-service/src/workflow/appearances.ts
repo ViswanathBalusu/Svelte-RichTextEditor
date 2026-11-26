@@ -5,9 +5,10 @@
  * - The fields come from the document as it stood at `completedSeq` (the job's `seq`): every
  *   `form_field` of kind `signature` or `initials`, with its identifier and key.
  * - The rectangles come from `layout.json` of the final export (`fields`, page and rectangle in
- *   twentieths of a point from the top-left corner). The file is read, checked to be in twips and
- *   of the job's `seq`, and its `fields` are checked by `validateLayout` before any is used; the
- *   signing service checks them again against the page sizes of the compiled PDF.
+ *   twentieths of a point from the top-left corner). The file is read and validated as a whole
+ *   against its schema (`validateLayoutFile`), checked to be in twips and of the job's `seq`, and
+ *   its `fields` are checked by `validateLayout` before any is used; the signing service checks
+ *   them again against the page sizes of the compiled PDF.
  * - The text is what the evidence says: for a field with a signing record, `Electronically signed`,
  *   the participant by name (else by identifier) and the date of the signing in UTC; for a field
  *   with none, `Not signed`. It says nothing about who the participant is: a participant's
@@ -16,7 +17,7 @@
  * A layout that cannot be read gives no rectangles, and every field is then reported by the signing
  * service as having none; the seal is not held back (FRW-057 criterion 6).
  */
-import { validateLayout } from '@docedit/authority';
+import { validateLayout, validateLayoutFile } from '@docedit/authority';
 import type { JsonNode } from '@docedit/model';
 import { objectKeys, type ObjectStore } from '../objects/store.ts';
 import type { DocRef } from '../storage/types.ts';
@@ -113,11 +114,16 @@ async function layoutFields(
   } catch {
     return {};
   }
-  const o = layout as { unit?: unknown; seq?: unknown; fields?: unknown };
   if (typeof layout !== 'object' || layout === null) return {};
+  const o = layout as { unit?: unknown; seq?: unknown; fields?: unknown };
+  // The whole file is checked against its schema before any of it is used (FRW-057 criterion 3): a
+  // file that fails gives no rectangle, not even for the fields that look right.
+  if (validateLayoutFile(layout).length > 0) return {};
   // The unit and the `seq` are part of what the rectangles mean: another unit, or the layout of
   // another state of the document, is not used.
   if (o.unit !== 'twip' || o.seq !== seq) return {};
+  // A rectangle outside its page or not of the right shape is dropped (`validateLayout`); the
+  // signing service checks the rest against the page sizes of the compiled PDF.
   const checked = validateLayout(layout);
   if (!checked.ok) return {};
   return o.fields as Record<string, unknown>;

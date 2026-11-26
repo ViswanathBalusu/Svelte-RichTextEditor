@@ -12,7 +12,8 @@
  * - the scheduled task `workflow.seal`, which looks at every `completed` workflow of a tenant.
  *
  * What it finds it finds again from the workflow: the final export job has a derived identifier
- * (`finalExportJobId`). A workflow whose export has not finished, or has failed, is left alone (a
+ * (`finalExportJobId`). A workflow whose export has not finished is left alone; one whose sealing
+ * export failed stops with an alert (EXP-079 criterion 4; below). Other failed exports are left alone (a
  * failed export is already audited and reported by the export hooks).
  *
  * One run at a time for one workflow in this process (`FinalSealer`). Across processes the rules
@@ -35,6 +36,7 @@ import { ANCHOR_FILE_FORMAT, type AnchorStore } from './anchor-store.ts';
 import { finalExportJobId } from './final-export-start.ts';
 import type { AppearanceRequest } from './signing-client.ts';
 import { raiseWorkflowEvents } from './raise-events.ts';
+import { recordFirstExpiry, type RenewalRegistry } from './renewal-schedule.ts';
 import type { WorkflowResourceView } from './workflow-resource.ts';
 import {
   sealAndFinalise,
@@ -60,6 +62,13 @@ export interface FinalSealDeps extends SealAndFinaliseDeps {
     workflow: WorkflowResourceView,
     job: JobRecord,
   ) => Promise<AppearanceRequest | undefined>;
+  /**
+   * Where the end of the seal's time-stamp is recorded for the renewal schedule (FRW-056 criterion
+   * 2). Absent: the seal is not renewed by the schedule.
+   */
+  readonly renewals?: Pick<RenewalRegistry, 'start'>;
+  /** Told when recording the first expiry failed; the seal stands. */
+  readonly renewalFailed?: (ref: DocRef, error: unknown) => void;
 }
 
 export type FinalSealOutcome =
@@ -106,6 +115,26 @@ export class FinalSealer {
     if (jobId === null) return { status: 'waiting', reason: 'no participant has completed' };
     const job = await deps.queue.get(ref.tenant, jobId);
     if (job === null) return { status: 'waiting', reason: 'no final export job' };
+    // A sealing export that failed seals nothing. When its two compiles differed, or it failed for
+    // another reason, the workflow stays `completed` and the operator is alerted (EXP-079 criterion
+    // 4; the worker's diagnostic `seal_pair_differs`). Asking again does not mend it: the run is
+    // remembered, so the alert is raised once.
+    if (job.state === 'failed' && job.payload['sealing'] !== undefined) {
+      const diagnostics = (job.error as { diagnostics?: ReadonlyArray<{ code?: unknown }> } | null)
+        ?.diagnostics;
+      const differs = (diagnostics ?? []).some((d) => d.code === 'seal_pair_differs');
+      const code = differs ? 'compile_pair_differs' : 'export_failed';
+      await stopFinalisation(deps, {
+        ref,
+        workflow: workflow.id,
+        reason: 'seal_failed',
+        code,
+        attempts: 0,
+        retryable: false,
+      });
+      this.#gaveUp.set(key, code);
+      return { status: 'stopped', code, retryable: false };
+    }
     if (job.state !== 'completed')
       return { status: 'waiting', reason: `the export is ${job.state}` };
 
@@ -170,6 +199,33 @@ export class FinalSealer {
       }
       // The workflow is finalised by now: the host hears of it first, whatever follows.
       await raiseWorkflowEvents(deps, ref, run.final.resource, run.final.control, run.final.raised);
+      // The end of the seal's time-stamp is recorded for the renewal schedule (FRW-056 criterion
+      // 2). A failure here is not a reason to undo the seal: the renewal then has no start, and
+      // the operator sees it in the log of the hook.
+      if (deps.renewals)
+        await recordFirstExpiry(deps.renewals, ref.tenant, ref.doc, run.expiresAtMs).catch((e) =>
+          deps.renewalFailed?.(ref, e),
+        );
+      // What a signature provider asserted about its level and the signer is on record as asserted
+      // by the provider (FRW-059 criterion 3); the platform does not verify it.
+      if (run.provider)
+        await deps.audit?.record([
+          {
+            id: uuid7(),
+            tenant: ref.tenant,
+            doc: ref.doc,
+            actor: 'system',
+            kind: 'workflow.seal_provider_asserted',
+            data: {
+              workflow: workflow.id,
+              assertedBy: 'provider',
+              provider: run.provider.provider,
+              signatureLevel: run.provider.level,
+              signerIdentification: run.provider.signer,
+            },
+            at: deps.now(),
+          },
+        ]);
       // What was not drawn is on record for the operator and the owner (FRW-057 criterion 6). It is
       // written after the events, so that a slow or failing audit store cannot delay or lose them.
       if (run.appearances && run.appearances.diagnostics.length > 0)

@@ -833,7 +833,10 @@ export interface AttachOptions {
    * 2): the card of a suggestion shows the server time of that commit.
    */
   history?: {
-    suggestionIntroduction(docId: string, suggestionId: string): Promise<{ time: string }>;
+    suggestionIntroduction(
+      docId: string,
+      suggestionId: string,
+    ): Promise<{ time: string; agent?: string; agentName?: string }>;
   };
 }
 

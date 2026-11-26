@@ -50,6 +50,22 @@ export interface AppearanceReport {
   }[];
 }
 
+/** What a signature provider says about its signature: its name, its level, the signer. */
+export interface ProviderAssertionFacts {
+  readonly provider: string;
+  readonly level: string;
+  readonly signer: string;
+}
+
+/** The provider facts of an answer, or null when it has none or they are not of the shape. */
+function providerOf(v: unknown): ProviderAssertionFacts | null {
+  if (typeof v !== 'object' || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const text = (x: unknown): x is string => typeof x === 'string' && x.length <= 1024;
+  if (!text(o['provider']) || !text(o['level']) || !text(o['signer'])) return null;
+  return { provider: o['provider'], level: o['level'], signer: o['signer'] };
+}
+
 /** Why a seal was not made, in the words of `finaliseWorkflow` (@docedit/authority). */
 export type SigningFailure = 'tsa_unreachable' | 'signing_unavailable' | 'seal_failed';
 
@@ -62,6 +78,13 @@ export type SigningAttempt =
       readonly timestamped: true;
       /** The time of the seal's time-stamp token (`genTime`), from the authority's clock. */
       readonly timestampTime: Date;
+      /** The end of the newest time-stamp's validity, ms since the epoch; the first renewal is due before it. */
+      readonly expiresAtMs?: number;
+      /**
+       * Present when a signature provider signed (FRW-059): what it asserts about its level and the
+       * signer. Asserted by the provider; the platform does not verify it (FRW-058).
+       */
+      readonly provider?: ProviderAssertionFacts;
       readonly profile: 'B-LT' | 'B-LTA';
       /** Present when appearances were asked for. */
       readonly appearances?: AppearanceReport;
@@ -184,7 +207,9 @@ interface Wire {
   profile?: unknown;
   timestamped?: unknown;
   timestampTime?: unknown;
+  expiresAtMs?: unknown;
   appearances?: unknown;
+  provider?: unknown;
 }
 
 /** The appearance report of an answer, or null when it has none or is not of the shape. */
@@ -286,8 +311,12 @@ export class HttpSigningClient implements SigningClient, BatchAnchorClient {
       sealedHash,
       timestamped: true,
       timestampTime: when,
+      ...(typeof wire.expiresAtMs === 'number' && Number.isSafeInteger(wire.expiresAtMs)
+        ? { expiresAtMs: wire.expiresAtMs }
+        : {}),
       profile: wire.profile,
       ...(reportOf(wire.appearances) ? { appearances: reportOf(wire.appearances)! } : {}),
+      ...(providerOf(wire.provider) ? { provider: providerOf(wire.provider)! } : {}),
     };
   }
 

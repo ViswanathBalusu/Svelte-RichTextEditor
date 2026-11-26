@@ -83,7 +83,10 @@ export interface AttachAt {
   session?: string;
   /** The history port's read of the commit that introduced a suggestion (FE-046 criterion 2). */
   history?: {
-    suggestionIntroduction(docId: string, suggestionId: string): Promise<{ time: string }>;
+    suggestionIntroduction(
+      docId: string,
+      suggestionId: string,
+    ): Promise<{ time: string; agent?: string; agentName?: string }>;
   };
   /** The user (`welcome.user.id`), whom suggestion marks name (03 §5; FE-042). */
   user?: string;

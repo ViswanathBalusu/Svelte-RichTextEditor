@@ -12,9 +12,8 @@
  * `sealedRenewalSigner` is the signing service's side of the renewal job (`RenewalSigner`,
  * control-plane/jobs/workflow-renewal.ts): it makes one renewal and reports the new expiry.
  *
- * Not built: the scheduler that finds the workflows whose time-stamp expires soon and enqueues the
- * renewal job (`planRenewal` and the job exist; nothing composes them), and the initial expiry
- * state at finalisation.
+ * The schedule that queues the renewal job before each expiry, and the first expiry recorded at
+ * finalisation, are in `renewal-schedule.ts` and `final-seal.ts` (FRW-056 criterion 2).
  */
 import type { RenewalResult } from '@docedit/authority';
 import type { RenewalSigner } from '../control-plane/jobs/workflow-renewal.ts';

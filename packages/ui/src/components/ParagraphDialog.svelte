@@ -8,7 +8,14 @@
   import { useShell } from '../context.ts';
   import type { ParagraphFormatView, TabStopView } from '../core-api.ts';
   import type { StringKey } from '../i18n/en-GB.ts';
-  import { dialogFields, dialogPatch, type DialogField } from '../shell/paragraph-dialog.ts';
+  import {
+    BORDER_SIDES,
+    TRI_OPTIONS,
+    convertLineSpacing,
+    dialogFields,
+    dialogPatch,
+    type DialogField,
+  } from '../shell/paragraph-dialog.ts';
   import { MAX_TABS } from '../shell/ruler.ts';
   import Dialog from './Dialog.svelte';
 
@@ -51,12 +58,34 @@
     'heavy',
   ];
 
+  const ALIGNMENTS = ['start', 'center', 'end', 'justify', 'distribute'] as const;
+  const LINE_RULES = ['multiple', 'atLeast', 'exact'] as const;
+  const BORDER_STYLES = ['none', 'single', 'double', 'dotted', 'dashed', 'thick'] as const;
+
   const mixed = $derived(
     format.indentLeft === null ||
       format.indentRight === null ||
       format.indentFirstLine === null ||
-      format.tabs === null,
+      format.tabs === null ||
+      (format.options?.mixed.length ?? 0) > 0,
   );
+
+  // The line spacing is typed in lines under `multiple` and in points under the other rules, so a
+  // change of rule converts what is typed to the same space.
+  // svelte-ignore state_referenced_locally
+  let lastRule = fields.options?.lineRule ?? '';
+  function changeRule(next: string): void {
+    const o = fields.options;
+    if (!o) return;
+    if (lastRule !== '' && next !== '')
+      o.lineSpacing = convertLineSpacing(
+        o.lineSpacing,
+        lastRule as (typeof LINE_RULES)[number],
+        next as (typeof LINE_RULES)[number],
+      );
+    o.lineRule = next;
+    lastRule = next;
+  }
 
   function addTab(): void {
     if (fields.tabs.length >= MAX_TABS) return;
@@ -105,6 +134,58 @@
         aria-describedby={bad(row.key) ? `${id}-error` : undefined}
       />
     {/each}
+    {#if fields.options}
+      {@const o = fields.options}
+      <label class="de-field" for={`${id}-align`}>{tr.t('dialog.paragraph.alignment')}</label>
+      <select id={`${id}-align`} class="de-input" bind:value={o.align}>
+        {#if o.align === ''}<option value="">{tr.t('dialog.paragraph.differs')}</option>{/if}
+        {#each ALIGNMENTS as align (align)}
+          <option value={align}>{tr.t(`dialog.paragraph.alignment.${align}`)}</option>
+        {/each}
+      </select>
+      {#each [{ key: 'spaceBefore', label: 'dialog.paragraph.spaceBefore' }, { key: 'spaceAfter', label: 'dialog.paragraph.spaceAfter' }] as const as row (row.key)}
+        <label class="de-field" for={`${id}-${row.key}`}>{tr.t(row.label)}</label>
+        <input
+          id={`${id}-${row.key}`}
+          class="de-input"
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          bind:value={o[row.key]}
+          aria-invalid={bad(row.key) ? 'true' : undefined}
+          aria-describedby={bad(row.key) ? `${id}-error` : undefined}
+        />
+      {/each}
+      <label class="de-field" for={`${id}-lineRule`}>{tr.t('dialog.paragraph.lineRule')}</label>
+      <select
+        id={`${id}-lineRule`}
+        class="de-input"
+        value={o.lineRule}
+        onchange={(event) => changeRule(event.currentTarget.value)}
+      >
+        {#if o.lineRule === ''}<option value="">{tr.t('dialog.paragraph.differs')}</option>{/if}
+        {#each LINE_RULES as rule (rule)}
+          <option value={rule}>{tr.t(`dialog.paragraph.lineRule.${rule}`)}</option>
+        {/each}
+      </select>
+      <label class="de-field" for={`${id}-lineSpacing`}
+        >{tr.t(
+          o.lineRule === 'multiple'
+            ? 'dialog.paragraph.lineSpacing.lines'
+            : 'dialog.paragraph.lineSpacing.points',
+        )}</label
+      >
+      <input
+        id={`${id}-lineSpacing`}
+        class="de-input"
+        type="text"
+        inputmode="decimal"
+        autocomplete="off"
+        bind:value={o.lineSpacing}
+        aria-invalid={bad('lineSpacing') ? 'true' : undefined}
+        aria-describedby={bad('lineSpacing') ? `${id}-error` : undefined}
+      />
+    {/if}
     <fieldset class="de-fieldset">
       <legend>{tr.t('dialog.paragraph.tabs')}</legend>
       {#if fields.tabs.length === 0}
@@ -155,6 +236,81 @@
         onclick={addTab}>{tr.t('dialog.paragraph.tabs.add')}</button
       >
     </fieldset>
+    {#if fields.options}
+      {@const o = fields.options}
+      <fieldset class="de-fieldset">
+        <legend>{tr.t('dialog.paragraph.rules')}</legend>
+        <p class="de-hint">{tr.t('dialog.paragraph.rules.hint')}</p>
+        {#each TRI_OPTIONS as key (key)}
+          <label class="de-check">
+            <input
+              type="checkbox"
+              checked={o[key] === true}
+              indeterminate={o[key] === 'mixed'}
+              onchange={(event) => (o[key] = event.currentTarget.checked)}
+            />
+            {tr.t(`dialog.paragraph.rule.${key}`)}
+          </label>
+        {/each}
+      </fieldset>
+      <fieldset class="de-fieldset">
+        <legend>{tr.t('dialog.paragraph.borders')}</legend>
+        {#each BORDER_SIDES as side (side)}
+          {@const name = tr.t(`dialog.paragraph.border.${side}`)}
+          {@const row = o.borders[side]}
+          <div class="de-paragraph-border">
+            <select
+              class="de-input"
+              aria-label={tr.t('dialog.paragraph.borderField.style', { side: name })}
+              bind:value={row.style}
+            >
+              {#each BORDER_STYLES as style (style)}
+                <option value={style}>{tr.t(`dialog.paragraph.borderStyle.${style}`)}</option>
+              {/each}
+            </select>
+            <input
+              class="de-input"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              aria-label={tr.t('dialog.paragraph.borderField.width', { side: name })}
+              aria-invalid={bad(`border:${side}`) ? 'true' : undefined}
+              aria-describedby={bad(`border:${side}`) ? `${id}-error` : undefined}
+              bind:value={row.width}
+            />
+            <input
+              class="de-input"
+              type="text"
+              autocomplete="off"
+              aria-label={tr.t('dialog.paragraph.borderField.color', { side: name })}
+              aria-invalid={bad(`border:${side}`) ? 'true' : undefined}
+              aria-describedby={bad(`border:${side}`) ? `${id}-error` : undefined}
+              bind:value={row.color}
+            />
+            <input
+              class="de-input"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              aria-label={tr.t('dialog.paragraph.borderField.space', { side: name })}
+              aria-invalid={bad(`border:${side}`) ? 'true' : undefined}
+              aria-describedby={bad(`border:${side}`) ? `${id}-error` : undefined}
+              bind:value={row.space}
+            />
+          </div>
+        {/each}
+      </fieldset>
+      <label class="de-field" for={`${id}-shading`}>{tr.t('dialog.paragraph.shading')}</label>
+      <input
+        id={`${id}-shading`}
+        class="de-input"
+        type="text"
+        autocomplete="off"
+        bind:value={o.shading}
+        aria-invalid={bad('shading') ? 'true' : undefined}
+        aria-describedby={bad('shading') ? `${id}-error` : undefined}
+      />
+    {/if}
     {#if invalid.length > 0}
       <p class="de-error" id={`${id}-error`} role="alert">{tr.t('dialog.paragraph.invalid')}</p>
     {/if}

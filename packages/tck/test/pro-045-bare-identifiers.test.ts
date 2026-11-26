@@ -28,6 +28,8 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
       'POST /threads/{tid}/comments',
       'PATCH /comments/{cid}',
       'DELETE /comments/{cid}',
+      'POST /comments/{cid}/reactions/{reaction}',
+      'DELETE /comments/{cid}/reactions/{reaction}',
       'POST /assets/{aid}/complete',
       'GET /exports/{jid}',
       'DELETE /exports/{jid}',
