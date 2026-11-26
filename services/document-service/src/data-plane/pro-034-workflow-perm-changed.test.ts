@@ -1,10 +1,10 @@
 /**
  * PRO-034 criterion 3, the permission half (lane V-PRO-018-034, round 2; 05 §5.5; 12 §10): a
  * workflow transition that changes what is allowed sends `perm.changed` to every open connection,
- * with a higher `rev` than the one the connection had when its channel opened. The `wf.changed`
- * event of 12 §10 is not built (FRW-025, FRW-060), so this test does not tick the criterion; it
- * shows the permission part through the real data plane over the in-memory stores
- * (test/data-plane/support.ts), which is what the transition path `workflowActive` drives.
+ * with a higher `rev` than the one the connection had when its channel opened. This test shows
+ * the permission part alone through the real data plane over the in-memory stores
+ * (test/data-plane/support.ts), which is what the transition path `workflowActive` drives. The
+ * whole criterion, with `wf.changed`, is in test/control-plane/pro-034-workflow-perm-changed.test.ts.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { startPlane, type Plane } from '../../test/data-plane/support.ts';

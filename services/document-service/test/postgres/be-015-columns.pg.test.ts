@@ -91,6 +91,9 @@ const SKETCH: Record<string, Sketch> = {
       created_at: 'timestamp with time zone N',
       edited_at: 'timestamp with time zone',
       deleted_at: 'timestamp with time zone',
+      // 0099 (UX-033) and 0102 (PRO-058).
+      reactions: 'jsonb N',
+      seq: 'bigint',
     },
     primaryKey: ['id'],
     references: { thread_id: 'threads' },
@@ -101,6 +104,7 @@ const SKETCH: Record<string, Sketch> = {
       tenant_id: TENANT,
       user_id: 'text N',
       seq: 'bigint N',
+      comment_seq: 'bigint N',
       updated_at: 'timestamp with time zone N',
     },
     primaryKey: ['doc_id', 'user_id'],
