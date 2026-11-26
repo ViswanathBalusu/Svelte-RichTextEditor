@@ -17,7 +17,7 @@
  * Lines of text the harness's faces have no glyphs for (CJK, Hangul) and lines with a tab are in the
  * report as skipped, not compared. Runs in Chromium, Firefox and WebKit; skipped in Node.js.
  */
-import { commands, server } from 'vitest/browser';
+import type * as VitestBrowser from 'vitest/browser';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import notoSansBold from '../../perf/fonts/files/NotoSans-Bold.ttf?url';
 import notoSansItalic from '../../perf/fonts/files/NotoSans-Italic.ttf?url';
@@ -32,6 +32,9 @@ import type { LayoutTree } from '../../layout/src/tree.ts';
 import linesJson from '../golden/fe-094-pages-20.lines.json?raw';
 import treeJson from '../golden/fe-094-pages-20.tree.json?raw';
 import { paintTree, type PaintRun, type PaintSource } from './painter.ts';
+
+type BrowserCommands = typeof VitestBrowser.commands;
+type BrowserServer = typeof VitestBrowser.server;
 
 const hasDom = typeof document !== 'undefined';
 
@@ -92,9 +95,12 @@ describe.skipIf(!hasDom)('the corpus painted in the browser (FE-094)', () => {
   const painted = new Map<string, number>();
   const diffs = new Map<string, number>();
   let skipped = 0;
+  let commands: BrowserCommands;
+  let server: BrowserServer;
   let pages = 0;
 
   beforeAll(async () => {
+    ({ commands, server } = await import('vitest/browser'));
     for (const line of golden!.lines) byKey.set(line.key, line);
     for (const face of golden!.faces) {
       const ff = new FontFace(face.alias, `url(${FONT_URLS[face.file]!})`, {
