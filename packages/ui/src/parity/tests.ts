@@ -396,6 +396,18 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/test/fe-135-footnote-number.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped with FE-140, UX-103 and EXP-121: the citation in a browser run, the engine's insert and
+  // bibliography, the sources pane, and the typeset bibliography.
+  [
+    'citations',
+    [
+      { path: 'packages/element/e2e/fe-140-citation.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/citation-insert.test.ts', kind: 'unit' },
+      { path: 'packages/engine/src/view/fe-140-bibliography.universal.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/ux-103-sources.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-121-citations.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-011 closed (2026-11-17): the search over the registry in Node, and the dialog in a browser run.
   [
     'command-search',
