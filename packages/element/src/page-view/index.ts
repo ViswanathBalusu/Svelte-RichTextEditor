@@ -4,3 +4,8 @@
  */
 export { mountPageView, type MountedPageView, type PageViewOptions } from './page-view.ts';
 export { pageViewSupported } from './providers.ts';
+export {
+  mountVersionPages,
+  pagedHistoryVersion,
+  type VersionPagesOptions,
+} from './version-pages.ts';
