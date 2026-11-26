@@ -327,7 +327,14 @@
     try {
       const outcome = await service.sign(request.id, adoption);
       if (outcome.ok) {
-        shell.announce('announce.signature.signed', { label: request.label });
+        const progress = service.progress?.(request.id) ?? null;
+        if (progress)
+          shell.announce('announce.signature.signedOf', {
+            label: request.label,
+            done: progress.signed,
+            count: progress.total,
+          });
+        else shell.announce('announce.signature.signed', { label: request.label });
         onSigned?.();
         onClose();
       } else {

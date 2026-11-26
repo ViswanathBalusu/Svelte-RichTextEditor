@@ -24,6 +24,7 @@ import type {
   ConsentService,
   SignatureAdoption,
   SignatureKind,
+  SignProgress,
   SigningService,
   SignOutcome,
 } from '@docedit/ui';
@@ -145,6 +146,41 @@ export function consentService(
   };
 }
 
+/** What the progress of the signing reads from the core: the fields and the roles of the participant. */
+export interface SignProgressSource {
+  fillFields(): readonly {
+    readonly id: string;
+    readonly kind?: string;
+    readonly assignee: string | null;
+    readonly filled: boolean;
+  }[];
+  readonly permissions: {
+    get(): { readonly fill: { readonly roles: readonly string[] } | null } | null;
+  };
+}
+
+/**
+ * The participant's own signature and initials fields: how many are signed, of how many (FRW-048).
+ * signedField counts as signed even before its value has arrived through the channel. Null when
+ * the participant has no such field.
+ */
+export function signProgress(core: SignProgressSource, signedField?: string): SignProgress | null {
+  const roles = new Set(core.permissions.get()?.fill?.roles ?? []);
+  const own = core
+    .fillFields()
+    .filter(
+      (f) =>
+        (f.kind === 'signature' || f.kind === 'initials') &&
+        f.assignee !== null &&
+        roles.has(f.assignee),
+    );
+  if (own.length === 0) return null;
+  return {
+    signed: own.filter((f) => f.filled || f.id === signedField).length,
+    total: own.length,
+  };
+}
+
 export function signingService(
   core: EditorCore,
   source: () => SigningSource | null,
@@ -157,6 +193,7 @@ export function signingService(
   return {
     consent: consentService(source, participant),
     request: core.signRequest,
+    progress: (signedField) => signProgress(core as unknown as SignProgressSource, signedField),
     adopted: (kind) => kept[kind],
     async adopt(kind, mode, image, filename): Promise<AdoptOutcome> {
       const current = source();

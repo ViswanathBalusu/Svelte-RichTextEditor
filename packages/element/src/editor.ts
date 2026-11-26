@@ -58,6 +58,7 @@ import type { NormalConfig } from './config.ts';
 import { attachWithSwitches, shellWithSwitches, switchedModes } from './feature-switches.ts';
 import type { Connection, StatusDetail } from './events.ts';
 import { fillActionsService } from './fill-actions.ts';
+import { completionService } from './completion.ts';
 import { threadsService, type ThreadsSource } from './threads.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
@@ -732,6 +733,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(participants ? { participants } : {}),
       ...(threads ? { threads } : {}),
       ...(signing ? { signing } : {}),
+      // Finishing the participant's part (FRW-048): the fields are checked, then /complete is called.
+      ...(fillActions ? { completion: completionService(fillActions) } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
       ...(fillActions
         ? { accessCode: { submit: (code: string) => fillActions.verify(code) } }

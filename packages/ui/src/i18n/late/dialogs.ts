@@ -117,6 +117,7 @@ export const EN_GB_DIALOGS = {
   'announce.signature.adopted': 'Signature adopted.',
   'announce.initials.adopted': 'Initials adopted.',
   'announce.signature.signed': 'Signed: {label}.',
+  'announce.signature.signedOf': 'Signed: {label}. {done} of {count} signed.',
 
   // The consent step that comes first (FRW-044). The text itself is the service's.
   'consent.title': 'Before you sign',

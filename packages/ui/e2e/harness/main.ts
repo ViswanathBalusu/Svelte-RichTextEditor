@@ -95,6 +95,8 @@ const signingLog: SigningHarnessLog = { adopts: [], signs: [], dismissed: 0 };
 let signingHandle: ReturnType<typeof signingService> | null = null;
 /** What the consent step asked of its service (FRW-044). */
 const consentLog: ConsentHarnessLog = { loads: 0, accepts: 0, declines: [] };
+/** What finishing asked of its service (FRW-048). */
+const completionLog = { completes: 0 };
 const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
@@ -145,6 +147,8 @@ export interface MountOptions {
   signing?: SigningHarnessMode;
   /** The consent step before signing (FRW-044), with signing: see harness/frw-044-consent-port.ts; absent: no step. */
   consent?: ConsentHarnessMode;
+  /** Finishing the participant's part (FRW-048): the service answers completed, invalid (2 fields), or not active. */
+  completion?: 'ok' | 'invalid' | 'inactive';
   /** The field properties service of FRW-073: one field, `tenant.name`, that this person may change. */
   fieldProperties?: boolean;
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
@@ -708,6 +712,20 @@ function mountShell(options: MountOptions = {}): void {
       Object.assign(signingHandle, { consent: consentService(options.consent, consentLog) });
     }
     Object.assign(core, { signing: signingHandle });
+    if (options.completion) {
+      const answer = options.completion;
+      completionLog.completes = 0;
+      Object.assign(core, {
+        completion: {
+          complete: async () => {
+            completionLog.completes++;
+            if (answer === 'invalid') return { ok: false, reason: 'invalid', count: 2 };
+            if (answer === 'inactive') return { ok: false, reason: 'not_active' };
+            return { ok: true };
+          },
+        },
+      });
+    }
   }
   if (options.accessCode) {
     accessCodeLog.length = 0;
@@ -1141,6 +1159,7 @@ const harness = {
   /** What the adoption and signing step asked of its service (FRW-045), and a field the participant activates (FRW-046). */
   signingLog: () => JSON.parse(JSON.stringify(signingLog)) as SigningHarnessLog,
   consentLog: () => JSON.parse(JSON.stringify(consentLog)) as ConsentHarnessLog,
+  completionLog: () => ({ ...completionLog }),
   activateSignature: (field: {
     id: string;
     key: string;

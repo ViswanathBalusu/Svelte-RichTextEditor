@@ -1530,6 +1530,21 @@
       void openPane('fill');
       return;
     }
+    // The participant's part is completed through the service when the core has one (FRW-048): the
+    // answer is said in words, and a field that needs attention has focus.
+    const completion = core.completion;
+    if (completion) {
+      void completion.complete().then(
+        (outcome) => {
+          if (outcome.ok) announce('fill.completed');
+          else if (outcome.reason === 'invalid')
+            announce('fill.completeInvalid', { count: outcome.count });
+          else announce(outcome.reason === 'not_active' ? 'fill.completeNotActive' : 'fill.finishFailed');
+        },
+        () => announce('fill.finishFailed'),
+      );
+      return;
+    }
     const done = core.runNamed?.('finishFill') ?? false;
     announce(done ? 'fill.finished' : 'fill.finishFailed');
   }
