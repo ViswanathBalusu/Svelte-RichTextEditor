@@ -18,7 +18,7 @@
  * 5. The commit that records the transition is read back, when a room is open to write it, so that
  *    the webhooks of the transition carry its `seq` and the chain head (FRW-030 criterion 5).
  *
- * Order and recovery: the lock is stored before the state moves. A process that stops between the two
+ * Order and recovery: the lock is stored before the state moves. The revision of a transition that keeps the lock\n * carries the key of the transition (ChangeOptions.transition), so its repeat finds that revision. A process that stops between the two
  * leaves a locked document whose workflow is still in the old state; the caller repeats the
  * transition, step 1 finds the lock in force and makes no second change, and the control commit of
  * that revision is written once. Nothing is done twice. The two writes are not one database
@@ -171,7 +171,8 @@ export async function recordTransition(
   // was by design (`sent` to `in_progress`, a completion that moves the order on) raises the grants
   // revision with nothing changed, so that it has a place in the chain too. A repeat after a stop
   // finds the lock in force and raises nothing, for a transition that changes the lock; for one that
-  // does not, the repeat raises a second revision (ADR 0382, point 6).
+  // does not, the revision carries the key of the transition, so the repeat finds it and raises no
+  // second one (FRW-030 criterion 3; ADR 0382, point 6).
   const fromLock = lockFor(from.state as WorkflowStateName);
   const keepsLock =
     fromLock !== null &&
@@ -187,7 +188,13 @@ export async function recordTransition(
     if (before.workflowActive !== lock.workflowActive) change.workflowActive = lock.workflowActive;
     if (Object.keys(change).length === 0 && !(anchor !== false && keepsLock)) break;
     try {
-      const after = await deps.grants.change(ref, change, { actor, ifRevision: before.revision });
+      // The key names this transition, so a repeat after a stop finds the revision raised here and
+      // raises no second one (FRW-030 criterion 3).
+      const after = await deps.grants.change(ref, change, {
+        actor,
+        ifRevision: before.revision,
+        transition: `${from.rev}:${from.state}>${write.to}`,
+      });
       revision = after.revision;
       // A notifier that pushes the workflow (FRW-035) is told once, after the state moves, with the
       // record and these permissions together: the room then sends `perm.changed` and `wf.changed`

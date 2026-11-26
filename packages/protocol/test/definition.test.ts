@@ -242,6 +242,10 @@ const OTHER_ROUTES = [
   'POST /documents/{id}/holds',
   'DELETE /documents/{id}/holds/{holdId}',
   'GET /holds',
+  // BE-048 (06 §12; 13 §10): fonts a tenant adds; the file is readable by users of the tenant.
+  'POST /tenant-fonts',
+  'GET /tenant-fonts/{sha256}',
+  'DELETE /tenant-fonts/{sha256}',
   // HIS-038 (08 §13): the erasure of a person, service credential only.
   'POST /users/erase',
   // HIS-040 (08 §13): the tombstone of one commit payload, service credential only.
@@ -340,6 +344,8 @@ describe('the DEP definition', () => {
         'POST /documents/{id}/holds',
         'DELETE /documents/{id}/holds/{holdId}',
         'GET /holds',
+        'POST /tenant-fonts',
+        'DELETE /tenant-fonts/{sha256}',
         'POST /users/erase',
         'POST /documents/{id}/commits/{seq}/tombstone',
         'POST /templates',

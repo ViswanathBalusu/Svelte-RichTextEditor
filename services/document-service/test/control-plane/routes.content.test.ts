@@ -249,13 +249,14 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // A grant, a lease and an approval show in "who can edit".
         const ref = { tenant: h.tenant, doc };
         const bob = (await h.parts.users.resolve(h.tenant, 'bob')).surrogate;
+        const leaseEnds = h.now() + 60_000;
         await h.parts.grants.change(
           ref,
           {
             putGrants: [
               { region: LEGAL, principal: `user:${bob}`, role: 'editor', expiresAt: null },
             ],
-            putLeases: [{ region: OPEN, holder: bob, expiresAt: h.now() + 60_000 }],
+            putLeases: [{ region: OPEN, holder: bob, expiresAt: leaseEnds }],
           },
           { actor: 'system' },
         );
@@ -265,6 +266,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           roles: ['editor', 'owner'],
           principals: [],
           leasedTo: 'bob',
+          // PRM-048 criterion 3: the lease says when it expires.
+          leaseExpiresAt: new Date(leaseEnds).toISOString(),
         });
         await h.parts.grants.change(
           ref,

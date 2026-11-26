@@ -16,7 +16,7 @@ import { packParagraph, unpackLines, type BrokenLine, type ParagraphInput } from
 import { segmenterOver, type KernelSegmenter } from './segmentation.ts';
 
 /** The version of the kernel's call interface that this package expects of the crate. */
-export const KERNEL_ABI_VERSION = 7;
+export const KERNEL_ABI_VERSION = 8;
 
 /** The files that `build:wasm` writes to `dist/`, by role. */
 export const KERNEL_FILES = {
@@ -94,6 +94,7 @@ export interface KernelGlue {
   bidi_levels(text: Uint16Array, direction: number): Uint8Array;
   bidi_visual_runs(text: Uint16Array, direction: number, from: number, to: number): Uint32Array;
   line_break_opportunities(text: Uint16Array): Uint32Array;
+  line_break_opportunities_for(text: Uint16Array, language: string): Uint32Array;
   grapheme_cluster_boundaries(text: Uint16Array): Uint32Array;
   segment_unicode_versions(): Uint32Array;
 }

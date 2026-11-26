@@ -344,6 +344,8 @@ Callers are end users (every request is checked against that user's permissions)
 | `/keys/{kid}` | DELETE | Service credential only. Removes a key; tokens it signed are refused at once; audited. 05, section 3.2; 13, section 10 |
 | `/history-visibility` | GET, PUT | Service credential only. The tenant's setting of who sees full history (`editors`, `all` or `since_access`); `editors` when none is set. PUT takes `If-Match` and is audited with the actor. 08, section 9; 13, section 10 |
 | `/documents/{id}/history-visibility` | GET, PUT | Service credential only. The document's own setting, the effective setting and its source (the document's wins over the tenant's). PUT takes `If-Match` and is audited with the actor; it applies to the next request. 08, section 9; 13, section 10 |
+| `/tenant-fonts` | POST | Service credential only. Adds a font file for the tenant, as base64 with its type, a licence declaration and the server-use flag; the file is checked in the asset worker's sandbox and stored under the tenant by its hash; a file that fails is refused and nothing is published. 06, section 12; 13, section 10 |
+| `/tenant-fonts/{sha256}` | GET, DELETE | GET: the file of a font the tenant added, for any user or service of that tenant; another tenant gets `not_found`. DELETE: service credential only; removes the font and its file; audited |
 | `/quotas` | GET, PUT | Service credential only. The tenant's quota values, null when unset; PUT names the dimensions to set, takes `If-Match`, and is audited. 06, section 12; 13, section 10 |
 
 Resources for fields, workflow, templates and bulk sends are listed in 12, section 10. Administration resources are outlined in 13, section 10.

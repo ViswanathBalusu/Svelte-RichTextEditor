@@ -338,6 +338,8 @@
         "POST /documents/{id}/holds",
         "DELETE /documents/{id}/holds/{holdId}",
         "GET /holds",
+        "POST /tenant-fonts",
+        "DELETE /tenant-fonts/{sha256}",
         "POST /users/erase",
         "POST /documents/{id}/commits/{seq}/tombstone",
         "POST /templates",
@@ -433,6 +435,11 @@
     { "route": "DELETE /exports/{jid}", "class": "open", "note": "deleting an export: no row" },
     { "route": "GET /imports/{jid}", "class": "open", "note": "reading an import job: no row" },
     { "route": "GET /fonts", "class": "open", "note": "the font manifest: no row" },
+    {
+      "route": "GET /tenant-fonts/{sha256}",
+      "class": "open",
+      "note": "a font file the tenant added: the tenant is the scope, no document"
+    },
     { "route": "GET /documents/{id}/fields", "class": "fields", "note": "12 §10" },
     {
       "route": "GET /documents/{id}/field-values",

@@ -1054,6 +1054,48 @@
       "owner": "PRO"
     },
     {
+      "operationId": "addTenantFont",
+      "method": "POST",
+      "path": "/tenant-fonts",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "06 §12; 13 §10",
+      "owner": "BE"
+    },
+    {
+      "operationId": "getTenantFont",
+      "method": "GET",
+      "path": "/tenant-fonts/{sha256}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "06 §12; 13 §10",
+      "owner": "BE"
+    },
+    {
+      "operationId": "removeTenantFont",
+      "method": "DELETE",
+      "path": "/tenant-fonts/{sha256}",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "06 §12; 13 §10",
+      "owner": "BE"
+    },
+    {
       "operationId": "listWebhooks",
       "method": "GET",
       "path": "/webhooks",

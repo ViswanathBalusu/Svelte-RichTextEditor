@@ -88,6 +88,16 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('validation_failed', 'the locale is not a language tag', {
         violations: [{ path: '/options/locale', rule: 'a BCP 47 language tag' }],
       });
+    // A compile that reports line-level layout for page-break reconciliation costs more than a
+    // preview, so it is opt-in per tenant and off by default (BE-051 criterion 4; 06 section 10).
+    if (
+      given['layout'] === 'lines' &&
+      !(await d.tenantSettings?.pageBreakReconciliation(ctx.caller.tenant))
+    )
+      throw new ApiError(
+        'forbidden',
+        'page-break reconciliation compiles are not enabled for this tenant',
+      );
     // The tenant's data-loss prevention hook is asked before the export starts (UX-086). An allow
     // lets it go on. A deny refuses it with the hook's reason. An unanswered hook refuses it too:
     // fail closed, a proposed decision (docs/adr/0330-lane-U-UX-076-090.md, section 4). Each refusal

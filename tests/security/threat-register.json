@@ -149,18 +149,13 @@
       "provenBy": "SEC-006",
       "criteria": [3, 4],
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "data-url-media.test.ts",
         "packages/element/e2e/sec-006-data-url-paste.spec.ts",
+        "packages/element/e2e/sec-006-007-assets.spec.ts",
         "packages/engine/test/sec-006-no-live-svg.test.ts",
         "services/asset-worker/test/content.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 4,
-          "what": "an SVG with script and outside references uploaded and shown in the editor, with a canary and a network log"
-        }
       ],
       "boundaries": ["host-page-to-element", "service-to-workers"],
       "specRows": ["Hostile images"]
@@ -187,17 +182,12 @@
       "builtBy": ["FE-008", "FE-009"],
       "provenBy": "SEC-007",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "packages/element/e2e/sec-007-wire-storage.spec.ts",
         "packages/element/e2e/sec-007-wire-scan.spec.ts",
-        "packages/element/e2e/sec-007-token-scan.spec.ts"
-      ],
-      "open": [
-        {
-          "criterion": 2,
-          "what": "the network log of a session scanned for the token in every address, an asset read address included"
-        }
+        "packages/element/e2e/sec-007-token-scan.spec.ts",
+        "packages/element/e2e/sec-006-007-assets.spec.ts"
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Token theft"]
@@ -235,18 +225,12 @@
       "provenBy": "SEC-009",
       "criteria": [1, 2, 3],
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "packages/element/src/sec-009-host-fonts.universal.test.ts",
         "packages/element/e2e/sec-009-host-focus.spec.ts",
         "packages/element/test/sec-009-host-shortcuts.test.ts",
         "packages/element/test/sec-009-collision-error.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 2,
-          "what": "editor shortcuts pressed with the focus in the host page fire nothing in the editor"
-        }
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Global side effects on the host page"]
@@ -260,13 +244,10 @@
       "provenBy": "SEC-009",
       "criteria": [4],
       "phase": "1b",
-      "status": "partly-proven",
-      "tests": ["packages/element/e2e/sec-009-event-scan.spec.ts"],
-      "open": [
-        {
-          "criterion": 4,
-          "what": "the scanned session also comments and fills, not only types and exports"
-        }
+      "status": "proven",
+      "tests": [
+        "packages/element/e2e/sec-009-event-scan.spec.ts",
+        "packages/element/e2e/sec-009-event-scan-comments-fills.spec.ts"
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Leaking content to the host page by accident"]
@@ -345,14 +326,8 @@
       "builtBy": ["BE-025", "BE-034"],
       "provenBy": "SEC-015",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": ["replay-and-key-reuse.test.ts", "sec-015-inflight-copies.test.ts"],
-      "open": [
-        {
-          "criterion": 2,
-          "what": "a thousand rapid copies of a commit that is still being stored: one stored, every copy acknowledged alike"
-        }
-      ],
       "boundaries": ["element-to-service", "host-backend-to-service"],
       "specRows": [
         "Replay and resubmission",
@@ -515,18 +490,13 @@
       "builtBy": ["CDM-013", "SYN-001", "SYN-006"],
       "provenBy": "SEC-027",
       "phase": "1a",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "corrupting-commits.test.ts",
         "corrupting-limits.test.ts",
         "sec-027-attribute-grammar.test.ts",
-        "sec-027-invariant-matrix.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 2,
-          "what": "every invariant violated with each allowed step type that can violate it"
-        }
+        "sec-027-invariant-matrix.test.ts",
+        "sec-027-i4-asset-arm-wire.test.ts"
       ],
       "boundaries": ["element-to-service"],
       "specRows": ["Corrupting the document"]

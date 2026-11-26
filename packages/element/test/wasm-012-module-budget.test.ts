@@ -40,7 +40,7 @@ const budget = MODULE_BUDGETS.find((b) => b.name === 'layout kernel')!;
 
 describe('the layout kernel module budget (WASM-012 criterion 1)', () => {
   it('is S10 prototype size and the segmentation crates, rounded up, and applies to the kernel file only', () => {
-    expect(budget.gzipBytes).toBe(426_000);
+    expect(budget.gzipBytes).toBe(427_000);
     expect(budget.source).toContain('419,844');
     expect(budget.match.test(KERNEL)).toBe(true);
     expect(budget.match.test('viewer/pdfjs/wasm/qcms_bg.wasm')).toBe(false);
@@ -62,7 +62,7 @@ describe('the layout kernel module budget (WASM-012 criterion 1)', () => {
     expect(report.moduleBudgetViolations).toHaveLength(1);
     const [violation] = report.moduleBudgetViolations;
     expect(violation).toContain(KERNEL);
-    expect(violation).toContain('426000');
+    expect(violation).toContain('427000');
     expect(violation).toContain('S10');
   });
 

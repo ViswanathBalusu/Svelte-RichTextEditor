@@ -14,8 +14,8 @@
  * Lane w4 (2026-11-15) added rows 3 (a commit over the wire), 4 and 5 (threads), 8 (a named
  * version) and 11 (a lease on a region that inherits, so the document role decides).
  *
- * Row not generated here: 9. The service answers a region restore with 404 (HIS-018), so no
- * positive case exists. It stays open in the story's Notes.
+ * Lane w9 (2026-11-25) added row 9 (a region restore, a dry run), now that HIS-018 is built; every
+ * row of the matrix is generated here.
  *
  * Memory and PostgreSQL. Each case uses the shared harness; the document is created once per storage.
  */
@@ -198,6 +198,19 @@ const ROWS: readonly Case[] = [
       }
       return r;
     },
+  },
+  {
+    // Row 9 (HIS-018 is built): `edit` in the region, here one that inherits, so the document role
+    // decides. A dry run reaches the guard and the plan and stores nothing, so the cases do not
+    // change the document for the cases after them.
+    row: 'restore.region',
+    succeeds: true,
+    allowed: (w) => holds(w, 'edit'),
+    call: (doc, token, h) =>
+      h.call('POST', `/v1/documents/${doc}/restore`, {
+        token,
+        body: { toSeq: 0, region: OPEN_REGION, dryRun: true },
+      }),
   },
   {
     row: 'manage',

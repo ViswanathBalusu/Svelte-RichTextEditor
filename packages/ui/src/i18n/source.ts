@@ -38,6 +38,7 @@ export const LATE_KEY_HEADS: readonly string[] = [
   'lease',
   'outline',
   'pages',
+  'participants',
   'pdf',
   'permissions',
   'recovered',

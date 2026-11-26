@@ -178,6 +178,8 @@ export interface MountOptions {
   grants?: RegionGrant[] | null;
   /** The core has a leases service (PRM-043); `holder` is the user this session takes leases as. */
   leases?: { holder: string } | null;
+  /** The core can set a region's state (PRM-048 criterion 4). */
+  regionStates?: boolean;
   fill?: FillSummary | null;
   /** The core takes an access code (FRW-039): the outcomes it answers with, in order; the last repeats. */
   accessCode?: AccessCodeOutcome[];
@@ -620,6 +622,7 @@ function mountShell(options: MountOptions = {}): void {
     ...(options.projected ? { projected: true } : {}),
     ...(options.grants !== undefined ? { grants: options.grants } : {}),
     ...(options.leases ? { leases: options.leases } : {}),
+    ...(options.regionStates ? { regionStates: true } : {}),
     ...(options.fill !== undefined ? { fill: options.fill } : {}),
     ...(options.carets ? { carets: options.carets } : {}),
     ...(options.direction ? { direction: options.direction } : {}),
@@ -1146,6 +1149,8 @@ const harness = {
   grantSaves: () => need().core.grants?.saves ?? [],
   /** What the check-out control asked the leases service to do (PRM-043). */
   leaseCalls: () => [...(need().core.leases?.calls ?? [])],
+  /** The region states the pane set (PRM-048 criterion 4). */
+  stateCalls: () => [...need().core.stateCalls],
   /** Makes the next check-out fail as a service would refuse it (PRM-043). */
   refuseNextLease: (code: 'conflict' | 'forbidden') => void (need().core.leases!.refuseNext = code),
   /** The comment threads port (UX-028, UX-031): what was asked for, and what the core reports. */

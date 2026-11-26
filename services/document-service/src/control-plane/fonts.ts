@@ -79,6 +79,8 @@ interface SourceManifest {
   }>;
   math?: SourceFace & { name: string; licence: string };
   defaultFamily?: string;
+  /** Ordered lines `{ family, replacement }` (FE-062; owner decision 125). */
+  substitutes?: unknown;
   fallback?: Array<SourceFace & { name: string; licence: string }>;
 }
 
@@ -91,7 +93,11 @@ export interface ManifestFace {
   url: string;
   sha256: string;
   bytes: number;
-  format: 'truetype' | 'opentype';
+  format: 'truetype' | 'opentype' | 'woff2';
+  /** The licence declaration of a tenant's own face (BE-048); absent on the shared catalogue's faces. */
+  licence?: string;
+  /** Whether the declaration allows the font on a server, so in a PDF (decision 62); tenant faces only. */
+  serverUse?: boolean;
   /**
    * The code points the face covers, as sorted inclusive ranges, when the font set's manifest
    * records them. The editor's export preflight reads them, so that it checks characters against
@@ -107,6 +113,10 @@ export interface ManifestFamily {
   licence: string;
   lineHeight: number | null;
   faces: ManifestFace[];
+  /** True for a family the tenant added (BE-048); the shared catalogue's families omit it. */
+  tenant?: true;
+  /** For a tenant family: every face may be used on a server (decision 62). */
+  serverUse?: boolean;
 }
 
 /** The body of `GET /fonts` (D143). */
@@ -114,6 +124,17 @@ export interface FontManifestBody {
   version: string;
   defaultFamily: string | null;
   families: ManifestFamily[];
+  /**
+   * Ordered lines that name a text family of this manifest to use for a family it lacks, as the
+   * converter reads them from `fonts.json` (Calibri to Carlito; FE-062, owner decision 125). The first
+   * line that names a family decides. Absent when the font set has no line.
+   */
+  substitutes?: SubstituteLine[];
+}
+
+export interface SubstituteLine {
+  family: string;
+  replacement: string;
 }
 
 interface FontFile {
@@ -150,18 +171,56 @@ export function emptyCatalogue(): FontCatalogue {
   };
 }
 
-function versionOf(defaultFamily: string | null, families: readonly ManifestFamily[]): string {
+export function versionOf(
+  defaultFamily: string | null,
+  families: readonly ManifestFamily[],
+  substitutes: readonly SubstituteLine[] = [],
+): string {
   // URLs are left out: the version names the set of fonts, wherever it is served from.
   const set = families.map((f) => ({
     family: f.family,
     role: f.role,
     licence: f.licence,
     lineHeight: f.lineHeight,
-    faces: f.faces.map((x) => ({ style: x.style, sha256: x.sha256 })),
+    faces: f.faces.map((x) => ({
+      style: x.style,
+      sha256: x.sha256,
+      ...(x.licence !== undefined ? { licence: x.licence } : {}),
+      ...(x.serverUse !== undefined ? { serverUse: x.serverUse } : {}),
+    })),
   }));
   return createHash('sha256')
-    .update(canonicalize({ v: 1, defaultFamily, set }), 'utf8')
+    .update(
+      canonicalize(
+        substitutes.length > 0
+          ? { v: 1, defaultFamily, set, substitutes }
+          : { v: 1, defaultFamily, set },
+      ),
+      'utf8',
+    )
     .digest('hex');
+}
+
+/**
+ * The substitute lines of `fonts.json` that the manifest can serve: both names are text, and the
+ * replacement is a text family that was published. Other lines are left out, in order kept.
+ */
+function substituteLines(source: unknown, families: readonly ManifestFamily[]): SubstituteLine[] {
+  if (!Array.isArray(source)) return [];
+  const published = new Set(families.filter((f) => f.role === 'text').map((f) => f.family));
+  const out: SubstituteLine[] = [];
+  for (const line of source) {
+    if (typeof line !== 'object' || line === null) continue;
+    const { family, replacement } = line as Record<string, unknown>;
+    if (
+      typeof family === 'string' &&
+      family.trim() !== '' &&
+      typeof replacement === 'string' &&
+      published.has(replacement)
+    )
+      out.push({ family, replacement });
+  }
+  return out;
 }
 
 /**
@@ -263,12 +322,21 @@ export async function loadFontCatalogue(
     source.defaultFamily && families.some((f) => f.family === source.defaultFamily)
       ? source.defaultFamily
       : null;
+  const substitutes = substituteLines(source.substitutes, families);
   return {
-    manifest: { version: versionOf(defaultFamily, families), defaultFamily, families },
+    manifest: {
+      version: versionOf(defaultFamily, families, substitutes),
+      defaultFamily,
+      families,
+      ...(substitutes.length > 0 ? { substitutes } : {}),
+    },
     files,
     excluded,
   };
 }
+
+/** The version of a set of families, as `loadFontCatalogue` computes it (BE-047 criterion 3). */
+export const fontsVersion = versionOf;
 
 /** The ETag of a manifest: its version (BE-047 criterion 3). */
 export const fontsEtag = (m: FontManifestBody) => `"f${m.version.slice(0, 32)}"`;

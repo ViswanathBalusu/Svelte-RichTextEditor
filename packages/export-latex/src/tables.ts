@@ -16,7 +16,6 @@ import {
   num,
   register,
   str,
-  warnOnce,
   within,
   line,
   type Ctx,
@@ -126,6 +125,13 @@ function layoutRows(rows: readonly J[], columns: number): Placed[][] {
   });
 }
 
+/**
+ * The fill of a banded row, a light grey (owner decision 50: one fixed grey in the editor, the PDF
+ * and the DOCX). The grey itself, F2F2F2, is the default of Word's banded table styles and is
+ * proposed here until the owner names another.
+ */
+export const BAND_FILL = 'F2F2F2';
+
 function tableStyleValue(ctx: Ctx, style: string | null, name: string): unknown {
   return style ? styleProperty(ctx.table, style, name) : null;
 }
@@ -157,13 +163,10 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
     (tableStyleValue(ctx, style, 'headerRowShading') as { fill?: string } | null)?.fill,
     id,
   );
-  if (tableStyleValue(ctx, style, 'bandedRows') === true)
-    warnOnce(
-      ctx,
-      'banded_rows',
-      'banded rows are not shaded: the table style gives no band colour',
-      id,
-    );
+  // Banded rows (owner decision 50, 2026-11-15): a fixed light grey on every other body row,
+  // starting with the first row under the header rows (Word's first band). A header row is not
+  // banded, and a cell's own `shading` replaces the band.
+  const banded = tableStyleValue(ctx, style, 'bandedRows') === true;
   const boxed = flow.place !== 'body' || ctx.state.columns > 1;
   if (boxed)
     diag(
@@ -352,8 +355,9 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
         p.origin !== null &&
         (attr(p.origin, 'shading') as { fill?: string } | null | undefined)?.fill !== undefined,
     );
-    if (r < headerRows && headerShade && !coveredShaded)
-      line(ctx, tex`\rowcolor[HTML]{${headerShade}}`);
+    const rowShade =
+      r < headerRows ? headerShade : banded && (r - headerRows) % 2 === 0 ? t(BAND_FILL) : null;
+    if (rowShade && !coveredShaded) line(ctx, tex`\rowcolor[HTML]{${rowShade}}`);
     cells.forEach((p, i) => {
       if (i > 0) line(ctx, t('&%'));
       // The cell's left edge is written only in the first column; every other edge belongs to the
@@ -384,7 +388,7 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
           (attr(p.cell, 'shading') as { fill?: string } | null | undefined)?.fill,
           idOf(p.cell),
         );
-        const shade = ownShade ?? (coveredShaded && r < headerRows ? headerShade : null);
+        const shade = ownShade ?? (coveredShaded ? rowShade : null);
         if (shade) line(ctx, tex`\cellcolor[HTML]{${shade}}%`);
         const cm = (attr(p.cell, 'margins') ?? margins) as Record<string, number>;
         const top = num(cm['top']) ?? 0;

@@ -525,6 +525,15 @@ export class EditorCore extends DocumentCore {
           EQUATION_NODES.has(node.type.name) && this.requestEquationEdit(nodePos),
         // Copy and cut are the core's (FE-050, FE-055): the browser's own copy would write ProseMirror's format.
         handleDOMEvents: {
+          // The browser keeps one undo history for the page. With the focus in a field of the host,
+          // its undo can reach the typing in this surface; the core would read the changed DOM as an
+          // edit (SEC-009 criterion 2). The core has its own undo, so the browser's is refused here
+          // whenever the surface has no focus.
+          beforeinput: (view, event) => {
+            if (!event.inputType.startsWith('history') || view.hasFocus()) return false;
+            event.preventDefault();
+            return true;
+          },
           // A link to a place in the document is followed with Ctrl or Command and a click while the
           // text is editable (a plain click places the caret), and with a plain click where it is not
           // (FE-133 criterion 3). The browser's own jump to a fragment is stopped either way: the

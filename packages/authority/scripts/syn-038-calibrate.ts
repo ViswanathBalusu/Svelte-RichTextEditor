@@ -4,7 +4,7 @@
 //
 //   node --expose-gc packages/authority/scripts/syn-038-calibrate.ts [section] [seed]
 //
-// `section` is one of `hash`, `rebase`, `cost`, `catchup`, `typing` or `all` (default). The output
+// `section` is one of `hash`, `rebase`, `stale`, `cost`, `catchup`, `typing` or `all` (default). The output
 // is Markdown tables. What is measured and what is simulated is said above each table:
 //
 // - hash, rebase, cost, catchup: wall-clock times of the authority's own functions on the shared
@@ -231,6 +231,80 @@ async function rebaseSection(): Promise<void> {
   console.log('|---|---|---|');
   for (const e of [1, 5, 20, 50])
     console.log(`| ${e} | ${f(5000 / (e * 2), 0)} s | ${f(5000 / (e * 5), 0)} s |`);
+  console.log('');
+}
+
+// ---------------------------------------------------------------- criterion 2: stale_base rate (simulated)
+/** A normal variate (Box-Muller). */
+function gauss(): number {
+  return Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
+}
+function lognormal(median: number, sigma: number): number {
+  return median * Math.exp(sigma * gauss());
+}
+/** A Poisson variate: exact for small means, a normal approximation above 50. */
+function poisson(mean: number): number {
+  if (mean > 50) return Math.max(0, Math.round(mean + Math.sqrt(mean) * gauss()));
+  const limit = Math.exp(-mean);
+  let k = 0;
+  let p = 1;
+  do {
+    k++;
+    p *= rand();
+  } while (p > limit);
+  return k - 1;
+}
+
+/**
+ * The rate of `stale_base` for simulated clients. Nothing records how far real clients fall behind,
+ * so the lag of each client class is a stated model (see the output), not a measurement. The
+ * distance of a commit is the number of steps by other editors since its base; the room refuses it
+ * with `stale_base` when that exceeds `maxRebaseSteps` (room.ts, the check on steps since base).
+ */
+function staleSection(): void {
+  console.log('## Rate of stale_base for simulated clients (SYN-038 criterion 2; 04 §5, §12)\n');
+  const classes: { name: string; median: number; sigma: number }[] = [
+    { name: 'fast (lag between base and submission)', median: 0.3, sigma: 0.5 },
+    { name: 'slow (lag between base and submission)', median: 3, sigma: 0.8 },
+    { name: 'returning after a disconnection (time away)', median: 60, sigma: 1.5 },
+  ];
+  const EDITORS = [5, 50];
+  const LIMITS = [1000, 2500, 5000, 10000, 20000];
+  const STEPS_PER_S = 2;
+  const ACTIVE = 0.3;
+  const N = 200_000;
+  console.log(
+    `Model: each other editor types ${STEPS_PER_S} steps a second while active, and ${ACTIVE * 100} % of them are active at any moment, so the room accepts \`editors x ${ACTIVE} x ${STEPS_PER_S}\` steps a second from others. ` +
+      "A client class has a lag drawn from a lognormal distribution with the median and sigma shown; the distance of its commit is a Poisson count of the others' steps in that lag. " +
+      `${N.toLocaleString('en-GB')} commits per cell, seed ${process.argv[3] ?? 1}. The medians and sigmas are assumptions, chosen to show a fast link, a slow link and a return after a drop; they are not recordings. ` +
+      'Not modelled: `stale_base` for a base before the oldest commit the room holds, or before a snapshot commit.\n',
+  );
+  console.log(
+    `| Client class | Median lag | Sigma | Other editors | ${LIMITS.map((l) => `stale at ${l.toLocaleString('en-GB')}`).join(' | ')} |`,
+  );
+  console.log(`|---|---|---|---|${LIMITS.map(() => '---').join('|')}|`);
+  for (const c of classes) {
+    for (const e of EDITORS) {
+      const rate = e * ACTIVE * STEPS_PER_S;
+      const hits = LIMITS.map(() => 0);
+      for (let i = 0; i < N; i++) {
+        const d = poisson(rate * lognormal(c.median, c.sigma));
+        LIMITS.forEach((l, j) => {
+          if (d > l) hits[j]!++;
+        });
+      }
+      console.log(
+        `| ${c.name} | ${c.median} s | ${c.sigma} | ${e} | ${hits.map((h) => `${f((100 * h) / N, 3)} %`).join(' | ')} |`,
+      );
+    }
+  }
+  console.log(
+    '\nMemory of the position maps kept for a room at each limit, from the measured 120 bytes per step map (table above):\n',
+  );
+  console.log('| maxRebaseSteps | Maps kept per room (KiB) |');
+  console.log('|---|---|');
+  for (const l of LIMITS)
+    console.log(`| ${l.toLocaleString('en-GB')} | ${f((l * 120) / 1024, 0)} |`);
   console.log('');
 }
 
@@ -522,6 +596,7 @@ async function typingSection(): Promise<void> {
 header();
 if (SECTION === 'all' || SECTION === 'hash') await hashSection();
 if (SECTION === 'all' || SECTION === 'rebase') await rebaseSection();
+if (SECTION === 'all' || SECTION === 'rebase' || SECTION === 'stale') staleSection();
 if (SECTION === 'all' || SECTION === 'cost') await costSection();
 if (SECTION === 'all' || SECTION === 'catchup') await catchupSection();
 if (SECTION === 'all' || SECTION === 'typing') await typingSection();

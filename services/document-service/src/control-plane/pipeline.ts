@@ -141,7 +141,7 @@ export interface PipelineOptions {
   onSpan?: (span: Span) => void;
 }
 
-const CONTENT_ROUTES = new Set(['createDocument', 'replaceContent']);
+const CONTENT_ROUTES = new Set(['createDocument', 'replaceContent', 'addTenantFont']);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

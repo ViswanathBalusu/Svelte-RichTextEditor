@@ -324,7 +324,7 @@ Out of scope: native advanced or qualified signatures, identity verification, no
 ## 15. Open questions for the project owner
 
 1. Does the host alone deliver invitations and authenticate participants, or must the hosted service also send messages and host a signing page? Decided on 2026-11-06: the host alone (SPK-010).
-2. Which jurisdictions come first, and is a simple signature with a seal enough at launch? Who is the sealing party: the operator or each tenant?
+2. Which jurisdictions come first, and is a simple signature with a seal enough at launch? Who is the sealing party: the operator or each tenant? Decided on 2026-11-15 (SPK-011): the European Union and the United States from the start; the operator seals by default, and a tenant's own key and certificate are used where the tenant supplies them. The launch level stays a simple signature with a seal.
 3. Is form mode without a workflow acceptable as the first slice? Decided yes on 2026-11-15 (FRW-083); see section 13.
 4. Must some values be hidden from other participants? Decided yes on 2026-11-06 (SPK-005); ADR 0019 proposes the design.
 5. Are repeating line items with totals needed early?
