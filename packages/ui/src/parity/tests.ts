@@ -541,6 +541,7 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'apps/reference-host/test/sample-extension.test.ts', kind: 'unit' },
       { path: 'packages/ui/e2e/extension-contributions.spec.ts', kind: 'playwright' },
       { path: 'packages/ui/e2e/ux-055-import-filters.spec.ts', kind: 'playwright' },
+    ],
   ],
 ];
 
