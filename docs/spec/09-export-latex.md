@@ -81,11 +81,21 @@ Constructs that map badly and how they are handled:
 
 Every job returns a list of warnings for constructs that were approximated.
 
+### 3.3 Citations and the bibliography
+
+Owner decision 16 (2026-11-15) fixes the route: the sources of the document become `references.bib`, a file of the bundle, and every citation becomes a `biblatex` command; biber runs in the compile (8, 9.3).
+
+- **The file.** One entry per source, in document order, written only through `bibField` and `bibKey` (4). Names use biber's key-value form (`family={..}, given={..}`), a literal name is one protected word.
+- **Citations.** `normal` is `\parencite`, `narrative` is `\textcite`, `suppressAuthor` is `\parencite*`; several sources use `\parencites` and `\textcites`. The prefix is the pre-note; the locator, its label and the suffix are the post-note. The citation of a source the document does not define is a diagnostic `citation_source_missing` that names the block, and prints `(?)`.
+- **The bibliography.** A `bibliography` node is `\printbibliography` at its place, in an environment that sets the block of the node and its paragraph format, so the layout data and the house paragraph style apply. `include: all` adds `\nocite{*}`.
+- **Styles.** `authorYear` (`authoryear`), `numeric`, `alphabetic`, `authorTitle` (`authortitle`) and `numericComp` (`numeric-comp`), chosen by the job's `citationStyle` option or by `settings.citationStyle` (owner decision 126; ADR 0433).
+- **Option `bibliography: text`.** The converter writes the citation texts and the bibliography itself, with no `.bib` file and no biber. It is kept for a job that cannot run biber.
+
 ## 4. Typed emitters
 
 User-controlled strings reach TeX in many contexts, not only as body text: key-value options (alternative text, PDF metadata), URLs, numbering templates and bullet characters, labels, colours, lengths and language names. Escaping for body text is wrong in most of them.
 
-The converter MUST write output only through these emitters, and nothing else may concatenate a user-controlled value into TeX:
+The converter MUST write output only through these emitters (the last two write `references.bib`, 3.3), and nothing else may concatenate a user-controlled value into TeX:
 
 | Emitter | Use | Rule |
 |---|---|---|
@@ -97,6 +107,8 @@ The converter MUST write output only through these emitters, and nothing else ma
 | `color` | Colours | Six hexadecimal digits |
 | `enumLookup` | Languages, alignment, formats, bullet characters | The value selects an entry from a fixed table; the value itself is never written |
 | `generatedId` | Labels, macro names, file names | Derived from a counter or a hash, never from user input |
+| `bibField` | A field value of `references.bib` (3.3) | The `text` escapes, except that a brace is written as `\textbraceleft{}` or `\textbraceright{}`, because BibTeX counts braces whatever precedes them; every run of white space is one space. A DOI or URL is percent-encoded outside RFC 3986 instead (the verbatim form) |
+| `bibKey` | An entry key of `references.bib` and the keys of the citation commands | The source's identifier when it is a plain word (letters, digits, dots, hyphens, underscores; at most 64), otherwise `src<n>` from a counter |
 
 Invariant I11 of the CDM is the other half: every attribute has a grammar, checked when it is set, so hostile values are rejected long before export.
 
@@ -173,6 +185,7 @@ What the editor does when its own layout disagrees with a reported break is defi
 - Published timings for TeX Live 2025 are about 1.4 seconds for a one-page document and about 23 seconds for 10,000 plain paragraphs. Those are lower bounds: they exclude this class's fonts, `hyperref`, `babel`, tables, tagging (reported as roughly three times slower) and second and third passes. Spike S4 measures the real class with tagging on.
 - Speed-ups: a pre-built font name cache in the image; engines that are started ahead of time inside fresh sandboxes and wait past the preamble; a preview profile with draft tagging and one pass; PDFs cached by bundle hash, with previews and final exports cached separately.
 - **No `.aux` reuse between jobs.** An `.aux` file is executed as TeX, so reusing one would let a single sandbox escape persist into later jobs and other users' exports, and it would make output depend on history. Final exports run from a clean state until page references stop changing, and the result records that it converged. A one-pass preview may show stale page numbers in the table of contents and says so.
+- **Citations add biber.** A bundle with `references.bib` leaves a `main.bcf` after the first pass. The compile then runs biber (section 9.3) once, and again whenever `main.bcf` changes, and compares `main.bbl` with the other auxiliary files when it checks that the references have converged. A document without citations runs no biber and takes the passes it took before. Measured: ADR 0433.
 - Capacity planning starts from one core and up to 1.5 GiB of memory per running job.
 
 ## 9. Compile service
@@ -209,6 +222,7 @@ The worker runs with file and line error messages enabled. The service parses th
 6. Workers hold no credentials other than a write-only, per-job upload location. Signing keys are never on a worker (12).
 7. **Worker outputs are hostile.** The PDF viewer runs in a sandboxed cross-origin frame with script evaluation disabled, because a PDF parser bug would otherwise run in the host page's origin. `layout.json` is validated against its schema. Logs go through the bounded parser. The downloadable `tex` bundle carries a notice that it should be compiled with the same restrictions.
 8. Before a final PDF is sealed, the bundle is compiled on two independent workers and the results are compared.
+9. **Biber** runs in the same container under the same rules: no network, a read-only root, the same user and limits, and the same timeout as a pass. It reads only `main.bcf` and `references.bib` of the job. It is a PAR executable that unpacks itself on every run (121 MiB), so the container has one extra tmpfs for that, `/opt/docedit/par`, mounted with execution allowed, 192 MiB, `nosuid` and `nodev`; the working directory stays `noexec`, and nothing but biber writes to the unpacked tree. Its temporary files go to the working directory. Its log (`main.blg`) is a worker output and is hostile like the others (item 7).
 
 ### 9.4 Reproducibility
 
@@ -262,5 +276,5 @@ With the LaTeX project's tagging support in TeX Live 2026, the class produces ta
 - How precise offsets in `layout.json` can be (spike S4).
 - L2 is built (owner decision 147, 2026-11-15; ADR 0413). What stays open is how closely the editor's first-fit lines match the PDF on forced paragraphs, which the build stories measure.
 - Customer templates (assumption A3). A possible middle path is a small set of reviewed house classes with parameters; templates with role placeholders (12, section 9) cover much of the same demand.
-- Citations and a bibliography are in version 1 since the owner's decision of 2026-11-06 (03, section 13). How `biblatex` and biber fit the typed emitters (section 4), the passes (section 8) and the sandbox rules (section 9.3) is not yet specified.
+- Citations and a bibliography use `biblatex` and biber (owner decision 16, 2026-11-15; ADR 0433): the `.bib` file goes through the emitters of section 4, biber runs in the sandbox of section 9.3, and its passes are in section 8. Open: the mapping of CSL item types to biblatex entry types is a proposal, and the styles beyond `authorYear` and `numeric` need the model's `settings.citationStyle` to name them (ADR 0433).
 - Cost per preview compile at scale, and whether a browser-side engine could take over previews later. WebAssembly builds of LuaTeX exist but are large and carry licence obligations.

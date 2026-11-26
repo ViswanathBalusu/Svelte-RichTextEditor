@@ -6,7 +6,7 @@
  * the bundle without an emitter is a type error (EXP-045). `emit.guard.test.ts` checks that no
  * other module creates `Tex` by a cast.
  *
- * The eight emitters of 09 §4 and their rules:
+ * The eight emitters of 09 §4, the two of the `.bib` file (EXP-121, SR-M20) and their rules:
  * - `text`: body text. Escapes `\ { } $ & # _ % ^ ~`, guards `[` and `]`, maps no-break space and
  *   soft hyphen, removes control and bidirectional control characters, normalises to NFC, and
  *   writes the spaces TeX would lose as explicit spaces (09 §3.2, Spaces; `spaceRuns` of the
@@ -21,6 +21,13 @@
  * - `enumLookup`: a value selects an entry of a fixed table; the value itself is never written.
  * - `generatedId`: numbers and names derived from counters or hashes, never from input; `int`,
  *   `letters` and `assetFile` are its forms.
+ *
+ * - `bibField`: a field value of the generated `.bib` file, which biber reads and biblatex typesets,
+ *   so it is TeX text in the BibTeX syntax: the `text` escapes, except that a brace is written as
+ *   `\textbraceleft{}` or `\textbraceright{}`, because BibTeX counts braces whatever precedes them,
+ *   and every run of white space (a line end included) is one space.
+ * - `bibKey`: an entry key, from the source's identifier when that is a plain word of at most 64
+ *   letters, digits, dots, hyphens and underscores, otherwise `src<n>` from a counter.
  *
  * Two more constructors carry checked values: `fontFile` (a content-hash file name from the font
  * manifest) and `gatedMath` (math that passed the gate, 09 §6.3).
@@ -43,6 +50,8 @@ export const EMITTERS = [
   'color',
   'enumLookup',
   'generatedId',
+  'bibField',
+  'bibKey',
 ] as const;
 export type EmitterName = (typeof EMITTERS)[number];
 
@@ -252,6 +261,54 @@ export function pdfHexString(value: string): Tex {
   for (let i = 0; i < s.length; i++)
     out += s.charCodeAt(i).toString(16).toUpperCase().padStart(4, '0');
   return asTex(`<${out}>`);
+}
+
+// ---------------------------------------------------------------------------------------------
+// bibField, bibKey (EXP-121)
+
+const BIB_ESCAPES: Readonly<Record<string, string>> = {
+  ...TEXT_ESCAPES,
+  '{': '\\textbraceleft{}',
+  '}': '\\textbraceright{}',
+  // Brackets are safe in a field value; the guard of `text` is for optional arguments.
+  '[': '[',
+  ']': ']',
+};
+
+/** A field value of the `.bib` file (see the module comment). The braces around it are the caller's. */
+export function bibField(value: string): Tex {
+  let out = '';
+  for (const ch of clean(value)
+    .replace(/[ \t\r\n\f\v]+/g, ' ')
+    .trim())
+    out += BIB_ESCAPES[ch] ?? ch;
+  return asTex(out);
+}
+
+/**
+ * A verbatim field of the `.bib` file (a DOI, a URL), part of the `bibField` emitter: a character
+ * outside RFC 3986 is percent-encoded, so no brace, backslash or quotation mark can end the value
+ * or start a TeX command. The braces around it are the caller's.
+ */
+export function bibVerbatim(value: string): Tex {
+  let out = '';
+  for (const ch of clean(value).trim()) {
+    if (URI_ALLOWED.test(ch)) out += ch;
+    else out += hexBytes(utf8(ch)).replace(/(..)/g, '%$1');
+  }
+  return asTex(out);
+}
+
+/**
+ * The entry key of a source. `used` holds the keys already given, so two sources never share one;
+ * `counter` makes the key of a source whose identifier is not a plain word.
+ */
+export function bibKey(id: string, counter: number, used: ReadonlySet<string>): Tex {
+  if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id) && !used.has(id)) return asTex(id);
+  if (!Number.isSafeInteger(counter) || counter < 0) throw new RangeError('not a counter');
+  let n = counter;
+  while (used.has(`src${n}`)) n++;
+  return asTex(`src${n}`);
 }
 
 // ---------------------------------------------------------------------------------------------

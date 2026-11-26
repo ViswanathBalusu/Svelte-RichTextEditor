@@ -5,7 +5,7 @@
  * (sandbox.escape.test.ts), which needs Podman and the image.
  */
 import { describe, expect, it } from 'vitest';
-import { LIMITS, sandboxArgs } from './sandbox.ts';
+import { BIBER_UNPACK_MIB, LIMITS, sandboxArgs } from './sandbox.ts';
 
 const MiB = 1024 * 1024;
 const args = sandboxArgs('docedit-job-args-test');
@@ -82,6 +82,20 @@ describe('the isolation of every job (EXP-070 criterion 1; 09 §9.3)', () => {
     expect(work).toHaveLength(1);
     const opts = work[0]!.slice('--tmpfs=/work:'.length).split(',');
     for (const opt of ['rw', 'noexec', 'nosuid', 'nodev']) expect(opts).toContain(opt);
+  });
+
+  it('has one more tmpfs that allows exec, for biber to unpack itself (EXP-121; 09 §9.3 item 9)', () => {
+    const tmpfs = iso.filter((a) => a.startsWith('--tmpfs='));
+    expect(tmpfs.map((a) => a.slice('--tmpfs='.length).split(':')[0]).sort()).toEqual([
+      '/opt/docedit/par',
+      '/work',
+    ]);
+    const par = iso.find((a) => a.startsWith('--tmpfs=/opt/docedit/par:'))!;
+    const opts = par.slice('--tmpfs=/opt/docedit/par:'.length).split(',');
+    for (const opt of ['rw', 'exec', 'nosuid', 'nodev']) expect(opts).toContain(opt);
+    expect(opts).toContain(`size=${BIBER_UNPACK_MIB}m`);
+    // The working directory, where the job's own files are, still allows no execution.
+    expect(iso.find((a) => a.startsWith('--tmpfs=/work:'))).toContain('noexec');
   });
 
   it('drops every capability and adds none, and forbids new privileges', () => {
