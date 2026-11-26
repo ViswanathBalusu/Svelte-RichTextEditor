@@ -1,12 +1,12 @@
 /**
- * EXP-079 (lane V-EXP-065-080), Podman: the same bundle compiled twice at once, each compile in its
+ * EXP-079 (lane V-EXP-065-080), Podman: the same bundle compiled twice, one after the other, each in its
  * own sandbox of the worker image, gives an equal pair that may be sealed (criteria 1, 3, 5); a pair
  * whose second compile uses another SOURCE_DATE_EPOCH differs and is refused (criterion 4). Skips
  * when the sandbox is not ready (see sandbox-ready.ts; DOCEDIT_REQUIRE_SANDBOX=1 makes it fail).
  * Run from services/export-worker with `pnpm exec vitest run src/exp-079-pair.podman.test.ts`.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { acceptForSealing, compileSealingPair, comparePair } from './exp-079-pair.ts';
+import { acceptForSealing, compileBoth, compileSealingPair, comparePair } from './exp-079-pair.ts';
 import { compileInSandbox } from './sandbox.ts';
 import { sandboxReady } from './sandbox-ready.ts';
 
@@ -60,5 +60,41 @@ describe.skipIf(!ready.ok)(`EXP-079 sealing pair (${ready.reason})`, () => {
     expect(out.sealable).toBeNull();
     expect(out.diagnostic).toMatch(/differ/);
     expect(() => acceptForSealing(out.sealable ?? {})).toThrow(/equal pair/);
+  });
+
+  it('holds no credential in either sandbox of the pair (EXP-079 criterion 6; ADR 0045)', async () => {
+    const lua = [
+      'local names = {}',
+      'local f = io.open("/proc/self/environ", "rb")',
+      'local data = f and f:read("*a") or ""',
+      'if f then f:close() end',
+      'for entry in data:gmatch("([^%z]+)") do names[#names + 1] = entry:match("^([^=]*)") end',
+      'texio.write_nl("S4RESULT env=" .. table.concat(names, ","))',
+      'local n = 0',
+      'local ok, iter, st = pcall(lfs.dir, "/run/secrets")',
+      'if ok and iter then for e in iter, st do if e ~= "." and e ~= ".." then n = n + 1 end end end',
+      'texio.write_nl("S4RESULT secrets=" .. n)',
+    ].join('\n');
+    const files = {
+      'main.tex':
+        '\\documentclass{article}\n\\directlua{dofile("probe.lua")}\n\\begin{document}\nx\n\\end{document}\n',
+      'probe.lua': lua,
+    };
+    const [a, b] = await compileBoth(files, { minPasses: 1, maxPasses: 1 });
+    for (const r of [a, b]) {
+      expect(r.ok, r.log.slice(0, 400)).toBe(true);
+      const env = /S4RESULT env=([^\r\n]*)/.exec(r.log)?.[1]?.split(',') ?? [];
+      // The control: the probe did read the environment of the job.
+      expect(env.length).toBeGreaterThan(0);
+      expect(
+        env.filter((n) =>
+          /(SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|SIGNING|PRIVATE|API_KEY|ACCESS_KEY|AWS_|DATABASE|DSN)/i.test(
+            n,
+          ),
+        ),
+      ).toEqual([]);
+      expect(/S4RESULT secrets=(\d+)/.exec(r.log)?.[1]).toBe('0');
+    }
+    expect(a.name).not.toBe(b.name);
   });
 });
