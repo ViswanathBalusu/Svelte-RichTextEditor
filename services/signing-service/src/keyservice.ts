@@ -8,9 +8,27 @@
  */
 export type DigestAlgorithm = 'SHA-256';
 
+/**
+ * What a signature provider says about its own signature (FRW-059). The platform does not check
+ * these: they are recorded as asserted by the provider and worded as such (FRW-058).
+ */
+export interface ProviderAssertion {
+  /** The provider's name. */
+  readonly provider: string;
+  /** The signature level the provider reports, in its own words. */
+  readonly level: string;
+  /** The signer identification the provider reports (for CSC, the certificate's subject). */
+  readonly signer: string;
+}
+
 export interface KeyService {
   /** A name for logs and the audit record. */
   readonly keyLabel: string;
+  /**
+   * Present on a key that a signature provider holds (`CscKeyService`): what the provider asserts.
+   * Absent on the operator's and the tenants' own keys, whose seal is the native one.
+   */
+  assertion?(): Promise<ProviderAssertion>;
   /** The DER SubjectPublicKeyInfo of the signing key. */
   publicKey(): Promise<Uint8Array>;
   /**

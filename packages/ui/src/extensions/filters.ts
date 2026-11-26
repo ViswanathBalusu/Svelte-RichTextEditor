@@ -90,6 +90,24 @@ const ID = /^[a-z][A-Za-z0-9-]*(\.[a-z][A-Za-z0-9-]*)+$/;
 
 export class FilterRegistry {
   readonly #filters = new Map<string, Filter>();
+  readonly #listeners = new Set<() => void>();
+  #version = 0;
+
+  /** Changes whenever a filter is added or removed, so the shell can offer or withdraw its commands. */
+  readonly view = {
+    get: (): number => this.#version,
+    subscribe: (listener: () => void): (() => void) => {
+      this.#listeners.add(listener);
+      return () => {
+        this.#listeners.delete(listener);
+      };
+    },
+  };
+
+  #changed(): void {
+    this.#version++;
+    for (const listener of [...this.#listeners]) listener();
+  }
 
   /** Adds a filter; returns the function that removes it. Throws naming the filter when invalid. */
   add(filter: Filter): () => void {
@@ -114,11 +132,31 @@ export class FilterRegistry {
     if (typeof filter.run !== 'function')
       throw new FilterRegistrationError(id, 'it has no run function');
     this.#filters.set(id, filter);
+    this.#changed();
     return () => this.remove(id);
   }
 
   remove(id: string): boolean {
-    return this.#filters.delete(id);
+    const removed = this.#filters.delete(id);
+    if (removed) this.#changed();
+    return removed;
+  }
+
+  /** The import filter that reads a file name's extension, or null. */
+  importFor(fileName: string): ImportFilter | null {
+    const dot = fileName.lastIndexOf('.');
+    const extension = dot < 0 ? '' : fileName.slice(dot + 1).toLowerCase();
+    for (const f of this.#filters.values())
+      if (f.kind === 'import' && f.extensions.some((e) => e.toLowerCase() === extension)) return f;
+    return null;
+  }
+
+  /** The file name extensions the import filters read, for the file chooser, with their dots. */
+  importExtensions(): string[] {
+    const out = new Set<string>();
+    for (const f of this.#filters.values())
+      if (f.kind === 'import') for (const e of f.extensions) out.add(`.${e.toLowerCase()}`);
+    return [...out];
   }
 
   /**

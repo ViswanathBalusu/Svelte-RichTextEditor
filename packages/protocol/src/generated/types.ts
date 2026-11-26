@@ -393,6 +393,8 @@ export interface TokenRequest {
   /** Document identifiers (at most 20) mapped to the role in each. */
   docs: { [key: string]: DocRole };
   name?: string;
+  /** An agent identifier from `POST /agents`. The token is then an agent token (type `dep-agent+jwt`) for an assistant acting for `sub`, capped at `suggest` (05 §3.2.1; ADR 0234). */
+  agent?: string;
   /** Group identifiers. */
   grp?: string[];
   /** Workflow participant (12 §7). */
@@ -415,6 +417,24 @@ export interface TokenResponse {
   token: string;
   /** Its `exp`. */
   expiresAt: string;
+}
+
+/** The registration of an assistant agent (ADR 0234 A2). */
+export interface AgentRequest {
+  /** What history and the review pane show for the agent, for example the name of the model. */
+  name: string;
+  /** The documents the agent may act on; absent means every document of the tenant. */
+  docs?: string[];
+}
+
+/** A registered assistant agent (ADR 0234 A2). */
+export interface Agent {
+  /** The agent identifier (`agt`) to put in `POST /tokens`. */
+  id: string;
+  /** The registered display name. */
+  name: string;
+  /** The documents the agent may act on; absent means all. */
+  docs?: string[];
 }
 
 /** Ends a user's access before the token expires (05 §3.3). */
@@ -618,9 +638,10 @@ export interface ForkRequest {
   atSeq: number;
 }
 
-/** The caller's last seen `seq`; it only moves forward (08 §10). */
+/** The caller's last seen `seq`; it only moves forward (08 §10). `commentSeq` is the last comment sequence number the caller has seen (a comment has a sequence number of its own in its document; owner decision 73); it moves forward on its own and is answered only when the request names it. */
 export interface ReadMarker {
   seq: number;
+  commentSeq?: number;
 }
 
 /** Where a client should open its channel (06 §2.1). A hint only: it grants nothing. */
@@ -921,6 +942,10 @@ export interface SuggestionIntroduction {
   user: string;
   /** The origin of the introducing commit. */
   origin: string;
+  /** The agent identifier when the commit was made on an agent connection (UX-046). */
+  agent?: string;
+  /** The registered display name of that agent, for example the model; absent when the agent is no longer registered. */
+  agentName?: string;
   /** The seq of the introducing commit; absent when it lies below the caller gate. */
   seq?: number;
 }
@@ -1804,6 +1829,15 @@ export interface Operations {
     query: Record<string, never>;
     body: TokenRequest;
     response: TokenResponse;
+  };
+  /** POST /agents: Registers an assistant agent; its token is minted with `POST /tokens` and `agent` (ADR 0234 A2). (05 §3.2.1, §6.2) */
+  createAgent: {
+    method: "POST";
+    path: "/agents";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: AgentRequest;
+    response: Agent;
   };
   /** GET /documents: Lists documents, filtered by `externalId`. The editor never lists documents. (05 §6.2) */
   listDocuments: {

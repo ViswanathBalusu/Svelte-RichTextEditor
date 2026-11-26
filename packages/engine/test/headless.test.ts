@@ -82,4 +82,17 @@ describe('the editing core without a browser (FE-121)', () => {
     expect(core.queryCommand('italic').active).toBe(false);
     core.destroy();
   });
+
+  it('orders the browser job after the Node.js job in CI (criterion 4)', () => {
+    const ci = readFileSync(
+      resolve(import.meta.dirname, '../../../.github/workflows/ci.yml'),
+      'utf8',
+    );
+    // Both jobs run on every pull request; the browser job starts only when `check` has passed.
+    expect(/^on:\s*\n\s+pull_request:/m.test(ci)).toBe(true);
+    const job = (name: string) =>
+      new RegExp(`^ {2}${name}:\\n([\\s\\S]*?)(?=^ {2}[a-z-]+:\\n)`, 'm').exec(ci)?.[1] ?? '';
+    expect(job('browsers')).toMatch(/^ {4}needs: check\s*$/m);
+    expect(job('check')).toMatch(/run: pnpm test\b/);
+  });
 });

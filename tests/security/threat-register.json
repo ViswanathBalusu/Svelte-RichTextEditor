@@ -200,16 +200,10 @@
       "builtBy": ["FE-125"],
       "provenBy": "FE-125",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "packages/element/e2e/s2-features.spec.ts",
         "packages/element/test/published-policies.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 5,
-          "what": "the policy test seen to run again in CI after a dependency update"
-        }
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Strict host policies"],
@@ -515,16 +509,13 @@
         "sec-028-expensive-commits.test.ts",
         "fuzz-time-limit.test.ts",
         "packages/authority/test/slow-input.test.ts",
-        "packages/authority/test/sec-028-throwing-commit.test.ts"
+        "packages/authority/test/sec-028-throwing-commit.test.ts",
+        "sec-028-worker-offload.test.ts"
       ],
       "open": [
         {
           "criterion": 1,
           "what": "expensive commits in volume from several channels while other rooms keep their acknowledgement latency"
-        },
-        {
-          "criterion": 3,
-          "what": "checkpoint serialisation, log replay, comparisons and conversions in worker threads during the attack"
         }
       ],
       "boundaries": ["element-to-service"],
@@ -538,27 +529,20 @@
       "builtBy": ["HIS-001", "HIS-002", "BE-081"],
       "provenBy": "SEC-029",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "history-tamper.test.ts",
         "sec-029-db-tamper.test.ts",
         "sec-029-changed-chain-head.test.ts",
         "sec-029-anchors.s3.test.ts",
         "sec-029-control-commits.test.ts",
-        "services/export-worker/src/sec-029-manifest-chain-head.pg.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 3,
-          "what": "each permission and workflow change as a control commit inside the chain"
-        },
-        {
-          "criterion": 5,
-          "what": "chain heads anchored in write-once storage, and what a rewrite before an anchor leaves undetected"
-        }
+        "services/export-worker/src/sec-029-manifest-chain-head.pg.test.ts",
+        "sec-029-workflow-control-commits.test.ts",
+        "sec-029-anchored-rewrite.pg.test.ts"
       ],
       "boundaries": ["element-to-service"],
-      "specRows": ["Forging history"]
+      "specRows": ["Forging history"],
+      "criteria": [1, 2, 3, 4, 5, 6]
     },
     {
       "id": "T-3.3-approved",
@@ -624,23 +608,19 @@
       "builtBy": ["EXP-042", "EXP-043", "EXP-044"],
       "provenBy": "SEC-033",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "latex-emitters.test.ts",
         "sec-033-contexts.test.ts",
         "sec-033-v-bullets.test.ts",
         "sec-033-w3-context-list.test.ts",
         "packages/export-latex/src/sec-033-hostile-text.compile.test.ts",
-        "services/export-worker/src/sec-033-unescaped.escape.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 1,
-          "what": "a fuzz target per emitter whose output is compiled and shown by the trace to run no unexpected control sequence"
-        }
+        "services/export-worker/src/sec-033-unescaped.escape.test.ts",
+        "packages/export-latex/src/sec-033-hostile-trace.compile.test.ts"
       ],
       "boundaries": ["service-to-workers"],
-      "specRows": ["typed emitters for every context in which a user's string can reach TeX"]
+      "specRows": ["typed emitters for every context in which a user's string can reach TeX"],
+      "criteria": [1, 2, 3, 4, 5]
     },
     {
       "id": "T-3.4-math-gate",
@@ -650,7 +630,7 @@
       "builtBy": ["EXP-049", "EXP-050"],
       "provenBy": "SEC-034",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "math-gate.test.ts",
         "math-commit-gate.test.ts",
@@ -660,14 +640,9 @@
         "packages/export-latex/src/sec-034-gate.compile.fuzz.test.ts",
         "services/export-worker/src/sec-034-region-equation.e2e.test.ts"
       ],
-      "open": [
-        {
-          "criterion": 5,
-          "what": "the end-to-end case: the strongest accepted equation built to cover a price in another region, checked by extracted text and rendered pixels"
-        }
-      ],
       "boundaries": ["service-to-workers"],
-      "specRows": ["a strict gate on math that also stops content painted outside its box"]
+      "specRows": ["a strict gate on math that also stops content painted outside its box"],
+      "criteria": [1, 2, 3, 4, 5, 6]
     },
     {
       "id": "T-3.4-sandbox",
@@ -823,10 +798,23 @@
       "builtBy": ["FRW-052"],
       "provenBy": "SEC-041",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "services/signing-service/test/sec-041-rotation.test.ts",
+        "services/signing-service/test/sec-041-worker-isolation.podman.test.ts"
+      ],
       "boundaries": ["service-to-signing"],
-      "specRows": ["Stolen signing key"]
+      "specRows": ["Stolen signing key"],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "no private key in the signing service memory, and signing in a hardware security module or a cloud key service (the module is the development emulator)"
+        },
+        {
+          "criterion": 2,
+          "what": "the import and indexer workers and the key service of the emulator, which are not separate deployables here"
+        }
+      ]
     },
     {
       "id": "T-3.6-tampered-pdf",
@@ -836,17 +824,11 @@
       "builtBy": ["FRW-052", "EXP-068"],
       "provenBy": "SEC-042",
       "phase": "2",
-      "status": "partly-proven",
-      "tests": ["sec-042-tampered-pdf.test.ts", "sealed-write-once.test.ts"],
-      "open": [
-        {
-          "criterion": 4,
-          "what": "the hash sent to the signing service compared with the stored PDF"
-        },
-        {
-          "criterion": 5,
-          "what": "long-term validation data added only as incremental updates, the sealed bytes not rewritten"
-        }
+      "status": "proven",
+      "tests": [
+        "sec-042-tampered-pdf.test.ts",
+        "sealed-write-once.test.ts",
+        "sec-042-sealed-bytes.test.ts"
       ],
       "boundaries": ["service-to-signing"],
       "specRows": ["A tampered PDF being sealed"]
@@ -882,19 +864,13 @@
       "builtBy": ["FRW-040", "FRW-050"],
       "provenBy": "SEC-044",
       "phase": "2",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "evidence-outside-log.test.ts",
         "evidence-purge-job.test.ts",
         "sec-044-evidence-scan.pg.test.ts",
         "sec-044-w8-workflow-scan.test.ts",
         "sec-044-v-payload-salt.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 1,
-          "what": "the scan of the commit log, control commits, audit trail, logs and search entries after a completed workflow"
-        }
       ],
       "boundaries": ["service-to-signing"],
       "specRows": ["Evidence leaking or outliving its purpose"]
@@ -930,13 +906,11 @@
         "sec-045-v-b-identifiers.test.ts",
         "sec-045-signed-url-tenant.test.ts",
         "sec-045-scenario-keys.test.ts",
-        "sec-045-v-c-webhooks.test.ts"
+        "sec-045-v-c-webhooks.test.ts",
+        "sec-045-w8-keys-and-urls.test.ts",
+        "sec-045-w8-key-inventory.test.ts"
       ],
       "open": [
-        {
-          "criterion": 4,
-          "what": "every object key of a full scenario under the tenant prefix, and a signed URL of one tenant refused on a key of another"
-        },
         {
           "criterion": 5,
           "what": "the tenant in the key of every cache, counter and stream"
@@ -973,20 +947,15 @@
       "builtBy": ["BE-088"],
       "provenBy": "SEC-047",
       "phase": "1a",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "logs-no-content.test.ts",
         "sec-047-structural-dump.test.ts",
         "sec-047-compile-log.test.ts",
         "sec-047-v-compile-log-route.test.ts",
         "sec-047-v-canary-surfaces.test.ts",
-        "sec-047-w3-field-values-alt-text.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 1,
-          "what": "the full canary scenario: no canary in any log line, metric, trace, error report or dump"
-        }
+        "sec-047-w3-field-values-alt-text.test.ts",
+        "sec-047-w8-codes-signatures-workers.test.ts"
       ],
       "boundaries": ["host-backend-to-service"],
       "specRows": ["Logs and metrics never contain document content or tokens"]
@@ -1140,20 +1109,15 @@
       "builtBy": ["FE-125"],
       "provenBy": "SEC-054",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "sec-054-font-origins.test.ts",
         "packages/element/e2e/sec-054-network-tour.spec.ts",
         "packages/element/e2e/sec-054-tour-math.spec.ts",
         "packages/element/e2e/sec-054-tour-pdf-viewer.spec.ts",
+        "packages/element/e2e/sec-054-tour-ports.spec.ts",
         "scripts/supply-chain/bundle.test.ts",
         "scripts/supply-chain/origin-sandbox.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 1,
-          "what": "the network record of a tour of every feature: every script, style, font and WebAssembly request to the host or the configured service only"
-        }
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["The editor bundle loads no code at run time from third-party origins"]

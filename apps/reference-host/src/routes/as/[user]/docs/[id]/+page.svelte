@@ -16,6 +16,7 @@
     type EditorLike,
     type FlushOutcome,
   } from '../../../../../lib/glue/page-glue.ts';
+  import { SAMPLE_STRINGS, sampleExtension } from '../../../../../lib/sample-extension.ts';
   import ShareDialog from '../../../../../lib/share/ShareDialog.svelte';
   import type { PageProps } from './$types';
 
@@ -57,8 +58,17 @@
       await import(/* @vite-ignore */ ELEMENT_MODULE);
       await customElements.whenDefined('doc-editor');
       if (stopped || !editor) return;
-      const el = editor as unknown as EditorLike & { config: Record<string, unknown> };
+      const el = editor as unknown as EditorLike & {
+        config: Record<string, unknown>;
+        extensions: unknown;
+        strings: Record<string, string> | null;
+      };
       if (data.viewerUrl) el.config = { pdfViewerUrl: data.viewerUrl };
+      // The sample extension (UX-050 criterion 6): off unless the page is opened with ?sample-extension.
+      if (new URLSearchParams(location.search).has('sample-extension')) {
+        el.strings = { ...SAMPLE_STRINGS };
+        el.extensions = [sampleExtension];
+      }
       detach = attachEditor(el, {
         api: `${data.base}/api`,
         docId: data.doc.id,

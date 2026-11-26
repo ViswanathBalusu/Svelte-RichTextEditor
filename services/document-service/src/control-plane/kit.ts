@@ -62,6 +62,7 @@ import type { ReadRouter, ReadSession, ReadSessions, ReadStores } from './read-r
 import { ApiError } from './problems.ts';
 import type { TokenService } from './tokens.ts';
 import type { UserDirectory } from './users.ts';
+import type { PublicAnchorSource } from './public-anchor-export.ts';
 import type { Views } from './visibility.ts';
 import type { AccessCodeStore } from '../workflow/access-code-store.ts';
 import type { ConsentTextStore } from '../workflow/consent-service.ts';
@@ -87,6 +88,8 @@ export interface HandlerDeps {
    */
   comparePool?: Pick<WorkerPool, 'run'>;
   views: Views;
+  /** The public anchor evidence an audit export carries (SEC-067). Absent: none is carried. */
+  publicAnchors?: PublicAnchorSource;
   events: EventSink;
   notifier: RoomNotifier;
   /** The data plane's hooks and reads, when it offers them (seams.ts). */

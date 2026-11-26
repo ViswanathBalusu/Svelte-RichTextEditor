@@ -32,6 +32,7 @@ import type {
   RegionStateRequest,
   RevokeRequest,
   TokenRequest,
+  AgentRequest,
   UpdateDocumentRequest,
 } from '@docedit/protocol';
 import { diffPermissions } from '../storage/permission-change.ts';
@@ -170,6 +171,25 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     const body = (await ctx.body()) as TokenRequest;
     const minted = await d.tokens.mint(ctx.caller.tenant, body);
     return json(200, minted, { 'Cache-Control': 'no-store' });
+  };
+
+  // `POST /agents` (05 §3.2.1; ADR 0234 A2): a service credential registers an assistant agent.
+  const createAgent: Handler = async (ctx) => {
+    const body = (await ctx.body()) as AgentRequest;
+    const agent = await d.tokens.agents.register(ctx.caller.tenant, {
+      name: body.name,
+      owner: ctx.caller.credential,
+      ...(body.docs !== undefined ? { documents: body.docs } : {}),
+    });
+    return json(
+      201,
+      {
+        id: agent.id,
+        name: agent.name,
+        ...(agent.documents !== null ? { docs: [...agent.documents] } : {}),
+      },
+      { 'Cache-Control': 'no-store' },
+    );
   };
 
   const revokeSessions: Handler = async (ctx) => {
@@ -815,6 +835,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
   return {
     getDiscovery,
     createToken,
+    createAgent,
     revokeSessions,
     listDocuments,
     createDocument,

@@ -408,6 +408,13 @@
       "aliases": []
     },
     {
+      "id": "document.import",
+      "group": "page",
+      "capability": "host-panels-and-commands",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "document.print",
       "group": "page",
       "capability": "export-pdf",
@@ -553,6 +560,13 @@
       "id": "insert.caption",
       "group": "insert",
       "capability": "editing",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.citation",
+      "group": "insert",
+      "capability": "citations",
       "keys": [],
       "aliases": []
     },

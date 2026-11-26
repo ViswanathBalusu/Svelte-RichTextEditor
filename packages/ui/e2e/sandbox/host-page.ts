@@ -55,6 +55,7 @@ function makeApi(): ExtensionDocumentApi {
     setMark: record('setMark', { ok: true }),
     insertExtensionBlock: record('insertExtensionBlock', { ok: true, id: 'b1' }),
     updateExtensionBlock: record('updateExtensionBlock', { ok: true, id: 'b1' }),
+    insertExtensionInline: record('insertExtensionInline', { ok: true }),
     on: () => () => undefined,
     dispose: () => {
       disposed += 1;

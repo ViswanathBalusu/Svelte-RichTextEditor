@@ -109,6 +109,7 @@ describe('SPK-021 criterion 3: the signing service holds no key either', () => {
     const src = readFileSync(join(root, 'services/signing-service/src/keyservice.ts'), 'utf8');
     const port = /export interface KeyService \{([\s\S]*?)\n\}/.exec(src)?.[1] ?? '';
     const methods = [...port.matchAll(/^\s{2}(?:readonly )?(\w+)\(?/gm)].map((m) => m[1]);
-    expect(methods).toEqual(['keyLabel', 'publicKey', 'signDigest']);
+    // `assertion` (FRW-059) reports the provider's own words, never a key.
+    expect(methods).toEqual(['keyLabel', 'assertion', 'publicKey', 'signDigest']);
   });
 });

@@ -32,6 +32,8 @@ interface ForkBody {
 /** The body of `PUT /documents/{id}/read-marker` (05 §6.2; 08 §10). */
 interface ReadMarkerBody {
   seq: number;
+  /** How far the caller has read the comments: a comment sequence number (PRO-058; decision 73). */
+  commentSeq?: number;
 }
 
 /**
@@ -156,8 +158,25 @@ export function historyRoutes(k: Kit): Record<string, Handler> {
     const head = await d.logs.head(ref);
     if (body.seq > head.seq)
       throw new ApiError('not_found', `no content at seq ${body.seq}; the head is ${head.seq}`);
+    // The comment marker moves on its own, and only when the body names it (decision 73).
+    let commentSeq: number | undefined;
+    if (body.commentSeq !== undefined) {
+      if (!Number.isSafeInteger(body.commentSeq) || body.commentSeq < 0)
+        throw new ApiError('validation_failed', 'commentSeq is a whole number of 0 or more', {
+          violations: [{ path: '/commentSeq', rule: 'a whole number, 0 or more' }],
+        });
+      const commentHead = (await d.threads?.commentHead(ref)) ?? 0;
+      if (body.commentSeq > commentHead)
+        throw new ApiError(
+          'not_found',
+          `no comment at seq ${body.commentSeq}; the last is ${commentHead}`,
+        );
+      commentSeq = await store.advanceComments(ref, ctx.caller.actor, body.commentSeq, d.now());
+    }
     const seq = await store.advance(ref, ctx.caller.actor, body.seq, d.now());
-    return json(200, { seq }, { ETag: `"r${seq}"` });
+    return json(200, commentSeq === undefined ? { seq } : { seq, commentSeq }, {
+      ETag: commentSeq === undefined ? `"r${seq}"` : `"r${seq}c${commentSeq}"`,
+    });
   };
 
   return { forkDocument, setReadMarker };

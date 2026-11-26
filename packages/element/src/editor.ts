@@ -14,6 +14,7 @@ import {
   type ConnectionState,
   type EditMode,
   type EquationDrawer,
+  type SuggestionIntroduction,
 } from '@docedit/engine';
 import {
   PortError,
@@ -23,7 +24,9 @@ import {
   type PrincipalInfo,
   type SearchPrincipals,
   type SyncChannel,
+  type SyncPort,
 } from '@docedit/protocol';
+import { classificationView, type NoticeSource } from './classification-shell.ts';
 import {
   App,
   PeopleDirectory,
@@ -105,6 +108,12 @@ export interface MountOptions {
    * `regions` read the shell offers the permissions pane; with its grants reads, the grant controls.
    */
   permissions?: PermissionsPort | null;
+  /**
+   * The session's metadata read and notices, when the backend has the read (UX-085 criterion 2).
+   * With them the status bar shows the document's classification label and follows
+   * `document.updated`; without them the core has no `classification` view and the bar shows none.
+   */
+  classification?: { document: NonNullable<SyncPort['document']>; notices: NoticeSource };
   /**
    * The export dialog's jobs (UX-101), when the backend has the exports port. Without it the shell
    * offers no export command.
@@ -272,7 +281,7 @@ const CAPABILITIES: readonly Capability[] = [
 /** A suggestion of the core as the shell's review tools take it (UX-036): the capabilities typed. */
 function reviewItem(
   s: ReturnType<EditorCore['suggestionItems']>[number],
-  committedAt: string | null,
+  introduced: SuggestionIntroduction | null,
 ): ReviewItem {
   return {
     id: s.id,
@@ -285,7 +294,10 @@ function reviewItem(
     caps: s.caps.filter((c): c is Capability => (CAPABILITIES as readonly string[]).includes(c)),
     canResolve: s.canResolve,
     region: s.region,
-    committedAt,
+    committedAt: introduced?.time ?? null,
+    ...(introduced?.agent !== undefined
+      ? { assistant: { agent: introduced.agent, name: introduced.agentName ?? null } }
+      : {}),
   };
 }
 
@@ -333,12 +345,12 @@ export function settingsFrom(attrs: {
  * history port once for each suggestion. `moved` counts the answers, so that the review pane reads
  * its list again when one arrives. A suggestion the port cannot answer for has no time.
  */
-function suggestionTimeCache(ask: (id: string) => Promise<string | null>): {
-  get(id: string): string | null;
+function suggestionTimeCache(ask: (id: string) => Promise<SuggestionIntroduction | null>): {
+  get(id: string): SuggestionIntroduction | null;
   ask(ids: readonly string[]): void;
   readonly moved: ReadView<number>;
 } {
-  const times = new Map<string, string>();
+  const times = new Map<string, SuggestionIntroduction>();
   const asking = new Set<string>();
   const listeners = new Set<() => void>();
   let moves = 0;
@@ -348,10 +360,10 @@ function suggestionTimeCache(ask: (id: string) => Promise<string | null>): {
       for (const id of ids) {
         if (times.has(id) || asking.has(id)) continue;
         asking.add(id);
-        void ask(id).then((time) => {
+        void ask(id).then((answer) => {
           asking.delete(id);
-          if (time === null) return;
-          times.set(id, time);
+          if (answer === null) return;
+          times.set(id, answer);
           moves++;
           for (const listener of [...listeners]) listener();
         });
@@ -388,6 +400,9 @@ const CONNECTION: Readonly<Record<ConnectionState, Connection>> = {
   reconnecting: 'reconnecting',
   offline: 'offline',
 };
+
+/** The most ranges one extension holds at once (UX-053). Proposed default; the spec gives no number. */
+const EXTENSION_MAX_RANGES = 64;
 
 export function mountEditor(options: MountOptions): MountedEditor {
   const { root, content, config, viewerUrl } = options;
@@ -451,7 +466,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     : null;
   // The guided bar follows `wf.changed` through the same status (FRW-035 criterion 6).
   const fill = fillView(core, fillActions?.status);
-  const suggestionTimes = suggestionTimeCache((id) => core.suggestionTime(id));
+  const suggestionTimes = suggestionTimeCache((id) => core.suggestionIntroduction(id));
   // The pages of the view on screen, for the navigation pane's thumbnails (UX-021): the page view
   // gives them while it is shown, and the web view has none.
   const pages = pagesBridge();
@@ -502,6 +517,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The document as this reader holds it: the accessibility checker reads it (UX-066), so a
       // picture without alternative text is listed (FE-132 criterion 5).
       getContent: () => core.getContent(),
+      // The client import filters of extensions insert their fragment through the guards of typing
+      // (UX-055; FE-027).
+      insertContent: (fragment) =>
+        core.insertContent(fragment as Parameters<typeof core.insertContent>[0]),
+      // The range-based document API of the host's extensions (UX-053; UX-050 criterion 6).
+      extensionApi: (opts) => core.extensionApi(opts),
       // The cross-reference dialog's list (FE-134 criterion 2).
       referenceTargets: () => core.referenceTargets(),
       // The navigation pane's search (UX-020 criterion 3): the core's find over the body this reader
@@ -589,6 +610,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'createStyle',
         'changeStyle',
         'deleteStyle',
+        'insertCitation',
       ],
       runNamed: (name, args) => {
         if (name === 'showReferences') return core.showReferences();
@@ -607,6 +629,26 @@ export function mountEditor(options: MountOptions): MountedEditor {
           const a = args as { asset?: unknown; alt?: unknown } | undefined;
           if (typeof a?.asset !== 'string' || typeof a.alt !== 'string') return false;
           return core.setImageAlt(a.asset, a.alt);
+        }
+        // The citation dialog (FE-140 criterion 1): `{ items, mode? }`; the core checks the sources and
+        // the user's right to change the text.
+        if (name === 'insertCitation') {
+          const a = args as { items?: unknown; mode?: unknown } | undefined;
+          if (!Array.isArray(a?.items)) return false;
+          const mode = a.mode;
+          if (
+            mode !== undefined &&
+            mode !== 'normal' &&
+            mode !== 'narrative' &&
+            mode !== 'suppressAuthor'
+          )
+            return false;
+          return core.run('insertCitation', {
+            citation: {
+              items: a.items as never,
+              ...(mode === undefined ? {} : { mode }),
+            },
+          });
         }
         if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
         // The ruler and the paragraph dialog (UX-102): the args are the patch of indents and tab
@@ -811,6 +853,17 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
       // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
       permissions: core.permissions,
+      // The classification label of the status bar (UX-085 criterion 2): the document resource,
+      // read again at every `document.updated`.
+      ...(options.classification
+        ? {
+            classification: classificationView(
+              options.classification.document,
+              options.docId,
+              options.classification.notices,
+            ),
+          }
+        : {}),
       // The lock indicators of the regions the user cannot edit (PRM-026): the core shades them from
       // the access and draws the shell's words, which hold the names of the host's directory.
       setRegionLabels: (labels, defaults) => core.setRegionLabels(labels, defaults),
@@ -873,7 +926,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
   const strings = new Strings({
     overrides: options.strings() ?? {},
     onUnknown: (keys) =>
-      console.warn(`doc-editor: unknown string keys ignored: ${keys.join(', ')}`),
+      console.warn(
+        `doc-editor: string keys the editor does not know (kept for extensions): ${keys.join(', ')}`,
+      ),
   });
   // The one command registry (13 §4; UX-005): the shell's toolbars and menus read it, and so do the
   // host's `exec` and `queryCommand`, so the host's buttons agree with the built-in ones.
@@ -899,6 +954,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(options.onForkRequest ? { onForkRequest: options.onForkRequest } : {}),
       ...(options.onAccessRequest ? { onAccessRequest: options.onAccessRequest } : {}),
       onExtensionError: options.onExtensionError,
+      // The range-based document API of the host's extensions (UX-053). The cap is the element's own
+      // default, not a spec figure (ADR 0136, proposed).
+      documentApi: { maxRanges: EXTENSION_MAX_RANGES },
     },
   });
   // Run the mount effects now, so the body view exists when `de-ready` is seen.

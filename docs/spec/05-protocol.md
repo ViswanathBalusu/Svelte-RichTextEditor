@@ -91,12 +91,14 @@ Host backends call the control plane with a service credential: an API key, or a
 
 An assistant acts for a user under an agent identity (13 section 6.2; ADR 0234 part A). The server learns that a connection is an agent's only from its verified credential, never from the client's `origin` hint (04 section 2).
 
-- The document service keeps an agent registry per tenant: an agent identifier (`agt`), a display name, the owning host and the documents it may act on. A service credential registers an agent with `POST /agents` (a route that joins the table in 6.2 when it is added to the protocol definition). A user token cannot register an agent or become one.
+- The document service keeps an agent registry per tenant: an agent identifier (`agt`), a display name, the owning host and the documents it may act on. A service credential registers an agent with `POST /agents` (the route is in the table in 6.2). A user token cannot register an agent or become one.
 - An **agent token** is a short-lived JWT with the type header `dep-agent+jwt`, signed with keys registered separately from user-token keys. Its claims are `sub` (the user the assistant acts for), `agt`, `act` (`{ "sub": "<agt>" }`, the actor claim in the manner of RFC 8693), `tid`, `doc`, `aud` and a short `exp`.
 - Only the service mints an agent token (`POST /tokens` with a service credential, or a host signing key registered as an agent issuer). A browser never signs one.
 - A host backend that calls the control plane for an agent sends `DEP-Agent: <agt>` with its service credential and `DEP-Actor`. The service honours `DEP-Agent` only when that agent is registered to the same credential and the document is in its list. A user token cannot set it.
 - `author.agent` on a stored commit is the `agt` of the verified token, and `origin` is `assistant`. A commit on a user connection that claims `origin: "assistant"` is stored as an ordinary commit with the hint recorded as a claim.
 - Disabling an agent changes `rev`, so it loses access at once.
+- `POST /tokens` takes the registered agent as `agent` and then mints the agent token with the service key. `GET /documents/{id}/suggestions/{sid}/introduction` adds `agent` and `agentName` (the registered display name, while it is registered) when the introducing commit was made on an agent connection, so that the review pane can name the model and, from `user`, the person.
+- Built in the reference service: the in-process registry, `POST /agents`, the agent token, the cap and `origin: "assistant"` stamped by the room. Not built: a host-signed agent issuer, the `DEP-Agent` header, a registry that survives a restart, a route to disable an agent, and closing the open channels of a disabled agent (a disabled agent's token stops verifying at once, so it cannot open a new channel).
 
 ### 3.3 Revocation
 
@@ -293,6 +295,7 @@ Callers are end users (every request is checked against that user's permissions)
 | Resource | Methods | Notes |
 |---|---|---|
 | `/tokens` | POST | Service credential only |
+| `/agents` | POST | Service credential only. Registers an assistant agent (3.2.1); `POST /tokens` with `agent` then mints its agent token |
 | `/documents` | GET, POST | Service credential only. POST creates a document, optionally from CDM content, a template (12) or an import, with optional `externalId` and `properties`. GET lists and filters by `externalId`; the editor never lists documents |
 | `/documents/{id}` | GET, PATCH, DELETE | Metadata, `properties`, classification label, `state` (`active`, `locked`, `archived`). DELETE is a soft delete; purge follows the retention policy |
 | `/documents/{id}/content` | GET, PUT | GET returns `{ seq, incarnation, cdm, requires, doc }` and, under read restrictions, `view`, with `?seq=N` for a pinned, immutable, cacheable read; the `ETag` combines incarnation, `seq` and the view token. Pinned reads are `Cache-Control: private` and immutable for a year, reads at the head `private, no-cache`. PUT (service credential) replaces content as a snapshot commit with origin `import` |

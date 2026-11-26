@@ -125,6 +125,7 @@ import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
 import { PgRenewalStore } from './workflow/renewal-state-pg.ts';
 import { MemoryRenewalStore } from './workflow/renewal-state-memory.ts';
 import { sealedRenewalSigner } from './workflow/extend-sealed.ts';
+import type { RenewalRegistry } from './workflow/renewal-schedule.ts';
 import {
   RENEWAL_KIND,
   renewalHandler,
@@ -212,6 +213,7 @@ import { registerProcessMetrics } from './control-plane/process-metrics.ts';
 import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-hooks.ts';
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
 import { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
+import type { PublicAnchorSource } from './control-plane/public-anchor-export.ts';
 import { restrictedViews, type Views } from './control-plane/visibility.ts';
 import { serialisedInPool } from './control-plane/workers/checkpoint-store.ts';
 import { WorkerPool } from './control-plane/workers/pool.ts';
@@ -355,6 +357,8 @@ export interface ServiceParts {
    * connects as a member of `docedit_purge`. Absent: no checkpoint thinning task runs.
    */
   checkpointThinningStore?: CheckpointThinningStore;
+  /** The public anchor evidence the audit export carries (SEC-067). Absent: none is carried. */
+  publicAnchors?: PublicAnchorSource;
   /**
    * The rows of the cold segments (HIS-029): the job that moves payloads older than 30 days to
    * object storage, and the removal of payloads from segments by thinning and tombstones. Like
@@ -397,7 +401,7 @@ export interface ServiceParts {
   /** The sealed final PDFs (FRW-054): `GET /documents/{id}/workflow/final` reads them. Absent: the route is not offered. */
   sealedPdfs?: SealedPdfStore;
   /** The expiry of each sealed PDF's newest time-stamp, for the renewal task (FRW-056, BE-052). */
-  renewals?: RenewalStore & RenewalDueSource;
+  renewals?: RenewalStore & RenewalDueSource & RenewalRegistry;
   /** The signed, time-stamped chain heads at completion, written once (FRW-054 criterion 3). */
   anchors?: AnchorStore;
   /** The registered access codes of workflow participants and their attempt counters (FRW-039). */
@@ -590,6 +594,46 @@ function withTestHooks(
   return config.testMode && !features.includes('test-hooks')
     ? [...features, 'test-hooks']
     : features;
+}
+
+/**
+ * The features of the fields, rules and workflow epic that this composition implements and that are
+ * announced only then (12 §10; 05 §2; FRW-065 criterion 2). `rules` is the data plane's own (the
+ * room enforces the rules fixtures) and `fields` is the CDM feature the data plane announces; here
+ * are the three that depend on what the service is composed of:
+ *
+ * - `workflow`: the workflow resource (`parts.workflows`).
+ * - `sign`: the signing ceremony, which the sign route offers when it has the workflow store, the
+ *   evidence ledger, the consent texts, the asset registry and the outbox.
+ * - `seal`: the sealing of the final PDF, which needs the signing service (`sealing`) and the
+ *   write-once stores; a service without them leaves a completed workflow `completed`.
+ */
+function workflowFeatures(
+  parts: Partial<
+    Pick<
+      ServiceParts,
+      | 'workflows'
+      | 'evidence'
+      | 'consentTexts'
+      | 'assetRegistry'
+      | 'outbox'
+      | 'sealedPdfs'
+      | 'anchors'
+    >
+  >,
+  sealing: boolean,
+): string[] {
+  return [
+    ...(parts.workflows ? ['workflow'] : []),
+    ...(parts.workflows &&
+    parts.evidence &&
+    parts.consentTexts &&
+    parts.assetRegistry &&
+    parts.outbox
+      ? ['sign']
+      : []),
+    ...(sealing && parts.workflows && parts.sealedPdfs && parts.anchors ? ['seal'] : []),
+  ];
 }
 
 /**
@@ -1192,7 +1236,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
             config.externalWorkers
               ? ['assets']
               : []),
-            ...(parts.workflows ? ['workflow'] : []),
+            ...workflowFeatures(parts, Boolean(opts.finalSealing ?? config.sealing)),
           ]),
         ],
       ),
@@ -1311,6 +1355,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
           retainMs: config.sealing.retentionDays * 24 * 60 * 60 * 1000,
         }
       : null);
+  // The renewal of time-stamps (FRW-056): the job that makes one renewal, and the scheduled task
+  // that enqueues it for each chain whose newest time-stamp expires within the lead time.
+  const renewalSetup =
+    sealSetup && parts.renewals ? (opts.renewal ?? config.sealing?.renewal ?? null) : null;
   let sealer: FinalSealer | null = null;
   if (sealSetup) {
     if (!parts.workflows || !parts.sealedPdfs || !parts.anchors)
@@ -1334,6 +1382,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
       objects: parts.objects,
       queue: parts.queue,
       events,
+      // The end of the seal's time-stamp, for its renewal (FRW-056).
+      ...(renewalSetup && parts.renewals
+        ? {
+            renewals: parts.renewals,
+            renewalFailed: (ref: { tenant: string; doc: string }, e: unknown) =>
+              logger.error({
+                event: 'workflow.renewal.start_failed',
+                tenant: ref.tenant,
+                doc: ref.doc,
+                ...errorFields(e),
+              }),
+          }
+        : {}),
       // The visible appearances at the signature and initials fields (FRW-057).
       ...(parts.evidence
         ? {
@@ -1365,9 +1426,6 @@ export async function startService(opts: StartOptions): Promise<Service> {
     });
   }
   const sealing = sealer;
-  // The renewal of time-stamps (FRW-056): the job that makes one renewal, and the scheduled task
-  // that enqueues it for each chain whose newest time-stamp expires within the lead time.
-  const renewalSetup = opts.renewal ?? config.sealing?.renewal ?? null;
   let renewalTask: ScheduledTask | null = null;
   if (sealSetup && renewalSetup && parts.renewals && parts.workflows && parts.sealedPdfs) {
     const workflows = parts.workflows;
@@ -1868,7 +1926,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         // `exports` only when a compile worker can serve the queue (ADR 0054; `exports.states`).
         ...(exportHandlers[EXPORT_KIND] || config.externalWorkers ? ['exports'] : []),
         ...(assetWorker || config.externalWorkers ? ['assets'] : []),
-        ...(parts.workflows ? ['workflow'] : []),
+        ...workflowFeatures(parts, Boolean(opts.finalSealing ?? config.sealing)),
       ]),
     ],
   );
@@ -1937,6 +1995,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     queue: parts.queue,
     content,
     views,
+    ...(parts.publicAnchors ? { publicAnchors: parts.publicAnchors } : {}),
     events,
     notifier: roomNotifier,
     dataPlane,

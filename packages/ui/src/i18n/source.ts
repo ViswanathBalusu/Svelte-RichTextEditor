@@ -36,6 +36,7 @@ export const LATE_KEY_HEADS: readonly string[] = [
   'field',
   'fill',
   'history',
+  'import',
   'lease',
   'outline',
   'pages',

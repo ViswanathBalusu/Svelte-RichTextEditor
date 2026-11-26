@@ -30,6 +30,18 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/his-010-version-view.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when FE-129 closed, after FE-128 (2026-11-26).
+  [
+    'character-and-paragraph-formatting',
+    [
+      { path: 'packages/engine/src/view/fe-129-paragraph-format.universal.test.ts', kind: 'unit' },
+      { path: 'packages/engine/src/view/fe-129-tab-stops.universal.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-129-paragraph-options-info.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/fe-129-paragraph-dialog-options.test.ts', kind: 'unit' },
+      { path: 'packages/ui/e2e/fe-129-paragraph-dialog.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-129-paragraph-dialog.spec.ts', kind: 'playwright' },
+    ],
+  ],
   // Shipped when CDM-019 and FE-130 closed (2026-11-18).
   [
     'lists',
@@ -245,6 +257,18 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/ux-020-place.test.ts', kind: 'unit' },
       { path: 'packages/ui/test/ux-021-page-thumbnails.test.ts', kind: 'unit' },
       { path: 'packages/element/test/ux-021-pages.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when FE-065 and UX-007 closed (2026-11-26): the web view, the page view and the switch
+  // between them in the element in a browser, and the layout switch of the shell.
+  [
+    'views',
+    [
+      { path: 'packages/element/e2e/fe-065-view-switch.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-065-web-label.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-065-view-print-fallback.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-101-page-view.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-007-layout-switch.spec.ts', kind: 'playwright' },
     ],
   ],
   // Shipped when UX-102 closed (2026-11-25): the ruler and the paragraph dialog in the shell and in
@@ -485,6 +509,38 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/element/e2e/prm-027-next-editable-region.spec.ts', kind: 'playwright' },
       { path: 'packages/ui/e2e/prm-035-grants.spec.ts', kind: 'playwright' },
     ],
+  ],
+  // Shipped when EXP-087 closed (2026-11-26): the HTML writer (structure, cascade, fonts, visible
+  // text) and the export job and route that carry its pictures.
+  [
+    'export-html',
+    [
+      { path: 'packages/export-latex/src/exp-087-structure.html.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-087-cascade.html.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-087-fonts.html.test.ts', kind: 'unit' },
+      { path: 'services/export-worker/src/exp-087-html.job.test.ts', kind: 'unit' },
+      { path: 'services/export-worker/src/exp-087-html-pictures.job.test.ts', kind: 'unit' },
+      {
+        path: 'services/document-service/test/control-plane/exp-087-html-assets.test.ts',
+        kind: 'unit',
+      },
+    ],
+  ],
+  // Shipped when UX-050 to UX-055 closed (2026-11-26): commands, panels, status items and client
+  // filters of host extensions, in the shell and in the real element with the reference host's sample.
+  [
+    'host-panels-and-commands',
+    [
+      { path: 'packages/element/e2e/ux-050-extensions.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-050-sample-extension.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-050-extensions.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-051-extension-controls.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/extension-commands.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/extension-contributions.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/extension-status-bar.test.ts', kind: 'unit' },
+      { path: 'apps/reference-host/test/sample-extension.test.ts', kind: 'unit' },
+      { path: 'packages/ui/e2e/extension-contributions.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-055-import-filters.spec.ts', kind: 'playwright' },
   ],
 ];
 

@@ -24,7 +24,25 @@ export const EN_GB_DIALOGS = {
   'dialog.paragraph.right': 'Right indent (cm)',
   'dialog.paragraph.firstLine': 'First-line indent (cm; negative for a hanging indent)',
   'dialog.paragraph.mixed': 'The selected paragraphs differ. A blank field keeps each as it is.',
-  'dialog.paragraph.invalid': 'Enter a length in centimetres within the page.',
+  'dialog.paragraph.invalid':
+    'Check the fields marked invalid: a length is a number within the page, a colour is #RRGGBB.',
+  // The other options of the paragraph dialog (FE-129 criterion 6).
+  'dialog.paragraph.alignment': 'Alignment',
+  'dialog.paragraph.differs': '(differs)',
+  'dialog.paragraph.spaceBefore': 'Space before (pt)',
+  'dialog.paragraph.spaceAfter': 'Space after (pt)',
+  'dialog.paragraph.lineRule': 'Line spacing rule',
+  'dialog.paragraph.lineSpacing.lines': 'Line spacing (lines)',
+  'dialog.paragraph.lineSpacing.points': 'Line spacing (pt)',
+  'dialog.paragraph.rules': 'Keep and page rules',
+  'dialog.paragraph.rules.hint':
+    'These rules take effect in the PDF and the read view, not in the web view.',
+  'dialog.paragraph.borders': 'Borders',
+  'dialog.paragraph.borderField.style': '{side} border: style',
+  'dialog.paragraph.borderField.width': '{side} border: width (pt)',
+  'dialog.paragraph.borderField.color': '{side} border: colour (#RRGGBB, blank for automatic)',
+  'dialog.paragraph.borderField.space': '{side} border: distance from the text (pt)',
+  'dialog.paragraph.shading': 'Shading colour (#RRGGBB, blank for none)',
   'dialog.paragraph.tabs': 'Tab stops',
   'dialog.paragraph.tabs.none': 'No tab stops.',
   'dialog.paragraph.tabs.add': 'Add a tab stop',
@@ -92,6 +110,17 @@ export const EN_GB_DIALOGS = {
   'dialog.crossRef.hint':
     'The reference prints the number of its target and follows it when content moves. The page number shows in the PDF; the web view has no pages and shows the number.',
   'dialog.crossRef.insert': 'Insert',
+  // The citation dialog (FE-140 criterion 1).
+  'dialog.citation.title': 'Insert a citation',
+  'dialog.citation.empty': 'The document has no sources yet. Add one in the sources pane.',
+  'dialog.citation.sources': 'Sources to cite, in this order',
+  'dialog.citation.prefix': 'Prefix before {source}',
+  'dialog.citation.locator': 'Locator for {source}, such as a page',
+  'dialog.citation.suffix': 'Suffix after {source}',
+  'dialog.citation.mode': 'Citation mode',
+  'dialog.citation.hint':
+    'Tick each source to cite it. The text of the citation follows the document’s citation style.',
+  'dialog.citation.insert': 'Insert',
   'dialog.region.title': 'Make a region',
   'dialog.region.field': 'Title of the region',
   'dialog.region.hint':
@@ -257,6 +286,16 @@ export const EN_GB_DIALOGS = {
   'export.filter.noExport': 'Your access does not allow export.',
   'export.filter.save': 'Save {name}',
   'export.filter.failed': 'This format could not write the file. The document is unchanged.',
+  // Client import filters of extensions (UX-055). The format's label is the extension's own text.
+  'dialog.import.title': 'Import a file',
+  'dialog.import.format': 'Format',
+  'dialog.import.file': 'File',
+  'dialog.import.start': 'Import',
+  'dialog.import.none': 'No format can be imported here.',
+  'import.filter.failed': 'This format could not read the file. The document is unchanged.',
+  'import.filter.refused':
+    'The file could not be inserted here. The document is unchanged. {message}',
+  'import.filter.done': 'Imported {name}.',
 } as const satisfies StringTable;
 
 registerSource(EN_GB_DIALOGS);

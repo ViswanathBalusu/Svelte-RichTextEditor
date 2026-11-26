@@ -149,6 +149,22 @@ export interface ImportsPort {
   ): Promise<W.ImportJob>;
   /** `GET /imports/{jid}`. */
   get(jobId: string): Promise<Tagged<W.ImportJob>>;
+  /**
+   * The whole flow (PRO-097): uploads the Word file as an asset (the upload answers with the asset
+   * identifier), requests the import with it, and follows the job until it is `completed`, `failed`
+   * or `cancelled`. Resolves with that last job, and calls `onProgress` with the job and then with
+   * each change of its state. Rejects when the upload fails, is cancelled by `signal`, or the
+   * backend closes. A job that failed is a resolved job: its `state` says so.
+   */
+  importFile(
+    docId: string,
+    file: { filename: string; source: UploadSource },
+    opts?: {
+      signal?: CancelSignal;
+      idempotencyKey?: string;
+      onProgress?: (job: W.ImportJob) => void;
+    },
+  ): Promise<W.ImportJob>;
 }
 
 /** The font manifest (05 §6.2). No feature name (G06). */

@@ -312,6 +312,9 @@ export type CoreQueryName1b =
  *   on, in its caption sequence (FE-134 criterion 1);
  * - `insertCrossReference`: `{ target, format? }`, a target of `referenceTargets` and `null` or
  *   `page` as the format; inserts a `ref` field at the caret (FE-134 criterion 2);
+ * - `insertCitation`: `{ items, mode? }`, items of `{ source, prefix?, suffix?, locator? }` for sources of the
+ *   `sources` service and the mode `normal`, `narrative` or `suppressAuthor`; inserts a citation at the
+ *   caret through the guards (FE-140 criterion 1);
  * - `setParagraphFormat`: a patch of `indentLeft`, `indentRight`, `indentFirstLine` (twips) and
  *   `tabs` (the whole list, or null for none) for the selected paragraphs; the ruler and the
  *   paragraph dialog both run it (UX-102 criterion 2; FE-129);
@@ -323,6 +326,7 @@ export type CoreQueryName1b =
  *   for a user with `manage` only (UX-038; owner decision 118).
  */
 export type CoreCommandName =
+  | 'insertCitation'
   | 'setParagraphFormat'
   | 'setTableSize'
   | 'moveBlockUp'
@@ -513,6 +517,41 @@ export interface TabStopView {
   readonly leader: 'none' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' | 'heavy';
 }
 
+export type ParagraphBorderSideView = 'top' | 'bottom' | 'left' | 'right' | 'between';
+
+/** One border of a paragraph (03 §4.5): width in eighths of a point, space in twentieths. */
+export interface ParagraphBorderView {
+  readonly style: 'none' | 'single' | 'double' | 'dotted' | 'dashed' | 'thick';
+  readonly width?: number;
+  readonly color?: string | null;
+  readonly space?: number;
+}
+
+/**
+ * The options of the paragraph dialog besides indents and tab stops (FE-129 criterion 6). Each
+ * value is the first selected paragraph's own, with the CDM's default when it sets none; `mixed`
+ * names the options the selected paragraphs do not share.
+ */
+export interface ParagraphOptionsView {
+  readonly align: 'start' | 'center' | 'end' | 'justify' | 'distribute';
+  /** Twips. */
+  readonly spaceBefore: number;
+  readonly spaceAfter: number;
+  /** Thousandths of a line under `multiple`, twips under `exact` and `atLeast`. */
+  readonly lineSpacing: number;
+  readonly lineRule: 'multiple' | 'exact' | 'atLeast';
+  readonly keepNext: boolean;
+  readonly keepLines: boolean;
+  readonly pageBreakBefore: boolean;
+  readonly widowControl: boolean;
+  readonly contextualSpacing: boolean;
+  /** The sides that have a border; a side with none is absent. */
+  readonly borders: Readonly<Partial<Record<ParagraphBorderSideView, ParagraphBorderView>>>;
+  /** The fill colour (`#RRGGBB`) of the shading; null for none. */
+  readonly shading: string | null;
+  readonly mixed: readonly string[];
+}
+
 /**
  * The indents and tab stops of the paragraphs at the selection, for the ruler and the paragraph
  * dialog (UX-102; 13 §2). Lengths are twips, as the document stores them. A value the selected
@@ -537,6 +576,8 @@ export interface ParagraphFormatView {
   } | null;
   /** Whether the paragraphs may be changed now. */
   readonly editable: boolean;
+  /** Alignment, spacing, keep rules, borders and shading; absent when the core gives none. */
+  readonly options?: ParagraphOptionsView;
 }
 
 /**
@@ -1132,6 +1173,12 @@ export interface CoreApi {
    * client export filters of extensions (UX-055; 13 §7.1). Never hidden content (ADR 0019).
    */
   getContent?(): unknown;
+  /**
+   * Inserts a CDM fragment in place of the selection through the guards of typing (FE-027): the
+   * region guard, the identifier plugin and the read restrictions. Used by the client import filters
+   * of extensions (UX-055). A refusal changes nothing and says why.
+   */
+  insertContent?(fragment: unknown): { ok: true } | { ok: false; reason: string; message: string };
   /**
    * What a cross-reference may point at in the document this reader holds (FE-134 criterion 2): each
    * target with the text a reference to it prints. Absent when the core cannot insert references.
@@ -2155,6 +2202,12 @@ export interface ReviewItem {
    * its commit (the suggestion-to-commit index of HIS-042 would give it).
    */
   readonly committedAt?: string | null;
+  /**
+   * Set when the commit that introduced it was made on an assistant's agent connection (UX-046
+   * criterion 6): the agent and its registered name, the model, or null when the name is gone. The
+   * person it acted for is `user`.
+   */
+  readonly assistant?: { readonly agent: string; readonly name: string | null } | null;
   /** The capabilities the user has in the suggestion's scope. */
   readonly caps: readonly Capability[];
   /** Whether the user may accept or reject it now (`edit` in its scope, document not locked). */

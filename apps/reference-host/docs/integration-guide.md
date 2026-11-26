@@ -297,7 +297,17 @@ A panel an extension contributes is held to the same accessibility bar as a buil
 6. **Pass axe with no violations.** The editor's own panels are checked with axe. Run axe and a keyboard pass on your panel before you ship, in light and dark mode.
 7. **Obey the strict content security policy.** Under the policy in the section above, a `style` attribute and a `style` element are refused. Set styles through the CSS object model or an adopted style sheet.
 
-The editor's tests check items 1 to 3, 4, 5 and 6 on a panel that a test harness contributes, in Chromium, Firefox and WebKit. This reference host does not ship a sample extension yet (UX-050), so the guide has no sample to point to.
+The editor's tests check items 1 to 3, 4, 5 and 6 on a panel that a test harness contributes, in Chromium, Firefox and WebKit, and item 6 again on the sample extension below.
+
+### The sample extension
+
+The reference host ships one in `src/lib/sample-extension.ts`. It adds a command that inserts a custom block (an `extension_block` with a JSON payload and a text fallback), a side panel that lists the blocks it inserted, a second command that opens the panel, a status-bar item with a text alternative, and an import filter for `.note` files (a plain text file becomes a paragraph, inserted at the selection through the guards of typing; the editor lists it in `Import a file`). Open any document with `?sample-extension` added to its address to see it. The page sets `extensions` and `strings` on the element, and nothing else. The sample uses only the public API an extension is given: `registerCommand`, `registerPanel` (the panel draws plain elements into a container, so it needs no framework), `openPanel`, `addStatusItem`, `registerFilter` and the `document` API. The labels of its commands are string keys, so the page passes them in `strings`; the editor reports such keys once on the console and keeps them for extensions.
+
+The element's end-to-end test `packages/element/e2e/ux-050-sample-extension.spec.ts` sets the sample on a real element, runs its command, checks that the block's fallback arrives in the document, opens the panel, uses its button, runs axe on it and removes the extension again. A document gains the `extensions` feature with the first custom block, which the room allows only when every connected client announced that feature; the element announces the features its editor reads in `ch.open`.
+
+### Hooks never sit on the typing path
+
+An extension hears about the document through `document.on(event, handler)`. A handler is called in a later frame, after the change it reports and after the paint, and never inside the transaction; the editor does not wait for it. **No hook can veto, delay or alter a keystroke, and a hook cannot cancel or change a transaction.** Changes made before one delivery are reported together, as one change from the document at the last delivery. A handler that throws is reported as a `de-error` with `fatal` false and the other handlers and the next events are still delivered. A handler runs on the page's main thread, as any script of yours does: long work in a handler delays later frames, so keep it short or move it elsewhere. To change the document from an extension, use the document API: its writes go through the same guards as typing, as a new change, and never inside the keystroke that caused the hook.
 
 ## Backend tiers (05 section 9; PRO-101)
 

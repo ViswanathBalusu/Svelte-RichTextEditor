@@ -15,8 +15,11 @@
  *   made by `compareRange` (the worker thread, and block alignment for a long gap: HIS-011,
  *   HIS-012), with the caller's own changes taken out of it, and `summary` is the summary per
  *   region of what is left (08 §10). It is null when the marker is at the head;
- * - `comments` lists the comments by other people made after the commit the comparison starts at
- *   (`{ thread, comment, author, time, body }`, oldest first, at most 200); a thread in a region
+ * - `comments` lists the comments by other people whose own sequence number is above the caller's
+ *   comment marker (owner decision 73; ADR 0428), `{ thread, comment, seq, author, time, body }`,
+ *   in the order of `seq`, at most the last 200; the reply also carries `commentMarker` and
+ *   `commentHead`, and a client moves the marker with `PUT .../read-marker` (`commentSeq`). With no
+ *   comment marker, every comment by others is listed. A thread in a region
  *   the reader cannot see is left out, as the threads routes leave it out;
  * - `forYou` lists first the comments that mention the caller (`user:<sub>`, or a group of the
  *   token) and then the open threads assigned to the caller (`task`). A task is not limited to the
@@ -98,6 +101,9 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
     const { ref, head, perms } = v;
     const min = v.gate.min;
     const marker = (await store.get(ref, ctx.caller.actor)) ?? 0;
+    // Comments have a sequence number of their own and their own marker (owner decision 73).
+    const commentMarker = await store.getComments(ref, ctx.caller.actor);
+    const commentHead = (await d.threads?.commentHead(ref)) ?? 0;
     const reader = readerView(d.views, v.reader, v.headDoc, perms);
     // Visible seqs are at or above `min` (authority rangeVisible); "since the marker" is above it.
     const floor = Math.max(marker, min - 1);
@@ -127,6 +133,8 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
     const more = {
       marker,
       head: head.seq,
+      commentMarker,
+      commentHead,
       items,
       nextCursor: to < head.seq ? d.cursors.issue(`activity/${doc}`, String(to)) : null,
     };
@@ -138,8 +146,6 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
     let comparison: Comparison | null = null;
     if (fromSeq < head.seq)
       comparison = withoutOwn(await compareRange(k, v, fromSeq, head.seq), mine);
-    const sinceTime =
-      fromSeq === 0 ? 0 : ((await d.logs.read(ref, fromSeq, fromSeq))[0]?.time ?? 0);
     const threads = await threadsOf(ref, reader);
     const identity = ctx.caller.identity;
     const principals = new Set<string>(
@@ -150,6 +156,8 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
     interface Raw {
       thread: string;
       comment: string;
+      /** The comment's own sequence number in the document (decision 73). */
+      seq: number;
       author: string;
       time: number;
       body: unknown;
@@ -160,10 +168,13 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
     for (const t of threads) {
       if (t.state === 'open' && t.assignee !== null && principals.has(t.assignee)) tasks.push(t);
       for (const c of t.comments) {
-        if (c.author === mine || c.createdAt <= sinceTime) continue;
+        // A comment stored before the numbers existed has none and counts as 0: never new.
+        const seq = c.seq ?? 0;
+        if (c.author === mine || seq <= commentMarker) continue;
         raw.push({
           thread: t.id,
           comment: c.id,
+          seq,
           author: c.author,
           time: c.createdAt,
           body: c.body,
@@ -171,7 +182,7 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
         });
       }
     }
-    raw.sort((a, b) => a.time - b.time);
+    raw.sort((a, b) => a.seq - b.seq);
     const nameOf = await k.subsOf(
       ctx.caller.tenant,
       raw.map((r) => r.author),
@@ -179,6 +190,7 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
     const wire = (r: Raw) => ({
       thread: r.thread,
       comment: r.comment,
+      seq: r.seq,
       author: nameOf(r.author),
       time: formatTimestamp(r.time),
       body: r.body,

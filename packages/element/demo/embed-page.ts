@@ -11,7 +11,8 @@
  * - `useEndpoint()`: makes `endpoint` + `getToken` produce mock backends, so that `getToken` is
  *   exercised; tokens are strings from `issueToken(sub, role)`;
  * - `events`: every `de-*` event seen on the document, with its target and detail;
- * - `internals(el)`, `openPdf(el, source)`, `viewers(el)` from the test hooks.
+ * - `internals(el)`, `openPdf(el, source)`, `viewers(el)` from the test hooks;
+ * - `sample`: the reference host's sample extension, its strings and identifiers.
  */
 import '../src/index.ts';
 import { MockBackend, MockService, type MockToken } from '@docedit/backend-mock';
@@ -19,6 +20,12 @@ import { SPIKE_IDS, spikeDocument } from '@docedit/engine/spike-document';
 import { mathGateReason } from '@docedit/export-latex';
 import type { CdmEnvelope } from '@docedit/model';
 import type { DocRole } from '@docedit/protocol';
+import {
+  SAMPLE_EXTENSION_ID,
+  SAMPLE_PANEL_ID,
+  SAMPLE_STRINGS,
+  sampleExtension,
+} from '../../../apps/reference-host/src/lib/sample-extension.ts';
 import { EVENT_NAMES } from '../src/events.ts';
 import {
   internalsOf,
@@ -469,5 +476,12 @@ Object.assign(globalThis, {
     harness: spikeHarness,
     openPdf: openPdfViewer,
     viewers: viewersOf,
+    // The reference host's sample extension, as the host page sets it (UX-050 criterion 6).
+    sample: {
+      extension: sampleExtension,
+      strings: SAMPLE_STRINGS,
+      id: SAMPLE_EXTENSION_ID,
+      panel: SAMPLE_PANEL_ID,
+    },
   },
 });

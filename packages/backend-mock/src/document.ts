@@ -35,6 +35,7 @@ import {
   utf8Length,
   type Commit,
   type Content,
+  type DocumentResource,
   type FieldInfo,
   type FieldValues,
   type Grants,
@@ -240,6 +241,8 @@ export class MockDocument implements ChannelHost {
       epoch: 1,
       incarnation: this.incarnation,
       now: () => this.hooks.now(),
+      // The mock keeps the stored commits as the room builds them, so it can keep requires (03 §11.1).
+      requiresGrowth: true,
       ...(this.hooks.mathGate ? { mathGate: this.hooks.mathGate } : {}),
     });
   }
@@ -587,6 +590,36 @@ export class MockDocument implements ChannelHost {
    */
   setLeases(leases: PermissionState['leases']): void {
     this.changePermissions((p) => ({ ...p, leases: leases.map((l) => ({ ...l })) }));
+  }
+
+  /** The classification label (13 §10); null when the document has none. */
+  classification: string | null = null;
+  private metadataRevision = 0;
+
+  /** `PATCH /documents/{id}` with a label: stored, and every open channel gets `document.updated`. */
+  setClassification(label: string | null): void {
+    this.classification = label;
+    this.metadataRevision++;
+    for (const a of this.attached.values())
+      a.channel.event({ type: 'document.updated', resource: `/documents/${this.id}` });
+  }
+
+  /** `GET /documents/{id}`: the metadata, with the revision as its ETag (05 §6.2). */
+  resource(): Tagged<DocumentResource> {
+    return {
+      value: {
+        id: this.id,
+        externalId: null,
+        title: null,
+        properties: {},
+        classification: this.classification,
+        state: this.state,
+        cdm: 1,
+        requires: [...this.segment.requires] as DocumentResource['requires'],
+        createdAt: formatTimestamp(this.hooks.now()),
+      },
+      etag: `"m${this.metadataRevision}"`,
+    };
   }
 
   setState(state: 'active' | 'locked' | 'archived'): void {

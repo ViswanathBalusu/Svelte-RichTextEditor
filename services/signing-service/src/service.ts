@@ -39,7 +39,7 @@ import {
   timestampInfo,
   type TimestampSource,
 } from './cms.ts';
-import type { KeyService } from './keyservice.ts';
+import type { KeyService, ProviderAssertion } from './keyservice.ts';
 import {
   extendPdf,
   sealPdf,
@@ -146,12 +146,22 @@ export type SealOutcome =
       readonly profile: PadesProfile;
       /** The time of the signature's time-stamp token (`genTime`): the seal's time. */
       readonly timestampTime: Date;
+      /**
+       * The end of the newest time-stamp's validity (the authority certificate's `notAfter`), ms
+       * since the epoch: when the first renewal is due (FRW-056). Absent when it cannot be read.
+       */
+      readonly expiresAtMs?: number;
       /** The service's clock when it sealed: the time in `/M`. */
       readonly sealedAt: Date;
       readonly keyId: string;
       readonly keyOwner: 'operator' | 'tenant';
       /** Present when appearances were asked for. */
       readonly appearances?: AppearanceReport;
+      /**
+       * Present when a signature provider holds the key (FRW-059): what the provider asserts about
+       * its level and the signer. Asserted, not verified.
+       */
+      readonly provider?: ProviderAssertion;
     }
   | {
       readonly ok: false;
@@ -170,6 +180,18 @@ const RETRYABLE: ReadonlySet<SealFailureCode> = new Set([
 ]);
 
 const sha256Hex = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex');
+
+/** `expiresAtMs` from the authority certificate (first) of a time-stamp token; nothing if unreadable. */
+function expiryOf(certs: readonly Uint8Array[]): { expiresAtMs?: number } {
+  const der = certs[0];
+  if (der === undefined) return {};
+  try {
+    const t = certificateOf(der).notAfter.value.getTime();
+    return Number.isFinite(t) ? { expiresAtMs: t } : {};
+  } catch {
+    return {};
+  }
+}
 
 /** The PAdES level a `finalisation.seal` value names, or null for a value the service does not know. */
 export function profileOf(seal: string | undefined): PadesProfile | null {
@@ -426,16 +448,21 @@ export class SigningService {
         }))
       )
         return { ok: false, code: 'audit_unavailable', retryable: true };
+      // A key held by a signature provider says what the provider asserts about it (FRW-059). It was
+      // read when the certificate was; a failure to read it again is not a failed seal.
+      const provider = await keyService.assertion?.().catch(() => undefined);
       return {
         ok: true,
         pdf: result.pdf,
         sealedSha256,
         profile,
         timestampTime: result.timestampTime,
+        ...expiryOf(result.tokenCertificates),
         sealedAt,
         keyId: key.keyId,
         keyOwner: key.owner,
         ...(drawing ? { appearances: drawing.report } : {}),
+        ...(provider ? { provider } : {}),
       };
     } catch (e) {
       if (e instanceof TimestampFailure) return fail('tsa_unreachable');

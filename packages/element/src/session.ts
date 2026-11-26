@@ -38,6 +38,7 @@ import type {
 import type { AssetsPort as PictureAssetsPort, GlyphCoverage, JournalPort } from '@docedit/engine';
 // A value import from the headless entry only: the view code stays in its own chunk.
 import {
+  capabilities,
   type RestorePlan,
   discardForeignWork,
   readRestorePlan,
@@ -83,7 +84,10 @@ export interface AttachAt {
   session?: string;
   /** The history port's read of the commit that introduced a suggestion (FE-046 criterion 2). */
   history?: {
-    suggestionIntroduction(docId: string, suggestionId: string): Promise<{ time: string }>;
+    suggestionIntroduction(
+      docId: string,
+      suggestionId: string,
+    ): Promise<{ time: string; agent?: string; agentName?: string }>;
   };
   /** The user (`welcome.user.id`), whom suggestion marks name (03 §5; FE-042). */
   user?: string;
@@ -403,7 +407,12 @@ export class Session {
       const resume: Resume = { seq: content.seq, incarnation };
       if (content.view !== undefined) resume.view = content.view;
       if (resumeAt?.inflight) resume.inflight = resumeAt.inflight;
-      const channel = await backend.sync.open(this.docId, { resume });
+      // The CDM features this editor reads are announced with the channel, so that the room can add a
+      // feature to requires only when every attached client has it (03 section 11.1; UX-056).
+      const channel = await backend.sync.open(this.docId, {
+        resume,
+        features: capabilities().features,
+      });
       if (this.closed) return channel.close();
       // In the same task as open() resolved, before anything else is awaited: the core reads
       // `channel.opened` and subscribes first, so no message passes it by (decision D21).

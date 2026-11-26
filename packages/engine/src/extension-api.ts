@@ -36,6 +36,8 @@ import type {
   ExtComment,
   ExtEventMap,
   ExtEventName,
+  ExtInlineDraft,
+  ExtInlineResult,
   ExtMarkRun,
   ExtOrigin,
   ExtRange,
@@ -341,6 +343,43 @@ export class ExtensionApi implements ExtensionDocumentApi {
     // The room adds `extensions` to `requires` with the first block (03 §11.1); this copy follows.
     this.#host.requireFeature('extensions');
     return { ok: true, id };
+  }
+
+  insertExtensionInline(at: ExtRange, draft: ExtInlineDraft): ExtInlineResult {
+    const problem = checkBlock(
+      draft.extension,
+      draft.payload,
+      null,
+      draft.fallbackText,
+      INLINE_PAYLOAD_LIMIT_BYTES,
+      'the inline content needs fallback text',
+    );
+    if (problem) return problem;
+    const held = this.#writable(at);
+    if ('ok' in held) return held;
+    const state = this.#host.state();
+    const type = state.schema.nodes['extension_inline'];
+    if (!type)
+      return {
+        ok: false,
+        reason: 'unsupported',
+        message: 'this build has no inline custom content',
+      };
+    let node: PMNode;
+    try {
+      node = type.create({
+        extension: draft.extension,
+        payload: draft.payload ?? null,
+        fallbackText: draft.fallbackText,
+      });
+    } catch (error) {
+      return { ok: false, reason: 'invalid', message: describe(error) };
+    }
+    const result = this.#apply(state.tr.replaceRangeWith(held.from, held.to, node));
+    if (!result.ok) return result;
+    // As for a block: the room adds `extensions` to `requires` with the first node (03 §11.1).
+    this.#host.requireFeature('extensions');
+    return { ok: true };
   }
 
   updateExtensionBlock(id: string, change: ExtBlockChange): ExtBlockResult {
@@ -670,6 +709,8 @@ export class ExtensionApi implements ExtensionDocumentApi {
 
 /** The most bytes a custom block's payload may hold: 16 KiB (03 §4.3; I12). */
 const BLOCK_PAYLOAD_LIMIT_BYTES = 16384;
+/** The model's limit for inline content (03 §4.4, CDM-002); the owner has not set another (decision 176). */
+const INLINE_PAYLOAD_LIMIT_BYTES = 4096;
 
 const blank = (v: string | null | undefined): boolean =>
   v === null || v === undefined || v.trim() === '';
@@ -684,6 +725,8 @@ function checkBlock(
   payload: unknown,
   asset: string | null | undefined,
   text: string | null | undefined,
+  limit: number = BLOCK_PAYLOAD_LIMIT_BYTES,
+  noFallback = 'the block needs a fallback picture or fallback text',
 ): {
   ok: false;
   reason: 'no_extension' | 'no_fallback' | 'payload_too_large' | 'payload_not_json';
@@ -703,13 +746,13 @@ function checkBlock(
     return {
       ok: false,
       reason: 'no_fallback',
-      message: 'the block needs a fallback picture or fallback text',
+      message: noFallback,
     };
-  if (bytes > BLOCK_PAYLOAD_LIMIT_BYTES)
+  if (bytes > limit)
     return {
       ok: false,
       reason: 'payload_too_large',
-      message: `the payload is ${bytes} bytes; the limit is ${BLOCK_PAYLOAD_LIMIT_BYTES}`,
+      message: `the payload is ${bytes} bytes; the limit is ${limit}`,
     };
   return null;
 }

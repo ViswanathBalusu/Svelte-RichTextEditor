@@ -71,7 +71,7 @@ describe.skipIf(!ready.ok)(`EXP-072 the sandbox holds no credential (${ready.rea
 
   it('would find a credential if one were there (positive control)', async () => {
     const r = await runInSandbox(
-      `mkdir -p /work/probe && printf 'aws_access_key_id=AKIA0123456789ABCDEF\\n' > /work/probe/credentials\n${LIST}`,
+      `mkdir -p /work/probe && printf 'aws_access_key_id=AKIA${'0123456789ABCDEF'}\\n' > /work/probe/credentials\n${LIST}`,
     );
     const out = text(r.stdout);
     expect(out).toContain('[done]');

@@ -3,8 +3,9 @@
  * (12 §7; 05 §3.1; PRO-015 criterion 3; FRW-038, FRW-040). Lane U-PRO-001-017, round 2.
  *
  * A token may carry `wfp` (the workflow participant), `amr` and `auth_time` (how and when the host
- * authenticated the person). The token service keeps the well-typed ones on the verified identity
- * (`VerifiedIdentity.asserted`, control-plane/tokens.ts). When a channel opens, and again when its
+ * authenticated the person). The token service keeps the well-typed ones on the identity record it
+ * builds from the token (`VerifiedIdentity.asserted`, control-plane/tokens.ts; the token's
+ * signature is what is verified, not the person). When a channel opens, and again when its
  * token is refreshed, the session records them here with the token's `jti` and the server time.
  *
  * The service does not vouch for them. They are not identity proof, feed no permission check and

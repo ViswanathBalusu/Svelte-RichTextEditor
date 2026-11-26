@@ -58,6 +58,10 @@ export function suggestionRoutes(k: Kit): Record<string, Handler> {
     const c = rows[0];
     if (!c) throw new ApiError('not_found', 'the introducing commit is not in the log');
     const name = await k.subsOf(ctx.caller.tenant, [c.user]);
+    // The model of an assistant commit (UX-046 criterion 6): its identifier, and its registered
+    // name while the registry still has it. The history keeps `agent` after an agent is disabled.
+    const agent =
+      c.agent !== undefined ? await d.tokens.agents.get(ctx.caller.tenant, c.agent) : undefined;
     return json(
       200,
       {
@@ -65,6 +69,8 @@ export function suggestionRoutes(k: Kit): Record<string, Handler> {
         time: formatTimestamp(c.time),
         user: name(c.user),
         origin: c.origin,
+        ...(c.agent !== undefined ? { agent: c.agent } : {}),
+        ...(agent !== undefined ? { agentName: agent.name } : {}),
         ...(visible ? { seq } : {}),
       },
       { 'Cache-Control': 'private, no-cache' },

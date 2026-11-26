@@ -122,6 +122,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
           { gaps: ['G10'] },
         ),
         name: opt(text()),
+        agent: opt(
+          text({ minLength: 1 }),
+          'An agent identifier from `POST /agents`. The token is then an agent token (type `dep-agent+jwt`) for an assistant acting for `sub`, capped at `suggest` (05 §3.2.1; ADR 0234).',
+        ),
         grp: opt(arr(text()), 'Group identifiers.'),
         wfp: opt(text(), 'Workflow participant (12 §7).'),
         wfr: opt(
@@ -156,6 +160,33 @@ export const REST_SHAPES: readonly NamedShape[] = [
         expiresAt: req(timestamp(), 'Its `exp`.'),
       },
       { spec: '05 §3.1', decisions: ['D60'] },
+    ),
+  ),
+  named(
+    'AgentRequest',
+    obj(
+      {
+        name: req(
+          text({ minLength: 1, maxLength: 200 }),
+          'What history and the review pane show for the agent, for example the name of the model.',
+        ),
+        docs: opt(
+          arr(uuid7(), { maxItems: 1000, unique: true }),
+          'The documents the agent may act on; absent means every document of the tenant.',
+        ),
+      },
+      { spec: '05 §3.2.1', doc: 'The registration of an assistant agent (ADR 0234 A2).' },
+    ),
+  ),
+  named(
+    'Agent',
+    obj(
+      {
+        id: req(text({ minLength: 1 }), 'The agent identifier (`agt`) to put in `POST /tokens`.'),
+        name: req(text(), 'The registered display name.'),
+        docs: opt(arr(uuid7()), 'The documents the agent may act on; absent means all.'),
+      },
+      { spec: '05 §3.2.1', doc: 'A registered assistant agent (ADR 0234 A2).' },
     ),
   ),
   named(
@@ -502,9 +533,9 @@ export const REST_SHAPES: readonly NamedShape[] = [
   named(
     'ReadMarker',
     obj(
-      { seq: req(seq()) },
+      { seq: req(seq()), commentSeq: opt(seq()) },
       {
-        doc: "The caller's last seen `seq`; it only moves forward (08 §10).",
+        doc: "The caller's last seen `seq`; it only moves forward (08 §10). `commentSeq` is the last comment sequence number the caller has seen (a comment has a sequence number of its own in its document; owner decision 73); it moves forward on its own and is answered only when the request names it.",
         spec: '05 §6.2; 08 §10',
         gaps: ['G70'],
       },
@@ -1007,6 +1038,14 @@ export const REST_SHAPES: readonly NamedShape[] = [
         time: req(text(), 'The server time of the introducing commit, ISO 8601 UTC.'),
         user: req(text(), 'The user who introduced it, as `sub`.'),
         origin: req(text(), 'The origin of the introducing commit.'),
+        agent: opt(
+          text(),
+          'The agent identifier when the commit was made on an agent connection (UX-046).',
+        ),
+        agentName: opt(
+          text(),
+          'The registered display name of that agent, for example the model; absent when the agent is no longer registered.',
+        ),
         seq: opt(
           seq(),
           'The seq of the introducing commit; absent when it lies below the caller gate.',
@@ -1354,6 +1393,21 @@ export const OPERATIONS: readonly OperationDef[] = [
     success: ok(ref('TokenResponse')),
     gaps: ['G58'],
     decisions: ['D60'],
+    owner: PRO,
+  }),
+  op({
+    operationId: 'createAgent',
+    method: 'POST',
+    path: '/agents',
+    summary:
+      'Registers an assistant agent; its token is minted with `POST /tokens` and `agent` (ADR 0234 A2).',
+    spec: '05 §3.2.1, §6.2',
+    security: SERVICE,
+    requires: 'Service credential',
+    body: ref('AgentRequest'),
+    idempotencyKey: true,
+    success: created(ref('Agent')),
+    codes: ['idempotency_mismatch'],
     owner: PRO,
   }),
   op({

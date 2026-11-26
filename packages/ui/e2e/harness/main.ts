@@ -138,6 +138,8 @@ export interface MountOptions {
   status?: StatusSummary;
   presence?: PresencePeer[];
   features?: string[];
+  /** True: the backend announces neither `fields` nor `workflow` (FRW-065 criterion 3). */
+  withoutFieldPorts?: boolean;
   counts?: ShellCounts;
   /** `host`: the directory above; `failing`: every call rejects; `none`: no resolveUsers. */
   people?: 'host' | 'failing' | 'none';
@@ -216,6 +218,12 @@ export interface MountOptions {
    * tampers with what it receives and throws. The core then offers `getContent`.
    */
   exportFilters?: boolean;
+  /**
+   * Client import filters of an extension (UX-055): a working one that reads `.note` files, one that
+   * throws and one whose fragment the core refuses. The core then offers `insertContent`, which
+   * records what it is given.
+   */
+  importFilters?: boolean;
   /**
    * The accessibility checker pane (UX-066, UX-067): the core gives a document with one issue of
    * each kind (the alternative text of one figure is set by `editChecker`), and records the blocks
@@ -345,6 +353,8 @@ const unknownKeys: string[] = [];
 const iconsInvalid: string[] = [];
 /** What the export filters received (UX-055). */
 const filterContents: string[] = [];
+/** The fragments the fake core was asked to insert by an import filter (UX-055). */
+const insertedFragments: unknown[] = [];
 /** Hook calls (UX-054): the revision, and whether an input event was being dispatched then. */
 const hookCalls: Array<{
   revision: number;
@@ -501,6 +511,39 @@ function exportFilterRegistry(): FilterRegistry {
   return filters;
 }
 
+function importFilterRegistry(): FilterRegistry {
+  const filters = new FilterRegistry();
+  const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+  filters.add({
+    kind: 'import',
+    id: 'ext.note-in',
+    label: 'Notes (extension)',
+    extensions: ['note'],
+    run: ({ bytes }) => ({
+      cdm: 1,
+      requires: [],
+      content: [{ type: 'paragraph', text: text(bytes) }],
+    }),
+  });
+  filters.add({
+    kind: 'import',
+    id: 'ext.broken-in',
+    label: 'Broken format (extension)',
+    extensions: ['bad'],
+    run: () => {
+      throw new Error('the broken import filter failed');
+    },
+  });
+  filters.add({
+    kind: 'import',
+    id: 'ext.refused-in',
+    label: 'Refused format (extension)',
+    extensions: ['nope'],
+    run: () => ({ cdm: 1, requires: [], content: [{ type: 'refused' }] }),
+  });
+  return filters;
+}
+
 const host = document.getElementById('host')!;
 const root = host.attachShadow({ mode: 'open' });
 const base = new CSSStyleSheet();
@@ -612,9 +655,13 @@ function mountShell(options: MountOptions = {}): void {
     ...(options.access ? { access: options.access } : {}),
     ...(options.status ? { status: options.status } : {}),
     ...(options.presence ? { presence: options.presence } : {}),
-    ...(options.features || options.comments
-      ? { features: [...(options.features ?? []), ...(options.comments ? ['comments'] : [])] }
-      : {}),
+    // The backend of the harness announces the `fields` and `workflow` features unless a run says
+    // otherwise (`withoutFieldPorts`): the field and workflow controls need them (FRW-065).
+    features: [
+      ...(options.withoutFieldPorts ? [] : ['fields', 'workflow']),
+      ...(options.features ?? []),
+      ...(options.comments ? ['comments'] : []),
+    ],
     ...(options.comments ? { threads: true } : {}),
     ...(options.review ? { review: true } : {}),
     ...(options.counts ? { counts: options.counts } : {}),
@@ -923,6 +970,21 @@ function mountShell(options: MountOptions = {}): void {
     Object.assign(core, { getContent: () => DOCUMENT_CONTENT });
     props['filters'] = exportFilterRegistry();
   }
+  if (options.importFilters) {
+    Object.assign(core, {
+      insertContent: (fragment: { content: Array<{ type: string }> }) => {
+        if (fragment.content.some((b) => b.type === 'refused'))
+          return {
+            ok: false,
+            reason: 'refused',
+            message: 'The selection is in a region you may not change.',
+          };
+        insertedFragments.push(fragment);
+        return { ok: true };
+      },
+    });
+    props['filters'] = importFilterRegistry();
+  }
   if (options.hooks) {
     // Test bounds of the harness, not product values (ADR 0136: the host sets them).
     props['hooks'] = {
@@ -1046,6 +1108,7 @@ const harness = {
   unknownKeys,
   iconsInvalid,
   filterContents,
+  insertedFragments,
   hookCalls,
   hookErrors,
   /** The document the fake core holds, as the export filters would receive it. */

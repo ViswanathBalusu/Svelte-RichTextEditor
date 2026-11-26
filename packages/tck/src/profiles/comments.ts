@@ -19,7 +19,7 @@ const c = (def: Omit<ScenarioDef, 'id'> & { id: string }) => scenario('comments'
  * problem is `forbidden` (403) or `not_found` (404), the two refusals 05 §6.1 gives a caller whose
  * token does not cover the resource's document.
  */
-function refusedToOutsider(res: HttpResponse, what: string): void {
+export function refusedToOutsider(res: HttpResponse, what: string): void {
   const p = problemOf(res, what);
   check(
     (p.code === 'forbidden' && p.status === 403) || (p.code === 'not_found' && p.status === 404),
@@ -30,7 +30,7 @@ function refusedToOutsider(res: HttpResponse, what: string): void {
 }
 
 /** A thread with one more comment on a new document, made by a commenter of that document. */
-async function threadOf(ctx: ScenarioContext) {
+export async function threadOf(ctx: ScenarioContext) {
   const doc = await ctx.document();
   const { token } = await ctx.token('commenter', { [doc]: 'commenter' });
   const content = await readContent(ctx, token, doc);

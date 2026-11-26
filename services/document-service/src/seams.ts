@@ -65,6 +65,11 @@ export interface VerifiedIdentity {
   readonly sub: string;
   /** The `name` claim, when the token has one. */
   readonly name?: string;
+  /**
+   * The registered agent of a verified agent token (`dep-agent+jwt`; ADR 0234 A1). `connection.agent`
+   * is its identifier; absent for a user token.
+   */
+  readonly agent?: { readonly id: string; readonly name: string };
   /** When the token was issued (`iat`), Unix milliseconds. */
   readonly issuedAt: number;
   /** Output restrictions of the `restrict` claim (`no-export`, `no-copy`, `no-print`). */

@@ -218,6 +218,27 @@ export {
   type PathStep,
 } from './head-anchor.ts';
 export {
+  LOG_RECEIPT_FORMAT,
+  PUBLIC_ANCHOR_FORMAT,
+  PUBLIC_ROOT_FIELD_REASONS,
+  PUBLIC_ROOT_FORMAT,
+  PUBLIC_ROOT_MEMBERS,
+  PUBLIC_SALT_BYTES,
+  buildPublicRoot,
+  parsePublicEntry,
+  publicEntryText,
+  publicLeaf,
+  publicRootProof,
+  unlistedPublicEntryFields,
+  verifyPublicRootProof,
+  type PublicAnchorEvidence,
+  type PublicLogReceipt,
+  type PublicRoot,
+  type PublicRootEntry,
+  type PublicRootProof,
+  type SaltedHead,
+} from './public-root.ts';
+export {
   COLD_AFTER_MS,
   PAYLOAD_SEGMENT_FORMAT,
   coldMovePlan,

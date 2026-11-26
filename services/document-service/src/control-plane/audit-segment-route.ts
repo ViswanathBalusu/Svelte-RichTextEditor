@@ -17,6 +17,8 @@
  *   open (owner decisions, 2026-11-15, note under decision 142); until the owner says so, a reader
  *   with hidden regions gets no segment. A service credential reads the full chain.
  * - The anchors are those the store holds for the range; this store has none yet (HIS-036).
+ * - With a public anchor source (SEC-067) the segment also carries the transparency log's receipt and
+ *   the proof of a head in the published root.
  */
 import { auditSegment } from '@docedit/history';
 import {
@@ -78,7 +80,11 @@ export function auditSegmentRoutes(k: Kit): Record<string, Handler> {
 
     // Only the records the segment holds, and the one below them, are read.
     const bundle = await d.logs.chainRange(ref, Math.max(fromSeq, min), toSeq);
-    const made = auditSegment(bundle, { fromSeq, toSeq, minVisibleSeq: min });
+    // The public anchor of the range, when the service has one (SEC-067): the receipt and the proof.
+    const publicAnchors = d.publicAnchors
+      ? await d.publicAnchors.evidence(ref.tenant, doc, { from: Math.max(fromSeq, min), to: toSeq })
+      : [];
+    const made = auditSegment(bundle, { fromSeq, toSeq, minVisibleSeq: min, publicAnchors });
     if (!made.ok) throw new ApiError(made.code, made.reason);
     return json(200, made.segment, { 'Cache-Control': 'private, no-cache' });
   };

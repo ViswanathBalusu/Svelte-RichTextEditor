@@ -103,6 +103,8 @@ const KNOWN_PARAMS = [
   'seq',
   'deliveryId',
   'holdId',
+  // A name from a fixed set, not an identifier of tenant B (UX-033; ADR 0424).
+  'reaction',
 ];
 
 /** Client messages that take an identifier, and those that do not (05 §5). */
@@ -330,6 +332,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         ownerB,
       );
       ids['cid'] = made('comment', reply, reply.json?.id);
+      ids['reaction'] = 'thumbsUp';
       const version = await asB('POST', `/v1/documents/${ids['doc']}/versions`, { name: 'v1' });
       made('version', version, version.json?.name);
       const job = await asB('POST', `/v1/documents/${ids['doc']}/exports`, { target: 'pdf' });

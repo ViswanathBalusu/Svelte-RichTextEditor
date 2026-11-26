@@ -28,6 +28,7 @@ import {
   type CommentsPort,
   type Content,
   type Discovery,
+  type DocumentResource,
   type ErrorCode,
   type ExportsPort,
   type FieldsPort,
@@ -69,6 +70,7 @@ import {
 import { DepChannel, type ChannelHost } from './channel.ts';
 import { Connection } from './connection.ts';
 import { createFilePorts, type FilePorts } from './files.ts';
+import { createImportFlow, type ImportFlow } from './import-flow.ts';
 import { createReviewPorts, type ReviewPorts } from './review.ts';
 import { Timers, platform, type Platform } from './platform.ts';
 import { RestClient } from './rest.ts';
@@ -266,6 +268,7 @@ export class DepBackend implements Backend {
   private readonly fieldsPort: FieldsPort;
   private readonly files: FilePorts;
   private readonly review: ReviewPorts;
+  private readonly importFlow: ImportFlow;
 
   constructor(options: DepBackendOptions) {
     this.opts = options;
@@ -286,7 +289,12 @@ export class DepBackend implements Backend {
     );
     this.sync = {
       loadContent: (docId, seq) => this.loadContent(docId, seq),
-      open: (docId, o) => this.open(docId, o.resume),
+      // The metadata read (PRO-048): the answer is checked against its shape and unknown fields stay.
+      document: (docId) =>
+        this.tagged<DocumentResource>('GET', `/documents/${enc(docId)}`, {
+          shape: 'DocumentResource',
+        }),
+      open: (docId, o) => this.open(docId, o.resume, o.features),
     };
     const base: PermissionsPort = {
       current: (docId) => this.accesses.get(docId) ?? null,
@@ -364,6 +372,11 @@ export class DepBackend implements Backend {
         now: () => this.p.now(),
       },
     });
+    this.importFlow = createImportFlow({
+      imports: this.review.imports,
+      assets: this.files.assets,
+      clock: { set: (fn, ms) => this.timers.set(fn, ms), clear: (key) => this.timers.clear(key) },
+    });
   }
 
   // --- Backend ---------------------------------------------------------------------------------
@@ -397,7 +410,8 @@ export class DepBackend implements Backend {
     else delete this.workflow;
     if (this.negotiated.has('fields')) this.fields = this.fieldsPort;
     else delete this.fields;
-    if (this.opts.proxyImports === true) this.imports = this.review.imports;
+    if (this.opts.proxyImports === true)
+      this.imports = { ...this.review.imports, importFile: this.importFlow.importFile };
     else delete this.imports;
   }
 
@@ -441,6 +455,7 @@ export class DepBackend implements Backend {
     this.accesses.clear();
     this.failRequests('the backend was closed');
     this.files.abort('the backend was closed');
+    this.importFlow.abort('the backend was closed');
     const conn = this.conn ?? this.pendingConn;
     this.conn = null;
     this.pendingConn = null;
@@ -763,7 +778,11 @@ export class DepBackend implements Backend {
     else this.views.set(docId, { incarnation, view, from: seq, to: seq });
   }
 
-  private async open(docId: string, resume: Resume | undefined): Promise<SyncChannel> {
+  private async open(
+    docId: string,
+    resume: Resume | undefined,
+    features?: readonly string[],
+  ): Promise<SyncChannel> {
     if (this.phase !== 'online' || !this.conn) throw new PortError('unavailable', 'not connected');
     const existing = this.channels.get(docId);
     if (existing && !existing.isClosed)
@@ -785,9 +804,25 @@ export class DepBackend implements Backend {
     this.byCh.set(n, ch);
     const opened = ch.whenOpen();
     ch.apply(
-      machine.open(n, [...this.negotiated], resume && this.withView(docId, resume), this.p.now()),
+      machine.open(
+        n,
+        this.announced(features),
+        resume && this.withView(docId, resume),
+        this.p.now(),
+      ),
     );
     return opened;
+  }
+
+  /**
+   * The features sent in `ch.open` (D120): the negotiated ones, and the CDM features the caller reads
+   * that the server announced. The server keeps them for the channel's life.
+   */
+  private announced(read: readonly string[] | undefined): string[] {
+    const out = new Set(this.negotiated);
+    const offered = new Set(this.welcome?.features ?? []);
+    for (const f of read ?? []) if (offered.has(f)) out.add(f);
+    return [...out];
   }
 
   /** Fills `resume.view` from the content read or channel the resume point came from (D81). */

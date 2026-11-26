@@ -169,7 +169,7 @@ const SELECT_COMMITS = `${COMMIT_ROWS}
 
 /** The metadata of a range of commits, with no payload (`readMeta`). */
 const SELECT_COMMIT_META = `
-  SELECT c.seq, c.kind, c.user_id, c.session_id, c.server_ts, c.origin, c.access_rev,
+  SELECT c.seq, c.kind, c.user_id, c.session_id, c.agent, c.server_ts, c.origin, c.access_rev,
          coalesce(s.scopes, '{}') AS scopes
     FROM doc_commits c
     LEFT JOIN LATERAL (
@@ -725,9 +725,10 @@ export class PgLogStore implements LogStore, OwnershipStore {
     return this.#inTenant(
       ref,
       async (c) => {
-        const r = await c.query<
-          Omit<CommitRow, 'payload' | 'payload_hash' | 'commit_id' | 'agent'>
-        >(SELECT_COMMIT_META, [ref.doc, fromSeq, toSeq]);
+        const r = await c.query<Omit<CommitRow, 'payload' | 'payload_hash' | 'commit_id'>>(
+          SELECT_COMMIT_META,
+          [ref.doc, fromSeq, toSeq],
+        );
         return r.rows.map((row) => ({
           seq: int(row.seq),
           kind: row.kind,
@@ -735,6 +736,7 @@ export class PgLogStore implements LogStore, OwnershipStore {
           session: row.session_id ?? SERVER_SESSION,
           time: millis(row.server_ts)!,
           origin: row.origin,
+          ...(row.agent !== null ? { agent: row.agent } : {}),
           scopes: row.scopes,
           revision: int(row.access_rev),
         }));

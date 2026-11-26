@@ -27,6 +27,7 @@ import type { EquationDrawer } from '../equation-draw.ts';
 import { EQUATION_NODES } from '../equation-commands.ts';
 import { equationBlockView, equationNumbersPlugin, equationView } from './equation-view.ts';
 import { figureView } from './figure-view.ts';
+import { extensionBlockView } from './extension-view.ts';
 import { imageView } from './image-view.ts';
 import { preservedView } from './preserved-view.ts';
 import { coreKeys } from '../keys.ts';
@@ -66,6 +67,8 @@ import type { RegionLockDefaults, RegionLockLabel } from '../region-lock.ts';
 import { regionLockDecorations } from './region-lock-view.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
+import { tabStopsPlugin } from './tab-stops-view.ts';
+import { citationNamesPlugin } from './citation-names-view.ts';
 import { sectionWarningPlugin } from './section-warning-view.ts';
 import { SuggestionCard } from './suggestion-card.ts';
 import { tocPlugin, tocView } from './toc-view.ts';
@@ -514,10 +517,14 @@ export class EditorCore extends DocumentCore {
           // FE-139: the preserved atom's label, fallback picture and display size.
           preserved_block: preservedView('div', this.#assetImage),
           preserved_inline: preservedView('span', this.#assetImage),
+          // UX-058: the fallback picture of a custom block no extension draws.
+          extension_block: extensionBlockView(this.#assetImage),
           equation: equationView(this.#drawEquation),
           equation_block: equationBlockView(this.#drawEquation),
         },
         markViews: cssomMarkViews(this.#fontAlias),
+        // FE-129 criterion 2: a tab in the text advances to the paragraph's tab stops.
+        plugins: [tabStopsPlugin(), citationNamesPlugin()],
         attributes: this.#bodyAttributes(),
         // An equation opens in the math editor on a double click or on Enter while it is selected
         // (FE-070); the shell reads the request (`equationRequest`). Nothing is opened here.

@@ -402,15 +402,19 @@ function inlineHtml(ctx: Ctx, nodes: readonly J[] | undefined, blockId: string |
       case 'form_field':
         note(ctx, 'warning', 'form_field_omitted', 'form fields are not written in HTML', blockId);
         break;
-      case 'extension_inline':
+      case 'extension_inline': {
+        // Written as its fallback text and nothing else (UX-057 criterion 4).
+        const fallback = str(n.attrs?.['fallbackText']);
         note(
           ctx,
           'warning',
           'extension_omitted',
-          'host extensions are not written in HTML',
+          'host extension content is written as its fallback text, or not at all',
           blockId,
         );
+        if (fallback !== null) out += escapeHtml(fallback);
         break;
+      }
       case 'preserved_inline':
         note(
           ctx,

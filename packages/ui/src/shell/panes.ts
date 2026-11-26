@@ -108,6 +108,7 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
   {
     id: 'fields',
     label: 'pane.fields',
+    feature: 'fields',
     load: () => load(import('../panes/FieldsPane.svelte')),
     available: (core) => core.fieldProperties !== undefined,
     prepare: (core) => core.fieldProperties?.prepare?.(),
@@ -115,6 +116,7 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
   {
     id: 'rules',
     label: 'pane.rules',
+    feature: 'rules',
     load: () => load(import('../panes/RulesPane.svelte')),
     available: (core) => core.rules !== undefined,
     prepare: (core) => core.rules?.prepare?.(),
@@ -135,6 +137,7 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
   {
     id: 'roles',
     label: 'pane.roles',
+    feature: 'fields',
     load: () => load(import('../panes/RolesPane.svelte')),
     available: (core) => core.roles !== undefined,
     prepare: (core) => core.roles?.prepare?.(),
@@ -167,6 +170,7 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
   {
     id: 'fill',
     label: 'pane.fill',
+    feature: 'fields',
     load: () => load(import('../panes/FillPane.svelte')),
     available: (core) => core.fill !== undefined,
   },
@@ -177,6 +181,9 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
  * `sandboxedExtension` as `panel.load`; the component is its own chunk, loaded when the pane first opens.
  */
 export const loadSandboxPane: PaneLoader = () => load(import('../panes/SandboxPane.svelte'));
+
+/** The loader of the pane that holds the elements a tier 1 extension draws itself (UX-052). */
+export const loadDomPane: PaneLoader = () => load(import('../panes/ExtensionDomPane.svelte'));
 
 export class PaneRegistry {
   readonly #panes = new Map<string, PaneDescriptor>();

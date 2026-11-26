@@ -1568,6 +1568,10 @@
       "capability": "editing"
     },
     {
+      "id": "insert.citation",
+      "capability": "citations"
+    },
+    {
       "id": "insert.region",
       "capability": "regions-and-permissions"
     },
@@ -1586,6 +1590,10 @@
     {
       "id": "document.export",
       "capability": "export-pdf"
+    },
+    {
+      "id": "document.import",
+      "capability": "host-panels-and-commands"
     },
     {
       "id": "document.print",

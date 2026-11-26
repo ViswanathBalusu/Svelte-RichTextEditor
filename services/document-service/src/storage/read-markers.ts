@@ -15,6 +15,13 @@ export interface ReadMarkerStore {
    * `user` is the user's surrogate (the caller's actor).
    */
   advance(ref: DocRef, user: string, seq: number, now: number): Promise<number>;
+  /**
+   * How far the user has read the comments of the document: the highest comment sequence number
+   * seen (PRO-058; owner decision 73); 0 when none.
+   */
+  getComments(ref: DocRef, user: string): Promise<number>;
+  /** Moves the comment marker to `commentSeq` when that is higher; returns the marker in force. */
+  advanceComments(ref: DocRef, user: string, commentSeq: number, now: number): Promise<number>;
 }
 
 /** Read markers in PostgreSQL, under the tenant's row-level security (BE-011). */
@@ -58,6 +65,37 @@ export class PgReadMarkerStore implements ReadMarkerStore {
       return Number(r.rows[0]!.seq);
     });
   }
+
+  getComments(ref: DocRef, user: string): Promise<number> {
+    return inTenant(
+      this.#pool,
+      ref.tenant,
+      async (c) => {
+        const r = await c.query<{ comment_seq: string }>(
+          'select comment_seq from read_markers where doc_id = $1 and user_id = $2',
+          [ref.doc, user],
+        );
+        return r.rows[0] === undefined ? 0 : Number(r.rows[0].comment_seq);
+      },
+      { readOnly: true },
+    );
+  }
+
+  advanceComments(ref: DocRef, user: string, commentSeq: number, now: number): Promise<number> {
+    return inTenant(this.#pool, ref.tenant, async (c) => {
+      // A new row starts its log marker at 0; an existing row keeps it. Only a higher number writes.
+      const r = await c.query<{ comment_seq: string }>(
+        `insert into read_markers (doc_id, tenant_id, user_id, seq, comment_seq, updated_at)
+         values ($1, $2, $3, 0, $4, $5)
+         on conflict (doc_id, user_id) do update
+           set comment_seq = greatest(read_markers.comment_seq, excluded.comment_seq),
+               updated_at = excluded.updated_at
+         returning comment_seq`,
+        [ref.doc, ref.tenant, user, commentSeq, new Date(now)],
+      );
+      return Number(r.rows[0]!.comment_seq);
+    });
+  }
 }
 
 /** Read markers in memory: nothing outlives the process (the memory parts of the service). */
@@ -77,5 +115,18 @@ export class MemoryReadMarkerStore implements ReadMarkerStore {
     const current = this.#markers.get(key);
     if (current === undefined || current < seq) this.#markers.set(key, seq);
     return this.#markers.get(key)!;
+  }
+
+  readonly #comments = new Map<string, number>();
+
+  async getComments(ref: DocRef, user: string): Promise<number> {
+    return this.#comments.get(MemoryReadMarkerStore.#key(ref, user)) ?? 0;
+  }
+
+  async advanceComments(ref: DocRef, user: string, commentSeq: number): Promise<number> {
+    const key = MemoryReadMarkerStore.#key(ref, user);
+    const next = Math.max(this.#comments.get(key) ?? 0, commentSeq);
+    this.#comments.set(key, next);
+    return next;
   }
 }

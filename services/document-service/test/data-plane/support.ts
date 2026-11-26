@@ -91,6 +91,8 @@ interface TokenSpec {
   restrict?: readonly string[];
   /** The `access_since` claim as Unix milliseconds (08 §9; the `since_access` gate). */
   accessSince?: number;
+  /** The agent of an agent connection (UX-046) or of a verified agent token (ADR 0234 A1): the token holds the `agent` claim. */
+  agent?: string;
 }
 
 /** Tokens as opaque strings mapped to identities, in place of signed JWTs (BE-012 is A2's). */
@@ -119,6 +121,7 @@ export class Tokens {
         role: spec.docs[first] ?? base.role,
         ...(spec.groups ? { groups: spec.groups } : {}),
         ...(spec.accessSince !== undefined ? { accessSince: spec.accessSince } : {}),
+        ...(spec.agent !== undefined ? { agent: spec.agent } : {}),
       },
       jti: uuid7(),
       expiresAt: issuedAt + (spec.expiresIn ?? 15 * 60_000),

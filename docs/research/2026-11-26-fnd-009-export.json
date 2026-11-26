@@ -1,0 +1,51 @@
+{
+  "story": "FND-009 criterion 3",
+  "date": "2026-11-26T09:11:29.494Z",
+  "machine": {
+    "cpu": "Intel(R) Core(TM) i9-10900KF CPU @ 3.70GHz",
+    "cores": 20,
+    "memoryGiB": 128,
+    "platform": "win32 10.0.26300"
+  },
+  "node": "v22.18.0",
+  "image": "localhost/docedit-export-worker:s4",
+  "storage": "memory",
+  "toc": false,
+  "sections": 120,
+  "pages": [
+    20
+  ],
+  "runs": 20,
+  "failed": 0,
+  "targetMs": {
+    "p95": 10000
+  },
+  "ms": {
+    "min": 10443,
+    "median": 12965,
+    "p95": 28498,
+    "max": 34592
+  },
+  "samples": [
+    10821,
+    10550,
+    11276,
+    12810,
+    12965,
+    12731,
+    12997,
+    11365,
+    15280,
+    34592,
+    15547,
+    24285,
+    27939,
+    28498,
+    15254,
+    13806,
+    13810,
+    11314,
+    10503,
+    10443
+  ]
+}
