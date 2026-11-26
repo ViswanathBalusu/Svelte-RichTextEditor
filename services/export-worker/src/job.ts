@@ -50,6 +50,7 @@ import { imageDigest as readImageDigest, imageId as readImageId } from './contai
 import { chainHeadOf, contentAt, documentLang, type ContentStores } from './content.ts';
 import { diagnostic, LOG_LIMITS, parseLog, type ParsedLog } from './diagnostics.ts';
 import type { FontFileCheck } from './font-files.ts';
+import { tenantFonts as loadTenantFonts, type TenantFontSource } from './tenant-fonts.ts';
 import { buildLayout, parseRawLayout, validateLayout, type LayoutJson } from './layout.ts';
 import {
   compileBoth,
@@ -143,6 +144,12 @@ export interface ExportHandlerDeps {
    * reports a problem the job fails before conversion, and no other font is used. Absent: not checked.
    */
   checkFontFiles?: (manifest: FontManifest) => Promise<FontFileCheck>;
+  /**
+   * The fonts tenants added (tenant-fonts.ts; EXP-048). A job asks for its own tenant only, so a
+   * font of another tenant is neither in its manifest nor among the files it compiles with. Absent:
+   * the job has the image's fonts only.
+   */
+  tenantFonts?: TenantFontSource;
   /** The compile; the sandbox by default. Tests replace it. */
   compile?: (
     files: Readonly<Record<string, string | Uint8Array>>,
@@ -714,9 +721,9 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
 
     const t1 = now();
     const digest = await readDigest(image);
-    const fonts = await deps.fonts();
+    const imageFonts = await deps.fonts();
     if (deps.checkFontFiles) {
-      const check = await deps.checkFontFiles(fonts);
+      const check = await deps.checkFontFiles(imageFonts);
       if (!check.ok)
         throw failed(
           'unavailable',
@@ -724,6 +731,12 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
           check.problems.map((p) => diagnostic(p.code, null, `${p.family}, ${p.face}: ${p.file}`)),
         );
     }
+    // The tenant's own fonts join the manifest of this job, and their files go with the compile.
+    const tenantSet = deps.tenantFonts
+      ? await loadTenantFonts(deps.tenantFonts, tenant, imageFonts)
+      : null;
+    const fonts = tenantSet ? tenantSet.manifest : imageFonts;
+    const tenantFontFiles = tenantSet ? tenantSet.files : {};
     // The manifest names the chain head of the exported state (HIS-034 criterion 3).
     const pdfChainHead = await chainHeadOf(deps.stores, { tenant, doc: payload.doc }, payload.seq);
     // The bundle is written with the class pinned when the handler started, the same bytes
@@ -760,7 +773,11 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       pinned.classFiles,
     );
     m.convertMs = now() - t1;
-    const diagnostics: Diagnostic[] = [...plan.diagnostics, ...bundle.diagnostics];
+    const diagnostics: Diagnostic[] = [
+      ...plan.diagnostics,
+      ...(tenantSet ? tenantSet.diagnostics : []),
+      ...bundle.diagnostics,
+    ];
     // Counted from the converter's own list, one per occurrence, before `dedupe` joins the equal
     // diagnostics of two pictures in one block (09 §13; EXP-113 criterion 2).
     const imagesWithoutAlt = bundleAltTextReport(bundle).count;
@@ -856,7 +873,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     let allPasses: CompileResult['passes'];
     if (payload.sealing) {
       const [first, second] = await compileBoth(
-        { ...bundle.files, ...assets },
+        { ...bundle.files, ...assets, ...tenantFontFiles },
         compileOptions,
         compile,
       );
@@ -865,7 +882,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       wallMs = first.wallMs + second.wallMs;
       allPasses = [...first.passes, ...second.passes];
     } else {
-      r = await compile({ ...bundle.files, ...assets }, compileOptions);
+      r = await compile({ ...bundle.files, ...assets, ...tenantFontFiles }, compileOptions);
       wallMs = r.wallMs;
       allPasses = r.passes;
     }

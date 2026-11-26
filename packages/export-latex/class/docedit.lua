@@ -154,6 +154,23 @@ function docedit.fontpath()
   if path then tex.sprint(-2, path) end
 end
 
+-- The directory of a family's files. A tenant's own font (EXP-048) comes with the job, in the job's
+-- tenant-fonts/ directory, under its hash name like every other font; the worker puts it there for
+-- that tenant's jobs only. A file that is not there is read from the image's font directory.
+function docedit.fontpath_of(file)
+  local path = font_directory()
+  if not path then return end
+  if type(file) == "string" and file:match("^[0-9a-f]+%.[ot]t[fc]$") then
+    local f = io.open("tenant-fonts/" .. file, "rb")
+    if f then
+      f:close()
+      tex.sprint(-2, "tenant-fonts/")
+      return
+    end
+  end
+  tex.sprint(-2, path)
+end
+
 -- The fallback chain (09 §3.2; EXP-026, EXP-047): faces from the font directory, named by their
 -- SHA-256 like every other font, in the order of the font manifest. luaotfload takes a glyph from
 -- the first face of the chain that has it.

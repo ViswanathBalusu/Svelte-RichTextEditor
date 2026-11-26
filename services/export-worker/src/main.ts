@@ -23,9 +23,11 @@ import {
   PgGrantStore,
   PgJobQueue,
   PgLogStore,
+  PgTenantFontStore,
   S3ObjectStore,
 } from '@docedit/document-service';
 import { imageFontManifest } from './fonts.ts';
+import { tenantFontSource } from './tenant-fonts.ts';
 import { imageFontCheck } from './image-font-files.ts';
 import { metricsLogFields } from './metrics-log.ts';
 import { IMAGE } from './sandbox.ts';
@@ -63,6 +65,7 @@ pool.on('error', () => {});
 const grants = new PgGrantStore(pool);
 const objects = new S3ObjectStore(config.s3!);
 const assetStore = new ObjectAssetStore(objects);
+const tenantFontStore = new PgTenantFontStore(pool);
 const logs = new PgLogStore(pool, { permissions: (ref) => grants.current(ref) });
 const worker = createExportWorker({
   queue: new PgJobQueue(pool),
@@ -81,6 +84,8 @@ const worker = createExportWorker({
     // EXP-047 criterion 2: every face of the manifest must be a file of the image under its hash,
     // or the job fails with font_file_missing or font_file_mismatch before it converts.
     checkFontFiles: imageFontCheck(IMAGE),
+    // EXP-048: the fonts the job's own tenant added, from that tenant's rows and object prefix only.
+    tenantFonts: tenantFontSource(tenantFontStore, objects),
     image: IMAGE,
     // Every attempt, named by how it ended (metrics-log.ts): `export.completed`,
     // `export.attempt_failed` or `export.attempt_aborted`, with the stage times of EXP-060 and the

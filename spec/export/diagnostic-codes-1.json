@@ -149,6 +149,11 @@
       "message": "Documents with unresolved suggestions cannot be exported yet."
     },
     {
+      "code": "tenant_font_unavailable",
+      "severity": "warning",
+      "message": "A font the tenant added is not used in this export."
+    },
+    {
       "code": "tex_error",
       "severity": "error",
       "message": "The typesetter stopped with an error."

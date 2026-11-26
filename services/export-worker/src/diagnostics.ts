@@ -35,6 +35,10 @@ export const CODES = {
     message: 'A font file does not hash to the name the manifest gives it.',
   },
   overfull_line: { severity: 'warning', message: 'A line is wider than its column.' },
+  tenant_font_unavailable: {
+    severity: 'warning',
+    message: 'A font the tenant added is not used in this export.',
+  },
   field_too_wide: {
     severity: 'warning',
     message: 'The value of a form field is wider than the field.',
