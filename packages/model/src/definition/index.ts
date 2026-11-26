@@ -29,6 +29,7 @@ export {
   NO_PAGE_BREAK_CONTAINERS,
   REGION_POLICIES,
 } from './cdm1.ts';
+export { MODEL_PACKAGE, modelStampIdentity, type ModelStampIdentity } from './stamp.ts';
 export {
   FIELD_DEFAULT_WIDTH,
   FIELD_KINDS,
