@@ -85,6 +85,7 @@ export const EN_GB_CORE = {
   'command.view.layout.read': 'Reading',
   'command.view.layout.print': 'Print layout',
   'command.document.export': 'Export',
+  'command.document.import': 'Import a file',
   'command.document.print': 'Print',
   'command.page.closeStory': 'Close header and footer',
   'command.mode.edit': 'Editing',
@@ -708,6 +709,8 @@ export const EN_GB_CORE = {
 
   // Client export filters of extensions (UX-055). The format's label is the extension's own text.
   'announce.export.completed': 'The export has finished.',
+  'announce.import.completed': 'The file has been imported.',
+  'announce.import.failed': 'The file could not be imported. The document is unchanged.',
   'announce.export.failed': 'The export failed.',
   'announce.export.cancelled': 'The export was cancelled.',
 

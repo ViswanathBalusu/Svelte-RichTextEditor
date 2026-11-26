@@ -204,6 +204,12 @@ export interface MountOptions {
    */
   exportFilters?: boolean;
   /**
+   * Client import filters of an extension (UX-055): a working one that reads `.note` files, one that
+   * throws and one whose fragment the core refuses. The core then offers `insertContent`, which
+   * records what it is given.
+   */
+  importFilters?: boolean;
+  /**
    * The accessibility checker pane (UX-066, UX-067): the core gives a document with one issue of
    * each kind (the alternative text of one figure is set by `editChecker`), and records the blocks
    * the pane asks it to select.
@@ -332,6 +338,8 @@ const unknownKeys: string[] = [];
 const iconsInvalid: string[] = [];
 /** What the export filters received (UX-055). */
 const filterContents: string[] = [];
+/** The fragments the fake core was asked to insert by an import filter (UX-055). */
+const insertedFragments: unknown[] = [];
 /** Hook calls (UX-054): the revision, and whether an input event was being dispatched then. */
 const hookCalls: Array<{
   revision: number;
@@ -484,6 +492,39 @@ function exportFilterRegistry(): FilterRegistry {
       (content as { doc: unknown }).doc = null;
       throw new Error('the broken filter failed');
     },
+  });
+  return filters;
+}
+
+function importFilterRegistry(): FilterRegistry {
+  const filters = new FilterRegistry();
+  const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+  filters.add({
+    kind: 'import',
+    id: 'ext.note-in',
+    label: 'Notes (extension)',
+    extensions: ['note'],
+    run: ({ bytes }) => ({
+      cdm: 1,
+      requires: [],
+      content: [{ type: 'paragraph', text: text(bytes) }],
+    }),
+  });
+  filters.add({
+    kind: 'import',
+    id: 'ext.broken-in',
+    label: 'Broken format (extension)',
+    extensions: ['bad'],
+    run: () => {
+      throw new Error('the broken import filter failed');
+    },
+  });
+  filters.add({
+    kind: 'import',
+    id: 'ext.refused-in',
+    label: 'Refused format (extension)',
+    extensions: ['nope'],
+    run: () => ({ cdm: 1, requires: [], content: [{ type: 'refused' }] }),
   });
   return filters;
 }
@@ -890,6 +931,21 @@ function mountShell(options: MountOptions = {}): void {
     Object.assign(core, { getContent: () => DOCUMENT_CONTENT });
     props['filters'] = exportFilterRegistry();
   }
+  if (options.importFilters) {
+    Object.assign(core, {
+      insertContent: (fragment: { content: Array<{ type: string }> }) => {
+        if (fragment.content.some((b) => b.type === 'refused'))
+          return {
+            ok: false,
+            reason: 'refused',
+            message: 'The selection is in a region you may not change.',
+          };
+        insertedFragments.push(fragment);
+        return { ok: true };
+      },
+    });
+    props['filters'] = importFilterRegistry();
+  }
   if (options.hooks) {
     // Test bounds of the harness, not product values (ADR 0136: the host sets them).
     props['hooks'] = {
@@ -1013,6 +1069,7 @@ const harness = {
   unknownKeys,
   iconsInvalid,
   filterContents,
+  insertedFragments,
   hookCalls,
   hookErrors,
   /** The document the fake core holds, as the export filters would receive it. */

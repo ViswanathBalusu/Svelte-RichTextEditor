@@ -499,6 +499,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The document as this reader holds it: the accessibility checker reads it (UX-066), so a
       // picture without alternative text is listed (FE-132 criterion 5).
       getContent: () => core.getContent(),
+      // The client import filters of extensions insert their fragment through the guards of typing
+      // (UX-055; FE-027).
+      insertContent: (fragment) =>
+        core.insertContent(fragment as Parameters<typeof core.insertContent>[0]),
       // The range-based document API of the host's extensions (UX-053; UX-050 criterion 6).
       extensionApi: (opts) => core.extensionApi(opts),
       // The cross-reference dialog's list (FE-134 criterion 2).

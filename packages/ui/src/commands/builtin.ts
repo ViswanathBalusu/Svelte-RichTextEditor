@@ -250,6 +250,7 @@ export interface ShellCommandHost1b {
       | 'version'
       | 'send'
       | 'crossReference'
+      | 'import'
       | 'paragraph',
   ): boolean;
   zoom(step: 'in' | 'out' | 'reset'): boolean;
@@ -667,6 +668,16 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       feature: 'exports',
       capability: 'export-pdf',
       run: () => host.openDialog('export'),
+    },
+    // Import through the client filters of extensions (UX-055). It changes the document, so it needs
+    // `edit` or `suggest` (UX-004); the shell offers it only when a filter and the core can take a file.
+    'document.import': {
+      id: 'document.import',
+      label: 'command.document.import',
+      group: 'page',
+      changesContent: true,
+      capability: 'host-panels-and-commands',
+      run: () => host.openDialog('import'),
     },
     // Disabled with the reason under `no-print` (UX-040 criterion 3); the shell sets the answer.
     'document.print': {

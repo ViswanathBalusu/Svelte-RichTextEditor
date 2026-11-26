@@ -1095,6 +1095,12 @@ export interface CoreApi {
    */
   getContent?(): unknown;
   /**
+   * Inserts a CDM fragment in place of the selection through the guards of typing (FE-027): the
+   * region guard, the identifier plugin and the read restrictions. Used by the client import filters
+   * of extensions (UX-055). A refusal changes nothing and says why.
+   */
+  insertContent?(fragment: unknown): { ok: true } | { ok: false; reason: string; message: string };
+  /**
    * What a cross-reference may point at in the document this reader holds (FE-134 criterion 2): each
    * target with the text a reference to it prints. Absent when the core cannot insert references.
    */
