@@ -205,12 +205,13 @@ export async function compileInSandbox(
       : readTar(res.stdout, { allow: OUTPUTS, maxFileBytes: l.outputBytes });
   let r: RunResult = await start(name);
   let out = read(r);
-  // A container that never reached TeX (the runtime failed to start it, exit 125, or the entry point
-  // failed in its set-up, exit 65 or 70) wrote none of the outputs, not even the timings, and says
-  // nothing about the bundle. It is started once more, under another name. On the hosted CI runners
-  // (rootless Podman, 2026-11-25) a few compiles ended like this with no reason on record; the
-  // first attempt's exit code and standard error stay at the head of the result's `stderr`. A
-  // timeout, an overflow and a cancel are never repeated, and neither is a job that ran TeX.
+  // A container that never reached TeX wrote none of the outputs, not even the timings, and says
+  // nothing about the bundle: the runtime failed to start it (exit 125), or the entry point failed
+  // in its set-up (65 or 70), or the outputs were lost. It is started once more, under another name.
+  // On the hosted CI runners (rootless Podman, 2026-11-25) a few compiles ended like this with no
+  // reason on record; the first attempt's exit code and standard error stay at the head of the
+  // result's `stderr`. A timeout, an overflow, a cancel and a kill by a limit (exit 137 or 143)
+  // are never repeated, and neither is a job that ran TeX.
   let startFailure = '';
   let ranName = name;
   if (
@@ -219,7 +220,9 @@ export async function compileInSandbox(
     !r.timedOut &&
     !r.stdoutOverflow &&
     !r.aborted &&
-    (r.code === 125 || r.code === 65 || r.code === 70)
+    r.code !== null &&
+    r.code !== 137 &&
+    r.code !== 143
   ) {
     startFailure = `[first start failed, exit ${r.code} after ${Math.round(r.wallMs)} ms: ${r.stderr.trim().slice(-1000)}]\n`;
     ranName = `${name}-again`;
