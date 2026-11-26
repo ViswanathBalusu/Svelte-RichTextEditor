@@ -15,6 +15,7 @@ import type { AddressInfo } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { uuid7 } from '@docedit/model';
 import {
+  checkFontFile,
   podmanSandbox,
   signExportUrl,
   type AssetUrlKeys,
@@ -105,6 +106,12 @@ import {
 } from './control-plane/document-purge.ts';
 import { PgPurgeStore } from './control-plane/document-purge-pg.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
+import { PgTenantFontStore } from './control-plane/tenant-fonts-pg.ts';
+import {
+  MemoryTenantFontStore,
+  TenantFontService,
+  type TenantFontStore,
+} from './control-plane/tenant-fonts.ts';
 import { MemorySessionRecordStore, SessionRecords } from './control-plane/session-records.ts';
 import { PgSessionRecordStore } from './control-plane/session-records-pg.ts';
 import {
@@ -301,6 +308,8 @@ export interface ServiceParts {
   historyVisibility?: HistoryVisibilityService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080). Absent: the routes are not offered. */
   holds?: HoldService;
+  /** The fonts tenants add (BE-048). Absent: `/tenant-fonts` is not offered. */
+  tenantFonts?: TenantFontStore;
   /**
    * The rows of the purge of deleted documents (HIS-039). Needs a pool that connects as a member of
    * docedit_purge (migration 0073), so `pgParts` does not make it. Absent: no purge task runs.
@@ -682,6 +691,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     retention: retentionOver(new PgRetentionStore(pool), documents, audit, now),
     historyVisibility: visibilityOver(visibility, documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
+    tenantFonts: new PgTenantFontStore(pool),
     workflows: new PgWorkflowResourceStore(pool, { now }),
     templates: new PgTemplateStore(pool),
     reminders: new PgReminderStore(pool),
@@ -735,6 +745,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     retention: retentionOver(new MemoryRetentionStore(), store, audit, now),
     historyVisibility: visibilityOver(visibility, store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
+    tenantFonts: new MemoryTenantFontStore(),
     workflows: new MemoryWorkflowResourceStore(),
     templates: new MemoryTemplateStore(),
     reminders: new MemoryReminderStore(),
@@ -1397,6 +1408,23 @@ export async function startService(opts: StartOptions): Promise<Service> {
       : config.assetWorker
         ? { sandbox: podmanSandbox() }
         : null;
+  // The fonts tenants add (BE-048): checked in the asset worker's sandbox, stored under the tenant.
+  const tenantFonts =
+    parts.tenantFonts && parts.audit
+      ? new TenantFontService({
+          store: parts.tenantFonts,
+          objects: parts.objects,
+          audit: parts.audit,
+          check: assetWorker
+            ? async (bytes, mime) => {
+                const r = await checkFontFile(assetWorker.sandbox, bytes, mime);
+                return r.ok ? r : { ok: false, code: r.code, message: r.message };
+              }
+            : null,
+          fileBase: `${publicUrl}${REST_PATH}/tenant-fonts`,
+          now,
+        })
+      : undefined;
   if (assetWorker)
     runnerFor({
       [ASSET_JOB_KIND]: assetJobHandler({
@@ -1873,6 +1901,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.quotaAdmin ? { quotaAdmin: parts.quotaAdmin } : {}),
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),
+    ...(tenantFonts ? { tenantFonts } : {}),
     ...(erasures ? { erasures } : {}),
     ...(tombstones ? { tombstones } : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),

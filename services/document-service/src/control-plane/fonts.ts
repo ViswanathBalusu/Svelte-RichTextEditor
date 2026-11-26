@@ -91,7 +91,11 @@ export interface ManifestFace {
   url: string;
   sha256: string;
   bytes: number;
-  format: 'truetype' | 'opentype';
+  format: 'truetype' | 'opentype' | 'woff2';
+  /** The licence declaration of a tenant's own face (BE-048); absent on the shared catalogue's faces. */
+  licence?: string;
+  /** Whether the declaration allows the font on a server, so in a PDF (decision 62); tenant faces only. */
+  serverUse?: boolean;
   /**
    * The code points the face covers, as sorted inclusive ranges, when the font set's manifest
    * records them. The editor's export preflight reads them, so that it checks characters against
@@ -107,6 +111,10 @@ export interface ManifestFamily {
   licence: string;
   lineHeight: number | null;
   faces: ManifestFace[];
+  /** True for a family the tenant added (BE-048); the shared catalogue's families omit it. */
+  tenant?: true;
+  /** For a tenant family: every face may be used on a server (decision 62). */
+  serverUse?: boolean;
 }
 
 /** The body of `GET /fonts` (D143). */
@@ -150,14 +158,22 @@ export function emptyCatalogue(): FontCatalogue {
   };
 }
 
-function versionOf(defaultFamily: string | null, families: readonly ManifestFamily[]): string {
+export function versionOf(
+  defaultFamily: string | null,
+  families: readonly ManifestFamily[],
+): string {
   // URLs are left out: the version names the set of fonts, wherever it is served from.
   const set = families.map((f) => ({
     family: f.family,
     role: f.role,
     licence: f.licence,
     lineHeight: f.lineHeight,
-    faces: f.faces.map((x) => ({ style: x.style, sha256: x.sha256 })),
+    faces: f.faces.map((x) => ({
+      style: x.style,
+      sha256: x.sha256,
+      ...(x.licence !== undefined ? { licence: x.licence } : {}),
+      ...(x.serverUse !== undefined ? { serverUse: x.serverUse } : {}),
+    })),
   }));
   return createHash('sha256')
     .update(canonicalize({ v: 1, defaultFamily, set }), 'utf8')
@@ -269,6 +285,9 @@ export async function loadFontCatalogue(
     excluded,
   };
 }
+
+/** The version of a set of families, as `loadFontCatalogue` computes it (BE-047 criterion 3). */
+export const fontsVersion = versionOf;
 
 /** The ETag of a manifest: its version (BE-047 criterion 3). */
 export const fontsEtag = (m: FontManifestBody) => `"f${m.version.slice(0, 32)}"`;

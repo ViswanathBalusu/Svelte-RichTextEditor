@@ -3893,6 +3893,150 @@
         "placedAt"
       ]
     },
+    "TenantFontRequest": {
+      "title": "TenantFontRequest",
+      "description": "A font file and its licence declaration (BE-048).",
+      "$comment": "06 §12; 13 §10",
+      "type": "object",
+      "properties": {
+        "filename": {
+          "description": "The file name, for the administrator only.",
+          "type": "string",
+          "maxLength": 255
+        },
+        "mime": {
+          "description": "The declared type of the file.",
+          "type": "string",
+          "enum": [
+            "font/ttf",
+            "font/otf",
+            "font/woff2"
+          ]
+        },
+        "content": {
+          "description": "The font file, base64.",
+          "type": "string",
+          "minLength": 1
+        },
+        "licence": {
+          "description": "The licence declaration the administrator makes for the file.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "serverUse": {
+          "description": "Whether the licence allows the font on a server, so in a PDF. A font without it is shown on screen only and replaced in the PDF (decision 62).",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mime",
+        "content",
+        "licence",
+        "serverUse"
+      ]
+    },
+    "TenantFont": {
+      "title": "TenantFont",
+      "description": "A font a tenant added (BE-048).",
+      "$comment": "06 §12; 13 §10",
+      "type": "object",
+      "properties": {
+        "sha256": {
+          "description": "The SHA-256 of the file, lower-case hex.",
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "family": {
+          "description": "The family name the font file declares.",
+          "type": "string",
+          "minLength": 1
+        },
+        "style": {
+          "description": "The face.",
+          "type": "string",
+          "enum": [
+            "regular",
+            "bold",
+            "italic",
+            "boldItalic"
+          ]
+        },
+        "format": {
+          "description": "The format found in the file.",
+          "type": "string",
+          "enum": [
+            "truetype",
+            "opentype",
+            "woff2"
+          ]
+        },
+        "bytes": {
+          "description": "The size of the file.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "licence": {
+          "description": "The licence declaration.",
+          "type": "string",
+          "minLength": 1
+        },
+        "serverUse": {
+          "description": "Whether the declaration allows server-side use.",
+          "type": "boolean"
+        },
+        "url": {
+          "description": "Where the file is read, with a credential of the tenant.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "sha256",
+        "family",
+        "style",
+        "format",
+        "bytes",
+        "licence",
+        "serverUse",
+        "url"
+      ]
+    },
+    "TenantFontFile": {
+      "title": "TenantFontFile",
+      "description": "The file of a font a tenant added (BE-048).",
+      "$comment": "06 §12",
+      "type": "object",
+      "properties": {
+        "sha256": {
+          "description": "The SHA-256 of the file.",
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "mime": {
+          "description": "The type of the file.",
+          "type": "string",
+          "enum": [
+            "font/ttf",
+            "font/otf",
+            "font/woff2"
+          ]
+        },
+        "content": {
+          "description": "The font file, base64.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "sha256",
+        "mime",
+        "content"
+      ]
+    },
     "ErasePersonRequest": {
       "title": "ErasePersonRequest",
       "description": "The body of an erasure of a person (HIS-038; 08 section 13).",

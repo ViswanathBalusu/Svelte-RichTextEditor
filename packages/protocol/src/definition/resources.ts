@@ -1129,6 +1129,63 @@ export const REST_SHAPES: readonly NamedShape[] = [
     ),
     'UX',
   ),
+  // Fonts a tenant adds (BE-048; owner decisions 62, 94, 95). The file travels as base64 in the body
+  // because the contract has no binary bodies; the shapes are a proposal of docs/adr/0424-w5-BE-048-tenant-fonts.md.
+  named(
+    'TenantFontRequest',
+    obj(
+      {
+        filename: opt(text({ maxLength: 255 }), 'The file name, for the administrator only.'),
+        mime: req(enm(['font/ttf', 'font/otf', 'font/woff2']), 'The declared type of the file.'),
+        content: req(text({ minLength: 1 }), 'The font file, base64.'),
+        licence: req(
+          text({ minLength: 1, maxLength: 200 }),
+          'The licence declaration the administrator makes for the file.',
+        ),
+        serverUse: req(
+          bool(),
+          'Whether the licence allows the font on a server, so in a PDF. A font without it is shown on screen only and replaced in the PDF (decision 62).',
+        ),
+      },
+      { doc: 'A font file and its licence declaration (BE-048).', spec: '06 §12; 13 §10' },
+    ),
+    'BE',
+  ),
+  named(
+    'TenantFont',
+    obj(
+      {
+        sha256: req(
+          text({ minLength: 64, maxLength: 64 }),
+          'The SHA-256 of the file, lower-case hex.',
+        ),
+        family: req(text({ minLength: 1 }), 'The family name the font file declares.'),
+        style: req(enm(['regular', 'bold', 'italic', 'boldItalic']), 'The face.'),
+        format: req(enm(['truetype', 'opentype', 'woff2']), 'The format found in the file.'),
+        bytes: req(int({ min: 1 }), 'The size of the file.'),
+        licence: req(text({ minLength: 1 }), 'The licence declaration.'),
+        serverUse: req(bool(), 'Whether the declaration allows server-side use.'),
+        url: req(
+          text({ minLength: 1 }),
+          'Where the file is read, with a credential of the tenant.',
+        ),
+      },
+      { doc: 'A font a tenant added (BE-048).', spec: '06 §12; 13 §10' },
+    ),
+    'BE',
+  ),
+  named(
+    'TenantFontFile',
+    obj(
+      {
+        sha256: req(text({ minLength: 64, maxLength: 64 }), 'The SHA-256 of the file.'),
+        mime: req(enm(['font/ttf', 'font/otf', 'font/woff2']), 'The type of the file.'),
+        content: req(text({ minLength: 1 }), 'The font file, base64.'),
+      },
+      { doc: 'The file of a font a tenant added (BE-048).', spec: '06 §12' },
+    ),
+    'BE',
+  ),
   // Erasing a person (HIS-038 criterion 6; 08 section 13). The `sub` travels in the body and never
   // in a path, so that it stays out of access logs.
   named(
@@ -1918,6 +1975,49 @@ export const OPERATIONS: readonly OperationDef[] = [
     success: ok(ref('FontManifest')),
     gaps: ['G75', 'G06'],
     owner: PRO,
+  }),
+  op({
+    operationId: 'addTenantFont',
+    method: 'POST',
+    path: '/tenant-fonts',
+    summary:
+      'Adds a font file for the tenant with a licence declaration. The file is checked in the sandbox and stored under the tenant by its hash; a file that fails is refused and nothing is published (BE-048).',
+    spec: '06 §12; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    body: ref('TenantFontRequest'),
+    idempotencyKey: true,
+    success: created(ref('TenantFont')),
+    owner: 'BE',
+  }),
+  op({
+    operationId: 'getTenantFont',
+    method: 'GET',
+    path: '/tenant-fonts/{sha256}',
+    params: {
+      sha256: req(text({ minLength: 64, maxLength: 64 }), 'The SHA-256 of the font file.'),
+    },
+    summary:
+      'The file of a font the tenant added, for any user or service of the tenant. Another tenant gets not_found, even for the same hash (BE-048).',
+    spec: '06 §12; 13 §10',
+    security: BOTH,
+    success: ok(ref('TenantFontFile')),
+    owner: 'BE',
+  }),
+  op({
+    operationId: 'removeTenantFont',
+    method: 'DELETE',
+    path: '/tenant-fonts/{sha256}',
+    params: {
+      sha256: req(text({ minLength: 64, maxLength: 64 }), 'The SHA-256 of the font file.'),
+    },
+    summary:
+      'Removes a font the tenant added and its file; audited. Exports that use it fall back to the fallback chain with a warning (BE-048; EXP-048).',
+    spec: '06 §12; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    success: ok(ref('TenantFont')),
+    owner: 'BE',
   }),
   op({
     operationId: 'listWebhooks',
