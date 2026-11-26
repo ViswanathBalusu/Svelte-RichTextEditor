@@ -123,13 +123,14 @@ describe('backend-mock', () => {
       [IDS.locked]: { roles: ['owner'], principals: ['group:legal', 'user:ada'] },
     });
     // A lease names its holder until it expires (07 §10).
-    service.setLeases(docId, [
-      { region: IDS.open, holder: 'bob', expiresAt: service.now() + 60_000 },
-    ]);
+    const leaseEnds = service.now() + 60_000;
+    service.setLeases(docId, [{ region: IDS.open, holder: 'bob', expiresAt: leaseEnds }]);
     expect((await editors())[IDS.open]).toEqual({
       roles: ['editor', 'owner'],
       principals: [],
       leasedTo: 'bob',
+      // PRM-048 criterion 3: and when the lease expires.
+      leaseExpiresAt: new Date(leaseEnds).toISOString(),
     });
     service.advanceClock(60_001);
     expect((await editors())[IDS.open]).toEqual({ roles: ['editor', 'owner'], principals: [] });

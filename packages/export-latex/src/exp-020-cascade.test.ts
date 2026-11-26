@@ -9,7 +9,7 @@
  * are run properties: a text run takes them from a mark, and they print in its `\DEfont` macro.
  */
 import { describe, expect, it } from 'vitest';
-import { blockLines, doc, para, run, type J } from '../test/docs.ts';
+import { blockLines, doc, FONTS, para, run, type J } from '../test/docs.ts';
 import { dimen } from './emit.ts';
 
 const SIZE = { min: 20, max: 32760 };
@@ -193,5 +193,50 @@ describe('EXP-020 criterion 5: a paragraph style in a table overrides the table 
     expect(
       effective(blockLines(withoutStyle, idOf(plain)), withoutStyle.files['styles.tex']!, 'DEsz'),
     ).toBe(String(dimen(1000, SIZE)));
+  });
+});
+
+describe('FE-062: a substitute line of the font manifest names the family of a family the manifest lacks', () => {
+  const family = (name: string, c: string) => ({
+    name,
+    lineHeight: 1362,
+    regular: { file: `${c.repeat(64)}.ttf`, sha256: c.repeat(64) },
+    bold: { file: `${'b'.repeat(63)}${c}.ttf`, sha256: `${'b'.repeat(63)}${c}` },
+    italic: { file: `${'c'.repeat(63)}${c}.ttf`, sha256: `${'c'.repeat(63)}${c}` },
+    boldItalic: { file: `${'d'.repeat(63)}${c}.ttf`, sha256: `${'d'.repeat(63)}${c}` },
+    licence: 'OFL-1.1',
+  });
+  const fonts = {
+    ...FONTS,
+    families: [family('Noto Serif', '1'), family('Carlito', '2')],
+    substitutes: [
+      { family: 'Calibri', replacement: 'Carlito' },
+      { family: 'Cambria', replacement: 'Not In The Manifest' },
+    ],
+  };
+  /** The `\DEfont` family number of a paragraph set in `name`, and the diagnostics' codes. */
+  async function familyNumber(name: string): Promise<{ n: string; codes: string[] }> {
+    const p = para('', {}, [textRun('Text.', [{ type: 'fontFamily', attrs: { value: name } }])]);
+    const bundle = await run(doc([p]), { fonts });
+    return {
+      n: /\DEfont\{(\d+)\}/.exec(blockLines(bundle, idOf(p)).join('\n'))![1]!,
+      codes: bundle.diagnostics.map((d) => d.code),
+    };
+  }
+
+  it('uses the replacement family without a diagnostic, whatever the case and spacing of the name', async () => {
+    for (const name of ['Calibri', 'calibri', ' CALIBRI  ']) {
+      const r = await familyNumber(name);
+      expect(r.n).toBe('2');
+      expect(r.codes).not.toContain('font_family_missing');
+    }
+  });
+
+  it('uses the default family and says so when the replacement is not in the manifest, or no line names the family', async () => {
+    for (const name of ['Cambria', 'Aptos']) {
+      const r = await familyNumber(name);
+      expect(r.n).toBe('1');
+      expect(r.codes).toContain('font_family_missing');
+    }
   });
 });

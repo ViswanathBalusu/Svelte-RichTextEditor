@@ -250,6 +250,30 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       expect(unchanged.json.rev).toBe(1);
     });
 
+    it.skipIf(skip)(
+      'refuses every action of the owner to a caller without manage and changes nothing (criterion 5)',
+      async () => {
+        const doc = await h.createDocument();
+        const owner = h.userToken({ [doc]: 'owner' });
+        await put(doc, owner, '"0"', body(doc));
+        for (const role of ['viewer', 'commenter']) {
+          const token = h.userToken({ [doc]: role });
+          for (const action of ['send', 'correct', 'resume', 'void', 'remind']) {
+            const refused = await h.call('POST', `/v1/documents/${doc}/workflow/${action}`, {
+              token,
+              body: action === 'void' ? { reason: 'No longer needed.' } : {},
+              headers: { 'idempotency-key': `frw-025-${role}-${action}` },
+            });
+            expect(refused.status, `${role} ${action}`).toBe(403);
+            expect(refused.json.code, `${role} ${action}`).toBe('forbidden');
+          }
+        }
+        const after = await h.call('GET', `/v1/documents/${doc}/workflow`, { token: owner });
+        expect(after.json.state).toBe('draft');
+        expect(after.json.rev).toBe(1);
+      },
+    );
+
     it.skipIf(skip)('announces the feature workflow in discovery (criterion 6)', async () => {
       const discovery = await h.call('GET', '/.well-known/dep');
       expect(discovery.status).toBe(200);

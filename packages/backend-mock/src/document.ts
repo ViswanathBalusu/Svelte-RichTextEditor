@@ -670,7 +670,9 @@ export class MockDocument implements ChannelHost {
         editors: {
           roles: frozen ? [] : policy === 'inherit' ? ['editor', 'owner'] : ['owner'],
           principals: [...new Set(principals)].sort(),
-          ...(lease && !frozen ? { leasedTo: lease.holder } : {}),
+          ...(lease && !frozen
+            ? { leasedTo: lease.holder, leaseExpiresAt: formatTimestamp(lease.expiresAt) }
+            : {}),
         },
       });
     });

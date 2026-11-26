@@ -42,6 +42,7 @@ import {
   type EditorMode,
   type ExportService,
   type LeasesService,
+  type RegionSummary,
   type ResolveUsers,
   type ReviewItem,
   type ShellSettings,
@@ -71,6 +72,7 @@ import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
 import { rulesService } from './rules.ts';
 import { signRequestWatch, signingService, type SigningSource } from './signing.ts';
+import { participantsService } from './participants.ts';
 import { workflowSendService, type WorkflowSendSource } from './workflow-send.ts';
 import { fieldPropertiesService } from './field-properties.ts';
 import { mathEditorService } from './math-editor.ts';
@@ -420,6 +422,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
 
   // The send dialog and the lock banner (FRW-028, FRW-029): made once, so that one service follows the workflow.
   const workflowSend = options.workflow ? workflowSendService(core, options.workflow) : null;
+  // The participants of the workflow and their order (FRW-026): the roles pane lists and edits them.
+  const participants = options.workflow ? participantsService(core, options.workflow) : null;
   // The adoption and signing step (FRW-045, FRW-046): a signature field the participant activated.
   const signing = options.signing ? signingService(core, options.signing) : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
@@ -556,6 +560,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'insertRecovered',
         'discardRecovered',
         'setLanguage',
+        'setParagraphFormat',
         'paragraphStyle',
         'characterStyle',
         'tableStyle',
@@ -582,6 +587,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
           return core.setImageAlt(a.asset, a.alt);
         }
         if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
+        // The ruler and the paragraph dialog (UX-102): the args are the patch of indents and tab
+        // stops; the core checks every value and the user's right to change the paragraphs.
+        if (name === 'setParagraphFormat') {
+          if (args === null || typeof args !== 'object' || Array.isArray(args)) return false;
+          return core.run('setParagraphFormat', {
+            paragraphFormat: args as Readonly<Record<string, unknown>>,
+          });
+        }
         // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
         // puts it on the selection through the guards; neither takes an argument.
         if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
@@ -665,6 +678,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // Page thumbnails (UX-021): the state is null until a view with pages is shown.
       pages: pages.service,
       language: core.language,
+      // The indents and tab stops at the selection, for the ruler and the paragraph dialog (UX-102).
+      paragraphFormat: core.paragraphFormat,
       // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
       // port `proofing.get().available` is false and the shell shows no proofing control.
       // The assistant pane, offered only while the backend's assistant port is attached (UX-045).
@@ -707,6 +722,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(options.exports ? { exports: options.exports } : {}),
       // The send dialog (FRW-028): the pre-send checks and the send action.
       ...(workflowSend ? { workflowSend } : {}),
+      ...(participants ? { participants } : {}),
       ...(threads ? { threads } : {}),
       ...(signing ? { signing } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
@@ -754,6 +770,18 @@ export function mountEditor(options: MountOptions): MountedEditor {
               { grants: port.grants.bind(port), updateGrants: port.updateGrants.bind(port) },
               options.docId,
             ),
+          }
+        : {}),
+      // A region's state (PRM-048 criterion 4): `PUT .../state`, for people who manage. `*` because
+      // the pane shows the list it has read; the server checks the right, not a tag.
+      ...(port?.setRegionState
+        ? {
+            setRegionState: async (
+              region: string,
+              state: RegionSummary['state'],
+            ): Promise<void> => {
+              await port.setRegionState!(options.docId, region, state, { ifMatch: '*' });
+            },
           }
         : {}),
       // Check-out (PRM-043): the leases port, when the backend announced the feature.
@@ -957,6 +985,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       stopKeyboardInset?.();
       stopKeyboardInset = null;
       workflowSend?.dispose?.();
+      participants?.dispose();
       signing?.dispose?.();
       fillActions?.dispose();
       workflowCompleteListeners.clear();

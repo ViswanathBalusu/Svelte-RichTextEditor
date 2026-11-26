@@ -103,6 +103,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `format.italic` | format | character-and-paragraph-formatting | `Mod-i` | `italic` |
 | `format.language` | review | character-and-paragraph-formatting |  |  |
 | `format.painter` | format | format-painter | `Shift-Mod-c` |  |
+| `format.paragraph` | format | character-and-paragraph-formatting |  |  |
 | `history.nameVersion` | review | version-history |  |  |
 | `insert.caption` | insert | editing |  |  |
 | `insert.crossReference` | insert | editing |  |  |

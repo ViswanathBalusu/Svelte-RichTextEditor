@@ -54,7 +54,15 @@ const setup = (id: string, attrs: J = {}): J => ({
   attrs: { id, ...A4, ...attrs },
 });
 
-describe('EXP-018 criterion 1 (not ticked): a page setup with default, first-page and even-page stories gives the variants', () => {
+describe('EXP-018 criterion 1: the class page styles of a page setup give the first-page and even-page variants', () => {
+  it('builds page styles per setup, with a first-page variant, and picks the story through the model slot rule (class audit)', () => {
+    expect(CLASS_CODE).toMatch(/\\@namedef\{ps@DEps@#1\}\{\\DE@pagestyle\{#1\}\{0\}\}/);
+    expect(CLASS_CODE).toMatch(/\\@namedef\{ps@DEps@#1@first\}\{\\DE@pagestyle\{#1\}\{1\}\}/);
+    expect(CLASS_CODE).toMatch(/\\ifnum\\DE@ps\{#1\}\{dfp\}=1 \\thispagestyle\{DEps@#1@first\}/);
+    expect(CLASS_CODE).toMatch(/docedit\.slot\(\\DE@ps\{#1\}\{dfp\}, \\DE@ps\{#1\}\{doe\}, #3/);
+    expect(CLASS_CODE).toMatch(/\\let\\@evenhead\\@oddhead/);
+  });
+
   it('writes the story numbers and the different-first-page and different-odd-even flags of the setup', async () => {
     const bundle = await run(
       doc([para('body')], {

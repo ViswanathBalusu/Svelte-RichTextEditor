@@ -15,6 +15,7 @@ import type {
   DocumentStats,
   EditorMode,
   ExportJobView,
+  ParagraphFormatView,
   ExportOptions,
   ExportService,
   ExportTarget,
@@ -137,6 +138,8 @@ export interface FakeCoreOptions {
   regions?: readonly RegionSummary[];
   stats?: DocumentStats;
   language?: string | null;
+  /** The indents and tab stops at the selection (UX-102); absent: no ruler and no paragraph dialog. */
+  paragraphFormat?: ParagraphFormatView | null;
   /** Export targets the deployment announces; null: no exports port. */
   exportTargets?: readonly ExportTarget[] | null;
   /** Whether an export leaves out hidden parts (ADR 0019). */
@@ -145,6 +148,8 @@ export interface FakeCoreOptions {
   grants?: readonly RegionGrant[] | null;
   /** Check-out of regions (PRM-043); the holder this session takes leases as. Absent: no leases port. */
   leases?: { holder: string } | null;
+  /** The core can set a region's state (PRM-048 criterion 4); each call is in `stateCalls`. */
+  regionStates?: boolean;
   fill?: FillSummary | null;
   carets?: readonly PeerCaret[];
   /** The document's base direction (`settings.dir`); absent: no `direction` view (UX-065). */
@@ -368,6 +373,7 @@ export const FAKE_COMMANDS = [
   'changeStyle',
   'deleteStyle',
   'setLanguage',
+  'setParagraphFormat',
   'markRegion',
   'setRegionPolicy',
   'renameRegion',
@@ -594,6 +600,7 @@ export class FakeCore implements CoreApi {
   readonly permissions?: Value<AccessObject | null>;
   readonly stats?: Value<DocumentStats>;
   readonly language?: Value<string | null>;
+  readonly paragraphFormat?: Value<ParagraphFormatView | null>;
   readonly styles?: Value<readonly StyleSummary[]>;
   readonly regions?: Value<readonly RegionSummary[]>;
   readonly carets?: Value<readonly PeerCaret[]>;
@@ -601,6 +608,8 @@ export class FakeCore implements CoreApi {
   readonly exports?: FakeExports;
   readonly grants?: FakeGrants;
   readonly leases?: FakeLeases;
+  /** The states the shell set, as `<region> <state>` (PRM-048 criterion 4). */
+  readonly stateCalls: string[] = [];
   readonly threads?: FakeThreads;
   regionLabels: Readonly<Record<string, RegionLabel>> | null = null;
   copiedFormat: string[] | null = null;
@@ -701,6 +710,10 @@ export class FakeCore implements CoreApi {
       options.language === undefined ? 'en-GB' : options.language,
       notify,
     );
+    if (options.paragraphFormat !== undefined)
+      Object.assign(this, {
+        paragraphFormat: new Value<ParagraphFormatView | null>(options.paragraphFormat, notify),
+      });
     this.styles = new Value<readonly StyleSummary[]>(options.styles ?? [], notify);
     if (options.styleEdit) {
       const cfg = options.styleEdit;
@@ -730,6 +743,18 @@ export class FakeCore implements CoreApi {
     if (options.grants !== null && options.grants !== undefined)
       Object.assign(this, { grants: new FakeGrants(options.grants) });
     if (options.leases) Object.assign(this, { leases: new FakeLeases(options.leases.holder) });
+    if (options.regionStates)
+      Object.assign(this, {
+        // The service answers, then the region list follows (a state change raises `perm.changed`).
+        setRegionState: async (region: string, state: RegionSummary['state']): Promise<void> => {
+          this.stateCalls.push(`${region} ${state}`);
+          this.regions?.set(
+            (this.regions.get() as readonly RegionSummary[]).map((r) =>
+              r.id === region ? { ...r, state } : r,
+            ),
+          );
+        },
+      });
     if (options.fill === undefined) Object.assign(this, { fill: undefined });
   }
 
@@ -851,6 +876,18 @@ export class FakeCore implements CoreApi {
       case 'deleteStyle':
         this.styles?.set((this.styles.get() ?? []).filter((x) => x.id !== a['id']));
         return true;
+      case 'setParagraphFormat': {
+        // As the engine does: a patch of indents and tabs on the paragraphs at the selection.
+        const now = this.paragraphFormat?.get();
+        if (!now || !now.editable || !this.#canChange()) return false;
+        const patch = { ...(a as Partial<ParagraphFormatView>) };
+        // No tab stops is the empty list in the view; a null
+        // there means the paragraphs differ.
+        if ('tabs' in a && a['tabs'] === null) patch.tabs = [];
+        this.paragraphFormat?.set({ ...now, ...patch });
+        this.#bump();
+        return true;
+      }
       case 'setLanguage':
         if (!this.#canChange()) return false;
         this.selection.set({ ...s, lang: (a['lang'] as string | null) ?? null });

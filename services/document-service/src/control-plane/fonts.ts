@@ -79,6 +79,8 @@ interface SourceManifest {
   }>;
   math?: SourceFace & { name: string; licence: string };
   defaultFamily?: string;
+  /** Ordered lines `{ family, replacement }` (FE-062; owner decision 125). */
+  substitutes?: unknown;
   fallback?: Array<SourceFace & { name: string; licence: string }>;
 }
 
@@ -122,6 +124,17 @@ export interface FontManifestBody {
   version: string;
   defaultFamily: string | null;
   families: ManifestFamily[];
+  /**
+   * Ordered lines that name a text family of this manifest to use for a family it lacks, as the
+   * converter reads them from `fonts.json` (Calibri to Carlito; FE-062, owner decision 125). The first
+   * line that names a family decides. Absent when the font set has no line.
+   */
+  substitutes?: SubstituteLine[];
+}
+
+export interface SubstituteLine {
+  family: string;
+  replacement: string;
 }
 
 interface FontFile {
@@ -161,6 +174,7 @@ export function emptyCatalogue(): FontCatalogue {
 export function versionOf(
   defaultFamily: string | null,
   families: readonly ManifestFamily[],
+  substitutes: readonly SubstituteLine[] = [],
 ): string {
   // URLs are left out: the version names the set of fonts, wherever it is served from.
   const set = families.map((f) => ({
@@ -176,8 +190,37 @@ export function versionOf(
     })),
   }));
   return createHash('sha256')
-    .update(canonicalize({ v: 1, defaultFamily, set }), 'utf8')
+    .update(
+      canonicalize(
+        substitutes.length > 0
+          ? { v: 1, defaultFamily, set, substitutes }
+          : { v: 1, defaultFamily, set },
+      ),
+      'utf8',
+    )
     .digest('hex');
+}
+
+/**
+ * The substitute lines of `fonts.json` that the manifest can serve: both names are text, and the
+ * replacement is a text family that was published. Other lines are left out, in order kept.
+ */
+function substituteLines(source: unknown, families: readonly ManifestFamily[]): SubstituteLine[] {
+  if (!Array.isArray(source)) return [];
+  const published = new Set(families.filter((f) => f.role === 'text').map((f) => f.family));
+  const out: SubstituteLine[] = [];
+  for (const line of source) {
+    if (typeof line !== 'object' || line === null) continue;
+    const { family, replacement } = line as Record<string, unknown>;
+    if (
+      typeof family === 'string' &&
+      family.trim() !== '' &&
+      typeof replacement === 'string' &&
+      published.has(replacement)
+    )
+      out.push({ family, replacement });
+  }
+  return out;
 }
 
 /**
@@ -279,8 +322,14 @@ export async function loadFontCatalogue(
     source.defaultFamily && families.some((f) => f.family === source.defaultFamily)
       ? source.defaultFamily
       : null;
+  const substitutes = substituteLines(source.substitutes, families);
   return {
-    manifest: { version: versionOf(defaultFamily, families), defaultFamily, families },
+    manifest: {
+      version: versionOf(defaultFamily, families, substitutes),
+      defaultFamily,
+      families,
+      ...(substitutes.length > 0 ? { substitutes } : {}),
+    },
     files,
     excluded,
   };

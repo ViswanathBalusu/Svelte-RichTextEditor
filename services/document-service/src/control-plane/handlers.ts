@@ -500,7 +500,12 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
         editors: {
           roles,
           principals: [...new Set(principals)].sort(),
-          ...(lease && !frozen ? { leasedTo: names(`user:${lease.holder}`).slice(5) } : {}),
+          ...(lease && !frozen
+            ? {
+                leasedTo: names(`user:${lease.holder}`).slice(5),
+                leaseExpiresAt: formatTimestamp(lease.expiresAt),
+              }
+            : {}),
         },
       };
     });

@@ -288,6 +288,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
           'The holder of a lease on the region; while it holds, only they may edit (07 §10).',
           { decisions: ['D42'] },
         ),
+        leaseExpiresAt: opt(
+          timestamp(),
+          'When the lease in `leasedTo` expires (07 §10; PRM-048); present exactly when `leasedTo` is.',
+        ),
       },
       {
         doc: '"Who can edit" a region (05 §6.2), from the region policy, its state, its lease and the stored grants; the document roles themselves are in the hosts\' tokens.',

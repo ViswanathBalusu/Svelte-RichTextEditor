@@ -1,7 +1,6 @@
 /**
- * EXP-035 (Node.js only): an extension node is typeset through its fallback. Criteria 1, 3 and 4
- * are tested here. Criterion 2 is not: a block's `fallbackText` is written through the `pdfString`
- * emitter (attributes.ts), not the `text` emitter the criterion names, so it stays open (story Notes).
+ * EXP-035 (Node.js only): an extension node is typeset through its fallback. Criterion 2 follows
+ * owner decision 210: a block's `fallbackText` goes through `pdfString`, an inline's through `text`.
  * Nothing compiles here.
  */
 import { readFileSync, readdirSync } from 'node:fs';
@@ -126,5 +125,63 @@ describe('EXP-035 criterion 4: a missing fallback asset is reported with the blo
     const id = nid('x');
     const bundle = await run(doc([extensionBlock(id)]), { assets: ASSETS });
     expect(bundle.diagnostics.some((x) => x.code === 'fallback_asset_missing')).toBe(false);
+  });
+});
+
+describe('EXP-035 criterion 2: the fallback text is written through its emitter (owner decision 210)', () => {
+  const TRICKY = 'Total 50% of a_b & {c} \\d';
+
+  it('writes a block fallback text, with no asset, through pdfString: hex that decodes to the text as typed', async () => {
+    const id = nid('x');
+    const bundle = await run(
+      doc([extensionBlock(id, { fallbackAsset: null, fallbackText: TRICKY })]),
+    );
+    const line = blockLines(bundle, id).find((l) => l.includes('\\DEplaceholder{'));
+    expect(line).toBeDefined();
+    // The argument is a PDF string (hex), so no character of the text reaches TeX as typed.
+    expect(line).toMatch(/\\DEplaceholder\{\d+\}\{\\DEstr\{[0-9A-F]+\}\}/);
+    expect(decodeStrings(line!)).toContain(TRICKY);
+    expect(line).not.toContain('a_b');
+  });
+
+  it('writes the fallback text of a block with a picture as the alternative text, through pdfString', async () => {
+    const id = nid('x');
+    const bundle = await run(doc([extensionBlock(id, { fallbackText: TRICKY })]), {
+      assets: ASSETS,
+    });
+    const line = blockLines(bundle, id).find((l) => l.includes('\\DEfig{'));
+    expect(line).toMatch(/\{\{\\DEstr\{[0-9A-F]+\}\}\}/);
+    expect(decodeStrings(line!)).toContain(TRICKY);
+  });
+
+  it('writes an inline fallback text through the text emitter: special characters are escaped', async () => {
+    const id = nid('p');
+    const bundle = await run(
+      doc([
+        {
+          type: 'paragraph',
+          attrs: { id },
+          content: [
+            { type: 'text', text: 'Before ' },
+            {
+              type: 'extension_inline',
+              attrs: {
+                id: nid('i'),
+                extension: 'example.widget',
+                payload: { text: SENTINEL },
+                fallbackAsset: null,
+                fallbackText: TRICKY,
+                ext: {},
+              },
+            },
+          ],
+        },
+      ]),
+    );
+    const body = blockLines(bundle, id).join('\n');
+    expect(body).toContain('50\\%');
+    expect(body).toContain('\\&');
+    expect(body).not.toMatch(/[^\\]&/);
+    expect(body).not.toContain(SENTINEL);
   });
 });
