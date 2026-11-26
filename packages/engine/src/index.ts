@@ -14,6 +14,7 @@ export {
   ENGINE,
   UnsupportedDocumentError,
   capabilities,
+  loadProofing,
   type CoreConfig,
   type SuggestionIntroduction,
   type TransactionInfo,

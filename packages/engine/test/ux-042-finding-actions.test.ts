@@ -4,6 +4,7 @@
  * range changes. The core is given a mock port and a stepped clock; the suggestion-mode case joins
  * the mock service (the real authority room) as a member who may only suggest. Node.js, no DOM.
  */
+import { loadProofing } from '../src/core.ts';
 import type { ProofingFinding } from '@docedit/protocol';
 import { contractDocument } from '@docedit/protocol/contract';
 import { TextSelection } from 'prosemirror-state';
@@ -14,6 +15,9 @@ import { internals } from '../src/testing.ts';
 import { STYLE_IDS } from './fixtures.ts';
 import { blockText, endOf, manualClock, newCore, settle, wordPort } from './proofing-support.ts';
 import { join, newService, posOf, type, until } from './support.ts';
+
+// The proofing controller is a chunk of its own (UX-070); load it so that attaching a port is synchronous.
+await loadProofing();
 
 /**
  * A port whose checks follow a word list per language, and that keeps two custom dictionaries as

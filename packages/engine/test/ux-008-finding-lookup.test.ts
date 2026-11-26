@@ -4,6 +4,7 @@
  * finding as the interface reads it, wherever the caret is, and null once the finding is not shown.
  * The core is given a mock port and a stepped clock. Node.js, no DOM.
  */
+import { loadProofing } from '../src/core.ts';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { proofingDecorations } from '../src/proofing-decorations.ts';
@@ -11,6 +12,9 @@ import { internals } from '../src/testing.ts';
 import { STYLE_IDS, styledEditorAccess } from './fixtures.ts';
 import { endOf, manualClock, newCore, settle, wordPort } from './proofing-support.ts';
 import { type } from './support.ts';
+
+// The proofing controller is a chunk of its own (UX-070); load it so that attaching a port is synchronous.
+await loadProofing();
 
 /** The words of the styled document's body, each once. */
 const WORDS = [
