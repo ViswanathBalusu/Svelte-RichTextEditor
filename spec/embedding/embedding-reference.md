@@ -94,6 +94,8 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `document.share` | header | sharing |  |  |
 | `edit.discardRecovered` | edit | recovery-journal |  |  |
 | `edit.insertRecovered` | edit | recovery-journal |  |  |
+| `edit.moveBlockDown` | edit | editing |  |  |
+| `edit.moveBlockUp` | edit | editing |  |  |
 | `edit.redo` | edit | editing | `Mod-y`, `Shift-Mod-z` | `redo` |
 | `edit.selectAll` | edit | editing | `Mod-a` | `selectAll` |
 | `edit.undo` | edit | editing | `Mod-z` | `undo` |
@@ -138,6 +140,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `review.previous` | review | suggestions |  |  |
 | `review.reject` | review | suggestions |  |  |
 | `review.rejectAll` | review | suggestions |  |  |
+| `table.size` | insert | editing |  |  |
 | `view.assistant` | view | assistant |  |  |
 | `view.catchUp` | header | catch-up |  |  |
 | `view.checker` | review | accessibility-checker |  |  |

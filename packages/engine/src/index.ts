@@ -34,6 +34,7 @@ export type {
   TabLeader,
   TabStopInfo,
 } from './paragraph-format-info.ts';
+export type { TableSizeInfo } from './table-size.ts';
 export {
   VersionDocument,
   openVersion,

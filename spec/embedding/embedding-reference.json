@@ -415,6 +415,20 @@
       "aliases": []
     },
     {
+      "id": "edit.moveBlockDown",
+      "group": "edit",
+      "capability": "editing",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "edit.moveBlockUp",
+      "group": "edit",
+      "capability": "editing",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "edit.redo",
       "group": "edit",
       "capability": "editing",
@@ -750,6 +764,13 @@
       "id": "review.rejectAll",
       "group": "review",
       "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "table.size",
+      "group": "insert",
+      "capability": "editing",
       "keys": [],
       "aliases": []
     },

@@ -47,6 +47,9 @@ export const EN_GB_CORE = {
   'command.format.applyFormat': 'Apply copied formatting',
   'command.format.language': 'Language',
   'command.format.paragraph': 'Paragraph',
+  'command.table.size': 'Table column widths and row height',
+  'command.edit.moveBlockUp': 'Move block up',
+  'command.edit.moveBlockDown': 'Move block down',
   'command.navigate.nextEditableRegion': 'Next part I can edit',
   'command.insert.region': 'Region',
   'command.insert.caption': 'Caption',
@@ -170,6 +173,11 @@ export const EN_GB_CORE = {
   'reason.query.structure': 'Changing the structure of the document needs permission to do so.',
   'reason.query.none': 'There is no further part you can edit.',
   'reason.query.noFormat': 'Select the text whose formatting you want to copy.',
+  'reason.query.firstBlock': 'This is the first block, so it cannot move up.',
+  'reason.query.lastBlock': 'This is the last block, so it cannot move down.',
+  'reason.query.notInTable': 'Place the caret in a table first.',
+  'reason.query.notMovable':
+    'Place the caret in a paragraph, a table or another block of the body.',
   'reason.query.noEdit': 'You do not have permission to edit this document.',
   'reason.query.no-export':
     'Your access does not allow export. Restrictions deter casual copying and are not a security boundary.',
@@ -666,6 +674,8 @@ export const EN_GB_CORE = {
   'announce.language.failed': 'The language could not be set here.',
   'announce.paragraph.set': 'Paragraph format changed.',
   'announce.paragraph.failed': 'The paragraph format could not be changed.',
+  'announce.tableSize.set': 'Table size changed.',
+  'announce.tableSize.failed': 'The table size could not be changed.',
   // Names the paragraph dialog and the ruler build from a kind (UX-102): keys built at run time stay in the core.
   'dialog.paragraph.align.left': 'Left',
   'dialog.paragraph.align.center': 'Centre',

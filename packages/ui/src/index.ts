@@ -46,6 +46,7 @@ export type {
   PageThumbnails,
   PagesInfo,
   ParagraphFormatView,
+  TableSizeView,
   TabStopView,
   PaneName,
   PanelInfo,

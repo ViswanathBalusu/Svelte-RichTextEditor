@@ -134,6 +134,45 @@ async function draw(): Promise<void> {
   }
 }
 
+/**
+ * Draws every page of the open PDF on a canvas of its own, one at a time, and sends each as an
+ * `ImageBitmap` (FE-073). The element prints these in a separate print-only frame; this frame never
+ * prints and has no `allow-modals`. A PDF.js scale of 1 is 72 dpi.
+ */
+async function renderAll(dpi: number): Promise<void> {
+  const source = doc;
+  if (!source) return;
+  const scale = Math.min(Math.max(dpi, 72), 600) / 72;
+  try {
+    for (let number = 1; number <= source.numPages; number += 1) {
+      const page = await source.getPage(number);
+      const viewport = page.getViewport({ scale });
+      const target = document.createElement('canvas');
+      target.width = Math.ceil(viewport.width);
+      target.height = Math.ceil(viewport.height);
+      await page.render({ canvas: target, canvasContext: target.getContext('2d')!, viewport })
+        .promise;
+      const points = page.getViewport({ scale: 1 });
+      const bitmap = await createImageBitmap(target);
+      port?.postMessage(
+        {
+          type: 'print-page',
+          page: number,
+          pages: source.numPages,
+          width: points.width,
+          height: points.height,
+          bitmap,
+        } satisfies FromViewer,
+        [bitmap],
+      );
+      page.cleanup();
+    }
+    post({ type: 'print-done', pages: source.numPages });
+  } catch (e) {
+    post({ type: 'failed', code: 'page_failed', message: describe(e) });
+  }
+}
+
 function describe(e: unknown): string {
   const text = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
   return text.slice(0, 300);
@@ -225,6 +264,7 @@ function onPortMessage(event: MessageEvent<ToViewer>): void {
   const message = event.data;
   if (message?.type === 'open') void open(message);
   else if (message?.type === 'page') go(message.page);
+  else if (message?.type === 'render-all') void renderAll(message.dpi);
   else if (message?.type === 'close') {
     void close();
     worker?.terminate();

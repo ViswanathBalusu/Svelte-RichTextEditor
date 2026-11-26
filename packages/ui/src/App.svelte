@@ -571,6 +571,7 @@
     | 'alt'
     | 'crossReference'
     | 'paragraph'
+    | 'tableSize'
     | null
   >(null);
   // The picture that was just inserted without alternative text (FE-132 criterion 5).
@@ -1103,6 +1104,7 @@
     add(host1b['format.applyFormat']);
     add(host1b['format.language']);
     if (core.paragraphFormat) add(host1b['format.paragraph']);
+    if (core.tableSize) add(host1b['table.size']);
     add(host1b['insert.region']);
     if (core.referenceTargets) add(host1b['insert.crossReference']);
     if (core.threads) add(host1b['review.comment']);
@@ -1747,6 +1749,7 @@
       CrossReferenceDialog,
       LanguageDialog,
       ParagraphDialog,
+      TableSizeDialog,
       RegionDialog,
       CommentBox,
       ExportDialog,
@@ -1780,6 +1783,16 @@
         onApply={(patch) => {
           const done = core.runNamed?.('setParagraphFormat', patch) ?? false;
           paragraphChanged(done);
+          return done;
+        }}
+        onClose={() => (dialog = null)}
+      />
+    {:else if dialog === 'tableSize' && core.tableSize?.get()}
+      <TableSizeDialog
+        view={core.tableSize.get()!}
+        onApply={(args) => {
+          const done = core.runNamed?.('setTableSize', args) ?? false;
+          announce(done ? 'announce.tableSize.set' : 'announce.tableSize.failed');
           return done;
         }}
         onClose={() => (dialog = null)}

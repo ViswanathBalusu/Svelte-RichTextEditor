@@ -69,6 +69,10 @@ export type CommandName =
   | TableCommandName
   | 'setTableStyle'
   | 'sortTableRows'
+  // FE-104: the keyboard and dialog forms of dragging a column border, a row edge and a block.
+  | 'setTableSize'
+  | 'moveBlockUp'
+  | 'moveBlockDown'
   | 'resizeFigure'
   | 'setFigureLayout'
   | 'increaseIndent'
@@ -202,6 +206,11 @@ export interface CommandArgs {
   /** For `sortTableRows` (FE-131): the direction; `sortColumn` is the column, default the caret's. */
   sortDirection?: 'ascending' | 'descending';
   sortColumn?: number;
+  /** For `setTableSize` (FE-104): the column widths and the caret's row height, in twips. */
+  tableSize?: {
+    columnWidths?: readonly number[];
+    rowHeight?: number | null;
+  };
   /** For `resizeFigure` and `setFigureLayout` (FE-132): the figure's position in the document. */
   figurePos?: number;
   /** For `resizeFigure`: twips; the aspect ratio is kept unless `lockAspect` is false. */
@@ -307,6 +316,9 @@ export type CommandUnavailable =
   | 'empty-row'
   | 'single-cell'
   | 'not-merged'
+  | 'first-block'
+  | 'last-block'
+  | 'not-movable'
   | 'suggestion'
   | 'scheme-not-allowed'
   | 'malformed-link'
@@ -542,7 +554,11 @@ export type CoreQueryName =
   | 'hasNextEditableRegion'
   // UX-009: the selection has formatting to take; formatting was taken and may be put here.
   | 'canCopyFormat'
-  | 'canPasteFormat';
+  | 'canPasteFormat'
+  // FE-104: the table at the caret may be resized; the selection's blocks may change places.
+  | 'canSetTableSize'
+  | 'canMoveBlockUp'
+  | 'canMoveBlockDown';
 
 /** `de-status.connection` (05 §8.1), plus `detached` before any channel is attached. */
 export type ConnectionState = 'detached' | 'online' | 'reconnecting' | 'offline';

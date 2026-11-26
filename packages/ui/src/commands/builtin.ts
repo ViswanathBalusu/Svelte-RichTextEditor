@@ -209,6 +209,33 @@ export function coreCommands(): Entry[] {
       contextMenu: ['text', 'table'],
       run: ({ core }) => named(core, 'insertCaption'),
     },
+    // The keyboard and dialog forms of dragging (FE-104; 02 §10). They have no keys of their own yet:
+    // the command search, the context menu and the dialog reach them without a pointer, and a key for
+    // each belongs to the shortcut reading of UX-013 (the four browser lists must be read for it).
+    {
+      id: 'edit.moveBlockUp',
+      label: 'command.edit.moveBlockUp',
+      group: 'edit',
+      enabled: 'canMoveBlockUp',
+      changesContent: true,
+      capability: 'editing',
+      needs: 'moveBlockUp',
+      toolbar: false,
+      contextMenu: ['text', 'table'],
+      run: ({ core }) => named(core, 'moveBlockUp'),
+    },
+    {
+      id: 'edit.moveBlockDown',
+      label: 'command.edit.moveBlockDown',
+      group: 'edit',
+      enabled: 'canMoveBlockDown',
+      changesContent: true,
+      capability: 'editing',
+      needs: 'moveBlockDown',
+      toolbar: false,
+      contextMenu: ['text', 'table'],
+      run: ({ core }) => named(core, 'moveBlockDown'),
+    },
     ...FIELD_KINDS.map(({ kind, label, feature }): Entry => ({
       id: `insert.field.${kind}`,
       label,
@@ -250,7 +277,8 @@ export interface ShellCommandHost1b {
       | 'version'
       | 'send'
       | 'crossReference'
-      | 'paragraph',
+      | 'paragraph'
+      | 'tableSize',
   ): boolean;
   zoom(step: 'in' | 'out' | 'reset'): boolean;
   setMode(mode: EditorMode): boolean;
@@ -594,6 +622,20 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       needs: 'setParagraphFormat',
       contextMenu: ['text'],
       run: () => host.openDialog('paragraph'),
+    },
+    // The column widths and the row height of the caret's table as fields (FE-104 criterion 1): the
+    // dialog form of dragging a column border or a row edge.
+    'table.size': {
+      id: 'table.size',
+      label: 'command.table.size',
+      group: 'insert',
+      enabled: 'canSetTableSize',
+      changesContent: true,
+      capability: 'editing',
+      needs: 'setTableSize',
+      toolbar: false,
+      contextMenu: ['table'],
+      run: () => host.openDialog('tableSize'),
     },
     // A reference to a heading, a numbered paragraph, a caption, an equation or a bookmark (FE-134
     // criterion 2): opens the dialog that lists the targets the core gives.

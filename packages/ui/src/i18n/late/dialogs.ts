@@ -32,6 +32,14 @@ export const EN_GB_DIALOGS = {
   'dialog.paragraph.tabs.align': 'Tab stop {n}: alignment',
   'dialog.paragraph.tabs.leader': 'Tab stop {n}: leader',
   'dialog.paragraph.tabs.remove': 'Remove tab stop {n}',
+  // The table size dialog (FE-104).
+  'dialog.tableSize.title': 'Table column widths and row height',
+  'dialog.tableSize.columns': 'Column widths',
+  'dialog.tableSize.column': 'Column {n} width (cm)',
+  'dialog.tableSize.row': 'Height of row {n} (cm)',
+  'dialog.tableSize.hint':
+    'Leave the row height blank for the height its text needs. A height you enter is the least the row has.',
+  'dialog.tableSize.invalid': 'Enter each length in centimetres, within the page.',
   'ruler.label': 'Ruler',
   'ruler.tab': 'Tab stop, {align}',
   'ruler.value': '{name}: {value} cm',
