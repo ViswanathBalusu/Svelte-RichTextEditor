@@ -145,6 +145,10 @@ export const objectKeys = {
   publicRootHeads(tenant: string, to: string): string {
     return `${objectKeys.prefix(tenant)}anchors/public/${anchorTime(to)}.heads.json`;
   },
+  /** The log's receipt for that root (SEC-066), next to the signed heads. */
+  publicRootReceipt(tenant: string, to: string): string {
+    return `${objectKeys.prefix(tenant)}anchors/public/${anchorTime(to)}.receipt.json`;
+  },
 };
 
 /** A record's `to` as one safe key segment: `2026-11-21T01:00:00.000Z` is `20261121T010000.000Z`. */

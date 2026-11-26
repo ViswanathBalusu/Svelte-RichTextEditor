@@ -29,6 +29,7 @@ import { objectKeys } from '../objects/store.ts';
 import { wrapDataKey, type KeyService } from '../storage/key-service.ts';
 import type { AuditStore } from '../storage/types.ts';
 import type { HeadAnchorFiles } from './head-anchoring.ts';
+import type { ScheduledTask } from './scheduler.ts';
 
 /** The latest head of one document: what a leaf is made of, with the document it belongs to. */
 export interface DocumentHead extends SaltedHead {
@@ -168,6 +169,8 @@ export interface StoredPublicRoot {
   entry: string;
   objectKey: string;
   headsKey: string;
+  /** The log's receipt, as the JSON of a LogReceipt, or null while the root has none (SEC-066). */
+  receipt: string | null;
 }
 
 /** The roots of tenants. A PostgreSQL implementation stores the same fields. */
@@ -176,6 +179,10 @@ export interface PublicRootStore {
   get(tenant: string, to: string): Promise<StoredPublicRoot | null>;
   /** Stores a root. False when the tenant has one at that time or later already. */
   record(tenant: string, root: StoredPublicRoot): Promise<boolean>;
+  /** The tenant's roots, oldest first. */
+  list(tenant: string): Promise<StoredPublicRoot[]>;
+  /** Keeps the receipt of a root. */
+  setReceipt(tenant: string, to: string, receipt: string): Promise<void>;
 }
 
 export class MemoryPublicRootStore implements PublicRootStore {
@@ -196,6 +203,15 @@ export class MemoryPublicRootStore implements PublicRootStore {
     rows.push({ ...root });
     this.#rows.set(tenant, rows);
     return true;
+  }
+
+  async list(tenant: string): Promise<StoredPublicRoot[]> {
+    return (this.#rows.get(tenant) ?? []).map((r) => ({ ...r }));
+  }
+
+  async setReceipt(tenant: string, to: string, receipt: string): Promise<void> {
+    const row = this.#rows.get(tenant)?.find((r) => r.to === to);
+    if (row !== undefined) row.receipt = receipt;
   }
 }
 
@@ -330,6 +346,7 @@ export class PublicRoots {
       entry: text.text,
       objectKey,
       headsKey,
+      receipt: null,
     };
     let recorded: boolean;
     try {
@@ -409,4 +426,17 @@ export class PublicRoots {
       path: built.path,
     };
   }
+}
+
+/**
+ * The scheduled task (BE-052): per tenant, every `everyMs`, it builds the root of the period that
+ * ends then. The period is the caller's: no default is fixed here (ADR 0409 decision 3, SEC-066).
+ * Its count is 1 for a tenant that got a root.
+ */
+export function publicRootBuildTask(roots: PublicRoots, everyMs: number): ScheduledTask {
+  return {
+    name: 'public-root.build',
+    everyMs,
+    forTenant: async (tenant: string, at: number) => ((await roots.run(tenant, at)).built ? 1 : 0),
+  };
 }
