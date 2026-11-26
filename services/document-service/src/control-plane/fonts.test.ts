@@ -32,12 +32,17 @@ function family(name: string, licence: string, tag: string) {
   };
 }
 
-async function writeDir(families: unknown[], defaultFamily?: string) {
+async function writeDir(families: unknown[], defaultFamily?: string, substitutes?: unknown) {
   const d = await mkdtemp(join(tmpdir(), 'docedit-fonts-'));
   for (const [file, bytes] of contents) await writeFile(join(d, file), bytes);
   await writeFile(
     join(d, 'fonts.json'),
-    JSON.stringify({ version: 1, families, ...(defaultFamily ? { defaultFamily } : {}) }),
+    JSON.stringify({
+      version: 1,
+      families,
+      ...(defaultFamily ? { defaultFamily } : {}),
+      ...(substitutes === undefined ? {} : { substitutes }),
+    }),
   );
   return d;
 }
@@ -127,5 +132,41 @@ describe('the font manifest (BE-047)', () => {
     const moved = await loadFontCatalogue(dirs.at(-1)!, 'https://elsewhere.example.test/fonts');
     expect(moved.manifest.version).toBe(relicensed.manifest.version);
     expect(fontsEtag(emptyCatalogue().manifest)).not.toBe(fontsEtag(first.manifest));
+  });
+});
+
+describe('the substitute lines of the font manifest (FE-062, owner decision 125)', () => {
+  it('serves the lines whose replacement is a published text family, in order, and nothing else', async () => {
+    const carlito = family('Carlito', 'OFL-1.1', 'carlito');
+    const closed = family('Closed Sans', 'LicenseRef-Proprietary', 'closed-sub');
+    dirs.push(
+      await writeDir([carlito, closed], 'Carlito', [
+        { family: 'Calibri', replacement: 'Carlito' },
+        { family: 'Segoe UI', replacement: 'Closed Sans' },
+        { family: 'Aptos', replacement: 'Missing' },
+        { family: '', replacement: 'Carlito' },
+        { family: 'Cambria' },
+        'text',
+        { family: 'Calibri Light', replacement: 'Carlito' },
+      ]),
+    );
+    const cat = await loadFontCatalogue(dirs.at(-1)!, BASE);
+    expect(cat.manifest.substitutes).toEqual([
+      { family: 'Calibri', replacement: 'Carlito' },
+      { family: 'Calibri Light', replacement: 'Carlito' },
+    ]);
+  });
+
+  it('leaves the member out when there is no line, and the version of such a set does not change', async () => {
+    const a = family('Plain', 'OFL-1.1', 'plain-sub');
+    dirs.push(await writeDir([a], 'Plain'));
+    const without = await loadFontCatalogue(dirs.at(-1)!, BASE);
+    expect('substitutes' in without.manifest).toBe(false);
+    dirs.push(await writeDir([a], 'Plain', []));
+    const empty = await loadFontCatalogue(dirs.at(-1)!, BASE);
+    expect(empty.manifest.version).toBe(without.manifest.version);
+    dirs.push(await writeDir([a], 'Plain', [{ family: 'Calibri', replacement: 'Plain' }]));
+    const withLine = await loadFontCatalogue(dirs.at(-1)!, BASE);
+    expect(withLine.manifest.version).not.toBe(without.manifest.version);
   });
 });
