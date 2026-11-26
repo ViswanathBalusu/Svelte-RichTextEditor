@@ -89,6 +89,12 @@ export function assetRefsIn(json: unknown): Set<string> {
         const x = (n.attrs as Record<string, unknown>)[name];
         if (typeof x === 'string') out.add(x);
       }
+    // The fragment of an inline atom's `origin` (spike S11; I4 checks it too).
+    if (n.attrs && typeof n.attrs === 'object') {
+      const o = (n.attrs as Record<string, unknown>)['origin'];
+      const f = o && typeof o === 'object' ? (o as { fragment?: unknown }).fragment : undefined;
+      if (typeof f === 'string') out.add(f);
+    }
     if (
       typeof n.attr === 'string' &&
       ASSET_ATTRIBUTE_NAMES.has(n.attr) &&
