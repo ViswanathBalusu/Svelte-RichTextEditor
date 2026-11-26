@@ -103,6 +103,28 @@ test.describe('the reference host’s sample extension (UX-050 criterion 6, UX-0
     expect((await events(page, 'de-error')).length).toBe(0);
   });
 
+  test('its import filter inserts a .note file through the guards of typing (UX-055)', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mount(page);
+    const surface = page.locator(`${HOST} .de-editing-surface`);
+    await surface.locator('p', { hasText: 'Last paragraph.' }).click();
+    await page.keyboard.press('End');
+    expect(await exec(page, 'document.import')).toBe(true);
+    const dialog = page.getByRole('dialog', { name: 'Import a file' });
+    await expect(dialog.getByRole('listitem')).toHaveText(['Sample notes (.note)']);
+    await dialog.getByLabel('File').setInputFiles({
+      name: 'todo.note',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Imported from a note file.'),
+    });
+    await dialog.getByRole('button', { name: 'Import' }).click();
+    await expect(dialog.getByRole('status')).toContainText('Imported todo.note.');
+    await expect(surface).toContainText('Imported from a note file.');
+    expect((await events(page, 'de-error')).length).toBe(0);
+  });
+
   test('removing the extension removes its command, panel and status item', async ({ page }) => {
     await openEmbed(page);
     await mount(page);

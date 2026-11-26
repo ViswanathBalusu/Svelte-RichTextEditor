@@ -11,9 +11,11 @@ import type { HostExtensionApi } from '@docedit/element';
 import { describe, expect, it } from 'vitest';
 import {
   SAMPLE_EXTENSION_ID,
+  SAMPLE_IMPORT_FILTER_ID,
   SAMPLE_PANEL_ID,
   SAMPLE_STRINGS,
   noteFallback,
+  noteFragment,
   sampleExtension,
 } from '../src/lib/sample-extension.ts';
 
@@ -29,6 +31,12 @@ function standIn(opts: { document: boolean; refuse?: boolean }) {
   const inserted: Draft[] = [];
   const released: unknown[] = [];
   const opened: string[] = [];
+  const filters: Array<{
+    id: string;
+    kind: string;
+    extensions: string[];
+    run: (i: unknown) => unknown;
+  }> = [];
   const range = { id: 'r1' };
   const api = {
     registerCommand: (c: { id: string; run: (x: unknown) => boolean; changesContent: boolean }) => {
@@ -42,6 +50,7 @@ function standIn(opts: { document: boolean; refuse?: boolean }) {
     addStatusItem: (i: { id: string; position: string; text: string; label: string }) =>
       void items.push(i),
     onRemove: () => {},
+    registerFilter: (f: (typeof filters)[number]) => void filters.push(f),
     document: opts.document
       ? {
           selection: () => range,
@@ -63,6 +72,7 @@ function standIn(opts: { document: boolean; refuse?: boolean }) {
     inserted,
     released,
     opened,
+    filters,
   };
 }
 
@@ -114,6 +124,25 @@ describe('the sample extension (UX-050 criterion 6)', () => {
     ]);
     // The held range is released after each write.
     expect(s.released).toHaveLength(2);
+  });
+
+  it('contributes an import filter that turns a .note file into a one-paragraph fragment', () => {
+    const s = standIn({ document: true });
+    sampleExtension.activate(s.api);
+    expect(s.filters).toHaveLength(1);
+    const filter = s.filters[0]!;
+    expect(filter).toMatchObject({
+      id: SAMPLE_IMPORT_FILTER_ID,
+      kind: 'import',
+      extensions: ['note'],
+    });
+    const bytes = new TextEncoder().encode('  Hello from a file.  \n');
+    expect(filter.run({ bytes, name: 'a.note' })).toEqual(noteFragment('Hello from a file.'));
+    expect(noteFragment('x')).toMatchObject({
+      cdm: 1,
+      requires: [],
+      content: [{ type: 'paragraph' }],
+    });
   });
 
   it('reports false, and releases the range, when the document API refuses or is absent', () => {

@@ -379,15 +379,19 @@ function inline(
           blockId,
         );
         break;
-      case 'extension_inline':
+      case 'extension_inline': {
+        // Written as its fallback text and nothing else (UX-057 criterion 4).
+        const fallback = str(n.attrs?.['fallbackText']);
         note(
           ctx,
           'warning',
           'extension_omitted',
-          'host extensions are not written in Markdown',
+          'host extension content is written as its fallback text, or not at all',
           blockId,
         );
+        if (fallback !== null) out += escapeMarkdown(fallback);
         break;
+      }
       case 'preserved_inline':
         note(
           ctx,

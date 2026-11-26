@@ -52,6 +52,7 @@ function fixture(access: SandboxAccess, suggesting = false) {
     setMark: record('setMark', { ok: true }),
     insertExtensionBlock: record('insertExtensionBlock', { ok: true, id: 'b1' }),
     updateExtensionBlock: record('updateExtensionBlock', { ok: true, id: 'b1' }),
+    insertExtensionInline: record('insertExtensionInline', { ok: true }),
     on<E extends ExtEventName>(event: E, handler: (e: ExtEventMap[E]) => void) {
       handlers.set(event, handler as (e: unknown) => void);
       return () => handlers.delete(event);

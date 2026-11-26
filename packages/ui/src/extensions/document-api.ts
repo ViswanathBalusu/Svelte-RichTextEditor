@@ -148,6 +148,22 @@ export type ExtBlockResult =
   | { readonly ok: true; readonly id: string }
   | { readonly ok: false; readonly reason: ExtBlockFailure; readonly message: string };
 
+/**
+ * Inline content an extension offers (03 §4.4; 13 §7.3; UX-057). The payload is JSON the editor never
+ * interprets, at most 4 KiB (the model's limit, CDM-002); the fallback text is mandatory.
+ */
+export interface ExtInlineDraft {
+  /** The extension's identifier. */
+  readonly extension: string;
+  readonly payload: unknown;
+  /** The text a reader sees when no extension draws the item, and the text an export writes. */
+  readonly fallbackText: string;
+}
+
+export type ExtInlineResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: ExtBlockFailure; readonly message: string };
+
 export interface ExtensionDocumentApi {
   /** Holds a range. Throws a RangeError for positions outside the document or when `maxRanges` are held. */
   range(from: number, to: number): ExtRange;
@@ -184,6 +200,12 @@ export interface ExtensionDocumentApi {
    * the same guards, the same commit, the same history as an edit of the text. The same checks apply.
    */
   updateExtensionBlock(id: string, change: ExtBlockChange): ExtBlockResult;
+  /**
+   * Inserts inline custom content (`extension_inline`, 03 §4.4) in place of the range, through the same
+   * guards as typing. Content without fallback text, or with a payload over 4 KiB, is refused before
+   * anything is sent. The node is an atom: the caret steps over it and a delete removes it whole.
+   */
+  insertExtensionInline(at: ExtRange, draft: ExtInlineDraft): ExtInlineResult;
 
   /**
    * Subscribes to an event. Delivery is asynchronous and never inside the transaction. Changes made

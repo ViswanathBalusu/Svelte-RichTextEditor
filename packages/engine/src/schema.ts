@@ -121,7 +121,7 @@ export const EXTENSION_NOTICE = 'This content comes from an extension that is no
  * ordinary paragraph. The picture's alternative text is the fallback text, so a block with a picture
  * and no text has none (the accessibility checker flags it). The payload is never rendered.
  */
-function extensionDOM(node: PMNode): DOMOutputSpec {
+export function extensionDOM(node: PMNode): DOMOutputSpec {
   const text = typeof node.attrs['fallbackText'] === 'string' ? node.attrs['fallbackText'] : '';
   const hasAsset =
     typeof node.attrs['fallbackAsset'] === 'string' && node.attrs['fallbackAsset'] !== '';
@@ -402,7 +402,15 @@ const NODE_RENDERING: Record<string, Partial<NodeSpec>> = {
         : ['span', { class: 'de-form-field' }, '[field]'],
   },
   extension_inline: {
-    toDOM: (node) => ['span', { class: 'de-extension' }, String(node.attrs['fallbackText'] ?? '')],
+    // The fallback text is ordinary text for a reader; the payload is never drawn (UX-057, UX-058).
+    toDOM: (node) => [
+      'span',
+      {
+        class: 'de-extension de-extension-inline',
+        'data-extension': String(node.attrs['extension'] ?? ''),
+      },
+      String(node.attrs['fallbackText'] ?? ''),
+    ],
   },
   preserved_inline: {
     toDOM: (node) => preservedDOM('span', node),

@@ -6,7 +6,9 @@
  *   payload and a text fallback) in place of the selection, through the document API;
  * - a side panel, `sample-notes`, that lists the notes the extension has inserted in this session
  *   and is opened by a second command, `sample.open-notes`;
- * - a status-bar item with a text alternative.
+ * - a status-bar item with a text alternative;
+ * - an import filter, "Sample notes", that reads a .note file (plain text) and inserts it as a paragraph at
+ *   the selection, through the guards of typing.
  *
  * A tier 1 extension runs in the page with the host's trust (13 section 7.2): it is not sandboxed
  * and can read whatever the host page can read. This one reads nothing but the editor's API. The
@@ -24,6 +26,21 @@ export const SAMPLE_EXTENSION_ID = 'sample.notes';
 
 /** The panel identifier (lower case, letters, digits and hyphens). */
 export const SAMPLE_PANEL_ID = 'sample-notes';
+
+/** The identifier of the sample's import filter (UX-055). */
+export const SAMPLE_IMPORT_FILTER_ID = 'sample.note-in';
+
+/** The CDM fragment a .note file gives: one paragraph with the file's text, trimmed. */
+export function noteFragment(text: string): unknown {
+  return {
+    cdm: 1,
+    requires: [],
+    defs: [],
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: text.trim() }] }],
+    openStart: 0,
+    openEnd: 0,
+  };
+}
 
 /** The strings of the sample's commands, panel and status item, for the `strings` property. */
 export const SAMPLE_STRINGS: Readonly<Record<string, string>> = {
@@ -123,6 +140,14 @@ export const sampleExtension: HostExtension = {
           region.remove();
         };
       },
+    });
+
+    api.registerFilter({
+      kind: 'import',
+      id: SAMPLE_IMPORT_FILTER_ID,
+      label: 'Sample notes (.note)',
+      extensions: ['note'],
+      run: ({ bytes }) => noteFragment(new TextDecoder().decode(bytes)),
     });
 
     api.addStatusItem({

@@ -526,8 +526,8 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       },
     ],
   ],
-  // Shipped when UX-050 to UX-052 closed (2026-11-26): a host panel, command and status item in the
-  // shell and in the element in a browser, and the registries in Node.js.
+  // Shipped when UX-050 to UX-055 closed (2026-11-26): commands, panels, status items and client
+  // filters of host extensions, in the shell and in the real element with the reference host's sample.
   [
     'host-panels-and-commands',
     [
@@ -539,7 +539,8 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/extension-contributions.test.ts', kind: 'unit' },
       { path: 'packages/ui/test/extension-status-bar.test.ts', kind: 'unit' },
       { path: 'apps/reference-host/test/sample-extension.test.ts', kind: 'unit' },
-    ],
+      { path: 'packages/ui/e2e/extension-contributions.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-055-import-filters.spec.ts', kind: 'playwright' },
   ],
 ];
 

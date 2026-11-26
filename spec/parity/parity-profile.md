@@ -147,6 +147,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `workflow.send` | fields-and-forms |
 | `review.comment` | comments |
 | `document.export` | export-pdf |
+| `document.import` | host-panels-and-commands |
 | `document.print` | export-pdf |
 | `proofing.next` | spelling-and-grammar |
 | `proofing.previous` | spelling-and-grammar |

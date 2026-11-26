@@ -286,6 +286,16 @@ export const EN_GB_DIALOGS = {
   'export.filter.noExport': 'Your access does not allow export.',
   'export.filter.save': 'Save {name}',
   'export.filter.failed': 'This format could not write the file. The document is unchanged.',
+  // Client import filters of extensions (UX-055). The format's label is the extension's own text.
+  'dialog.import.title': 'Import a file',
+  'dialog.import.format': 'Format',
+  'dialog.import.file': 'File',
+  'dialog.import.start': 'Import',
+  'dialog.import.none': 'No format can be imported here.',
+  'import.filter.failed': 'This format could not read the file. The document is unchanged.',
+  'import.filter.refused':
+    'The file could not be inserted here. The document is unchanged. {message}',
+  'import.filter.done': 'Imported {name}.',
 } as const satisfies StringTable;
 
 registerSource(EN_GB_DIALOGS);
