@@ -102,6 +102,13 @@ describe('release notes', () => {
     expect(text).toContain('| Conformance kit | @docedit/tck 0.2.0, tests protocol 1.0 |');
   });
 
+  it('state the window during which CDM versions n and n-1 are supported (CDM-050)', () => {
+    const text = renderReleaseNotes(input());
+    expect(text).toContain('CDM versions n and n-1 are supported side by side');
+    expect(text).toContain('until version n+1 is released');
+    expect(text).not.toContain('not yet published');
+  });
+
   it('list artefacts, images, what is missing, how to verify and the coverage that changed', () => {
     const text = renderReleaseNotes(input());
     expect(text).toContain(
