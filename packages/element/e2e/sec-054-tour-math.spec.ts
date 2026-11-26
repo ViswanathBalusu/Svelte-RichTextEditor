@@ -5,8 +5,7 @@
  * editor by keyboard, confirms an edited source, and records every request on the page. Every
  * request must go to the demo's origin, or be a data: or blob: URL built in the page.
  *
- * The proofing and assistant ports are not part of this tour: the element has no configuration
- * for either, and no demo page supplies one (see the story's Notes).
+ * The proofing and assistant ports have their own tour (sec-054-tour-ports.spec.ts).
  *
  * Run from the repository root with
  * `DOCEDIT_DEMO_PORT=57071 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/sec-054-tour-math.spec.ts`
