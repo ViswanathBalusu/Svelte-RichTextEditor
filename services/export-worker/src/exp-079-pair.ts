@@ -95,9 +95,10 @@ export function acceptForSealing(candidate: unknown): Uint8Array {
 }
 
 /**
- * Compiles the same bundle on two independent sandboxes at once, each with its own container name,
- * and compares them. The caller counts both compiles against the tenant's compile minutes
- * (criterion 7; `compileMs` gives the wall time of each).
+ * Compiles the same bundle in two separate sandboxes, one after the other, each with its own
+ * container name, and compares them. Both compiles count against the tenant's compile minutes,
+ * because the budget counts the handler's wall time (criterion 7; `compileMs` gives the wall time
+ * of each).
  */
 export async function compileSealingPair(
   files: Readonly<Record<string, string | Uint8Array>>,
@@ -116,10 +117,12 @@ export async function compileBoth(
 ): Promise<[CompileResult, CompileResult]> {
   const tag = randomBytes(6).toString('hex');
   const base = opts.name ?? `docedit-v-exp-065-080-seal-${tag}`;
-  return Promise.all([
-    compile(files, { ...opts, name: `${base}-a` }),
-    compile(files, { ...opts, name: `${base}-b` }),
-  ]);
+  // One after the other, not at once (EXP-079 criterion 7; owner decision 63): the tenant's compile
+  // budget counts the handler's wall time, so a sequential pair counts both compiles, and the first
+  // sandbox is gone (`--rm`) before the second starts.
+  const a = await compile(files, { ...opts, name: `${base}-a` });
+  const b = await compile(files, { ...opts, name: `${base}-b` });
+  return [a, b];
 }
 
 /**

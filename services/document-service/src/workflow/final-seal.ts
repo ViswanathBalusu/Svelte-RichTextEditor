@@ -12,7 +12,8 @@
  * - the scheduled task `workflow.seal`, which looks at every `completed` workflow of a tenant.
  *
  * What it finds it finds again from the workflow: the final export job has a derived identifier
- * (`finalExportJobId`). A workflow whose export has not finished, or has failed, is left alone (a
+ * (`finalExportJobId`). A workflow whose export has not finished is left alone; one whose sealing
+ * export failed stops with an alert (EXP-079 criterion 4; below). Other failed exports are left alone (a
  * failed export is already audited and reported by the export hooks).
  *
  * One run at a time for one workflow in this process (`FinalSealer`). Across processes the rules
@@ -106,6 +107,26 @@ export class FinalSealer {
     if (jobId === null) return { status: 'waiting', reason: 'no participant has completed' };
     const job = await deps.queue.get(ref.tenant, jobId);
     if (job === null) return { status: 'waiting', reason: 'no final export job' };
+    // A sealing export that failed seals nothing. When its two compiles differed, or it failed for
+    // another reason, the workflow stays `completed` and the operator is alerted (EXP-079 criterion
+    // 4; the worker's diagnostic `seal_pair_differs`). Asking again does not mend it: the run is
+    // remembered, so the alert is raised once.
+    if (job.state === 'failed' && job.payload['sealing'] !== undefined) {
+      const diagnostics = (job.error as { diagnostics?: ReadonlyArray<{ code?: unknown }> } | null)
+        ?.diagnostics;
+      const differs = (diagnostics ?? []).some((d) => d.code === 'seal_pair_differs');
+      const code = differs ? 'compile_pair_differs' : 'export_failed';
+      await stopFinalisation(deps, {
+        ref,
+        workflow: workflow.id,
+        reason: 'seal_failed',
+        code,
+        attempts: 0,
+        retryable: false,
+      });
+      this.#gaveUp.set(key, code);
+      return { status: 'stopped', code, retryable: false };
+    }
     if (job.state !== 'completed')
       return { status: 'waiting', reason: `the export is ${job.state}` };
 

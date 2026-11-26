@@ -81,6 +81,7 @@ describe('EXP-067 criterion 1: the exports resource has no input for raw LaTeX',
         'certificate',
         'comments',
         'fields',
+        // BE-051: what the compile reports of the layout; not an input to the engine or a package.
         'layout',
         'locale',
         'pdfStandard',
