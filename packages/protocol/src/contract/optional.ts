@@ -41,7 +41,7 @@ const MEMBERS = {
   ],
   assets: ['create', 'complete', 'resolve', 'upload'],
   exports: ['request', 'get', 'cancel'],
-  imports: ['request', 'get'],
+  imports: ['request', 'get', 'importFile'],
   fonts: ['manifest'],
   leases: ['acquire', 'heartbeat', 'release'],
   fields: ['fields', 'values', 'prefill', 'sign'],

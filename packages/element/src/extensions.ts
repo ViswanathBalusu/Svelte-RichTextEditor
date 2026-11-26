@@ -51,7 +51,7 @@ export interface HostExtensionApi {
   registerPanel(panel: {
     id: string;
     label: string;
-    mount: (container: HTMLElement) => (() => void) | undefined;
+    mount: (container: HTMLElement) => unknown;
   }): void;
   /** Opens a panel by its identifier; resolves false when it is not offered. */
   openPanel(id: string): Promise<boolean>;

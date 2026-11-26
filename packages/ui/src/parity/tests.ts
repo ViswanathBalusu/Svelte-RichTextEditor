@@ -531,16 +531,16 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
   [
     'host-panels-and-commands',
     [
+      { path: 'packages/element/e2e/ux-050-extensions.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-050-sample-extension.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-050-extensions.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-051-extension-controls.spec.ts', kind: 'playwright' },
       { path: 'packages/ui/test/extension-commands.test.ts', kind: 'unit' },
       { path: 'packages/ui/test/extension-contributions.test.ts', kind: 'unit' },
       { path: 'packages/ui/test/extension-status-bar.test.ts', kind: 'unit' },
       { path: 'apps/reference-host/test/sample-extension.test.ts', kind: 'unit' },
       { path: 'packages/ui/e2e/extension-contributions.spec.ts', kind: 'playwright' },
-      { path: 'packages/ui/e2e/ux-050-extensions.spec.ts', kind: 'playwright' },
-      { path: 'packages/ui/e2e/ux-051-extension-controls.spec.ts', kind: 'playwright' },
       { path: 'packages/ui/e2e/ux-055-import-filters.spec.ts', kind: 'playwright' },
-      { path: 'packages/element/e2e/ux-050-extensions.spec.ts', kind: 'playwright' },
-      { path: 'packages/element/e2e/ux-050-sample-extension.spec.ts', kind: 'playwright' },
     ],
   ],
 ];

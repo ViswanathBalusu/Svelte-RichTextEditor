@@ -10,22 +10,29 @@
  * and the sandboxed worker of EXP-099 criterion 1 is not built. A node that is given no importer
  * does not offer the routes. See docs/adr/0373-w2-EXP-098-import-job.md.
  */
-import { canonicalize, formatTimestamp, type JsonEnvelope, type JsonNode } from '@docedit/model';
+import {
+  canonicalize,
+  formatTimestamp,
+  uuid7,
+  type JsonEnvelope,
+  type JsonNode,
+} from '@docedit/model';
 import { readDocument } from '@docedit/model/validate';
 import type { CreateImportRequest, ImportJob } from '@docedit/protocol';
 import type { AssetStore, DocRef, GrantStore } from '../storage/types.ts';
 import type { DataPlane } from '../seams.ts';
 import type { VersionStorePort } from '../storage/versions-memory.ts';
-import { assetReferences, type AssetRegistry } from './assets.ts';
+import { assetReferences, type AssetRecord, type AssetRegistry } from './assets.ts';
 import { regionNodeOf } from './content.ts';
 import type { ContentReader } from './content.ts';
 import type { EventSink } from './events.ts';
 import type { NotifyFn } from './exports.ts';
 import { JobFailure, type JobHandler, type JobHooks } from './jobs/runner.ts';
 import type { JobRecord } from './jobs/queue.ts';
-import { json, type Kit } from './kit.ts';
+import type { DocxImporter, ImportedDocument } from './import-port.ts';
+import { json, type HandlerDeps, type Kit } from './kit.ts';
 import { capabilitiesOn, hiddenFrom, type Ctx, type Handler } from './pipeline.ts';
-import { ApiError } from './problems.ts';
+import { ApiError, type RestCode } from './problems.ts';
 
 export const IMPORT_KIND = 'import';
 
@@ -33,22 +40,7 @@ export const IMPORT_KIND = 'import';
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-/** What an importer returns: the CDM envelope and the warnings to show the author. */
-export interface ImportedDocument {
-  envelope: unknown;
-  warnings: ReadonlyArray<string | Record<string, unknown>>;
-  /**
-   * How much of the file the model keeps as preserved data and what that costs in bytes (EXP-116
-   * criterion 5): the job's `preservation` member. Counts and bytes only, never content.
-   */
-  preservation?: Record<string, unknown>;
-}
-
-/** Reads the bytes of a `.docx` file into CDM content. It throws when the file is refused. */
-export type DocxImporter = (
-  bytes: Uint8Array,
-  opts: { signal: AbortSignal },
-) => Promise<ImportedDocument>;
+export type { DocxImporter, ImportedDocument } from './import-port.ts';
 
 export interface ImportJobDeps {
   importer: DocxImporter;
@@ -67,6 +59,195 @@ const warningsOf = (
 /** A short, content-free text of an error thrown by the importer. */
 const reasonOf = (e: unknown): string =>
   (e instanceof Error ? e.message : 'the file could not be read').slice(0, 200);
+
+/**
+ * The checks of `PUT /documents/{id}/content` (BE-037) and the snapshot commit with origin `import`,
+ * shared by the import job and by `POST /documents` with an import. Returns the commit's `seq`.
+ * Every refusal is a `JobFailure`.
+ */
+export async function storeImported(
+  o: Pick<ImportJobDeps, 'registry' | 'grants' | 'content' | 'dataPlane'>,
+  ref: DocRef,
+  imported: ImportedDocument,
+  actor: string,
+  requestId: string,
+): Promise<number> {
+  const { tenant, doc } = ref;
+  // The state of the document may have changed since the request, so the checks are made here.
+  const perms = await o.grants.current(ref);
+  if (perms.workflowActive)
+    throw new JobFailure('workflow_active', 'a workflow is active; its content cannot be replaced');
+  const current = await o.content.read(ref, { conn: null });
+  const attached = new Set(assetReferences(current.doc).display);
+  for (const f of assetReferences(current.doc).fragments) attached.add(f);
+  for (const a of await o.registry.readyFor(tenant, doc)) attached.add(a.id);
+  // This is where I1 to I11 are checked, before the snapshot commit is made (EXP-109 criterion 1).
+  const read = readDocument(imported.envelope, {
+    attachedAssets: attached,
+    retiredRegionIds: new Set(await o.grants.retired(ref)),
+  });
+  if (!read.ok) {
+    const rules =
+      read.code === 'validation_failed' && read.violations
+        ? [...new Set(read.violations.map((v) => v.invariant))].join(', ')
+        : read.code;
+    throw new JobFailure(
+      read.code,
+      `the imported content breaks the model (${rules}); nothing was stored`,
+    );
+  }
+  const envelope = {
+    cdm: read.cdm,
+    requires: read.requires,
+    doc: read.doc.toJSON(),
+  } as JsonEnvelope;
+  // An approved region must stay as approved (07 §11); an import replaces the whole content.
+  for (const [rid, state] of perms.regionStates) {
+    if (state !== 'approved') continue;
+    const before = regionNodeOf(current.doc, rid);
+    const after = regionNodeOf(envelope.doc as JsonNode, rid);
+    if (before && (!after || canonicalize(before) !== canonicalize(after)))
+      throw new JobFailure(
+        'conflict',
+        `region ${rid} is approved; change its state first (07 §11)`,
+      );
+  }
+  const replace = o.dataPlane.replaceContent?.bind(o.dataPlane);
+  if (!replace) throw new JobFailure('unavailable', 'this server does not replace content');
+  let seq: number;
+  try {
+    // The job is the request: a retry of it after a crash is the same commit (SYN-030 criterion 3).
+    ({ seq } = await replace(ref, envelope, actor, { requestId }));
+  } catch (e) {
+    const code = (e as { code?: unknown } | null)?.code;
+    throw new JobFailure(typeof code === 'string' ? code : 'internal', reasonOf(e));
+  }
+  return seq;
+}
+
+/** A Word file read for `POST /documents` with an import, before the document exists. */
+export interface PreparedImport {
+  source: AssetRecord;
+  imported: ImportedDocument;
+  /** The features the imported content needs, which the new document lists (I1). */
+  requires: string[];
+}
+
+const REST_CODES: ReadonlySet<string> = new Set<RestCode>([
+  'not_found',
+  'conflict',
+  'validation_failed',
+  'workflow_active',
+  'unavailable',
+]);
+
+/** A refusal of the job's checks as the REST error it is. */
+export const asApiError = (e: JobFailure): ApiError =>
+  new ApiError(REST_CODES.has(e.code) ? (e.code as RestCode) : 'internal', e.message);
+
+/**
+ * `POST /documents` with `import` (EXP-098 criterion 6; owner decision 108). The value is the
+ * identifier of a ready `.docx` asset of the tenant. The file is read here, before anything is
+ * stored: the importer is a pure function of the bytes, so a file that is refused leaves nothing
+ * to remove (docs/adr/0430-w2-EXP-098-new-document-from-import.md).
+ */
+export async function prepareImport(
+  d: Pick<HandlerDeps, 'assetRegistry' | 'assets' | 'importer' | 'importsOffered'>,
+  tenant: string,
+  assetId: string,
+  signal: AbortSignal,
+): Promise<PreparedImport> {
+  if (!d.importsOffered || !d.importer || !d.assetRegistry)
+    throw new ApiError('validation_failed', 'imports are not offered by this server', {
+      violations: [{ path: '/import', rule: 'not supported by this server' }],
+    });
+  const source = await d.assetRegistry.get(tenant, assetId);
+  if (!source) throw new ApiError('not_found', `no asset ${assetId}`);
+  if (source.state !== 'ready' || source.sha256 === null)
+    throw new ApiError('conflict', 'the asset has not been accepted by the asset worker yet');
+  if (source.contentType !== DOCX_CONTENT_TYPE)
+    throw new ApiError('validation_failed', 'the asset is not a Word file', {
+      violations: [{ path: '/import', rule: 'a .docx asset' }],
+    });
+  const bytes = await d.assets.getFinal(tenant, source.sha256);
+  if (!bytes) throw new ApiError('not_found', 'the asset has no stored bytes');
+  let imported: ImportedDocument;
+  try {
+    imported = await d.importer(bytes, { signal });
+  } catch (e) {
+    throw new ApiError('validation_failed', `the Word file was refused: ${reasonOf(e)}`);
+  }
+  const read = readDocument(imported.envelope, {
+    attachedAssets: new Set(),
+    retiredRegionIds: new Set(),
+  });
+  if (!read.ok)
+    throw new ApiError(
+      'validation_failed',
+      `the imported content breaks the model; nothing was stored`,
+    );
+  return { source, imported, requires: [...read.requires] };
+}
+
+/**
+ * The new document exists, empty at seq 0: the source file is attached to it (a record of its own
+ * over the same stored bytes, which ready objects share by hash) and then the content is written
+ * as the snapshot commit of an import. Returns the commit's `seq` and the attached asset's id.
+ * On a failure the caller removes the document; the attached record is removed here.
+ */
+export async function attachAndStore(
+  d: Pick<HandlerDeps, 'assetRegistry' | 'grants' | 'content' | 'dataPlane' | 'now'>,
+  ref: DocRef,
+  actor: string,
+  prepared: PreparedImport,
+): Promise<{ seq: number; asset: string }> {
+  const registry = d.assetRegistry!;
+  const src = prepared.source;
+  const id = uuid7();
+  await registry.create(
+    ref.tenant,
+    {
+      id,
+      doc: ref.doc,
+      filename: src.filename,
+      mime: src.mime,
+      declaredBytes: src.declaredBytes,
+      createdBy: actor,
+      uploadExpiresAt: d.now(),
+    },
+    d.now(),
+  );
+  try {
+    const settled = await registry.settleReady(
+      ref.tenant,
+      id,
+      {
+        sha256: src.sha256!,
+        bytes: src.bytes ?? src.declaredBytes,
+        contentType: src.contentType!,
+        objectKey: src.objectKey!,
+        width: null,
+        height: null,
+        frames: null,
+        renditions: [],
+      },
+      d.now(),
+    );
+    if (!settled) throw new JobFailure('internal', 'the source file could not be attached');
+    if (!d.dataPlane) throw new JobFailure('unavailable', 'this server does not replace content');
+    const seq = await storeImported(
+      { registry, grants: d.grants, content: d.content, dataPlane: d.dataPlane },
+      ref,
+      prepared.imported,
+      actor,
+      id,
+    );
+    return { seq, asset: id };
+  } catch (e) {
+    await registry.remove(ref.tenant, id).catch(() => false);
+    throw e;
+  }
+}
 
 /**
  * The job handler. Every refusal is a `JobFailure` without retry: an import that failed once would
@@ -91,59 +272,7 @@ export function importJobHandler(o: ImportJobDeps): JobHandler {
       throw new JobFailure('validation_failed', `the Word file was refused: ${reasonOf(e)}`);
     }
     await ctx.report('storing', 80);
-    // The checks of `PUT /documents/{id}/content` (BE-037), made again here: the state of the
-    // document may have changed since the request.
-    const perms = await o.grants.current(ref);
-    if (perms.workflowActive)
-      throw new JobFailure(
-        'workflow_active',
-        'a workflow is active; its content cannot be replaced',
-      );
-    const current = await o.content.read(ref, { conn: null });
-    const attached = new Set(assetReferences(current.doc).display);
-    for (const f of assetReferences(current.doc).fragments) attached.add(f);
-    for (const a of await o.registry.readyFor(job.tenant, doc)) attached.add(a.id);
-    // This is where I1 to I11 are checked, before the snapshot commit is made (EXP-109 criterion 1).
-    const read = readDocument(imported.envelope, {
-      attachedAssets: attached,
-      retiredRegionIds: new Set(await o.grants.retired(ref)),
-    });
-    if (!read.ok) {
-      const rules =
-        read.code === 'validation_failed' && read.violations
-          ? [...new Set(read.violations.map((v) => v.invariant))].join(', ')
-          : read.code;
-      throw new JobFailure(
-        read.code,
-        `the imported content breaks the model (${rules}); nothing was stored`,
-      );
-    }
-    const envelope = {
-      cdm: read.cdm,
-      requires: read.requires,
-      doc: read.doc.toJSON(),
-    } as JsonEnvelope;
-    // An approved region must stay as approved (07 §11); an import replaces the whole content.
-    for (const [rid, state] of perms.regionStates) {
-      if (state !== 'approved') continue;
-      const before = regionNodeOf(current.doc, rid);
-      const after = regionNodeOf(envelope.doc as JsonNode, rid);
-      if (before && (!after || canonicalize(before) !== canonicalize(after)))
-        throw new JobFailure(
-          'conflict',
-          `region ${rid} is approved; change its state first (07 §11)`,
-        );
-    }
-    const replace = o.dataPlane.replaceContent?.bind(o.dataPlane);
-    if (!replace) throw new JobFailure('unavailable', 'this server does not replace content');
-    let seq: number;
-    try {
-      // The job is the request: a retry of it after a crash is the same commit (SYN-030 criterion 3).
-      ({ seq } = await replace(ref, envelope, job.createdBy, { requestId: job.id }));
-    } catch (e) {
-      const code = (e as { code?: unknown } | null)?.code;
-      throw new JobFailure(typeof code === 'string' ? code : 'internal', reasonOf(e));
-    }
+    const seq = await storeImported(o, ref, imported, job.createdBy, job.id);
     return {
       seq,
       asset: assetId,

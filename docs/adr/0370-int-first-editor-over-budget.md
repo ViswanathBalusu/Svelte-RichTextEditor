@@ -19,6 +19,8 @@ Measured with `pnpm build` on Windows 11, Node.js zlib, gzip level 9, minified l
 
 Update of 2026-11-18: with the batch 5 merges of that day both configurations are over the 320 kB budget (host backend 59.7 kB over, DEP client 80.3 kB over), so `pnpm build` fails at the element package on the size check alone; every other package builds. The row is one measurement; the earlier rows were taken by other integrators. Nobody has measured how much of the growth since 2026-11-17 belongs to which batch. The decision stays with the owner.
 
+Update of 2026-11-26 (batch 9 integration, same method, `node scripts/check-parallel.ts` build step): host backend 306.6 kB, DEP client 330.3 kB, so the host-backend configuration is within the 320 kB budget and the DEP one is 10.3 kB over. The batch 8 integration note put the DEP client at 329.0 kB, so batch 9 added about 1.3 kB to it. The build still fails on the size check alone. The decision stays with the owner.
+
 So the DEP configuration was already over the budget at `ccd52bb` and is 15.4 kB over now. The host-backend configuration is within it. The growth since `ccd52bb` comes mostly from the engine and the shell: form field views and entries, the field and role editing, fill mode, and the panes' glue (`packages/engine/src/field-entries.ts`, `field-edit.ts`, `role-edit.ts`, `view/form-field-view.ts`).
 
 Batch 6 added 14.8 kB to the host-backend configuration (8.6 kB below the budget now) and 15.1 kB to the DEP one (30.5 kB over). The new code is in the engine and shell: the proofing controller, the extension document API, the image and equation node views and the equation editor glue. Nobody has measured how much each part costs; that would be the first step of option 2.

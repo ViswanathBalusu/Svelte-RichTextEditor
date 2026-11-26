@@ -1,5 +1,5 @@
 // The `history` profile against the reference service (PRO-119). The service is started with
-// `history` and `comments` in DOCEDIT_FEATURES, as an operator announces them (a comment is made in
+// `history`, `comments` and `exports` in DOCEDIT_FEATURES, as an operator announces them (a comment is made in
 // the region-restore scenario). The history listing (`GET /documents/{id}/history`)
 // is served since HIS-026, and `history.gate.history-list-and-versions` runs it.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -16,7 +16,8 @@ describe.skipIf(skip)('history profile against the reference service (PRO-119)',
   beforeAll(async () => {
     target = await startReference({
       env: {
-        DOCEDIT_FEATURES: 'presence,regions,suggest-enforced,read-restrictions,history,comments',
+        DOCEDIT_FEATURES:
+          'presence,regions,suggest-enforced,read-restrictions,history,comments,exports',
       },
     });
     report = await runKit({

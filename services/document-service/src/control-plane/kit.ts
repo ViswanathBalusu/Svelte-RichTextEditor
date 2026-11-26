@@ -62,6 +62,7 @@ import type { ReadRouter, ReadSession, ReadSessions, ReadStores } from './read-r
 import { ApiError } from './problems.ts';
 import type { TokenService } from './tokens.ts';
 import type { UserDirectory } from './users.ts';
+import type { PublicAnchorSource } from './public-anchor-export.ts';
 import type { Views } from './visibility.ts';
 import type { AccessCodeStore } from '../workflow/access-code-store.ts';
 import type { ConsentTextStore } from '../workflow/consent-service.ts';
@@ -70,6 +71,7 @@ import type { CaptureSettingsPort } from '../workflow/capture-settings.ts';
 import type { SealedPdfStore } from '../workflow/sealed-store.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import type { TemplateStore } from '../workflow/template-store.ts';
+import type { DocxImporter } from './import-port.ts';
 
 export interface HandlerDeps {
   documents: DocumentStore;
@@ -87,6 +89,8 @@ export interface HandlerDeps {
    */
   comparePool?: Pick<WorkerPool, 'run'>;
   views: Views;
+  /** The public anchor evidence an audit export carries (SEC-067). Absent: none is carried. */
+  publicAnchors?: PublicAnchorSource;
   events: EventSink;
   notifier: RoomNotifier;
   /** The data plane's hooks and reads, when it offers them (seams.ts). */
@@ -214,6 +218,8 @@ export interface HandlerDeps {
   policyHook?: PolicyHookGate;
   /** True when this node runs the import job (EXP-098); otherwise `/imports` is `not_found`. */
   importsOffered?: boolean;
+  /** The Word importer of this node, for `POST /documents` with an import (EXP-098 criterion 6). */
+  importer?: DocxImporter;
 }
 
 export const json = (

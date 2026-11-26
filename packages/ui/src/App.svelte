@@ -857,7 +857,7 @@
      * panel is opened, and may return the function that removes them. The panel is removed with the
      * extension. Open it with `openPanel`.
      */
-    registerPanel(panel: { id: string; label: string; mount: (container: HTMLElement) => (() => void) | undefined }): void;
+    registerPanel(panel: { id: string; label: string; mount: (container: HTMLElement) => unknown }): void;
     /** Opens a panel by its identifier; false when it is not offered. */
     openPanel(id: string): Promise<boolean>;
     /** Adds a status-bar item with a text alternative (UX-052). Removed with the extension. */

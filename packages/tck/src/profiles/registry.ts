@@ -692,8 +692,42 @@ const PROVOCATIONS: Provocation[] = [
     code: 'workflow_active',
     surface: 'rest',
     how: 'replacing an active workflow',
-    needs: { features: ['workflow'] },
-    unreachable: 'the workflow profiles (phase 2, FRW-068)',
+    needs: { features: ['workflow', 'fields'] },
+    async run(ctx) {
+      // A draft with a filler and a signer for the roles of the fields document, sent (12 §6.2), and
+      // then replaced: only a draft is replaced (12 §10).
+      const doc = await ctx.document(fieldsDocument());
+      const { token } = await ctx.token('workflow', { [doc]: 'owner' });
+      const body = {
+        id: uuid7(),
+        doc,
+        state: 'draft',
+        rev: 0,
+        timeZone: 'UTC',
+        participants: [
+          { id: 'p1', roles: ['role_tenant'], kind: 'filler', order: 1 },
+          { id: 'p2', roles: ['role_landlord'], kind: 'signer', order: 2 },
+        ],
+      };
+      const put = (etag: string) =>
+        ctx.service.as(token, 'PUT', `/documents/${doc}/workflow`, {
+          body,
+          headers: { 'if-match': etag },
+        });
+      const made = await put('"0"');
+      check(made.status === 201, 'a draft workflow is created', 201, made.status);
+      const sent = await ctx.service.as(token, 'POST', `/documents/${doc}/workflow/send`);
+      check(
+        sent.status >= 200 && sent.status < 300,
+        'the draft is sent (12 §6.2)',
+        '2xx',
+        sent.status,
+      );
+      const etag = (await ctx.service.as(token, 'GET', `/documents/${doc}/workflow`)).headers.get(
+        'etag',
+      );
+      restProblem(await put(etag ?? '"1"'), 'workflow_active', 'a replacement of a sent workflow');
+    },
   },
   {
     code: 'rate_limited',

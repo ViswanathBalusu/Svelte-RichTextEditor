@@ -65,7 +65,14 @@ What changes for the signing service (lane w3, 2026-11-17, proposed wording of t
 - Workers (LaTeX, asset) do not change.
 - Seal levels are decision 15 (PAdES B-LT in phase 2, B-LTA in phase 4) and belong to SPK-021 and the signing stories, not to this record.
 
-**Status of the criteria.** Criteria 1, 2 and 3 are met by this record. Criterion 4 (BE-041 and the signing stories are updated) stays open: it applies when the owner accepts the key custody record as a whole, which the 2026-11-15 answers do not cover (they settle only the sealing party), and it is a change to other epics that this batch does not make.
+**Owner answer (decision 205, 2026-11-15, applied by lane w8 on 2026-11-26).** The owner accepted this key custody record as proposed, with the two-person recovery rule (docs/owner-decisions-2026-11-15.md, decision 205). Recovering a key-encryption key therefore needs two named people. The search-index choice (whether search entries are encrypted under the document key or hold no text) is not covered by that answer and stays an open question; the default to build against, until the owner chooses, is that search entries are encrypted under the document key.
+
+**Changes the stories need.** These follow from the accepted record. They are listed here because SEC-062 does not edit the story files of other lanes.
+
+- BE-041: tenant data keys are key-encryption-key wrapped data keys with a recorded key version; per-document keys are optional and off by default; every unwrap writes an audit event with the key identifier, the actor and the time, and no content.
+- SPK-021, FRW-052, FRW-053 (signing): the signing service resolves a key per tenant, with the operator's key as default; the seal's evidence names the key; a tenant key is used only through the signing service; loading a tenant key is a tenant administration action that checks the certificate chain and validity first. The production key store stays open (decisions 221 to 223).
+
+**Status of the criteria.** Criteria 1, 2 and 3 are met by this record. Criterion 4 (BE-041 and the signing stories are updated) is now applicable, because decision 205 accepts the record. It stays unticked: the story files it names belong to other lanes, which this lane does not edit, and the list above is what they need.
 
 ## SEC-061: abuse handling for hosted mode
 

@@ -213,6 +213,7 @@ import { registerProcessMetrics } from './control-plane/process-metrics.ts';
 import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-hooks.ts';
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
 import { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
+import type { PublicAnchorSource } from './control-plane/public-anchor-export.ts';
 import { restrictedViews, type Views } from './control-plane/visibility.ts';
 import { serialisedInPool } from './control-plane/workers/checkpoint-store.ts';
 import { WorkerPool } from './control-plane/workers/pool.ts';
@@ -356,6 +357,8 @@ export interface ServiceParts {
    * connects as a member of `docedit_purge`. Absent: no checkpoint thinning task runs.
    */
   checkpointThinningStore?: CheckpointThinningStore;
+  /** The public anchor evidence the audit export carries (SEC-067). Absent: none is carried. */
+  publicAnchors?: PublicAnchorSource;
   /**
    * The rows of the cold segments (HIS-029): the job that moves payloads older than 30 days to
    * object storage, and the removal of payloads from segments by thinning and tombstones. Like
@@ -1992,6 +1995,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     queue: parts.queue,
     content,
     views,
+    ...(parts.publicAnchors ? { publicAnchors: parts.publicAnchors } : {}),
     events,
     notifier: roomNotifier,
     dataPlane,
@@ -2063,7 +2067,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(liveQuotas ? { liveQuotas } : {}),
     ...(quotaSource ? { quotaSource } : {}),
     ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),
-    ...(opts.importer ? { importsOffered: true } : {}),
+    ...(opts.importer ? { importsOffered: true, importer: opts.importer } : {}),
   };
   bulkSendDeps = controlDeps;
   const handlers = createHandlers(controlDeps);

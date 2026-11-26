@@ -361,6 +361,7 @@ describe('the ports exist only when their features are negotiated (PRO-097 crite
     const proxied = make(['history'], true);
     await proxied.connect();
     expect(proxied.imports).toBeDefined();
+    expect(typeof proxied.imports?.importFile).toBe('function');
     await proxied.close();
   });
 });

@@ -41,7 +41,7 @@ export interface ReviewPorts {
   readonly history: HistoryPort;
   readonly comments: CommentsPort;
   readonly leases: LeasesPort;
-  readonly imports: ImportsPort;
+  readonly imports: Omit<ImportsPort, 'importFile'>;
 }
 
 const enc = (s: string): string => encodeURIComponent(s);
@@ -337,7 +337,7 @@ export function createReviewPorts(host: ReviewPortsHost): ReviewPorts {
     },
   };
 
-  const imports: ImportsPort = {
+  const imports: Omit<ImportsPort, 'importFile'> = {
     request: async (docId, body, opts) =>
       (
         await call<Response<'createImport'>>('POST', docPath(docId, '/imports'), {

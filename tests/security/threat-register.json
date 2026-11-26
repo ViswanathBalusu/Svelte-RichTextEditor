@@ -1115,6 +1115,7 @@
         "packages/element/e2e/sec-054-network-tour.spec.ts",
         "packages/element/e2e/sec-054-tour-math.spec.ts",
         "packages/element/e2e/sec-054-tour-pdf-viewer.spec.ts",
+        "packages/element/e2e/sec-054-tour-ports.spec.ts",
         "scripts/supply-chain/bundle.test.ts",
         "scripts/supply-chain/origin-sandbox.test.ts"
       ],
