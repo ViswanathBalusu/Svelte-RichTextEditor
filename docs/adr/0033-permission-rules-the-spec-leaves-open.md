@@ -33,6 +33,8 @@ ProseMirror never leaves half a region in the tree, and the outcome check alread
 
 ### 4. `structure` stays document-level (PRM-063, the specification's default)
 
+**Reversed by owner decision 128 (2026-11-15); the design is ADR 0424.**
+
 No part of `structure` is grantable per region. The role table, P2 and 07 §5.3 stay as they are. A region-only editor can apply existing styles in the region but cannot create or change definitions, page setups, headers or footers (PRM-030). The integration guide must say so when it is written.
 
 ### 5. No size quota per region (PRM-064, the specification's default)
