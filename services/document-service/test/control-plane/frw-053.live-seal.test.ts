@@ -212,7 +212,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
                   classVersion: '1.0.0',
                   granularity: 'block',
                   unit: 'twip',
-                  pages: [],
+                  pages: [{ n: 1, setup: null, starts: null, opensWith: 'text' }],
                   blocks: {},
                   fields: { [SIGN_FIELD]: { page: 1, rect: [400, 3000, 2400, 3600] } },
                 }),
