@@ -14,6 +14,11 @@
       "message": "The house class refused part of the document."
     },
     {
+      "code": "field_too_wide",
+      "severity": "warning",
+      "message": "The value of a form field is wider than the field."
+    },
+    {
       "code": "font_file_mismatch",
       "severity": "error",
       "message": "A font file does not hash to the name the manifest gives it."
