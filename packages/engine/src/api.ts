@@ -1031,6 +1031,12 @@ export interface DocumentApi {
   closePanel(): void;
   /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
   selectBlock(id: string): boolean;
+  /**
+   * Whether a block changed in the confirmed document after the commit `seq` (EXP-065 criterion 3):
+   * null when the core cannot tell (the block is gone or hidden from this reader, or `seq` is older
+   * than the first commit the core followed).
+   */
+  blockChangedSince(id: string, seq: number): boolean | null;
   /** Selects the text of the suggestion with this identifier and scrolls it into view; false when it cannot (FRW-028). */
   selectSuggestion(id: string): boolean;
   /** The pre-send checks over the visible document, given the roles each participant holds; empty when all pass (FRW-028). */
