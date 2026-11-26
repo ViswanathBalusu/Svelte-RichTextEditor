@@ -21,6 +21,7 @@ if (skip) console.warn(`skipped: ${skip}`);
 
 interface Operation {
   responses?: Record<string, unknown>;
+  security?: Array<Record<string, unknown>>;
 }
 interface Spec {
   paths: Record<string, Record<string, Operation>>;
@@ -43,6 +44,13 @@ function announcedListRoutes(): string[] {
     if (text.includes('nextCursor') || named.includes('nextCursor')) out.push(path);
   }
   return out.sort();
+}
+
+// The routes that only an operator credential opens (07 §12): a tenant's API key is refused with
+// 403, so this walk, which holds a tenant key, cannot follow them.
+function operatorOnly(path: string): boolean {
+  const security = spec.paths[path]?.['get']?.security ?? [];
+  return security.length > 0 && security.every((alt) => 'operatorCredential' in alt);
 }
 
 // Every list route continues a page with `cursor` (the commit list too, after its first `after`).
@@ -147,7 +155,12 @@ describe.skipIf(skip !== null)(
       expect(routes.length).toBeGreaterThan(0);
       const pagesOf: Record<string, number> = {};
       const notServed: string[] = [];
+      const needOperator: string[] = [];
       for (const template of routes) {
+        if (operatorOnly(template)) {
+          needOperator.push(template);
+          continue;
+        }
         const path = template.replaceAll('{id}', doc);
         const unpaged = await rest('GET', start(path));
         if (unpaged.status === 404) {
@@ -169,7 +182,9 @@ describe.skipIf(skip !== null)(
       // Commit lists are walked and compared with the unpaged list, but the snapshot commits seeded
       // here end the page at a reset, so they give no paged items; paging over edit commits needs
       // the data plane (not walked here).
-      expect([...notServed].sort()).toEqual(['/search', '/webhooks']);
+      expect([...notServed].sort()).toEqual(['/sealing-keys', '/search', '/webhooks']);
+      // The operator's list of tenants (UX-076) needs an operator credential, which this test does not hold, so it is not walked.
+      expect(needOperator).toEqual(['/tenants']);
     });
   },
 );
