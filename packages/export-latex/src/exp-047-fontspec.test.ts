@@ -38,7 +38,9 @@ describe('EXP-047 criterion 1: fonts are named by hash and given by path', () =>
     for (const { i } of loaders) {
       // The option list of a loader may run over the next lines; look three lines on.
       const window = lines.slice(i, i + 3).join(' ');
-      expect(window).toContain('Path=\\DE@fontpath');
+      // A family's directory is the image's, or the job's tenant-fonts/ for a tenant's own file
+      // (EXP-048); both come from the class's Lua, never from the bundle.
+      expect(window).toMatch(/Path=\\DE@(?:fam)?fontpath\b/);
     }
     // The only names a loader takes are macro arguments, filled by the converter with hash files.
     for (const { l } of loaders) {
