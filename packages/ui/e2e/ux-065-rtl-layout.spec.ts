@@ -10,9 +10,9 @@
  * Criterion 3: the arrow keys of the full toolbar's tab list move to the next tab in the reading
  * direction, so ArrowLeft in `ar-XB` and ArrowRight in `en-GB`.
  *
- * Not covered here: criterion 2 (direction-carrying icons, which needs metadata in the icon set; the
- * icon set in packages/ui/src has none), and criterion 5 (collaborators' carets, whose coordinates
- * are physical in src/components/Carets.svelte).
+ * Criterion 2: a drawing in the icon set says through `mirrorInRtl` whether it carries a direction;
+ * the shell flips those in a right-to-left interface and no others. Criterion 5 (collaborators'
+ * carets) is in ux-065-carets-rtl.spec.ts.
  *
  * Run with `DOCEDIT_UI_PORT=56293 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-065-rtl-layout`.
  */
@@ -122,5 +122,28 @@ test.describe('the arrow keys follow the reading direction (UX-065, criterion 3)
     expect(await selectedGroup(page)).toBe(rtl[1]);
     await page.keyboard.press('ArrowRight');
     expect(await selectedGroup(page)).toBe(rtl[0]);
+  });
+});
+
+test.describe('direction-carrying icons mirror (UX-065, criterion 2)', () => {
+  /** The computed transform of the icon drawn on a toolbar control, or null when none is drawn. */
+  async function transformOf(page: Page, command: string): Promise<string | null> {
+    return page.evaluate((id: string) => {
+      const root = document.getElementById('host')!.shadowRoot!;
+      const svg = root.querySelector(`.de-toolbar [data-command-id="${id}"] svg.de-icon`);
+      return svg ? getComputedStyle(svg).transform : null;
+    }, command);
+  }
+
+  test('undo flips and bold does not in ar-XB; neither flips in en-GB', async ({ page }) => {
+    const h = await open(page, { extended: true, icons: {} });
+    expect(await transformOf(page, 'edit.undo')).toBe('none');
+    expect(await transformOf(page, 'format.bold')).toBe('none');
+
+    await h.setLocale('ar-XB');
+    await expect(page.locator('.de-shell')).toHaveAttribute('dir', 'rtl');
+    await h.frames(2);
+    expect(await transformOf(page, 'edit.undo')).toBe('matrix(-1, 0, 0, 1, 0, 0)');
+    expect(await transformOf(page, 'format.bold')).toBe('none');
   });
 });

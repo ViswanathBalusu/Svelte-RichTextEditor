@@ -23,6 +23,11 @@ export interface IconDrawing {
   readonly viewBox?: string;
   /** True for a drawing made of filled shapes; false or absent for outlines. */
   readonly fill?: boolean;
+  /**
+   * True when the drawing carries a direction (an arrow, a speech bubble's tail, indented lines) and
+   * is flipped in a right-to-left interface (UX-065; 13 section 8). Absent or false: never flipped.
+   */
+  readonly mirrorInRtl?: boolean;
 }
 
 /** What a host may give for one name: path data, or a drawing. */
@@ -60,10 +65,13 @@ export function parseIcon(value: unknown): IconDrawing | null {
   }
   const fill = record['fill'];
   if (fill !== undefined && typeof fill !== 'boolean') return null;
+  const mirror = record['mirrorInRtl'];
+  if (mirror !== undefined && typeof mirror !== 'boolean') return null;
   return {
     paths: [...(paths as string[])],
     ...(viewBox !== undefined ? { viewBox: (viewBox as string).trim() } : {}),
     ...(fill === true ? { fill: true } : {}),
+    ...(mirror === true ? { mirrorInRtl: true } : {}),
   };
 }
 
@@ -83,17 +91,17 @@ const bubble = 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z';
 
 /** The built-in drawings, by the names the built-in commands use. */
 export const BUILT_IN_ICONS: Readonly<Record<string, IconDrawing>> = {
-  undo: { paths: ['M9 14L4 9l5-5', 'M4 9h10a6 6 0 0 1 0 12h-3'] },
-  redo: { paths: ['M15 14l5-5-5-5', 'M20 9H10a6 6 0 0 0 0 12h3'] },
+  undo: { paths: ['M9 14L4 9l5-5', 'M4 9h10a6 6 0 0 1 0 12h-3'], mirrorInRtl: true },
+  redo: { paths: ['M15 14l5-5-5-5', 'M20 9H10a6 6 0 0 0 0 12h3'], mirrorInRtl: true },
   'select-all': { paths: ['M4 4h16v16H4z', 'M8 12l3 3 5-6'] },
   bold: { paths: ['M7 5h6a3.5 3.5 0 0 1 0 7H7z', 'M7 12h7a3.5 3.5 0 0 1 0 7H7z'] },
   italic: { paths: ['M19 4h-9', 'M14 20H5', 'M15 4L9 20'] },
-  find: { paths: find },
-  'zoom-in': { paths: [...find, 'M8 11h6', 'M11 8v6'] },
-  'zoom-out': { paths: [...find, 'M8 11h6'] },
+  find: { paths: find, mirrorInRtl: true },
+  'zoom-in': { paths: [...find, 'M8 11h6', 'M11 8v6'], mirrorInRtl: true },
+  'zoom-out': { paths: [...find, 'M8 11h6'], mirrorInRtl: true },
   close: { paths: ['M6 6l12 12', 'M18 6L6 18'] },
-  comment: { paths: [bubble] },
-  comments: { paths: [bubble, 'M8 9h8', 'M8 13h5'] },
+  comment: { paths: [bubble], mirrorInRtl: true },
+  comments: { paths: [bubble, 'M8 9h8', 'M8 13h5'], mirrorInRtl: true },
   print: {
     paths: [
       'M6 9V3h12v6',
@@ -103,10 +111,10 @@ export const BUILT_IN_ICONS: Readonly<Record<string, IconDrawing>> = {
   },
   share: { paths: ['M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7', 'M16 6l-4-4-4 4', 'M12 2v13'] },
   export: { paths: ['M12 3v12', 'M8 11l4 4 4-4', 'M5 21h14'] },
-  checklist: { paths: ['M4 6l2 2 3-3', 'M4 15l2 2 3-3', 'M13 7h8', 'M13 16h8'] },
+  checklist: { paths: ['M4 6l2 2 3-3', 'M4 15l2 2 3-3', 'M13 7h8', 'M13 16h8'], mirrorInRtl: true },
   insert: { paths: ['M12 5v14', 'M5 12h14'] },
   discard: { paths: ['M4 7h16', 'M9 7V4h6v3', 'M6 7l1 13h10l1-13'] },
-  outline: { paths: ['M4 6h16', 'M8 12h12', 'M12 18h8'] },
+  outline: { paths: ['M4 6h16', 'M8 12h12', 'M12 18h8'], mirrorInRtl: true },
   // A four-pointed star: text an assistant wrote (HIS-017). Always beside words, never alone.
   assistant: { paths: ['M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z'] },
 };
