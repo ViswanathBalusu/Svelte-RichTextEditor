@@ -47,6 +47,7 @@ import type { HoldService } from './holds.ts';
 import type { ErasureRequests } from './erasure-requests.ts';
 import type { CommitTombstone } from './commit-tombstone.ts';
 import type { QuotaAdminService } from './quota-admin.ts';
+import type { UsageRecorder, UsageService } from './usage.ts';
 import type { TenantFontService } from './tenant-fonts.ts';
 import type { TenantSettingService } from './tenant-settings.ts';
 import type { TenantRegistry } from './tenants.ts';
@@ -71,6 +72,7 @@ import type { CaptureSettingsPort } from '../workflow/capture-settings.ts';
 import type { SealedPdfStore } from '../workflow/sealed-store.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import type { TemplateStore } from '../workflow/template-store.ts';
+import type { DocxImporter } from './import-port.ts';
 
 export interface HandlerDeps {
   documents: DocumentStore;
@@ -209,6 +211,10 @@ export interface HandlerDeps {
   search?: { search(tenant: string, q: string, query: SearchQuery): Promise<SearchHit[]> };
   /** The monthly compile-minute budget of tenants (EXP-009). Absent: no budget is checked. */
   compileBudget?: CompileBudget;
+  /** The usage figures of GET /usage, and where the routes record what they see (UX-078). */
+  usage?: UsageService;
+  /** The recorder behind the usage figures. */
+  usagePeaks?: UsageRecorder;
   /** The live-use quotas of the node; the REST routes that author a commit ask it (BE-091). */
   liveQuotas?: LiveQuotas;
   /** The tenants' quota values, for the storage and export quotas (BE-092). Absent: none apply. */
@@ -218,14 +224,7 @@ export interface HandlerDeps {
   /** True when this node runs the import job (EXP-098); otherwise `/imports` is `not_found`. */
   importsOffered?: boolean;
   /** The Word importer of this node, for `POST /documents` with an import (EXP-098 criterion 6). */
-  importer?: (
-    bytes: Uint8Array,
-    opts: { signal: AbortSignal },
-  ) => Promise<{
-    envelope: unknown;
-    warnings: ReadonlyArray<string | Record<string, unknown>>;
-    preservation?: Record<string, unknown>;
-  }>;
+  importer?: DocxImporter;
 }
 
 export const json = (

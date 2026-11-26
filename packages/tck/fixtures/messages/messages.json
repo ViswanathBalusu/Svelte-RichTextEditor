@@ -787,6 +787,7 @@
               "message": "x",
               "retryable": true,
               "retryAfterMs": 0,
+              "quota": "connections",
               "fatal": true,
               "versions": ["1.0"]
             }
@@ -841,6 +842,7 @@
               "message": "x",
               "retryable": true,
               "retryAfterMs": 0,
+              "quota": "connections",
               "fatal": true,
               "versions": ["1.0"]
             }
@@ -1719,7 +1721,8 @@
               "head": 0,
               "scopes": ["region:rG7mK2pQ9xYt4HcD"],
               "rule": "x",
-              "retryAfterMs": 0
+              "retryAfterMs": 0,
+              "quota": "connections"
             }
           }
         }
@@ -1783,7 +1786,8 @@
               "head": 0,
               "scopes": ["region:rG7mK2pQ9xYt4HcD"],
               "rule": "x",
-              "retryAfterMs": 0
+              "retryAfterMs": 0,
+              "quota": "connections"
             }
           },
           "fatal": true

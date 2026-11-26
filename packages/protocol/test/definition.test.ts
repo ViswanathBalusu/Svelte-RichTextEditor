@@ -217,6 +217,12 @@ const PROSE_ROUTES = [
   'DELETE /origins/{origin}',
   'POST /keys',
   'DELETE /keys/{kid}',
+  'GET /tenants',
+  'POST /tenants',
+  'GET /tenants/{tenantId}',
+  'PATCH /tenants/{tenantId}',
+  'GET /usage',
+  'GET /sealing-keys',
 ];
 // 05 §2 (discovery) and the routes of 12 §10 that have a path and a method.
 const OTHER_ROUTES = [
@@ -369,6 +375,8 @@ describe('the DEP definition', () => {
         'DELETE /origins/{origin}',
         'POST /keys',
         'DELETE /keys/{kid}',
+        'GET /usage',
+        'GET /sealing-keys',
       ].sort(),
     );
   });

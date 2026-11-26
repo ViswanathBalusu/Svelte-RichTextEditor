@@ -1460,6 +1460,90 @@
       "owner": "UX"
     },
     {
+      "operationId": "listTenants",
+      "method": "GET",
+      "path": "/tenants",
+      "security": [
+        "operator"
+      ],
+      "requires": "Operator credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "13 §10; 06 §12",
+      "owner": "UX"
+    },
+    {
+      "operationId": "createTenant",
+      "method": "POST",
+      "path": "/tenants",
+      "security": [
+        "operator"
+      ],
+      "requires": "Operator credential",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "13 §10; 06 §12",
+      "owner": "UX"
+    },
+    {
+      "operationId": "getTenant",
+      "method": "GET",
+      "path": "/tenants/{tenantId}",
+      "security": [
+        "operator"
+      ],
+      "requires": "Operator credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "13 §10; 06 §12",
+      "owner": "UX"
+    },
+    {
+      "operationId": "updateTenant",
+      "method": "PATCH",
+      "path": "/tenants/{tenantId}",
+      "security": [
+        "operator"
+      ],
+      "requires": "Operator credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "13 §10; 06 §12",
+      "owner": "UX"
+    },
+    {
+      "operationId": "getTenantUsage",
+      "method": "GET",
+      "path": "/usage",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "06 §12; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "listSealingKeys",
+      "method": "GET",
+      "path": "/sealing-keys",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "10 §6; 13 §10",
+      "owner": "UX"
+    },
+    {
       "operationId": "placeHold",
       "method": "POST",
       "path": "/documents/{id}/holds",

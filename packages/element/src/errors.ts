@@ -7,6 +7,7 @@
 import type { ErrorCode } from '@docedit/protocol';
 
 const CODE = /^[a-z][a-z_]*$/;
+const CODE_WORD = /^[A-Za-z][A-Za-z]*$/;
 
 /** The registry code of a failure; `internal` for anything that is not a port error. */
 export function codeOf(e: unknown): ErrorCode {
@@ -44,3 +45,20 @@ export const AUTH_CODES: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   'token_expired',
   'revoked',
 ]);
+
+/**
+ * The kind of quota a quota_exceeded refusal names (owner decision 110): the quota of a
+ * sync.reject, or of the socket rror or REST problem a port error carries in details. Null
+ * when the refusal named none.
+ */
+export function quotaOf(e: unknown): string | null {
+  if (e === null || typeof e !== 'object') return null;
+  const own = (e as { quota?: unknown }).quota;
+  if (typeof own === 'string' && CODE_WORD.test(own)) return own;
+  const details = (e as { details?: unknown }).details;
+  if (details !== null && typeof details === 'object') {
+    const q = (details as { quota?: unknown }).quota;
+    if (typeof q === 'string' && CODE_WORD.test(q)) return q;
+  }
+  return null;
+}

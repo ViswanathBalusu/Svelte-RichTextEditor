@@ -96,6 +96,7 @@ import { PgVisibilityStore } from './control-plane/history-visibility-pg.ts';
 import { QuotaAdminService, type QuotaAdminStore } from './control-plane/quota-admin.ts';
 import { MemoryQuotaStore } from './control-plane/quotas.ts';
 import { PgQuotaStore } from './control-plane/quotas-pg.ts';
+import { UsagePeaks, UsageService } from './control-plane/usage.ts';
 import { HoldService, MemoryHoldStore, type HoldStore } from './control-plane/holds.ts';
 import { ErasureRequests } from './control-plane/erasure-requests.ts';
 import { CommitTombstone, type TombstoneStore } from './control-plane/commit-tombstone.ts';
@@ -1143,12 +1144,15 @@ export async function startService(opts: StartOptions): Promise<Service> {
   // service's cache, so that a change written through `PUT /quotas` applies to the next request
   // (BE-091 criterion 3; docs/adr/0370-w5-BE-091-quota-cache.md).
   const quotaSource: QuotaSource | undefined = parts.quotas ?? parts.quotaAdmin?.source;
+  // The peaks behind GET /usage (UX-078 criterion 2): kept in this node's memory.
+  const usagePeaks = new UsagePeaks();
   const liveQuotas = quotaSource
     ? new LiveQuotas({
         quotas: quotaSource,
         metrics,
         windowMs: LIVE_QUOTA_WINDOW_MS,
         countRetryMs: LIVE_QUOTA_COUNT_RETRY_MS,
+        usage: usagePeaks,
       })
     : undefined;
   // The search index (BE-054; off unless config.searchIndex). Every stored checkpoint queues a job
@@ -1339,6 +1343,12 @@ export async function startService(opts: StartOptions): Promise<Service> {
   const compileBudget = new CompileBudget(quotaSource ?? null, (tenant, from, to) =>
     parts.queue.workerTime(tenant, EXPORT_KINDS, from, to),
   );
+  const usage = new UsageService({
+    peaks: usagePeaks,
+    now: () => Date.now(),
+    minutesUsed: (tenant, at) => compileBudget.usedMinutes(tenant, at),
+    ...(parts.assetRegistry ? { storedBytes: (t: string) => parts.assetRegistry!.storedBytes(t) } : {}),
+  });
   // The seal step (FRW-052 criterion 5, FRW-053): when the final export of a completed workflow has
   // finished, its PDF goes to the signing service, is stored write-once and the workflow becomes
   // `finalised`. A run that stops is reported to the operator through the log and a counter.
@@ -2064,6 +2074,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),
     compileBudget,
+    usage,
+    usagePeaks,
     ...(liveQuotas ? { liveQuotas } : {}),
     ...(quotaSource ? { quotaSource } : {}),
     ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),

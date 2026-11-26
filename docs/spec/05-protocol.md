@@ -142,7 +142,7 @@ Direction: C is client, S is server.
 | `auth.revoked` | S to C | `reason` | Followed by close code 4401 |
 | `ping`, `pong` | both | none | |
 | `goaway` | S to C | `reconnectInMs`, `reason` | The whole connection is draining. It is never used for a single channel |
-| `error` | both | `code`, `message`, `retryable`, `retryAfterMs`, `fatal` | With `re` when it answers a message. A fatal error is followed by the matching close code |
+| `error` | both | `code`, `message`, `retryable`, `retryAfterMs`, optional `quota`, `fatal` | With `re` when it answers a message. A fatal error is followed by the matching close code |
 | `chunk` | both | `of`, `i`, `n`, `part` | Section 4 |
 
 There is no session resumption: a new connection is a new session.
@@ -169,7 +169,7 @@ Semantics are defined in [04 Sync engine](04-sync-engine.md).
 |---|---|---|
 | `sync.submit` | C to S | `id`, `base`, `steps`, optional `origin` |
 | `sync.ack` | S to C | `id` (the commit), `seq`, `serverTime`, `rebased`, and `steps` when `rebased` is true. `re` is the envelope `id` of the submit. An acknowledgement rebuilt for a duplicate always carries `steps` |
-| `sync.reject` | S to C | `id`, `code`, `message`, `action` (`rebase`, `drop`, `reload`, `retry`), `head`, optional `scopes`, optional `rule`, optional `retryAfterMs` |
+| `sync.reject` | S to C | `id`, `code`, `message`, `action` (`rebase`, `drop`, `reload`, `retry`), `head`, optional `scopes`, optional `rule`, optional `retryAfterMs`, optional `quota` (the kind of quota, with `quota_exceeded` or a spent room CPU budget) |
 | `sync.commit` | S to C | `commits`: array in ascending `seq` of `{ seq, kind, id, steps, control, author: { user, session, agent }, serverTime, origin }`. `kind` is `steps` or `control`; `session` is null for server-authored commits |
 | `sync.caughtUp` | S to C | `seq` |
 | `sync.reset` | S to C | `seq`, `reason` (`import`, `restore`, `migration`, `repair`). A snapshot commit was stored; the client reloads content at `seq` |
@@ -253,7 +253,7 @@ One registry covers every surface. REST problems use the same codes in their `co
 | `conflict`, `field_invalid` | sync, REST | no | 12 |
 | `busy` | sync | yes | Resubmit after the pending answer |
 | `too_large` | all | no | Split or report |
-| `rate_limited`, `quota_exceeded` | all | yes, after `retryAfterMs` or `Retry-After` | Back off; tell the user for quotas |
+| `rate_limited`, `quota_exceeded` | all | yes, after `retryAfterMs` or `Retry-After` | Back off; tell the user for quotas, naming the kind of quota: `quota` (`connections`, `openDocuments`, `commitRate`, `roomCpuBudget`, `storage`, `exportConcurrency`, `exportMinutes`) on the socket `error`, on `sync.reject` and in the REST problem (owner decision 110) |
 | `slow_consumer` | channel close | yes | Resume |
 | `precondition_failed`, `validation_failed`, `pending_suggestions`, `workflow_active`, `idempotency_mismatch` | REST | no | Fix the request |
 | `unavailable`, `internal` | all | yes | Back off |
@@ -284,7 +284,7 @@ S  {"t":"event","ch":1,"d":{"type":"export.completed","resource":"/exports/0192f
 - **Browsers.** The service answers CORS preflights for the tenant's allowed origins, allows the headers `Authorization`, `Content-Type`, `If-Match`, `Idempotency-Key`, `DEP-Actor` and `traceparent`, and exposes `ETag`, `Retry-After`, `Deprecation` and `Sunset`. The conformance kit asserts these headers.
 - **Concurrency.** Every mutable resource has an `ETag`, and updates require `If-Match`.
 - **Idempotency.** `POST` requests that create something, `PUT /documents/{id}/content` and `PATCH /documents/{id}/field-values` (the prefill of 12 §9; owner decision 184, ADR 0342), accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
-- **Lists** are `{ items, nextCursor }` with an opaque `cursor` and a `limit` of at most 200.
+- **Lists** are `{ items, nextCursor }` with an opaque `cursor` and a `limit` of at most 200. Two collections are exempt: the allowed origins (`GET /origins`) and the registered token keys (`GET /keys`) are small, are held with the tenant's registration and answer as one object, `{ origins }` and `{ keys }` (UX-076, ADR 0371; a proposal the owner may reverse).
 - **Tracing.** Requests may carry `traceparent`; responses carry a request identifier.
 - **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document. A caller whose token does not cover that document, and a user who may not see the resource (another user's export or import job), gets `not_found`, the answer for an identifier that names nothing, with the same body apart from the identifier (owner decision 57 of 2026-11-15; SEC-016). A caller who sees the resource but lacks the capability gets `forbidden`.
 
@@ -350,6 +350,10 @@ Callers are end users (every request is checked against that user's permissions)
 | `/tenant-fonts` | POST | Service credential only. Adds a font file for the tenant, as base64 with its type, a licence declaration and the server-use flag; the file is checked in the asset worker's sandbox and stored under the tenant by its hash; a file that fails is refused and nothing is published. 06, section 12; 13, section 10 |
 | `/tenant-fonts/{sha256}` | GET, DELETE | GET: the file of a font the tenant added, for any user or service of that tenant; another tenant gets `not_found`. DELETE: service credential only; removes the font and its file; audited |
 | `/quotas` | GET, PUT | Service credential only. The tenant's quota values, null when unset; PUT names the dimensions to set, takes `If-Match`, and is audited. 06, section 12; 13, section 10 |
+| `/tenants` | GET, POST | Operator credential only (decision 68). GET lists the tenants of the service, one page at a time. POST registers a tenant (`{ name }`) and is audited. A service credential and a user token are refused. 13, section 10 |
+| `/tenants/{tenantId}` | GET, PATCH | Operator credential only. GET reads one tenant. PATCH renames it or sets its state (`active` or `suspended`), takes `If-Match` and is audited. 13, section 10 |
+| `/usage` | GET | Service credential only. The tenant's usage in one calendar month in UTC (`month`, as `YYYY-MM`; this month when absent), one figure for each quota dimension; no document content and no personal data (decision 69). 06, section 12; 13, section 10 |
+| `/sealing-keys` | GET | Service credential only. The PDF sealing keys of the tenant, as public facts (identifier, algorithm, certificate thumbprint, subject and expiry), one page at a time. These are not the token keys of `/keys` (decision 112). There is no write route until the production custody of sealing keys is decided. 10, section 6; 13, section 10 |
 
 Resources for fields, workflow, templates and bulk sends are listed in 12, section 10. Administration resources are outlined in 13, section 10.
 

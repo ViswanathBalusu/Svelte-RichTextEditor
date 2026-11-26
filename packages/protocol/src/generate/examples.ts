@@ -89,7 +89,7 @@ export class ExampleBuilder {
     if (s.format) return FORMAT_EXAMPLE[s.format];
     if (s.pattern) {
       const re = new RegExp(s.pattern, 'u');
-      const found = ['everyone', 'x', 'a1'].find((c) => re.test(c));
+      const found = ['everyone', 'x', 'a1', '2026-01'].find((c) => re.test(c));
       if (!found) throw new Error(`no example for pattern ${s.pattern}`);
       return found;
     }

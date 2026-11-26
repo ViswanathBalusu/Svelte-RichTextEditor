@@ -106,6 +106,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
         'the tenant has used its compile minutes for this month',
         {
           retryAfterS: spent.retryAfterS,
+          quota: 'exportMinutes',
         },
       );
     const identity = ctx.caller.identity;
@@ -331,8 +332,11 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
     }
     // BE-092 criterion 3: a tenant at its export concurrency quota is refused, not queued.
     if (kind === EXPORT_KIND)
-      await admitExportConcurrency(d.quotaSource, ctx.caller.tenant, (t) =>
-        d.queue.activeCount(t, EXPORT_KIND),
+      await admitExportConcurrency(
+        d.quotaSource,
+        ctx.caller.tenant,
+        (t) => d.queue.activeCount(t, EXPORT_KIND),
+        d.usagePeaks,
       );
     const job = await d.queue.enqueue(ctx.caller.tenant, {
       kind,

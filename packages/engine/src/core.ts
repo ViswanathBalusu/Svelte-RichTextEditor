@@ -243,11 +243,11 @@ import {
   type LocatedFinding,
   NO_PROOFING,
   type ProofingClock,
-  ProofingController,
   type ProofingFindingInfo,
   type ProofingPort,
   type ProofingInfo,
 } from './proofing.ts';
+import type { ProofingController } from './proofing-controller.ts';
 import { ReadValue, type Schedule, ViewHub, sameJson } from './read-value.ts';
 import {
   placeholderAt,
@@ -557,6 +557,23 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
  * The title `canMarkRegion` asks `markRegion` with: the shell's dialog asks for the real title only
  * after the command is chosen, and the command refuses only an empty one (PRM-033).
  */
+/** The controller's class, once its chunk has loaded (UX-070 criterion 2). */
+type ProofingControllerClass = typeof ProofingController;
+let proofingControllerClass: ProofingControllerClass | null = null;
+let proofingLoading: Promise<ProofingControllerClass> | null = null;
+
+/**
+ * Loads the proofing controller, a chunk of its own, and answers once it is there. `attachProofing`
+ * asks for it when a port is first attached; a host or a test may ask earlier so that the first
+ * attach is synchronous too.
+ */
+export function loadProofing(): Promise<ProofingControllerClass> {
+  proofingLoading ??= import('./proofing-controller.ts').then((module) => {
+    proofingControllerClass = module.ProofingController;
+    return module.ProofingController;
+  });
+  return proofingLoading;
+}
 const REGION_QUERY_TITLE = 'Region';
 
 const COMMANDS: readonly CommandName[] = [
@@ -1039,6 +1056,8 @@ export class DocumentCore implements DocumentApi {
   #journalHeld = false;
   #accessValue: Access | null;
   #proofing: ProofingController | null = null;
+  /** The attach waiting for the proofing chunk, so a later attach or a detach cancels it. */
+  #proofingTicket: object | null = null;
   /** The `mode` the host set, and the one in force under the access (FE-029). */
   #requested: EditMode = 'edit';
   #effective: EditMode = 'edit';
@@ -1430,34 +1449,59 @@ export class DocumentCore implements DocumentApi {
     opts: { docId?: string; clock?: ProofingClock; debounceMs?: number } = {},
   ): () => void {
     this.#proofing?.dispose();
-    const controller = new ProofingController(
-      {
-        doc: () => this.#state.doc,
-        canView: (scope) => this.#canView(scope),
-        docId: () => opts.docId ?? this.#docId,
-        defaultLang: () => stylesOf(this.#state.doc).settings.lang,
-        changed: () => {
-          if (this.#proofing === controller) this.#publishProofing();
+    const ticket = {};
+    this.#proofingTicket = ticket;
+    const attach = (Controller: ProofingControllerClass): (() => void) => {
+      const controller = new Controller(
+        {
+          doc: () => this.#state.doc,
+          canView: (scope: string) => this.#canView(scope),
+          docId: () => opts.docId ?? this.#docId,
+          defaultLang: () => stylesOf(this.#state.doc).settings.lang,
+          changed: () => {
+            if (this.#proofing === controller) this.#publishProofing();
+          },
         },
+        port,
+        {
+          clock: opts.clock ?? {
+            // Bound wrappers, as the sync client's clock has (browsers refuse an unbound `setTimeout`).
+            setTimeout: (fn, ms) => setTimeout(fn, ms),
+            clearTimeout: (h) => clearTimeout(h as never),
+          },
+          ...(opts.debounceMs !== undefined ? { debounceMs: opts.debounceMs } : {}),
+        },
+      );
+      this.#proofing = controller;
+      controller.start();
+      this.#publishProofing();
+      return () => {
+        if (this.#proofing !== controller) return;
+        controller.dispose();
+        this.#proofing = null;
+        this.proofing.set(NO_PROOFING);
+      };
+    };
+    // The controller is a separate chunk (UX-070 criterion 2): it is requested when a port is first
+    // attached. Once it is loaded, a later attach is synchronous, as it was before the split.
+    if (proofingControllerClass) return attach(proofingControllerClass);
+    this.#proofing = null;
+    this.proofing.set(NO_PROOFING);
+    let detach: (() => void) | null = null;
+    let cancelled = false;
+    loadProofing().then(
+      (Controller) => {
+        if (cancelled || this.#proofingTicket !== ticket) return;
+        detach = attach(Controller);
       },
-      port,
-      {
-        clock: opts.clock ?? {
-          // Bound wrappers, as the sync client's clock has (browsers refuse an unbound `setTimeout`).
-          setTimeout: (fn, ms) => setTimeout(fn, ms),
-          clearTimeout: (h) => clearTimeout(h as never),
-        },
-        ...(opts.debounceMs !== undefined ? { debounceMs: opts.debounceMs } : {}),
+      () => {
+        // The chunk did not load: proofing stays unavailable and the editor keeps working.
       },
     );
-    this.#proofing = controller;
-    controller.start();
-    this.#publishProofing();
     return () => {
-      if (this.#proofing !== controller) return;
-      controller.dispose();
-      this.#proofing = null;
-      this.proofing.set(NO_PROOFING);
+      cancelled = true;
+      if (detach) detach();
+      else if (this.#proofingTicket === ticket) this.#proofingTicket = null;
     };
   }
 
@@ -5667,6 +5711,7 @@ one or original. It is a
     for (const api of [...this.#extApis]) api.dispose();
     this.#proofing?.dispose();
     this.#proofing = null;
+    this.#proofingTicket = null;
     this.#session?.end();
     this.#session = null;
     this.#threadSync?.end();

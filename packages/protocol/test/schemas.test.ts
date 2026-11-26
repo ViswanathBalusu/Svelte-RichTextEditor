@@ -337,7 +337,9 @@ describe('the OpenAPI document (spec/dep/dep-1.openapi.json)', () => {
       for (const s of op['security'] as Array<Record<string, unknown>>)
         for (const scheme of Object.keys(s))
           expect(components['securitySchemes'], where).toHaveProperty(scheme);
-      const service = def.security.length === 1 && def.security[0] === 'service';
+      const service =
+        def.security.length === 1 &&
+        (def.security[0] === 'service' || def.security[0] === 'operator');
       expect(
         (op['security'] as Array<Record<string, unknown>>).some((s) => 'userToken' in s),
         `${where} user token`,

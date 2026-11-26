@@ -1,7 +1,9 @@
 /**
  * UX-068 criterion 4, a guard (lane w3, 2026-11-15). The criterion asks for a keyboard or dialog
  * alternative to every shell interaction that can be done by dragging (WCAG 2.2, 2.5.7). The shell
- * has no such interaction today. This test reads the shell's source and fails when a drag gesture
+ * has two (the ruler's markers and the drawn signature), each named in `REVIEWED` with an
+ * alternative that a browser test runs (ux-102-ruler.spec.ts, frw-045-adoption-step.spec.ts). This
+ * test reads the shell's source and fails when a drag gesture
  * appears (a `draggable` attribute, a drag event, pointer capture, or a CSS `resize`), unless the
  * file is named in `REVIEWED` with its alternative. It does not show that an alternative exists;
  * it makes sure the question is asked when the first drag is built.

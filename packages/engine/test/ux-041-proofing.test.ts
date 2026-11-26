@@ -3,6 +3,7 @@
  * a mock port that records its requests and answers from a list of "misspelt" words. Time is a
  * manual clock, so the pause before a check is stepped, not waited for. Node.js, no DOM.
  */
+import { loadProofing } from '../src/core.ts';
 import type { CancelSignal, ProofingFinding } from '@docedit/protocol';
 import { describe, expect, it } from 'vitest';
 import type { ProofingPort } from '../src/proofing.ts';
@@ -17,6 +18,9 @@ import { blockText, endOf, manualClock, newCore, settle, wordPort } from './proo
 import { join, newService, posOf, type, until } from './support.ts';
 import { contractDocument } from '@docedit/protocol/contract';
 import { TextSelection } from 'prosemirror-state';
+
+// The proofing controller is a chunk of its own (UX-070); load it so that attaching a port is synchronous.
+await loadProofing();
 
 describe('UX-041 criterion 1: findings return as decorations and change nothing', () => {
   it('sends the blocks with the document language when the document opens', async () => {

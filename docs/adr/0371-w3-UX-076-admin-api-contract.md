@@ -40,3 +40,16 @@ The compatibility check of PRO-006 (`packages/protocol/src/generate/compat.ts`) 
 ## Consequences
 
 No criterion of UX-076 is ticked by this record. Its test is a regression guard on the part that exists.
+
+## Update (lane w3, 2026-11-26): owner decisions applied
+
+Owner decisions 68 (credentials), 69 (usage window), 112 (signing keys), 74 (compatibility baseline) and the bulk acceptance of proposed defaults (196 to 220) settle the gaps above. The contract now says:
+
+- **Two credentials.** The tenant administrator credential is the tenant's service credential (`serviceCredential`): bound to one tenant, it manages that tenant's resources. The operator credential (`operatorCredential`, a new bearer scheme) is for every tenant and manages tenants only. A user token never grants access to either. A service credential on an operator route, and an operator credential on a tenant route, are `forbidden`. Row 14 of the matrix of 07 section 12 (`operator`) carries the four tenant routes; row 13 gained `GET /usage` and `GET /sealing-keys`.
+- **Tenants.** `GET`, `POST /tenants` and `GET`, `PATCH /tenants/{tenantId}` (operator credential): a tenant has an identifier, a name, a state (`active` or `suspended`) and a creation time. The shapes are proposals; the spec gave none.
+- **Usage.** `GET /usage?month=YYYY-MM` (tenant administrator): one non-negative integer for each quota dimension of `QuotaSettings`, over the calendar month in UTC (decision 69), no document content and no personal data. The figures are the largest value reached in the month for the rate and concurrency dimensions, and the amount used for storage and minutes.
+- **Signing keys.** Token keys stay at `/keys` (and `/keys/{kid}`). PDF sealing keys are a section of their own, `GET /sealing-keys`, which lists public facts only (identifier, algorithm, certificate thumbprint, subject, expiry). There is no write route: production custody of sealing keys is open (decisions 221 to 223 allow development choices only).
+- **Keys and origins are exempt from paging.** They are small, held with the tenant registration, and answer as `{ keys }` and `{ origins }`. 05 section 6.1 now says so. This is the first option of the proposal; the owner may still ask for `{ items, nextCursor }`.
+- **Versioning.** Only additive changes within a major version (05 section 1) is PRO-006's check. Decision 74 makes the first public release its baseline; until one exists the comparison has nothing to compare with, so criterion 5 stays open.
+
+Not done: the service implements none of the new routes (the pipeline refuses a user token with `forbidden` before it looks for a handler, and answers `not_found` for an operator or administrator credential until a handler exists); a negative test for a caller of another tenant needs a second credential, which the conformance kit's three inputs (05 section 11) do not include.

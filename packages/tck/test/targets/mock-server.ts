@@ -61,6 +61,12 @@ const SERVICE_ROUTES = (MATRIX.find((r) => r.id === 'service')?.routes ?? []).ma
   return { method, path: new RegExp(`^${template.replace(/\{[^}]+\}/g, '[^/]+')}$`) };
 });
 
+/** The routes that take an operator credential (07 §12 row 14). The mock holds none, so it refuses every caller. */
+const OPERATOR_ROUTES = (MATRIX.find((r) => r.id === 'operator')?.routes ?? []).map((r) => {
+  const [method = '', template = ''] = r.split(' ');
+  return { method, path: new RegExp(`^${template.replace(/\{[^}]+\}/g, '[^/]+')}$`) };
+});
+
 /** The mock service has the comments port in process (ADR 0417), but this REST emulation has no thread routes: it does not announce the feature, so the kit skips the `comments` profile. */
 const notComments = (feature: string): boolean => feature !== 'comments';
 
@@ -321,6 +327,8 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
         throw new Problem('forbidden', 'the route takes a service credential');
     };
     const sub = path.slice(3);
+    if (OPERATOR_ROUTES.some((r) => r.method === method && r.path.test(sub)))
+      throw new Problem('forbidden', 'the route takes an operator credential');
     if (SERVICE_ROUTES.some((r) => r.method === method && r.path.test(sub))) svc();
     const ifMatch = req.headers['if-match'];
     if (parts[0] === 'tokens' && method === 'POST') {

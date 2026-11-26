@@ -9,6 +9,7 @@
  * of the lang mark'), through `core.attachProofing`; that test, with this one, is the evidence for
  * criterion 3.
  */
+import { loadProofing } from '../src/core.ts';
 import type { Node as PMNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
@@ -17,6 +18,9 @@ import { internals } from '../src/testing.ts';
 import { proofingRequest, type ProofingBlock } from '../../ui/src/proofing/request.ts';
 import { STYLE_IDS, styledDocument, styledEditorAccess } from './fixtures.ts';
 import { microtask, posOf } from './support.ts';
+
+// The proofing controller is a chunk of its own (UX-070); load it so that attaching a port is synchronous.
+await loadProofing();
 
 const PARA = STYLE_IDS.plain;
 const PLAIN_LENGTH = 'Plain text'.length;
