@@ -328,6 +328,20 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(h.events.of('dep.workflow.completed.v1').some((e) => e.subject === w.doc)).toBe(
           true,
         );
+
+        // FRW-036 criterion 1: `finalised` is raised once, with small data that holds the `seq` of the
+        // control commit of the transition and the chain head, and nothing that names a person.
+        const finals = h.events.of('dep.workflow.finalised.v1').filter((e) => e.subject === w.doc);
+        expect(finals).toHaveLength(1);
+        const data = finals[0]!.data as Record<string, unknown>;
+        expect(Object.keys(data).sort()).toEqual(['chainHead', 'document', 'seq', 'workflow']);
+        expect(data['workflow']).toBe(w.workflowId);
+        expect(data['document']).toBe(w.doc);
+        expect(Number.isSafeInteger(data['seq'])).toBe(true);
+        expect(data['seq'] as number).toBeGreaterThan(job!.payload['seq'] as number);
+        expect(data['chainHead']).toMatch(/^[0-9a-f]{64}$/);
+        const control = (await h.parts.logs.read(w.ref)).find((c) => c.seq === data['seq']);
+        expect(control?.kind).toBe('control');
       },
       300_000,
     );

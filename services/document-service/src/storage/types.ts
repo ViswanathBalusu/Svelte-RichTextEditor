@@ -213,6 +213,12 @@ export interface ChangeOptions {
   actor: string;
   /** Refuse the change unless this is the current revision (optimistic concurrency for PATCH). */
   ifRevision?: number;
+  /**
+   * Names the workflow transition that makes this change (FRW-030). A repeat with the same key finds
+   * the revision the first attempt raised and returns it with no second revision, so a transition
+   * repeated after a stop leaves one control commit. Absent for any other change.
+   */
+  transition?: string;
 }
 
 /** Permission data of 07 §3 (06 §14 `GrantStore`; PRM-002). */
