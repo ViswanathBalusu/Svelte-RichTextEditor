@@ -628,7 +628,6 @@ class SignFieldView implements NodeView, Refreshable {
     button.type = 'button';
     button.className = 'de-sign-button';
     button.style.font = 'inherit';
-    button.style.border = '1px solid currentColor';
     button.style.padding = '0 0.4em';
     button.addEventListener('click', this.#clicked);
     dom.append(button);
@@ -643,6 +642,11 @@ class SignFieldView implements NodeView, Refreshable {
     this.#port.signRequest?.(String(this.#node.attrs['id']));
   };
 
+  /** Whether the field must be signed: the field's own flag (a rule's `require` does not reach a signature button). */
+  #required(): boolean {
+    return this.#node.attrs['required'] === true;
+  }
+
   #draw(): void {
     const node = this.#node;
     const kind = String(node.attrs['kind']);
@@ -651,10 +655,31 @@ class SignFieldView implements NodeView, Refreshable {
     const named = typeof label === 'string' && label !== '' ? label : String(node.attrs['key']);
     const signed = isSigned(node.attrs['value']);
     const signable = !signed && (this.#port.signable?.(String(node.attrs['id'])) ?? false);
-    const word = signed ? 'Signed' : signable ? `Sign ${noun}` : 'Not signed';
+    // The state is said in words (FRW-048 criterion 4): signed, to sign (and whether it is required),
+    // or not signed and for another signer. A readable word is never replaced by colour alone.
+    const required = this.#required();
+    const readOnly = node.attrs['readOnly'] === true;
+    const assigned = typeof node.attrs['assignee'] === 'string' && node.attrs['assignee'] !== '';
+    const state = signed
+      ? 'signed'
+      : signable
+        ? 'open'
+        : assigned && !readOnly
+          ? 'other'
+          : 'closed';
+    const word =
+      state === 'signed'
+        ? 'Signed'
+        : state === 'open'
+          ? `Sign ${noun}${required ? ' (required)' : ''}`
+          : state === 'other'
+            ? 'Not signed (another signer)'
+            : 'Not signed';
     this.#button.textContent = word;
     this.#button.setAttribute('aria-label', `${named}: ${word.toLowerCase()}`);
+    this.#button.setAttribute('data-state', state);
     this.#button.disabled = !signable;
+    this.dom.toggleAttribute('data-required', required && !signed);
     this.dom.toggleAttribute('data-signed', signed);
     if (signed) this.#button.setAttribute('aria-disabled', 'true');
     else this.#button.removeAttribute('aria-disabled');
