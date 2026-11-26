@@ -113,9 +113,9 @@ describe.skipIf(!ready)(
 
       // Owner decision 149 (ADR 0223, decision 12): `align` is the picture's alone, so the caption
       // does not move. The three captions start at the same x whatever their figure's align.
-      const captionStarts = [
-        ...bbox.matchAll(/<word xMin="([^"]*)"[^>]*>Caption<\/word>/g),
-      ].map((m) => Number(m[1]));
+      const captionStarts = [...bbox.matchAll(/<word xMin="([^"]*)"[^>]*>Caption<\/word>/g)].map(
+        (m) => Number(m[1]),
+      );
       expect(captionStarts).toHaveLength(3);
       expect(Math.max(...captionStarts) - Math.min(...captionStarts)).toBeLessThan(1);
     }, 300_000);

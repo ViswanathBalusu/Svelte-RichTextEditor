@@ -68,7 +68,9 @@ test.describe('the region state in the permissions pane (PRM-048, criteria 3 to 
     // The backend's state is now approved, and the pane shows it, with no reload.
     await expect(row.locator('.de-badge')).toHaveText(/Approved/);
     await expect(row).toHaveAttribute('data-state', 'approved');
-    await expect(row.locator('[data-region-editors]')).toHaveText('It is approved, so nobody can edit it.');
+    await expect(row.locator('[data-region-editors]')).toHaveText(
+      'It is approved, so nobody can edit it.',
+    );
     expect((await events(page, 'de-ready')).length).toBe(ready);
     expect(await events(page, 'de-error')).toEqual([]);
     const stored = await page.evaluate(() => {
