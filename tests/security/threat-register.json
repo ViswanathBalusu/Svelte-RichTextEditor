@@ -200,16 +200,10 @@
       "builtBy": ["FE-125"],
       "provenBy": "FE-125",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "packages/element/e2e/s2-features.spec.ts",
         "packages/element/test/published-policies.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 5,
-          "what": "the policy test seen to run again in CI after a dependency update"
-        }
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Strict host policies"],
@@ -1115,20 +1109,15 @@
       "builtBy": ["FE-125"],
       "provenBy": "SEC-054",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "sec-054-font-origins.test.ts",
         "packages/element/e2e/sec-054-network-tour.spec.ts",
         "packages/element/e2e/sec-054-tour-math.spec.ts",
         "packages/element/e2e/sec-054-tour-pdf-viewer.spec.ts",
+        "packages/element/e2e/sec-054-tour-ports.spec.ts",
         "scripts/supply-chain/bundle.test.ts",
         "scripts/supply-chain/origin-sandbox.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 1,
-          "what": "the network record of a tour of every feature: every script, style, font and WebAssembly request to the host or the configured service only"
-        }
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["The editor bundle loads no code at run time from third-party origins"]
