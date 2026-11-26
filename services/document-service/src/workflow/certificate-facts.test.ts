@@ -133,3 +133,60 @@ describe('the certificate wording follows the legal stance (FRW-050 criterion 7)
     expect(facts.statement.join(' ')).toContain('does not verify identity');
   });
 });
+
+describe('the host amr is shown as asserted, not verified (SEC-043 criterion 2)', () => {
+  it('puts the amr recorded for a participant in the certificate as an unchecked assertion', async () => {
+    const l = await ledger(true);
+    await l.record(TENANT, {
+      doc: DOC,
+      participant: 'p2',
+      kind: 'approver',
+      item: 'viewed',
+      facts: {
+        items: { viewedAtMs: 1_050, amr: ['pwd', 'otp'] },
+        ipAddress: '203.0.113.9',
+        userAgent: 'Agent/9',
+      },
+    });
+    const facts = certificateFactsOf({
+      workflow,
+      rows: await l.list(TENANT, DOC),
+      completedSeq: 40,
+      chainHead: HASH,
+    });
+    const [p1, p2] = facts.participants;
+    expect(p1!.authentication).toBeUndefined();
+    expect(p2!.authentication).toMatchObject({
+      source: 'host',
+      checked: false,
+      amr: ['pwd', 'otp'],
+    });
+    const text = p2!.authentication!.text;
+    expect(text).toContain(AUTHENTICATION_PHRASE);
+    expect(text).toContain('recorded as given');
+    expect(text).toContain('did not check');
+    expect(isWithinLegalStance(text)).toBe(true);
+  });
+
+  it('leaves out an amr that is not a short list of plain strings', async () => {
+    const l = await ledger(true);
+    await l.record(TENANT, {
+      doc: DOC,
+      participant: 'p2',
+      kind: 'approver',
+      item: 'viewed',
+      facts: {
+        items: { viewedAtMs: 1_050, amr: ['ok', 'bad value\n\\input{x}'] },
+        ipAddress: '203.0.113.9',
+        userAgent: 'Agent/9',
+      },
+    });
+    const facts = certificateFactsOf({
+      workflow,
+      rows: await l.list(TENANT, DOC),
+      completedSeq: 40,
+      chainHead: HASH,
+    });
+    expect(facts.participants[1]!.authentication).toBeUndefined();
+  });
+});

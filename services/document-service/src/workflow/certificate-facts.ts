@@ -27,6 +27,26 @@ import type { WorkflowResourceView } from './workflow-resource.ts';
 const asMs = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null;
 
+/**
+ * The `amr` the host asserted for a participant, from the first of their rows that holds one, as
+ * given. The certificate shows it as asserted and unchecked (SEC-043). A value that is not a short
+ * list of plain strings is left out rather than shown.
+ */
+function amrOf(
+  rows: readonly StoredEvidence[],
+): { authentication: { amr: readonly string[] } } | Record<string, never> {
+  for (const row of rows) {
+    const amr = (row.evidence.items as Record<string, unknown>)['amr'];
+    if (
+      Array.isArray(amr) &&
+      amr.length <= 16 &&
+      amr.every((m) => typeof m === 'string' && /^[\x21-\x7e]{1,64}$/.test(m))
+    )
+      return { authentication: { amr: amr as string[] } };
+  }
+  return {};
+}
+
 function eventsOf(row: StoredEvidence): CertificateEventInput[] {
   const items = row.evidence.items as Record<string, unknown>;
   const network: { ipAddress?: string; userAgent?: string } = {};
@@ -66,6 +86,7 @@ export function certificateFactsOf(input: {
       id: p.id,
       label: p.name ?? p.id,
       events: rows.filter((r) => r.participant === p.id).flatMap(eventsOf),
+      ...amrOf(rows.filter((r) => r.participant === p.id)),
     })),
   });
 }
