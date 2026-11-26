@@ -200,6 +200,19 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // The open channel was told of every state it passed through, in order, without a reload.
         await until(() => states(client).includes('completed'), 5000, 'wf.changed for completed');
         expect(states(client)).toEqual(['sent', 'in_progress', 'completed']);
+
+        // SYN-004 criterion 1: the send, the first view and each of the three completions (two of
+        // which leave the lock as it was) are control commits with no steps, one each, in log order.
+        for (const out of [one, three, two]) expect(out.control).not.toBeNull();
+        const controls = (await h.parts.logs.read(ref)).filter((c) => c.kind === 'control');
+        expect(controls).toHaveLength(5);
+        expect(controls.every((c) => c.steps.length === 0)).toBe(true);
+        const seqs = controls.map((c) => c.seq);
+        expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+        expect(new Set(seqs).size).toBe(5);
+        expect(new Set(controls.map((c) => c.revision)).size).toBe(5);
+        expect(one.control!.seq).toBe(controls[2]!.seq);
+        expect(two.control!.seq).toBe(controls[4]!.seq);
       },
     );
 

@@ -1,6 +1,6 @@
 # 0361. Lane w4, SPK-011: the first jurisdictions and the sealing party
 
-**Status:** proposed (2026-11-15). Written by the developer of lane w4 for SPK-011. Not reviewed by the owner. Nothing here is an owner decision: it sets out the question, the default the spec already has, and a working assumption for the stories that wait on the answer.
+**Status:** answered by the owner (2026-11-15, decisions 13 and 14 of `docs/owner-decisions-2026-11-15.md`: the European Union and the United States from the start; the operator seals by default, and a tenant's own key and certificate are used where supplied). The text below is the proposal as written (2026-11-15). Written by the developer of lane w4 for SPK-011. Not reviewed by the owner. Nothing here is an owner decision: it sets out the question, the default the spec already has, and a working assumption for the stories that wait on the answer.
 
 ## Context
 

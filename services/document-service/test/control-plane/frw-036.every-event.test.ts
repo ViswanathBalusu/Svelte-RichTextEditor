@@ -3,9 +3,9 @@
 // connector only), once per occurrence, with small data that holds the `seq` and the chain head.
 // Every path is driven through its route or the real data plane: the send, the first view (a
 // participant's channel opens), the consent and the signing, the completion, the decline, the void,
-// the remind, the deadline sweep, the wrong access code and the correction. `finalised` is the one
-// event that no path of the service raises (`finaliseSealed` has no caller until the signing service
-// of FRW-052 and FRW-053 exists); the last test says so. Memory storage and, when the test
+// the remind, the deadline sweep, the wrong access code and the correction. `finalised` needs the
+// signing service and a time-stamp authority; the live path raises it (FRW-053), and its data is checked in
+// frw-053.live-seal.test.ts. Here the last test says that it is the one event this file does not drive. Memory storage and, when the test
 // environment is up, PostgreSQL in Podman.
 import { unsandboxed } from '@docedit/asset-worker';
 import { uuid7 } from '@docedit/model';
@@ -375,7 +375,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             expect(['workflow', 'document', 'seq', 'chainHead', 'participant']).toContain(key);
         }
         expect(new Set(sent.map((s) => s.host))).toEqual(new Set(['public.example.test']));
-        // Only `finalised` was not delivered: no path of the service raises it.
+        // Only `finalised` was not driven here: it needs the signing service (frw-053.live-seal.test.ts).
         const missing = NAMES.filter((n: Name) => !seen.has(n));
         expect(missing).toEqual(['finalised']);
       },

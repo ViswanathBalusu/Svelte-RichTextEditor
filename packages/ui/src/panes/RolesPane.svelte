@@ -14,6 +14,7 @@
   import type { StringKey } from '../i18n/en-GB.ts';
   import { live } from '../live.ts';
   import { roleIcon } from '../shell/fields.ts';
+  import ParticipantsPanel from '../components/ParticipantsPanel.svelte';
 
   const shell = useShell()!;
   const tr = $derived(shell.strings.current);
@@ -21,6 +22,12 @@
   const roles = live(service.list);
   const canChange = live(service.canChange);
   const id = `${shell.idPrefix}-roles`;
+  const participants = shell.core.participants;
+  const people = participants ? live(participants.participants) : null;
+  const mayEdit = participants ? live(participants.canEdit) : null;
+  const workflowState = participants ? live(participants.state) : null;
+  const tt = (key: string, params?: Readonly<Record<string, string | number>>): string =>
+    tr.t(key as StringKey, params);
   const preview = shell.core.rolePreview ? live(shell.core.rolePreview) : null;
 
   /** Previews the document as the role, or leaves the preview when it is already that role's (FRW-075). */
@@ -221,3 +228,16 @@
     {/if}
   {/if}
 </section>
+
+{#if participants && people && mayEdit && workflowState}
+  <ParticipantsPanel
+    people={people.current}
+    roles={roles.current.map((r) => ({ id: r.id, name: r.name }))}
+    canEdit={mayEdit.current}
+    workflowState={workflowState.current}
+    t={tt}
+    onsave={(input) => participants.save(input)}
+    onremove={(participantId) => participants.remove(participantId)}
+    announce={(key) => shell.announce(key as StringKey)}
+  />
+{/if}

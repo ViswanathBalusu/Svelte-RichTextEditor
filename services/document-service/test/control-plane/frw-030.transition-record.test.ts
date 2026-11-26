@@ -205,6 +205,79 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
+      'repeats cleanly after a stop for a transition that keeps the lock: the repeat finds the revision of the first attempt, one control commit, the state moves once (criterion 3)',
+      async () => {
+        const { ref, view } = await draft();
+        const sent = await recordTransition(deps(), {
+          ref,
+          actor: 'alice',
+          from: view,
+          write: { to: 'sent', sentSeq: 0, sentHash: 'sha256:' + '3'.repeat(64) },
+        });
+        expect(sent.ok).toBe(true);
+        if (!sent.ok) return;
+        expect(await controls(ref)).toHaveLength(1);
+
+        // `sent` to `in_progress` keeps the lock: the transition raises a grants revision with nothing
+        // changed, and the process stops after that and before the workflow row moves.
+        const crash = new Error('stopped after the revision, before the state');
+        await expect(
+          recordTransition(
+            deps({
+              afterLock: () => {
+                throw crash;
+              },
+            }),
+            { ref, actor: 'alice', from: sent.resource, write: { to: 'in_progress' } },
+          ),
+        ).rejects.toBe(crash);
+        const mid = (await h.parts.workflows!.read(h.tenant, ref.doc))!;
+        expect(mid.state).toBe('sent');
+        const raised = (await h.parts.grants.current(ref)).revision;
+
+        // The caller repeats: no second revision. The revision is the first attempt's, and its control
+        // commit is read back.
+        const again = await recordTransition(deps(), {
+          ref,
+          actor: 'alice',
+          from: mid,
+          write: { to: 'in_progress' },
+        });
+        expect(again.ok).toBe(true);
+        if (!again.ok) return;
+        expect(again.revision).toBe(raised);
+        expect((await h.parts.grants.current(ref)).revision).toBe(raised);
+        expect(again.control).not.toBeNull();
+        const found = await controls(ref);
+        expect(found).toHaveLength(2);
+        expect(found.map((c) => c.revision)).toEqual([2, raised]);
+        expect(found[1]!.steps).toEqual([]);
+        expect(again.resource.state).toBe('in_progress');
+        // The state and the log agree: one `in_progress` transition in the audit trail, one commit.
+        const audited = (
+          await h.parts.audit!.query(h.tenant, {
+            doc: ref.doc,
+            kind: 'workflow.transition',
+            limit: 10,
+          })
+        ).map((e) => e.data['to']);
+        expect(audited).toEqual(['sent', 'in_progress']);
+
+        // The next transition of the same document is not mistaken for the repeat: it raises its own revision.
+        const next = await recordTransition(deps(), {
+          ref,
+          actor: 'alice',
+          from: again.resource,
+          write: { to: 'voided' },
+        });
+        expect(next.ok).toBe(true);
+        if (!next.ok) return;
+        expect(next.revision).toBe(raised + 1);
+        expect(await controls(ref)).toHaveLength(3);
+      },
+    );
+
+    it.skipIf(skip)(
       'refuses a state that has no lock (a name that is not a state of 12)',
       async () => {
         const { ref, view } = await draft(false);

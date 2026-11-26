@@ -16,6 +16,10 @@ export type {
   AssetWorkerOptions,
   JobContext,
 } from './worker.ts';
+export { checkFontFile } from './font-check.ts';
+export type { FontCheck } from './font-check.ts';
+export { FONT_TYPES, isFontType, OTF, TTF, WOFF2, processFont } from './sandbox/font.ts';
+export type { FontInfo, FontType } from './sandbox/font.ts';
 export { checkDeclaredUpload, presignQuarantineUpload } from './upload.ts';
 export type { DeclaredUploadCheck, QuarantineUpload } from './upload.ts';
 export { assetKeys, isSha256, isUuid } from './keys.ts';

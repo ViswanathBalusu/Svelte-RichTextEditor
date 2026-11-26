@@ -267,9 +267,9 @@
     try {
       await core.setRegionState(selected.id, chosenState);
       stateChoice = null;
-      shell.announce('permissions.state.changed');
+      shell.announce('permissions.stateChange.changed');
     } catch {
-      shell.announce('permissions.state.failed');
+      shell.announce('permissions.stateChange.failed');
     } finally {
       stateBusy = false;
     }
@@ -401,7 +401,7 @@
       {/if}
       {#if manage && core.setRegionState && selected.title !== null}
         <form class="de-form" onsubmit={changeState} data-region-state>
-          <label class="de-field" for={`${id}-state`}>{tr.t('permissions.state.label')}</label>
+          <label class="de-field" for={`${id}-state`}>{tr.t('permissions.stateChange.label')}</label>
           <select
             id={`${id}-state`}
             class="de-input"
@@ -421,7 +421,7 @@
             type="submit"
             class="de-button"
             disabled={stateBusy || chosenState === selected.state}
-            >{tr.t('permissions.state.save')}</button
+            >{tr.t('permissions.stateChange.save')}</button
           >
         </form>
       {/if}
