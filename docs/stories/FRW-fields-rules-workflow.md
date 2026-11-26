@@ -1846,6 +1846,8 @@ As an integrating developer, I want the attribute `mode="fill"` and the fill met
 
 **Notes (lane w4, 2026-11-26, third pass):** Checked again: no decision in `docs/owner-decisions-2026-11-15.md` to `2026-11-18` mentions upgrade, the PRO lifecycle or this wording, and 02 §3 (the `constructor` row) says only that properties set before the upgrade are captured, which is tested (PRO-075). The bulk acceptance of decisions 196 to 220 covers ADRs, and the proposed rewording is a note in this story, not an ADR. Criterion 6 therefore stays unticked for the owner's word, and the rewording above stands as the proposal.
 
+**Notes (lane w4, 2026-11-26, fourth pass):** Re-checked against the decisions files and the element: nothing has changed. Criterion 6 as worded cannot be met for methods (a custom element has no method before its class is defined), and the rewording needs the owner's word. Nothing else is open.
+
 ### FRW-070 Report field and fill progress as events
 
 | Type | Phase | Size | Priority | Persona |
