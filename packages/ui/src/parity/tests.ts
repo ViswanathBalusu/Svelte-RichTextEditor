@@ -30,6 +30,18 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/his-010-version-view.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when FE-129 closed, after FE-128 (2026-11-26).
+  [
+    'character-and-paragraph-formatting',
+    [
+      { path: 'packages/engine/src/view/fe-129-paragraph-format.universal.test.ts', kind: 'unit' },
+      { path: 'packages/engine/src/view/fe-129-tab-stops.universal.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-129-paragraph-options-info.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/fe-129-paragraph-dialog-options.test.ts', kind: 'unit' },
+      { path: 'packages/ui/e2e/fe-129-paragraph-dialog.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-129-paragraph-dialog.spec.ts', kind: 'playwright' },
+    ],
+  ],
   // Shipped when CDM-019 and FE-130 closed (2026-11-18).
   [
     'lists',

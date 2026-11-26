@@ -67,6 +67,7 @@ import { regionLockDecorations } from './region-lock-view.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
 import { tabStopsPlugin } from './tab-stops-view.ts';
+import { citationNamesPlugin } from './citation-names-view.ts';
 import { sectionWarningPlugin } from './section-warning-view.ts';
 import { SuggestionCard } from './suggestion-card.ts';
 import { tocPlugin, tocView } from './toc-view.ts';
@@ -520,7 +521,7 @@ export class EditorCore extends DocumentCore {
         },
         markViews: cssomMarkViews(this.#fontAlias),
         // FE-129 criterion 2: a tab in the text advances to the paragraph's tab stops.
-        plugins: [tabStopsPlugin()],
+        plugins: [tabStopsPlugin(), citationNamesPlugin()],
         attributes: this.#bodyAttributes(),
         // An equation opens in the math editor on a double click or on Enter while it is selected
         // (FE-070); the shell reads the request (`equationRequest`). Nothing is opened here.

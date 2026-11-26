@@ -312,6 +312,9 @@ export type CoreQueryName1b =
  *   on, in its caption sequence (FE-134 criterion 1);
  * - `insertCrossReference`: `{ target, format? }`, a target of `referenceTargets` and `null` or
  *   `page` as the format; inserts a `ref` field at the caret (FE-134 criterion 2);
+ * - `insertCitation`: `{ items, mode? }`, items of `{ source, prefix?, suffix?, locator? }` for sources of the
+ *   `sources` service and the mode `normal`, `narrative` or `suppressAuthor`; inserts a citation at the
+ *   caret through the guards (FE-140 criterion 1);
  * - `setParagraphFormat`: a patch of `indentLeft`, `indentRight`, `indentFirstLine` (twips) and
  *   `tabs` (the whole list, or null for none) for the selected paragraphs; the ruler and the
  *   paragraph dialog both run it (UX-102 criterion 2; FE-129);
@@ -321,6 +324,7 @@ export type CoreQueryName1b =
  *   above or below (FE-104).
  */
 export type CoreCommandName =
+  | 'insertCitation'
   | 'setParagraphFormat'
   | 'setTableSize'
   | 'moveBlockUp'

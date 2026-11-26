@@ -570,6 +570,7 @@
     | 'sign'
     | 'alt'
     | 'crossReference'
+    | 'citation'
     | 'paragraph'
     | 'tableSize'
     | null
@@ -701,6 +702,15 @@
     dialog = null;
     const done = core.runNamed?.('setLanguage', { lang }) ?? false;
     announce(done ? 'announce.language.set' : 'announce.language.failed');
+  }
+
+  function insertCitation(
+    items: readonly { source: string; prefix?: string; suffix?: string; locator?: string }[],
+    mode: 'normal' | 'narrative' | 'suppressAuthor',
+  ): void {
+    dialog = null;
+    const done = core.runNamed?.('insertCitation', { items, mode }) ?? false;
+    announce(done ? 'announce.citation.inserted' : 'announce.citation.failed');
   }
 
   function insertCrossReference(target: string, format: string | null): void {
@@ -1107,6 +1117,7 @@
     if (core.tableSize) add(host1b['table.size']);
     add(host1b['insert.region']);
     if (core.referenceTargets) add(host1b['insert.crossReference']);
+    if (core.sources) add(host1b['insert.citation']);
     if (core.threads) add(host1b['review.comment']);
     // The proofing commands exist only while a proofing port is attached (UX-041 criterion 5).
     const proofing = core.proofing;
@@ -1746,6 +1757,7 @@
   {#if dialogs}
     {@const {
       AltTextDialog,
+      CitationDialog,
       CrossReferenceDialog,
       LanguageDialog,
       ParagraphDialog,
@@ -1827,6 +1839,12 @@
           signRequest = null;
           core.signing?.dismiss();
         }}
+      />
+    {:else if dialog === 'citation' && core.sources}
+      <CitationDialog
+        sources={core.sources.list.get()}
+        onInsert={insertCitation}
+        onClose={() => (dialog = null)}
       />
     {:else if dialog === 'crossReference'}
       <CrossReferenceDialog

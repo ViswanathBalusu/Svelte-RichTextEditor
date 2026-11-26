@@ -82,6 +82,17 @@ export const EN_GB_DIALOGS = {
   'dialog.crossRef.hint':
     'The reference prints the number of its target and follows it when content moves. The page number shows in the PDF; the web view has no pages and shows the number.',
   'dialog.crossRef.insert': 'Insert',
+  // The citation dialog (FE-140 criterion 1).
+  'dialog.citation.title': 'Insert a citation',
+  'dialog.citation.empty': 'The document has no sources yet. Add one in the sources pane.',
+  'dialog.citation.sources': 'Sources to cite, in this order',
+  'dialog.citation.prefix': 'Prefix before {source}',
+  'dialog.citation.locator': 'Locator for {source}, such as a page',
+  'dialog.citation.suffix': 'Suffix after {source}',
+  'dialog.citation.mode': 'Citation mode',
+  'dialog.citation.hint':
+    'Tick each source to cite it. The text of the citation follows the document’s citation style.',
+  'dialog.citation.insert': 'Insert',
   'dialog.region.title': 'Make a region',
   'dialog.region.field': 'Title of the region',
   'dialog.region.hint':

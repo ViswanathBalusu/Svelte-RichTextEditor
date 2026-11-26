@@ -277,6 +277,7 @@ export interface ShellCommandHost1b {
       | 'version'
       | 'send'
       | 'crossReference'
+      | 'citation'
       | 'paragraph'
       | 'tableSize',
   ): boolean;
@@ -648,6 +649,19 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       needs: 'insertCrossReference',
       contextMenu: ['text'],
       run: () => host.openDialog('crossReference'),
+    },
+    // A citation of one or more of the document's sources, with an optional prefix, locator and
+    // suffix (FE-140 criterion 1): opens the dialog that lists the sources. Registered when the core
+    // gives a sources service and declares the command.
+    'insert.citation': {
+      id: 'insert.citation',
+      label: 'command.insert.citation',
+      group: 'insert',
+      changesContent: true,
+      capability: 'citations',
+      needs: 'insertCitation',
+      contextMenu: ['text'],
+      run: () => host.openDialog('citation'),
     },
     'insert.region': {
       id: 'insert.region',
