@@ -14,6 +14,10 @@
       "types": "./src/fonts/coverage.ts",
       "default": "./src/fonts/coverage.ts"
     },
+    "./math/gate": {
+      "types": "./src/math/gate.ts",
+      "default": "./src/math/gate.ts"
+    },
     "./preflight": {
       "types": "./src/preflight.ts",
       "default": "./src/preflight.ts"
