@@ -169,6 +169,25 @@ export interface RefusalNotice {
   readonly scopes: readonly string[];
   /** Suggestions a suggestion command skipped, when it counts them (FE-047 criterion 6). */
   readonly count?: number;
+  /** The quota a refused picture upload reached, when the service named it (UX-078 criterion 3). */
+  readonly quota?: QuotaWaitNotice['quota'];
+}
+
+/**
+ * A commit the service refused with `quota_exceeded`, naming the quota, which the engine sends again
+ * after the delay the service gave (UX-078 criterion 3; the core's `quotaWait` view). `n` counts the
+ * waits. The shell says which quota was reached and that nothing is lost.
+ */
+export interface QuotaWaitNotice {
+  readonly n: number;
+  readonly quota:
+    | 'connections'
+    | 'openDocuments'
+    | 'commitRate'
+    | 'roomCpuBudget'
+    | 'storage'
+    | 'exportConcurrency'
+    | 'exportMinutes';
 }
 
 /**
@@ -1005,6 +1024,8 @@ export interface CoreApi {
   } | null>;
   /** The last deletion the core trimmed to the editable parts (FE-037 criterion 2); the shell announces it. */
   readonly trimmed?: ReadView<TrimNotice | null>;
+  /** A commit refused for a quota the service named, sent again later (UX-078 criterion 3); the shell says which. */
+  readonly quotaWait?: ReadView<QuotaWaitNotice | null>;
   /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3); the shell reports it. */
   readonly replaced?: ReadView<ReplaceNotice | null>;
   /** Work set aside (rejected or unsent); the shell lists it and announces new items (UX-017). */

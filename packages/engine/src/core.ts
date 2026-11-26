@@ -93,6 +93,7 @@ import type {
   PresencePeerInfo,
   RecoveredEdits,
   RecoveredItem,
+  QuotaWait,
   ReplaceNotice,
   ReplaceReport,
   RefusalNotice,
@@ -955,6 +956,7 @@ export class DocumentCore implements DocumentApi {
   readonly suggestion: ReadValue<SuggestionModeInfo>;
   /** The last deletion that kept protected content (FE-037): `n` counts them. */
   readonly trimmed: ReadValue<TrimReport | null>;
+  readonly quotaWait: ReadValue<QuotaWait | null>;
   /** What the last Replace or Replace all did (FE-060 criterion 3): `n` counts them. */
   readonly replaced: ReadValue<ReplaceNotice | null>;
   readonly recovered: ReadValue<RecoveredEdits>;
@@ -1104,6 +1106,7 @@ export class DocumentCore implements DocumentApi {
   #referencedTargets: string[] = [];
   #referenceCursor = 0;
   #trims = 0;
+  #quotaWaits = 0;
   #replacements = 0;
   #target: { kind: 'footnote' | 'story'; id: string } | null = null;
   readonly #bridges = new Set<ViewBridge>();
@@ -1193,6 +1196,7 @@ export class DocumentCore implements DocumentApi {
       hub,
     );
     this.trimmed = new ReadValue<TrimReport | null>(null, sameJson, hub);
+    this.quotaWait = new ReadValue<QuotaWait | null>(null, sameJson, hub);
     this.replaced = new ReadValue<ReplaceNotice | null>(null, sameJson, hub);
     this.recovered = new ReadValue<RecoveredEdits>({ count: 0, items: [] }, sameJson, hub);
     this.syncSummary = new ReadValue<SyncSummary>(
@@ -2092,6 +2096,7 @@ export class DocumentCore implements DocumentApi {
       reason: r.reason,
       scopes: [...r.scopes],
       ...(r.count === undefined ? {} : { count: r.count }),
+      ...(r.quota === undefined ? {} : { quota: r.quota }),
     });
   }
 
@@ -4890,6 +4895,9 @@ one or original. It is a
                     : 'scope'
                   : result.reason,
               scopes: [],
+              ...(result.reason === 'upload-failed' && result.quota !== undefined
+                ? { quota: result.quota }
+                : {}),
             });
           }
         } finally {
@@ -5496,6 +5504,9 @@ one or original. It is a
       case 'service':
         this.#serviceUnavailable = !e.ok;
         this.#publishSync();
+        return;
+      case 'quota':
+        this.quotaWait.set(e.quota === null ? null : { n: ++this.#quotaWaits, quota: e.quota });
         return;
       case 'discarded': {
         const before = this.recovered.get().items;

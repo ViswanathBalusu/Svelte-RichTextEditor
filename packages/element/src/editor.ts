@@ -798,6 +798,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       glyphNotice: core.glyphNotice,
       recovered: core.recovered,
       trimmed: core.trimmed,
+      // A commit the service refused for a quota it named, sent again later (UX-078 criterion 3).
+      quotaWait: core.quotaWait,
       // The report of Replace and Replace all: how many matches changed and how many were skipped (FE-060).
       replaced: core.replaced,
       // The sources pane (UX-103): the core's sources and the changes to them, as commits.

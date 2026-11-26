@@ -32,6 +32,7 @@ import type {
   ChannelOpened,
   Content,
   Origin,
+  QuotaKind,
   RemoteCommit,
   SyncReject,
 } from '@docedit/protocol';
@@ -156,7 +157,8 @@ export type Effect = Rebuild | Replace;
 export type Action =
   | { readonly t: 'reconnect'; readonly reason: string }
   | { readonly t: 'reload'; readonly reason: string }
-  | { readonly t: 'resend'; readonly afterMs: number }
+  /** `quota` names the quota whose refusal this is, when the service said (UX-078 criterion 3). */
+  | { readonly t: 'resend'; readonly afterMs: number; readonly quota?: QuotaKind }
   | { readonly t: 'read-only' }
   | { readonly t: 'refresh-permissions'; readonly scopes: readonly string[] }
   | { readonly t: 'discarded'; readonly items: readonly Discarded[] }
@@ -736,7 +738,13 @@ export function receiveReject(s: SyncState, reject: SyncReject): Transition {
     case 'retry':
       // The same commit with the same id, after the indicated delay.
       return none({ ...s, inflight: { ...inf, resend: true } }, [
-        { t: 'resend', afterMs: reject.retryAfterMs ?? 0 },
+        {
+          t: 'resend',
+          afterMs: reject.retryAfterMs ?? 0,
+          ...(reject.code === 'quota_exceeded' && reject.quota !== undefined
+            ? { quota: reject.quota }
+            : {}),
+        },
       ]);
     case 'rebase':
       // Wait until the confirmed seq reaches the head the rejection names, then send the rebased

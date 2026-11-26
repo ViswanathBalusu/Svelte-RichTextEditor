@@ -297,6 +297,20 @@ export const EN_GB_CORE = {
     'The font {family} has no glyph for {char}. The PDF takes it from a fallback font if one has it; otherwise the export stops.',
   'notice.glyph.missingDefault':
     'The default font has no glyph for {char}. The PDF takes it from a fallback font if one has it; otherwise the export stops.',
+  'notice.quota.commitRate':
+    'The saves per minute quota of this workspace is reached, so saving is slower. Your changes are kept and are sent again shortly.',
+  'notice.quota.roomCpuBudget':
+    'The editing processing time quota of this workspace is reached, so saving is slower. Your changes are kept and are sent again shortly.',
+  'notice.quota.connections':
+    'The connections quota of this workspace is reached. Ask the administrator to raise it.',
+  'notice.quota.openDocuments':
+    'The open documents quota of this workspace is reached. Ask the administrator to raise it.',
+  'notice.quota.storage':
+    'The storage quota of this workspace is reached. Ask the administrator to raise it.',
+  'notice.quota.exportConcurrency':
+    'The simultaneous exports quota of this workspace is reached. Ask the administrator to raise it.',
+  'notice.quota.exportMinutes':
+    'The export minutes quota of this workspace is reached. Ask the administrator to raise it.',
   'notice.trimmed.kept':
     'Part of that deletion was kept: you cannot change some of the text it covered.',
   'notice.rejected.permission': {

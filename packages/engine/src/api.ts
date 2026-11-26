@@ -17,6 +17,7 @@ import type {
   Limits,
   PresencePeers,
   PresenceUpdate,
+  QuotaKind,
   SyncChannel,
   SyncPort,
   Unsubscribe,
@@ -605,6 +606,8 @@ export interface RefusalNotice {
   scopes: string[];
   /** The number of suggestions a suggestion command skipped, when it counts them (FE-047 criterion 6). */
   count?: number;
+  /** The quota a refused picture upload reached, when the service named it (UX-078 criterion 3). */
+  quota?: QuotaKind;
 }
 
 /** One piece of work that was set aside (02 §2.2; 04 §8). */
@@ -880,6 +883,17 @@ export interface ReplaceNotice extends ReplaceReport {
 }
 
 /**
+ * The `quotaWait` view (UX-078 criterion 3; owner decision 110): the service refused a commit with
+ * `quota_exceeded` and named the quota, and the commit is sent again after the delay the service
+ * gave. `n` counts the waits, so that the shell tells each one once. It names no document and no
+ * person.
+ */
+export interface QuotaWait {
+  readonly n: number;
+  readonly quota: QuotaKind;
+}
+
+/**
  * The editing mode (the `mode` attribute, 02 §5.2; FE-029): `edit`, `review` (suggestion mode, FE-041),
  * `view` (no changes) and `fill` (the body is read-only; field values are FRW's, FRW-076, FRW-079).
  */
@@ -995,6 +1009,8 @@ export interface DocumentApi {
   readonly trimmed: ReadView<TrimReport | null>;
   /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3). */
   readonly replaced: ReadView<ReplaceNotice | null>;
+  /** A commit waits for a quota the service named (UX-078 criterion 3); null when none does. */
+  readonly quotaWait: ReadView<QuotaWait | null>;
   readonly recovered: ReadView<RecoveredEdits>;
   readonly syncSummary: ReadView<SyncSummary>;
   /** The last problem the sync client reported, for `de-error`. */

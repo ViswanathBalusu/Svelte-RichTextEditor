@@ -278,6 +278,10 @@ export const EN_GB_DIALOGS = {
   'export.preflight.continue': 'Continue',
   'export.preflight.cancel': 'Do not export',
   'export.failed.start': 'The export could not be started.',
+  'export.failed.quota.exportConcurrency':
+    'The export could not be started: the simultaneous exports quota of this workspace is reached. Try again when another export has finished, or ask the administrator to raise it.',
+  'export.failed.quota.exportMinutes':
+    'The export could not be started: the export minutes quota of this workspace is reached. Ask the administrator to raise it.',
 
   // The PDF preview pane (EXP-001). The job's state and page count use the export strings above.
   'export.showInPane': 'Show in the PDF preview',
