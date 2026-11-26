@@ -1350,7 +1350,12 @@ export class DocEditorElement extends Base {
       signing: () => {
         const live = this.#session === session ? session?.backend : undefined;
         return live?.assets && live.fields && session
-          ? { assets: live.assets, fields: live.fields, docId: session.docId }
+          ? {
+              assets: live.assets,
+              fields: live.fields,
+              docId: session.docId,
+              ...(live.workflow && hasPort(live, 'workflow') ? { workflow: live.workflow } : {}),
+            }
           : null;
       },
     };

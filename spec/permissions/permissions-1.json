@@ -143,6 +143,13 @@
       "text": "Send, correct, resume, void or remind a workflow."
     },
     {
+      "id": "workflow.evidence",
+      "needs": "manage",
+      "where": "control",
+      "spec": "07 §12; 12 §8.2",
+      "text": "Fetch the evidence bundle of a workflow; every retrieval is audited."
+    },
+    {
       "id": "document.restore",
       "needs": "manage",
       "where": "control",
@@ -276,7 +283,7 @@
     {
       "row": 10,
       "id": "manage",
-      "operation": "Restore a document, grants, region state or policy, break a lease, workflow actions, delete",
+      "operation": "Restore a document, grants, region state or policy, break a lease, workflow actions, fetch the evidence bundle (audited), delete",
       "requirement": {
         "kind": "manage",
         "operations": [
@@ -286,6 +293,7 @@
           "region.policy",
           "lease.break",
           "workflow.action",
+          "workflow.evidence",
           "document.delete"
         ]
       },
@@ -302,6 +310,7 @@
         "POST /documents/{id}/workflow/participants/{pid}/access-code",
         "POST /documents/{id}/workflow/remind",
         "POST /documents/{id}/workflow/void",
+        "GET /documents/{id}/workflow/evidence",
         "DELETE /documents/{id}"
       ],
       "messages": []
@@ -347,6 +356,8 @@
         "GET /templates/{tid}",
         "POST /bulk-sends",
         "GET /bulk-sends/{bid}",
+        "GET /workflow/capture-settings",
+        "PUT /workflow/capture-settings",
         "GET /history-visibility",
         "PUT /history-visibility",
         "GET /documents/{id}/history-visibility",
@@ -458,6 +469,11 @@
       "note": "12 §7, §8.1"
     },
     {
+      "route": "GET /documents/{id}/workflow/participants/{pid}/consent",
+      "class": "fields",
+      "note": "12 §8.1 step 1: the text to accept"
+    },
+    {
       "route": "POST /documents/{id}/workflow/participants/{pid}/verify",
       "class": "fields",
       "note": "12 §7"
@@ -477,7 +493,6 @@
       "class": "fields",
       "note": "12 §8.1: P7 conditions, then origin `sign`"
     },
-    { "route": "GET /documents/{id}/workflow/evidence", "class": "fields", "note": "12 §7" },
     { "route": "GET /documents/{id}/workflow/final", "class": "fields", "note": "12 §8.2" }
   ]
 }

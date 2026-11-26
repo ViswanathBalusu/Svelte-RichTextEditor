@@ -153,6 +153,26 @@ export const EN_GB_DIALOGS = {
   'announce.signature.adopted': 'Signature adopted.',
   'announce.initials.adopted': 'Initials adopted.',
   'announce.signature.signed': 'Signed: {label}.',
+  'announce.signature.signedOf': 'Signed: {label}. {done} of {count} signed.',
+
+  // The consent step that comes first (FRW-044). The text itself is the service's.
+  'consent.title': 'Before you sign',
+  'consent.intro': 'Read this text in full. You can sign only after you accept it.',
+  'consent.region': 'Consent text',
+  'consent.loading': 'Loading the consent text.',
+  'consent.accept': 'I accept this text',
+  'consent.accepting': 'Recording your acceptance.',
+  'consent.decline': 'I decline',
+  'consent.decline.label': 'Why are you declining? The reason is sent to the sender.',
+  'consent.decline.confirm': 'Decline and stop',
+  'consent.decline.back': 'Go back to the text',
+  'consent.decline.problem': 'Say why you are declining first.',
+  'consent.declined': 'You declined. Nothing was signed.',
+  'consent.result.failed': 'The service did not answer. Try again.',
+  'consent.result.forbidden': 'This text cannot be accepted by you now.',
+  'consent.retry': 'Try again',
+  'announce.consent.accepted': 'Consent text accepted.',
+  'announce.consent.declined': 'Declined.',
 
   // The math editor (FE-070). The equation's LaTeX is content; the words around it are not.
   'dialog.math.title': 'Edit equation',

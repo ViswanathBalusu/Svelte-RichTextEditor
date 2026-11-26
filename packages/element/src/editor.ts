@@ -58,6 +58,7 @@ import type { NormalConfig } from './config.ts';
 import { attachWithSwitches, shellWithSwitches, switchedModes } from './feature-switches.ts';
 import type { Connection, StatusDetail } from './events.ts';
 import { fillActionsService } from './fill-actions.ts';
+import { completionService } from './completion.ts';
 import { threadsService, type ThreadsSource } from './threads.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
@@ -433,7 +434,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The participants of the workflow and their order (FRW-026): the roles pane lists and edits them.
   const participants = options.workflow ? lazyParticipantsService(core, options.workflow) : null;
   // The adoption and signing step (FRW-045, FRW-046): a signature field the participant activated.
-  const signing = options.signing ? signingService(core, options.signing) : null;
+  // The consent step reads the participant's identifier from the workflow status, reported by the server.
+  const signing = options.signing
+    ? signingService(
+        core,
+        options.signing,
+        () => fillActions?.status.get()?.participant?.id ?? null,
+      )
+    : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
   const workflowCompleteListeners = new Set<() => void>();
   const fillActions = options.workflow
@@ -773,6 +781,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(participants ? { participants } : {}),
       ...(threads ? { threads } : {}),
       ...(signing ? { signing } : {}),
+      // Finishing the participant's part (FRW-048): the fields are checked, then /complete is called.
+      ...(fillActions ? { completion: completionService(fillActions) } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
       ...(fillActions
         ? { accessCode: { submit: (code: string) => fillActions.verify(code) } }

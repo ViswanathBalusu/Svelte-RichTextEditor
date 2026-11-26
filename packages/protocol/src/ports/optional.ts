@@ -205,6 +205,11 @@ export interface WorkflowPort {
     action: ParticipantAction,
     body?: W.WorkflowPlaceholder,
   ): Promise<W.WorkflowPlaceholder>;
+  /**
+   * `GET /documents/{id}/workflow/participants/{pid}/consent` (method assumed, G95): the consent text the
+   * workflow names and the participant's acceptance of it (FRW-044). The hash is the service's.
+   */
+  consent(docId: string, participantId: string): Promise<W.WorkflowConsentText>;
   /** `GET /documents/{id}/workflow/evidence`. */
   evidence(docId: string): Promise<W.WorkflowPlaceholder>;
   /** `GET /documents/{id}/workflow/final`. */

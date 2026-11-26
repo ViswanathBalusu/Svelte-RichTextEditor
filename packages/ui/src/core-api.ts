@@ -851,6 +851,8 @@ export interface LeasesService {
 /** A field of the document as fill mode shows it (FRW-076, FRW-077, FRW-078). */
 export interface FillField {
   readonly id: string;
+  /** The field's kind (signature, initials, 	ext, ...); absent when the core does not say. */
+  readonly kind?: string;
   /** The field's `label`: document content. */
   readonly label: string;
   readonly required: boolean;
@@ -1191,6 +1193,8 @@ export interface CoreApi {
   readonly workflowSend?: WorkflowSendService;
   /** Adopting a signature and signing a field (FRW-045, FRW-046). Absent: signature fields cannot be signed here. */
   readonly signing?: SigningService;
+  /** Finishing the participant's part (FRW-048, FRW-071). Absent: the Finish control runs the named command only. */
+  readonly completion?: CompletionService;
   /** Submits the participant's access code (FRW-039). Absent: the bar shows no code input. */
   readonly accessCode?: AccessCodeService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
@@ -1596,8 +1600,59 @@ export interface SignRequest {
   readonly role: string | null;
 }
 
+/** The consent text the workflow names, as the service holds it, and the acceptance on record (FRW-044). */
+export interface ConsentView {
+  readonly textId: string;
+  readonly version: number;
+  /** The text in full: the service's, never the client's. */
+  readonly text: string;
+  /** The server time of the acceptance on record for this text, or null. */
+  readonly acceptedAt: string | null;
+}
+
+export type ConsentLoadOutcome =
+  | { readonly ok: true; readonly consent: ConsentView }
+  /** `none`: this participant has no consent text to accept (the workflow names none, or the kind accepts none). */
+  | { readonly ok: false; readonly reason: 'none' | 'failed' };
+
+export type ConsentAcceptOutcome =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'failed' | 'forbidden' };
+
+export type ConsentDeclineOutcome =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'reason_required' | 'failed' };
+
+/** The first step of the ceremony: the consent text, its acceptance and the way out (FRW-044; FRW-033). */
+export interface ConsentService {
+  /** Reads the text and whether it was accepted (`GET .../consent`). */
+  load(): Promise<ConsentLoadOutcome>;
+  /** Records the acceptance (`POST .../consent`); the service holds the text and takes the hash and time. */
+  accept(): Promise<ConsentAcceptOutcome>;
+  /** Declines instead (`POST .../decline`); a reason is required (FRW-033). */
+  decline(reason: string): Promise<ConsentDeclineOutcome>;
+}
+
+/** How many of the participant's signature and initials fields are signed, of how many (FRW-048). */
+export interface SignProgress {
+  readonly signed: number;
+  readonly total: number;
+}
+
+/** What finishing the participant's part answered (FRW-048; FRW-071). */
+export type CompletionOutcome =
+  | { readonly ok: true }
+  /** Fields still need attention: the first has focus, and nothing was sent. */
+  | { readonly ok: false; readonly reason: 'invalid'; readonly count: number }
+  | { readonly ok: false; readonly reason: 'not_active' | 'failed' };
+
+/** Completes the participant's part (POST .../complete) after the fields are checked. */
+export interface CompletionService {
+  complete(): Promise<CompletionOutcome>;
+}
+
 /** The signing ceremony's adoption and sign steps over the backend (FRW-045, FRW-046). */
 export interface SigningService {
+  /** The consent step that comes before any signing action. Absent: the step is not shown. */
+  readonly consent?: ConsentService;
   /** The field the participant activated, until the step is closed. */
   readonly request: ReadView<SignRequest | null>;
   /** The adoption made earlier for this kind and kept for the rest of the visit; null when none. */
@@ -1611,6 +1666,12 @@ export interface SigningService {
   ): Promise<AdoptOutcome>;
   /** Asks the server to sign the field with the adoption (`POST /documents/{id}/fields/{fid}/sign`). */
   sign(fieldId: string, adoption: SignatureAdoption): Promise<SignOutcome>;
+  /**
+   * The participant's own signature and initials fields, signed of all, counting signedField as
+   * signed (the value arrives through the channel a moment after the sign call answers); null when the
+   * core cannot say.
+   */
+  progress?(signedField?: string): SignProgress | null;
   /** Closes the step without signing. */
   dismiss(): void;
   dispose?(): void;

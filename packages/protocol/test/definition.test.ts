@@ -231,6 +231,7 @@ const OTHER_ROUTES = [
   'POST /documents/{id}/workflow/remind',
   'POST /documents/{id}/workflow/void',
   'POST /documents/{id}/workflow/participants/{pid}/consent',
+  'GET /documents/{id}/workflow/participants/{pid}/consent',
   'POST /documents/{id}/workflow/participants/{pid}/access-code',
   'POST /documents/{id}/workflow/participants/{pid}/verify',
   'POST /documents/{id}/workflow/participants/{pid}/complete',
@@ -257,6 +258,9 @@ const OTHER_ROUTES = [
   // FRW-063 (12 §9): bulk sends, service credential only.
   'POST /bulk-sends',
   'GET /bulk-sends/{bid}',
+  // FRW-042 (12 §7): the tenant's evidence capture setting, service credential only.
+  'GET /workflow/capture-settings',
+  'PUT /workflow/capture-settings',
 ];
 
 describe('the DEP definition', () => {
@@ -353,6 +357,8 @@ describe('the DEP definition', () => {
         'GET /templates/{tid}',
         'POST /bulk-sends',
         'GET /bulk-sends/{bid}',
+        'GET /workflow/capture-settings',
+        'PUT /workflow/capture-settings',
         'GET /quotas',
         'PUT /quotas',
         'GET /origins',

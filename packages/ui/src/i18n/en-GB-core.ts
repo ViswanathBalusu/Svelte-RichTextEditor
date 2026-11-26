@@ -782,6 +782,9 @@ export const EN_GB_CORE = {
   'announce.rolePreview.on': 'Preview as {role} started. What you enter here is not saved.',
   'announce.rolePreview.off': 'Preview ended. The document is as it was.',
   'fill.finishFailed': 'Finishing did not work.',
+  'fill.completed': 'Completed. Your part is done.',
+  'fill.completeInvalid': '{count} fields need attention before you can complete.',
+  'fill.completeNotActive': 'You cannot complete now.',
 
   // Role markers of fields (FRW-074, FRW-077). The palette's names are `command.insert.field.*`.
   // Field labels and role names are content.
