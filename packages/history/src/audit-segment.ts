@@ -28,6 +28,7 @@ import {
   type VerifyReport,
   verifyBundle,
 } from './chain.ts';
+import type { PublicAnchorEvidence } from './public-root.ts';
 import { type HistoryResult, refuse } from './types.ts';
 
 export const SEGMENT_FORMAT = 'docedit-audit-segment/1';
@@ -53,6 +54,11 @@ export interface AuditSegment {
   head: { seq: number; chainHead: string | null };
   commits: SegmentCommit[];
   anchors: Anchor[];
+  /**
+   * The public anchor of the segment's end (SEC-067): the receipt of the transparency log and the
+   * proof of a head in its root, when the service holds them. Absent when the service has none.
+   */
+  publicAnchors?: PublicAnchorEvidence[];
   instructions: string;
 }
 
@@ -66,6 +72,8 @@ export interface SegmentRequest {
    * record just below it travels, as the first held record's `prevHash`. Defaults to 0.
    */
   minVisibleSeq?: number;
+  /** The public anchor evidence to carry (SEC-067), read by the caller from the service's records. */
+  publicAnchors?: readonly PublicAnchorEvidence[];
 }
 
 /**
@@ -110,6 +118,9 @@ export function auditSegment(
       head: { seq: toSeq, chainHead: last.hash },
       commits,
       anchors: (bundle.anchors ?? []).filter((a) => a.seq >= from && a.seq <= toSeq),
+      ...(req.publicAnchors && req.publicAnchors.length > 0
+        ? { publicAnchors: [...req.publicAnchors] }
+        : {}),
       instructions: SEGMENT_INSTRUCTIONS,
     },
   };
