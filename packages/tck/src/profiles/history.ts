@@ -25,6 +25,17 @@ interface DiffBody {
     spans?: Array<{ op: string; text: string; user?: string; seq?: number }>;
   }>;
 }
+interface HistoryBody {
+  items: Array<{
+    type: string;
+    fromSeq: number;
+    toSeq: number;
+    changes: number;
+    authors: Array<{ user: string }>;
+    versions: Array<{ seq: number; name?: string }>;
+    version: { seq: number; name?: string };
+  }>;
+}
 interface AttributionBody {
   seq: number;
   spans: Array<{
@@ -104,6 +115,7 @@ export const HISTORY: ProfileDef = {
         operations: [
           'GET /documents/{id}/versions',
           'POST /documents/{id}/versions',
+          'GET /documents/{id}/history',
           'GET /documents/{id}/diff',
           'GET /documents/{id}/attribution',
         ],
@@ -145,6 +157,47 @@ export const HISTORY: ProfileDef = {
           items.map((v) => [v.seq, v.name]),
           [[s.s2, 'Draft']],
           'the list holds the one named version',
+        );
+
+        // The history list agrees with the commits and the version: its groups cover the three
+        // commits in order, name both authors, and the named version is listed as one (08 §4).
+        const hist = expectStatus(
+          await get(ctx, author.token, `/documents/${doc}/history`),
+          200,
+          'the history list',
+        ).json as HistoryBody;
+        const groups = hist.items.filter((x) => x.type === 'group');
+        check(groups.length > 0, 'the history has a group of commits', 'a group', hist.items);
+        for (const g of groups) {
+          check(
+            g.fromSeq <= g.toSeq && g.fromSeq >= 1 && g.toSeq <= s.s3,
+            'a group lies within the commits',
+            `1..${s.s3}`,
+            [g.fromSeq, g.toSeq],
+          );
+          check(g.changes >= 1, 'a group counts its changes', '>= 1', g.changes);
+        }
+        const covered = (seq: number) => groups.some((g) => g.fromSeq <= seq && seq <= g.toSeq);
+        for (const q of [s.s1, s.s2, s.s3])
+          check(covered(q), `commit ${q} is in a group`, 'a group', groups);
+        equal(Math.max(...groups.map((g) => g.toSeq)), s.s3, 'the newest group ends at the head');
+        const listed = groups.flatMap((g) => g.authors.map((x) => x.user));
+        check(
+          new Set(listed).size >= 2,
+          'both authors of the commits are named in the groups',
+          'two authors',
+          listed,
+        );
+        const versionItems = hist.items.filter((x) => x.type === 'version');
+        const named = [
+          ...versionItems.map((x) => x.version),
+          ...groups.flatMap((g) => g.versions),
+        ].filter((v) => v.name === 'Draft');
+        check(
+          named.length >= 1 && named.every((v) => v.seq === s.s2),
+          'the named version is listed at its seq',
+          `Draft at ${s.s2}`,
+          hist.items,
         );
         const missing = await ctx.service.as(author.token, 'POST', `/documents/${doc}/versions`, {
           body: { seq: s.s3 + 1, name: 'Ahead' },
@@ -364,6 +417,9 @@ export const HISTORY: ProfileDef = {
         operations: [
           'GET /documents/{id}/content',
           'GET /documents/{id}/commits',
+          'GET /documents/{id}/history',
+          'GET /documents/{id}/activity',
+          'POST /documents/{id}/fork',
           'GET /documents/{id}/diff',
           'GET /documents/{id}/attribution',
           'GET /documents/{id}/history-visibility',
@@ -411,7 +467,13 @@ export const HISTORY: ProfileDef = {
           equal(res.status, 403, `${what}: the status`);
         };
         /** Reads at every seq: refused below the gate, served at or above it, and at the head. */
-        const readsAgainst = async (who: string, token: string, gate: number) => {
+        const readsAgainst = async (
+          who: string,
+          token: string,
+          gate: number,
+          sub: string,
+          own: readonly number[] = [],
+        ) => {
           for (const q of [0, s.s1, s.s2, s.s3]) {
             const visible = q >= gate || q === s.s3;
             const res = await get(ctx, token, `${base}/content`, { seq: q });
@@ -423,7 +485,44 @@ export const HISTORY: ProfileDef = {
             const run = await get(ctx, token, `${base}/commits`, { after: q });
             if (q >= gate) expectStatus(run, 200, `${who}: the commits after ${q}`);
             else refused(run, `${who}: the commits after ${q}`);
+            // The history list: a run that ends below the gate is refused (08 §9; PRM-042).
+            const upTo = await get(ctx, token, `${base}/history`, { toSeq: q });
+            if (visible) expectStatus(upTo, 200, `${who}: the history up to ${q}`);
+            else refused(upTo, `${who}: the history up to ${q}`);
+            // A fork at a seq, by a service credential that names the acting user in DEP-Actor.
+            const fork = await ctx.service.call('POST', `${base}/fork`, {
+              body: { atSeq: q },
+              headers: { 'dep-actor': sub },
+            });
+            // The acting user's gate comes from the grants the service stores (ADR 0379), not from the
+            // token's role or claim, so only the refusal below the user's own gate is asserted here.
+            if (!visible) refused(fork, `${who}: a fork at ${q}`);
+            // An export at a seq, when the server runs exports.
+            if (ctx.has('exports')) {
+              const exp = await ctx.service.as(token, 'POST', `${base}/exports`, {
+                body: { target: 'pdf', seq: q },
+              });
+              if (visible) check(exp.status < 300, `${who}: an export at ${q}`, '2xx', exp.status);
+              else refused(exp, `${who}: an export at ${q}`);
+            }
           }
+          // The history list from the start starts below any gate above 0.
+          if (gate > 0)
+            refused(
+              await get(ctx, token, `${base}/history`, { fromSeq: 0 }),
+              `${who}: the history from the start`,
+            );
+          // The activity lists only the changes at or above the gate, whatever the read marker is.
+          const act = expectStatus(
+            await get(ctx, token, `${base}/activity`),
+            200,
+            `${who}: the activity`,
+          ).json as { items: Array<{ seq: number }> };
+          jsonEqual(
+            act.items.map((i) => i.seq),
+            [s.s1, s.s2, s.s3].filter((q) => q >= gate && !own.includes(q)),
+            `${who}: the activity lists the changes of others at or above the gate`,
+          );
           // A comparison that starts below the gate is refused whole; from the gate it is served.
           if (gate > 0)
             refused(
@@ -457,22 +556,27 @@ export const HISTORY: ProfileDef = {
         };
 
         // `editors` (the default): a viewer reads the head only, an editor everything.
-        const { token: viewer } = await ctx.token('viewer-matrix', { [doc]: 'viewer' });
+        const { token: viewer, sub: viewerSub } = await ctx.token('viewer-matrix', {
+          [doc]: 'viewer',
+        });
         await setSetting('editors');
-        await readsAgainst('a viewer under editors', viewer, s.s3);
-        await readsAgainst('an editor under editors', s.author.token, 0);
+        await readsAgainst('a viewer under editors', viewer, s.s3, viewerSub);
+        await readsAgainst('an editor under editors', s.author.token, 0, s.author.sub, [
+          s.s1,
+          s.s3,
+        ]);
         // `all`: everyone with view reads everything.
         await setSetting('all');
-        await readsAgainst('a viewer under all', viewer, 0);
+        await readsAgainst('a viewer under all', viewer, 0, viewerSub);
         // `since_access`: the claim decides, and without it the gate is the head.
         await setSetting('since_access');
-        const { token: claimed } = await ctx.token(
+        const { token: claimed, sub: claimedSub } = await ctx.token(
           'viewer-claim',
           { [doc]: 'viewer' },
           { access_since: claim },
         );
-        await readsAgainst('a viewer with access_since', claimed, sinceGate);
-        await readsAgainst('a viewer without access_since', viewer, s.s3);
+        await readsAgainst('a viewer with access_since', claimed, sinceGate, claimedSub);
+        await readsAgainst('a viewer without access_since', viewer, s.s3, viewerSub);
         await closeAll(s);
       },
     }),
