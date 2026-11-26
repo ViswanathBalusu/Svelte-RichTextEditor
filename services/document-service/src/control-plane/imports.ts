@@ -23,6 +23,7 @@ import type { AssetStore, DocRef, GrantStore } from '../storage/types.ts';
 import type { DataPlane } from '../seams.ts';
 import type { VersionStorePort } from '../storage/versions-memory.ts';
 import { assetReferences, type AssetRecord, type AssetRegistry } from './assets.ts';
+import { objectKeys } from '../objects/store.ts';
 import { regionNodeOf } from './content.ts';
 import type { ContentReader } from './content.ts';
 import type { EventSink } from './events.ts';
@@ -51,11 +52,69 @@ export type { DocxImporter, ImportedDocument } from './import-port.ts';
 
 export interface ImportJobDeps {
   importer: DocxImporter;
-  assets: Pick<AssetStore, 'getFinal'>;
+  assets: Pick<AssetStore, 'getFinal' | 'putFinal'>;
   registry: AssetRegistry;
   grants: Pick<GrantStore, 'current' | 'retired'>;
   content: Pick<ContentReader, 'read'>;
   dataPlane: Pick<DataPlane, 'replaceContent'>;
+  /** The clock for the asset records; the default is the system clock. */
+  now?: () => number;
+}
+
+/**
+ * Stores the assets an import's content names and registers each as a ready asset of the document,
+ * under the identifier the content uses (I4, EXP-116 criterion 5). An identifier that is already
+ * registered is left alone, so a retried job does not fail. Returns the identifiers it created, for
+ * the caller to remove when the commit fails.
+ */
+async function registerImportedAssets(
+  o: { registry: AssetRegistry; assets: Pick<AssetStore, 'putFinal'> },
+  ref: DocRef,
+  imported: ImportedDocument,
+  actor: string,
+  now: number,
+): Promise<string[]> {
+  const created: string[] = [];
+  try {
+    for (const a of imported.assets ?? []) {
+      if (await o.registry.get(ref.tenant, a.id)) continue;
+      await o.registry.create(
+        ref.tenant,
+        {
+          id: a.id,
+          doc: ref.doc,
+          filename: a.filename ?? null,
+          mime: a.contentType,
+          declaredBytes: a.bytes.length,
+          createdBy: actor,
+          uploadExpiresAt: now,
+        },
+        now,
+      );
+      created.push(a.id);
+      const sha256 = await o.assets.putFinal(ref.tenant, a.bytes, a.contentType);
+      const settled = await o.registry.settleReady(
+        ref.tenant,
+        a.id,
+        {
+          sha256,
+          bytes: a.bytes.length,
+          contentType: a.contentType,
+          objectKey: objectKeys.asset(ref.tenant, sha256),
+          width: null,
+          height: null,
+          frames: null,
+          renditions: [],
+        },
+        now,
+      );
+      if (!settled) throw new JobFailure('internal', 'an imported asset could not be stored');
+    }
+  } catch (e) {
+    for (const id of created) await o.registry.remove(ref.tenant, id).catch(() => false);
+    throw e;
+  }
+  return created;
 }
 
 const warningsOf = (
@@ -185,7 +244,8 @@ export async function prepareImport(
     throw new ApiError('validation_failed', `the Word file was refused: ${reasonOf(e)}`);
   }
   const read = readDocument(imported.envelope, {
-    attachedAssets: new Set(),
+    // The assets the import brings are registered with the document before the content is stored.
+    attachedAssets: new Set((imported.assets ?? []).map((a) => a.id)),
     retiredRegionIds: new Set(),
   });
   if (!read.ok)
@@ -203,7 +263,7 @@ export async function prepareImport(
  * On a failure the caller removes the document; the attached record is removed here.
  */
 export async function attachAndStore(
-  d: Pick<HandlerDeps, 'assetRegistry' | 'grants' | 'content' | 'dataPlane' | 'now'>,
+  d: Pick<HandlerDeps, 'assetRegistry' | 'assets' | 'grants' | 'content' | 'dataPlane' | 'now'>,
   ref: DocRef,
   actor: string,
   prepared: PreparedImport,
@@ -211,6 +271,13 @@ export async function attachAndStore(
   const registry = d.assetRegistry!;
   const src = prepared.source;
   const id = uuid7();
+  const brought = await registerImportedAssets(
+    { registry, assets: d.assets },
+    ref,
+    prepared.imported,
+    actor,
+    d.now(),
+  );
   await registry.create(
     ref.tenant,
     {
@@ -252,9 +319,11 @@ export async function attachAndStore(
     // The original is attached from the import commit on, so that the retention sweep keeps it and
     // a purge of the document removes it (EXP-108 criterion 3).
     await registry.attach(ref.tenant, ref.doc, id, seq);
+    for (const a of brought) await registry.attach(ref.tenant, ref.doc, a, seq);
     return { seq, asset: id };
   } catch (e) {
     await registry.remove(ref.tenant, id).catch(() => false);
+    for (const a of brought) await registry.remove(ref.tenant, a).catch(() => false);
     throw e;
   }
 }
@@ -282,9 +351,24 @@ export function importJobHandler(o: ImportJobDeps): JobHandler {
       throw new JobFailure('validation_failed', `the Word file was refused: ${reasonOf(e)}`);
     }
     await ctx.report('storing', 80);
-    const seq = await storeImported(o, ref, imported, job.createdBy, job.id);
-    // The uploaded file is the original: it is attached from the import commit on (EXP-108).
+    const brought = await registerImportedAssets(
+      o,
+      ref,
+      imported,
+      job.createdBy,
+      (o.now ?? Date.now)(),
+    );
+    let seq: number;
+    try {
+      seq = await storeImported(o, ref, imported, job.createdBy, job.id);
+    } catch (e) {
+      for (const a of brought) await o.registry.remove(job.tenant, a).catch(() => false);
+      throw e;
+    }
+    // The uploaded file is the original: it is attached from the import commit on (EXP-108), and
+    // so are the pictures and fragments the import brought.
     await o.registry.attach(job.tenant, doc, assetId, seq);
+    for (const a of imported.assets ?? []) await o.registry.attach(job.tenant, doc, a.id, seq);
     return {
       seq,
       asset: assetId,
