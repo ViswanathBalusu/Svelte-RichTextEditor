@@ -75,7 +75,8 @@ export interface Secrets {
   /** The service's key for the tokens it mints (EdDSA). */
   serviceSigning: JsonWebKey & { kid: string };
   viewKey: string;
-  cursorSecret: string;}
+  cursorSecret: string;
+}
 
 export const SECRETS_FILE = 'secrets.json';
 
@@ -110,7 +111,8 @@ export async function ensureSecrets(tenant: string, dir = dataDir()): Promise<Se
       kid: `demo-service-${randomUUID().slice(0, 8)}`,
     },
     viewKey: randomBytes(32).toString('base64'),
-    cursorSecret: randomBytes(32).toString('base64url'),  };
+    cursorSecret: randomBytes(32).toString('base64url'),
+  };
   await mkdir(dir, { recursive: true });
   const temp = join(dir, `${SECRETS_FILE}.${process.pid}.tmp`);
   await writeFile(temp, `${JSON.stringify(secrets, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
