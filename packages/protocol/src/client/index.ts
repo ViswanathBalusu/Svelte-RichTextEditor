@@ -58,3 +58,18 @@ export {
   type TierProblem,
   type TierProblemCode,
 } from './tiers.ts';
+export {
+  AUDIT_FEED_CADENCE_MS,
+  AUDIT_FEED_OVERLAP_MS,
+  AUDIT_FEED_PAGE,
+  AuditFeed,
+  AuditFeedPoller,
+  type AuditFeedEvent,
+  type AuditFeedOptions,
+  type AuditFeedPage,
+  type AuditFeedPollerOptions,
+  type AuditFeedPosition,
+  type FeedFetch,
+  type FeedResponse,
+  type FeedTimers,
+} from './audit-feed.ts';
