@@ -1,6 +1,6 @@
 {
   "$comment": "Reference outputs of the layout kernel, recorded in Node.js (WASM-010): advances of fixed lines, and for every paragraph of the shared corpus the kernel input, the checksum of each run’s advances and the lines. The line breaker takes its break opportunities as an input (UAX #14 from linebreak 1.1.0); the kernel’s own segmentation of each paragraph’s text (WASM-007: break opportunities, UAX #14, and grapheme cluster boundaries, UAX #29) is recorded beside the lines. Rewritten by DOCEDIT_UPDATE_GOLDEN=1 on purpose only; WASM-011 compares every browser with it.",
-  "abi": 7,
+  "abi": 8,
   "faces": [
     {
       "file": "files/NotoSerif-Regular.ttf",
