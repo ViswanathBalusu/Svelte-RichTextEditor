@@ -40,6 +40,8 @@ const ROUTED = [
   'checkpointIndex',
   'audit',
   'retention',
+  // HIS-025: the setting is read and written with the store and the documents of its tenant's shard.
+  'historyVisibility',
   'holds',
   'workflows',
   'templates',
