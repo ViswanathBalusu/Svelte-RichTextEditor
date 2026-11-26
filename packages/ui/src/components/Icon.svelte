@@ -24,6 +24,7 @@
   <svg
     class="de-icon"
     class:de-icon-fill={drawing.fill === true}
+    class:de-icon-mirror={drawing.mirrorInRtl === true}
     viewBox={drawing.viewBox ?? DEFAULT_VIEW_BOX}
     aria-hidden="true"
     focusable="false"

@@ -143,3 +143,29 @@ describe('the built-in set', () => {
     }
   });
 });
+
+describe('direction metadata (UX-065, criterion 2)', () => {
+  it('marks the direction-carrying built-in drawings and not the others', () => {
+    for (const name of ['undo', 'redo', 'comment', 'comments', 'outline', 'find']) {
+      expect(BUILT_IN_ICONS[name]?.mirrorInRtl, name).toBe(true);
+    }
+    for (const name of ['bold', 'italic', 'close', 'insert', 'select-all', 'print', 'assistant']) {
+      expect(BUILT_IN_ICONS[name]?.mirrorInRtl, name).toBeUndefined();
+    }
+  });
+
+  it('takes the flag from a host drawing and refuses one that is not a boolean', () => {
+    expect(parseIcon({ paths: [SQUARE], mirrorInRtl: true })).toEqual({
+      paths: [SQUARE],
+      mirrorInRtl: true,
+    });
+    expect(parseIcon({ paths: [SQUARE], mirrorInRtl: false })).toEqual({ paths: [SQUARE] });
+    expect(parseIcon({ paths: [SQUARE], mirrorInRtl: 'yes' })).toBeNull();
+    expect(parseIcon(SQUARE)).toEqual({ paths: [SQUARE] });
+  });
+
+  it('a host drawing replaces the built-in one, flag included', () => {
+    const icons = new Icons({ overrides: { undo: SQUARE } });
+    expect(icons.current.resolve('undo')?.mirrorInRtl).toBeUndefined();
+  });
+});

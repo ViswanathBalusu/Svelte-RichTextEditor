@@ -23,7 +23,7 @@
   function draw(node: HTMLElement) {
     try {
       const done = props.mount(node);
-      return typeof done === 'function' ? (done as () => void) : undefined;
+      return typeof done === 'function' ? done : undefined;
     } catch (error) {
       props.onError?.(error);
       return undefined;

@@ -471,6 +471,11 @@
   pointer-events: none;
 }
 
+.de-shell[dir='rtl'] .de-icon.de-icon-mirror {
+  /* Direction-carrying icons flip in a right-to-left interface; the drawing says which (UX-065). */
+  transform: scaleX(-1);
+}
+
 .de-icon.de-icon-fill {
   fill: currentColor;
   stroke: none;

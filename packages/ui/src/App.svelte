@@ -50,7 +50,7 @@
   import { provideShell } from './context.ts';
   import { createCatchUpController } from './shell/catch-up.ts';
   import { MARKUP_VIEWS, type MarkupView } from './shell/markup-views.ts';
-  import { FilterRegistry, type Filter } from './extensions/filters.ts';
+  import type { FilterRegistry } from './extensions/filters.ts';
   import {
   StatusItemRegistry,
   contributePanel,
@@ -241,9 +241,6 @@
   const paneRegistry = untrack(() => props.paneRegistry ?? new PaneRegistry());
   // The status-bar items of the host's extensions (UX-052): the host's own registry, or this shell's.
   const statusRegistry = untrack(() => props.statusItems ?? new StatusItemRegistry());
-  // The client filters of the host's extensions (UX-055): the host's own registry, or this shell's.
-  const filterRegistry = untrack(() => props.filters ?? new FilterRegistry());
-  const filterChanges = live(filterRegistry.view);
 
   /** Opens a pane by identifier, as a command of an extension would; false when not offered. */
   export function openPaneById(id: string): Promise<boolean> {
@@ -580,7 +577,6 @@
     | 'language'
     | 'region'
     | 'export'
-    | 'import'
     | 'comment'
     | 'math'
     | 'version'
@@ -862,8 +858,6 @@
     openPanel(id: string): Promise<boolean>;
     /** Adds a status-bar item with a text alternative (UX-052). Removed with the extension. */
     addStatusItem(item: StatusItem): void;
-    /** Adds a client import or export filter (UX-055). Removed with the extension. */
-    registerFilter(filter: Filter): void;
   }
   const extensionHost = untrack(
     () =>
@@ -917,9 +911,6 @@
             addStatusItem(item) {
               track(statusRegistry.add(item));
             },
-            registerFilter(filter) {
-              track(filterRegistry.add(filter));
-            },
           };
         },
         onError: (report) => props.onExtensionError?.(report),
@@ -934,8 +925,7 @@
 
   /** The client export filters, when the core can give them the document (UX-055). */
   function exportFilters(): boolean {
-    void filterChanges.current;
-    return !!core.getContent && filterRegistry.choices('export').length > 0;
+    return !!props.filters && !!core.getContent && props.filters.choices('export').length > 0;
   }
   $effect(() => {
     void selection.current;
@@ -1038,8 +1028,6 @@
     applyFormat: () => core.runNamed?.('pasteFormat') ?? false,
     openDialog: (name) => {
       if (name === 'export' && !core.exports && !exportFilters()) return false;
-      if (name === 'import' && !(core.insertContent && filterRegistry.choices('import').length > 0))
-        return false;
       if (name === 'send' && !core.workflowSend) return false;
       if (name === 'comment') {
         const anchor = core.threads?.anchor() ?? null;
@@ -1129,27 +1117,6 @@
       if (current) void say(findingSentence(current, (key, params) => tr.t(key, params)));
       return true;
     },
-  });
-
-  // The commands of the client filters of the host's extensions (UX-055): offered while a filter and
-  // the core can serve them, and withdrawn with the last filter. An extension may add a filter after
-  // the shell mounted, so this follows the registry (the commands above are registered once).
-  const filterCommands = (): CommandEntry[] => {
-    const out: CommandEntry[] = [];
-    if (!core.exports && core.getContent && filterRegistry.choices('export').length > 0)
-      out.push(host1b['document.export']!);
-    if (core.insertContent && filterRegistry.choices('import').length > 0)
-      out.push(host1b['document.import']!);
-    return out;
-  };
-  $effect(() => {
-    void filterChanges.current;
-    const held: Array<() => void> = [];
-    for (const entry of filterCommands())
-      if (registry.backs(entry)) held.push(registry.register(entry));
-    return () => {
-      for (const off of held) off();
-    };
   });
 
   const unregister: Array<() => void> = [];
@@ -1265,7 +1232,7 @@
         reviewSync = null;
       });
     }
-    if (core.exports) add(host1b['document.export']);
+    if (core.exports || (props.filters && core.getContent)) add(host1b['document.export']);
     if (props.onPrintRequest && core.exports) add(host1b['document.print']);
     add(host1b['view.zoomIn']);
     add(host1b['view.zoomOut']);
@@ -1855,7 +1822,6 @@
       RegionDialog,
       CommentBox,
       ExportDialog,
-      ImportDialog,
       MathEditorDialog,
       SendDialog,
       SignatureDialog,
@@ -1950,11 +1916,9 @@
     {:else if dialog === 'export' && (core.exports || exportFilters())}
       <ExportDialog
         exports={core.exports}
-        filters={filterRegistry}
+        filters={props.filters}
         onClose={() => (dialog = null)}
       />
-    {:else if dialog === 'import' && core.insertContent}
-      <ImportDialog filters={filterRegistry} onClose={() => (dialog = null)} />
     {/if}
   {/if}
   <div class="de-visually-hidden" role="status" lang={tr.locale}>{announcement}</div>
