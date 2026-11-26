@@ -180,6 +180,15 @@ export interface SnapshotRequest {
   preconditions?: Preconditions;
 }
 
+/** The stages of the commit procedure that the benchmark times (04 §5 steps 2 to 7; SYN-040). */
+export type CommitStage =
+  'dedupe' | 'base' | 'validate' | 'rebase' | 'apply' | 'invariants' | 'permissions';
+
+export interface StageProfile {
+  clock: () => number;
+  record: (stage: CommitStage, ms: number) => void;
+}
+
 export interface RoomInit {
   schema: Schema;
   /** Content at sequence number `initialSeq` (0 unless given). */
@@ -199,6 +208,11 @@ export interface RoomInit {
   epoch: number;
   incarnation: string;
   now: () => number;
+  /**
+   * Times the stages of 04 §5 for one commit (SYN-040). The benchmark gives a high-resolution clock
+   * and a recorder; a host leaves it out, and then the room reads no clock for this.
+   */
+  stageProfile?: StageProfile;
   limits?: Limits;
   attachedAssets?: ReadonlySet<string>;
   mathGate?: (latex: string, display: boolean) => string | null;
@@ -411,6 +425,7 @@ export class Room {
   readonly epoch: number;
   readonly incarnation: string;
   private readonly now: () => number;
+  private readonly stageProfile: StageProfile | undefined;
   private readonly limits: Limits;
   private readonly attachedAssets: ReadonlySet<string> | undefined;
   private readonly mathGate: RoomInit['mathGate'];
@@ -465,6 +480,7 @@ export class Room {
     this.epoch = init.epoch;
     this.incarnation = init.incarnation;
     this.now = init.now;
+    this.stageProfile = init.stageProfile;
     this.limits = init.limits ?? DEFAULT_LIMITS;
     this.attachedAssets = init.attachedAssets;
     this.mathGate = init.mathGate;
@@ -957,6 +973,14 @@ export class Room {
   private process(s: Submission): Effects {
     const { fx, reject } = s;
     const ch = s.channel === null ? null : this.channels.get(s.channel)!;
+    const prof = this.stageProfile;
+    let mark = prof ? prof.clock() : 0;
+    const lap = (stage: CommitStage): void => {
+      if (!prof) return;
+      const t = prof.clock();
+      prof.record(stage, t - mark);
+      mark = t;
+    };
     // 2. Deduplicate: first among commits waiting to be stored, then in the log.
     const waiting = this.pending().find((p) => p.stored.id === s.id);
     if (waiting) {
@@ -978,6 +1002,7 @@ export class Room {
     // The control plane's preconditions, re-checked once the commit is known to be new.
     const failed = this.preconditionFailure(s.preconditions);
     if (failed) return reject('conflict', `a precondition no longer holds: ${failed}`, 'drop');
+    lap('dedupe');
 
     // 3. Check the base.
     if (s.base > this.tentativeSeq)
@@ -989,9 +1014,11 @@ export class Room {
       return reject('stale_base', 'the base is older than the commits the room holds');
     if (this.distance(s.base) > this.limits.maxRebaseSteps)
       return reject('stale_base', `more than ${this.limits.maxRebaseSteps} steps since base`);
+    lap('base');
 
     const parsed = parseSteps(this.schema, s.steps, this.limits);
     if (!parsed.ok) return reject(parsed.code, parsed.reason);
+    lap('validate');
 
     // 4 and 5. Rebase and apply.
     let mapped: Step[];
@@ -1004,19 +1031,23 @@ export class Room {
       mapped = parsed.value;
       docAfter = r.value.doc;
       docs = r.value.docs;
+      lap('apply');
     } else {
       const r = rebaseOver(parsed.value, this.mapsAfter(s.base), this.tentativeDoc, 'reject');
       if (!r.ok) return reject(r.code, r.reason);
+      lap('rebase');
       mapped = r.value.steps;
       const a = applySteps(this.tentativeDoc, mapped);
       if (!a.ok) return reject('rebase_failed', a.reason);
       docAfter = a.value.doc;
       docs = a.value.docs;
       rebased = true;
+      lap('apply');
     }
 
     // 6. Invariants, and the features the result needs (03 §11.1).
     const inv = this.checkResult(this.tentativeDoc, docAfter, mapped, docs);
+    lap('invariants');
     // P7 (12 §4.2; SYN-012 criterion 3): a wrongly typed value is `field_invalid` only for a user who
     // holds `fill` and not `edit`; for everyone else I15 is `invalid_op` (04 §5 step 6).
     if (!inv.ok) {
@@ -1064,6 +1095,7 @@ export class Room {
         },
       });
     const verdict = judge(s.access, this.perms);
+    lap('permissions');
     if (gate?.overrun)
       return reject(
         'rate_limited',
