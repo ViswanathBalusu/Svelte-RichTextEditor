@@ -297,7 +297,10 @@ export const FRW_SHAPES: readonly NamedShape[] = [
     owner: FRW,
     shape: obj(
       {
-        textId: req(text({ minLength: 1 }), 'The identifier of the consent text the workflow names.'),
+        textId: req(
+          text({ minLength: 1 }),
+          'The identifier of the consent text the workflow names.',
+        ),
         version: req(count(), 'The version of the text.'),
         text: req(
           text({ minLength: 1 }),

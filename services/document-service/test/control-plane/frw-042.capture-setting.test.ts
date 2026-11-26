@@ -219,7 +219,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     });
 
     it.skipIf(skip)('refuses a malformed or stale request and changes nothing', async () => {
-      for (const body of [{}, { captureNetworkIdentity: 'no' }, { captureNetworkIdentity: false, x: 1 }]) {
+      for (const body of [
+        {},
+        { captureNetworkIdentity: 'no' },
+        { captureNetworkIdentity: false, x: 1 },
+      ]) {
         const r = await h.call('PUT', PATH, {
           token: admin(),
           body,
@@ -230,7 +234,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       const stale = await put(false, '"7"');
       expect(stale.status, stale.text).toBe(412);
       expect((await read()).json).toEqual({ captureNetworkIdentity: true });
-      expect(await h.parts.audit!.query(h.tenant, { kind: 'capture.setting.changed', limit: 10 })).toHaveLength(0);
+      expect(
+        await h.parts.audit!.query(h.tenant, { kind: 'capture.setting.changed', limit: 10 }),
+      ).toHaveLength(0);
     });
 
     it.skipIf(skip)(

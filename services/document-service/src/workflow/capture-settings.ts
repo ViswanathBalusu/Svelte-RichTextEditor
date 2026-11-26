@@ -18,15 +18,31 @@ import { uuid7 } from '@docedit/model';
 import {
   captureChangeAudit,
   DEFAULT_CAPTURE_SETTINGS,
+  type CaptureChangeAudit,
   type CaptureSettings,
 } from '@docedit/authority';
 import type { AuditStore } from '../storage/types.ts';
-import {
-  CaptureSettingsConflict,
-  type CaptureSettingsChange,
-  type CaptureSettingsState,
-} from './capture-settings-pg.ts';
+/** The setting in force for a tenant, and its version (0 while the tenant has never changed it). */
+export interface CaptureSettingsState {
+  readonly settings: CaptureSettings;
+  readonly version: number;
+}
 
+/** A change whose expected version is not the stored one. Nothing was written. */
+export class CaptureSettingsConflict extends Error {
+  readonly current: number;
+  constructor(current: number) {
+    super(`the capture setting is at version ${current}`);
+    this.name = 'CaptureSettingsConflict';
+    this.current = current;
+  }
+}
+
+/** The result of a change: the state after it, and the audit entry written (null for no change). */
+export interface CaptureSettingsChange {
+  readonly state: CaptureSettingsState;
+  readonly audit: CaptureChangeAudit | null;
+}
 export interface CaptureSettingsPort {
   /** The setting in force for the tenant, and its version (0 while the tenant has never changed it). */
   read(tenant: string): Promise<CaptureSettingsState>;

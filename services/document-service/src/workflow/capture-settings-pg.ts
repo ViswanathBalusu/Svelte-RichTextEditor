@@ -21,11 +21,16 @@ import {
   captureChangeAudit,
   captureEvidence,
   DEFAULT_CAPTURE_SETTINGS,
-  type CaptureChangeAudit,
   type CaptureSettings,
   type CapturedEvidence,
   type EvidenceFacts,
 } from '@docedit/authority';
+import {
+  CaptureSettingsConflict,
+  type CaptureSettingsChange,
+  type CaptureSettingsState,
+} from './capture-settings.ts';
+export { CaptureSettingsConflict, type CaptureSettingsChange, type CaptureSettingsState };
 import { insertAuditEvent, PgAuditStore } from '../data-plane/pg/audit.ts';
 import { inTenant, type Pool, type Queryable } from '../storage/db.ts';
 
@@ -33,28 +38,6 @@ export const TENANT_CAPTURE_SETTINGS_TABLE = 'tenant_capture_settings';
 
 /** The SQLSTATE PostgreSQL gives an insert for which no audit partition exists. */
 const NO_PARTITION = '23514';
-
-/** The setting in force for a tenant, and its version (0 while the tenant has never changed it). */
-export interface CaptureSettingsState {
-  readonly settings: CaptureSettings;
-  readonly version: number;
-}
-
-/** A change whose expected version is not the stored one. Nothing was written. */
-export class CaptureSettingsConflict extends Error {
-  readonly current: number;
-  constructor(current: number) {
-    super(`the capture setting is at version ${current}`);
-    this.name = 'CaptureSettingsConflict';
-    this.current = current;
-  }
-}
-
-/** The result of a change: the state after it, and the audit entry written (null for no change). */
-export interface CaptureSettingsChange {
-  readonly state: CaptureSettingsState;
-  readonly audit: CaptureChangeAudit | null;
-}
 
 /** One event's evidence to record. */
 export interface EvidenceEvent {

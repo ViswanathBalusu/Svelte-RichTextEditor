@@ -16,7 +16,7 @@ import { ApiError } from './problems.ts';
 import {
   CaptureSettingsConflict,
   type CaptureSettingsState,
-} from '../workflow/capture-settings-pg.ts';
+} from '../workflow/capture-settings.ts';
 import type { CaptureSettings } from '@docedit/authority';
 
 const etagOf = (version: number): string => `"${version}"`;
