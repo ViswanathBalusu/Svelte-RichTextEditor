@@ -1,0 +1,39 @@
+# Word import sandbox image (EXP-099 criterion 1; BE-043; SEC-038; ADR 0043). Built with Podman:
+#   node services/asset-worker/scripts/build-import-image.ts
+# which stages a build context holding only the source of packages/model and packages/export-docx at
+# their repository paths, the entry script, and the three npm packages they need (fflate,
+# prosemirror-model, orderedmap), and runs
+#   podman build -f Containerfile.import -t localhost/docedit-import-worker:dev <context>
+# (DOCEDIT_IMPORT_IMAGE overrides the tag; DOCEDIT_CONTAINER_CLI the binary).
+#
+# Base: the same pinned Node.js image as the asset worker's sandbox (Containerfile). Node.js does not
+# strip types from files under node_modules, so the two workspace packages sit at their repository
+# paths and are linked into each other's node_modules as pnpm does.
+FROM docker.io/library/node:24.21.0-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+
+RUN set -eu; \
+    rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-* /home/node; \
+    groupadd --gid 10001 sandbox; \
+    useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin sandbox
+
+ENV NODE_ENV=production \
+    LANG=C.UTF-8 \
+    HOME=/nonexistent
+
+COPY package.json /opt/docedit/package.json
+COPY packages/ /opt/docedit/packages/
+COPY services/ /opt/docedit/services/
+COPY NOTICE THIRD-PARTY-NOTICES.md /opt/docedit/
+RUN set -eu; \
+    mkdir -p /opt/docedit/packages/export-docx/node_modules/@docedit; \
+    ln -s ../../../model /opt/docedit/packages/export-docx/node_modules/@docedit/model; \
+    chown -R 0:0 /opt/docedit; \
+    chmod -R a+rX,go-w /opt/docedit; \
+    node --version | grep -E '^v24\.'
+
+USER 10001:10001
+WORKDIR /opt/docedit
+# Node.js's permission model: read access to /opt/docedit only; no writes, no child processes, no
+# worker threads, no native add-ons, no WASI. No code generation from strings.
+ENTRYPOINT ["node", "--permission", "--allow-fs-read=/opt/docedit/", "--disallow-code-generation-from-strings", "/opt/docedit/services/asset-worker/scripts/docx-import-main.ts"]

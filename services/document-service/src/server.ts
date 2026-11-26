@@ -2067,7 +2067,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(liveQuotas ? { liveQuotas } : {}),
     ...(quotaSource ? { quotaSource } : {}),
     ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),
-    ...(opts.importer ? { importsOffered: true } : {}),
+    ...(opts.importer ? { importsOffered: true, importer: opts.importer } : {}),
   };
   bulkSendDeps = controlDeps;
   const handlers = createHandlers(controlDeps);

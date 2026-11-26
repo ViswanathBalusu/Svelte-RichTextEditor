@@ -60,3 +60,11 @@ export { FAILURE_REASONS, registryCode } from './sandbox/errors.ts';
 export type { FailureReason } from './sandbox/errors.ts';
 export { ACCEPTED_TYPES, DOCX, GIF, JPEG, normaliseMime, PDF, PNG, SVG } from './sandbox/types.ts';
 export type { AcceptedType, OutputType } from './sandbox/types.ts';
+export {
+  IMPORT_IMAGE,
+  ImportSandboxError,
+  importSandboxReady,
+  podmanImportSandbox,
+  sandboxedDocxImporter,
+} from './docx-import.ts';
+export type { SandboxImported } from './docx-import.ts';

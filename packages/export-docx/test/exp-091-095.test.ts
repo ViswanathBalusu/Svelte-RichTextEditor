@@ -368,4 +368,27 @@ describe('the direct DOCX writer: rows, pictures, captions, suggestions and form
     const values = [...partsOf(out.bytes).values()].find((v) => v.includes('<f:fields'))!;
     expect(values).toContain('<f:field key="secret.value"></f:field>');
   });
+
+  it('writes the grants and definitions parts as the host passes them and nothing it did not (EXP-095, owner decision 151)', async () => {
+    const env = newDocument();
+    env.requires = ['fields'];
+    bodyOf(env).content = [
+      p([
+        t('Value: '),
+        {
+          type: 'form_field',
+          attrs: { id: nid('i'), key: 'a', kind: 'text', label: 'A', value: 'plain' },
+        },
+      ]),
+    ];
+    const out = await writeDocx(env, new AssetStore(), {
+      grants: { regions: { rOpen: ['export:alice'] } },
+    });
+    const parts = partsOf(out.bytes);
+    const grants = [...parts.values()].find((v) => v.includes('rOpen'))!;
+    expect(grants).toContain('export:alice');
+    // A region the host left out of the grants it passed is not in any part.
+    for (const [, text] of parts) expect(text).not.toContain('rHiddenNotPassed');
+    expect(out.redacted).toEqual([]);
+  });
 });
