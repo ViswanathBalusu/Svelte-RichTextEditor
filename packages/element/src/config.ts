@@ -37,6 +37,12 @@ export interface DocEditorConfig {
   /** Draws page guides in the web view where the last compile started a page (FE-068). Default off. */
   pageGuides?: boolean;
   /**
+   * `view="read"` shows the layout engine's own read-only pages instead of the typeset PDF (FE-095;
+   * 02 section 7). Default off: the PDF read view stays the default (docs/adr/0435-w1-FE-095-read-view-renderer.md,
+   * proposed). Where the browser cannot offer the page view, the PDF read view is shown as before.
+   */
+  readPages?: boolean;
+  /**
    * Feature switches (PRO-081; owner decision 89). Each group is on unless its key is `false`: `comments`
    * (comments and suggestions), `export` (export and print), `history` and `assistant` (assistant and
    * proofing). A group that is off has no controls when the editor loads. It is not a permission.
@@ -55,6 +61,8 @@ export interface NormalConfig {
   forceStyleFallback: boolean;
   /** Page guides in the web view (FE-068). Only the boolean `true` turns them on. */
   pageGuides: boolean;
+  /** Painted read-only pages for `view="read"` (FE-095). Only the boolean `true` turns them on. */
+  readPages: boolean;
   /** Which feature groups are on (every group by default). */
   features: FeatureSwitches;
 }
@@ -81,6 +89,7 @@ export function normaliseConfig(value: unknown): NormalConfig {
     deferRemoteWhileComposing: flag(v['deferRemoteWhileComposing'], true),
     forceStyleFallback: flag(v['forceStyleFallback'], false),
     pageGuides: v['pageGuides'] === true,
+    readPages: v['readPages'] === true,
     features: normaliseFeatures(v['features']),
   };
 }

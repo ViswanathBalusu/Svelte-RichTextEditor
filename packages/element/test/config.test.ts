@@ -17,6 +17,7 @@ const KNOWN = [
   'deferRemoteWhileComposing',
   'forceStyleFallback',
   'pageGuides',
+  'readPages',
   'features',
 ] as const;
 
@@ -98,6 +99,7 @@ describe('PRO-081 criterion 2: a config key the component does not know is ignor
         'deferRemoteWhileComposing',
         'forceStyleFallback',
         'pageGuides',
+        'readPages',
         'features',
       ].sort(),
     );

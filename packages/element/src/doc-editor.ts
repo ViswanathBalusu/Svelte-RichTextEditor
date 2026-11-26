@@ -456,7 +456,7 @@ export class DocEditorElement extends Base {
       case 'mode':
         // The same core takes the new mode: no reload, and unconfirmed work stays (FE-029). The
         // attribute keeps the host's value; the effective mode is the core's.
-        this.#mounted?.setMode(modeFrom(value));
+        this.#mounted?.setMode(this.#modeNow());
         break;
       case 'view':
         // A change of `view` is reflected by the reconcile a new document takes (FE-065). Between web and
@@ -721,10 +721,32 @@ export class DocEditorElement extends Base {
   #viewChoice(): ViewName {
     if (this.#viewOverride !== null) return this.#viewOverride;
     const touch = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches;
-    return selectView(this.getAttribute('view'), {
+    const view = selectView(this.getAttribute('view'), {
       touch,
       pageViewAvailable: this.#pageViewOffered(),
     }).view;
+    // `view="read"` with `config.readPages`: the page view shows the pages, read-only (FE-095).
+    // Where the page view is not offered, the typeset PDF read view stays.
+    if (view === 'read' && this.#readPagesAsked() && this.#pageViewOffered()) return 'print';
+    return view;
+  }
+
+  /** The host asked for the painted read-only pages in place of the typeset PDF (FE-095). */
+  #readPagesAsked(): boolean {
+    return this.getAttribute('view') === 'read' && this.#config.readPages;
+  }
+
+  /** The painted pages are shown, read-only, for `view="read"` (FE-095): no input bridge, no caret. */
+  #readingPages(): boolean {
+    return this.#viewOverride === null && this.#viewChoice() === 'print' && this.#readPagesAsked();
+  }
+
+  /**
+   * The mode the core runs in. A reader of the painted read view never edits, in the pages or in the
+   * web view that the person may switch to; every other view takes the `mode` attribute.
+   */
+  #modeNow(): EditMode {
+    return this.#readPagesAsked() ? 'view' : modeFrom(this.getAttribute('mode'));
   }
 
   /**
@@ -828,7 +850,8 @@ export class DocEditorElement extends Base {
    * layout, or the page layout while the page view is asked for.
    */
   #showWebLabel(): void {
-    const view = this.#viewChoice() === 'print' ? 'print' : 'web';
+    const shown = this.#viewChoice() === 'print';
+    const view = shown ? (this.#readingPages() ? 'read' : 'print') : 'web';
     let label = this.#webLabel;
     if (label === null) {
       label = document.createElement('p');
@@ -841,20 +864,20 @@ export class DocEditorElement extends Base {
     // The page view is drawn, not the page's own text, so a person who prefers the accessible
     // layout has a control for the web view with the same content, and one to come back (FE-099
     // criterion 4). The choice lasts until the host sets `view` again, as a fall-back does.
-    const asked = this.getAttribute('view') === 'print';
+    const asked = this.getAttribute('view') === 'print' || this.#readPagesAsked();
     const back = asked && this.#viewOverride === 'web' && this.#pageViewOffered();
     this.#viewSwitch?.remove();
     this.#viewSwitch = null;
-    if (view === 'print' || back) {
+    if (shown || back) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'de-view-switch';
       // At least the minimum target size (FE-104).
       button.style.minBlockSize = '24px';
       button.style.minInlineSize = '24px';
-      button.textContent = view === 'print' ? VIEW_STRINGS.toWeb : VIEW_STRINGS.toPrint;
+      button.textContent = shown ? VIEW_STRINGS.toWeb : VIEW_STRINGS.toPrint;
       button.addEventListener('click', () => {
-        this.#viewOverride = view === 'print' ? 'web' : null;
+        this.#viewOverride = shown ? 'web' : null;
         this.#syncPageView();
         this.#showWebLabel();
         this.#mounted?.core.focus();
@@ -905,6 +928,8 @@ export class DocEditorElement extends Base {
           host: mounted.core,
           parent: frame,
           label: mounted.core.labels.body,
+          // `view="read"` with painted pages: no input bridge, no caret (FE-095 criterion 1).
+          ...(this.#readingPages() ? { readOnly: true } : {}),
           shortcut: (event) => mounted.pageShortcut(event),
           onError: (error) => this.#pageViewFailed(error),
         });
@@ -914,6 +939,7 @@ export class DocEditorElement extends Base {
         // The navigation pane's thumbnails are this view's pages (UX-021).
         mounted.setPageSource(view.pages);
         body.style.setProperty('display', 'none', 'important');
+        // The shell's rule for the page view applies to both (element.css `[data-view='print']`).
         frame.closest<HTMLElement>('.de-page')?.setAttribute('data-view', 'print');
         this.#showWebLabel();
       } catch (error) {
@@ -1072,7 +1098,7 @@ export class DocEditorElement extends Base {
       // The status bar's classification label: the metadata read and the session's notices (UX-085).
       ...this.#classificationSource(docId),
       settings,
-      mode: modeFrom(this.getAttribute('mode')),
+      mode: this.#modeNow(),
       // The share command asks the host (PRO-089). Only the session that is current raises it.
       // The print command prints the typeset PDF (UX-040 criterion 3); a refusal is shown on the command.
       onPrintRequest: () => {
