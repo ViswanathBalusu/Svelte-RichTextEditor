@@ -365,7 +365,15 @@ export class DocEditorElement extends Base {
 
   set extensions(value: readonly HostExtension[]) {
     this.#extensions = Array.isArray(value) ? Object.freeze([...value]) : [];
-    this.#mounted?.setExtensions(this.#extensions);
+    const mounted = this.#mounted;
+    if (!mounted) return;
+    // An extension set after mount is given the document API, which loads on demand (FND-008).
+    const list = this.#extensions;
+    const apply = (): void => {
+      if (this.#mounted === mounted && this.#extensions === list) mounted.setExtensions(list);
+    };
+    if (list.length === 0) apply();
+    else void loadParts(['extension']).then(apply, apply);
   }
 
   /**
@@ -994,7 +1002,12 @@ export class DocEditorElement extends Base {
     const workflow = this.#workflowSource(docId);
     // A document with rules, or a host with a workflow, needs the rules language before anything is
     // drawn. A document without either never loads it (FND-008; engine parts.ts).
-    await loadParts(partsFor({ doc: content.doc, workflow: workflow.workflow !== undefined }));
+    // The host's extensions are given the document API, which is a part of its own (UX-050).
+    const needed = new Set(
+      partsFor({ doc: content.doc, workflow: workflow.workflow !== undefined }),
+    );
+    if (this.#extensions.length > 0) needed.add('extension');
+    await loadParts([...needed]);
     const mounted = mountEditor({
       root: this.#root,
       content,

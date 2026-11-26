@@ -178,6 +178,9 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
  */
 export const loadSandboxPane: PaneLoader = () => load(import('../panes/SandboxPane.svelte'));
 
+/** The loader of the pane that holds the elements a tier 1 extension draws itself (UX-052). */
+export const loadDomPane: PaneLoader = () => load(import('../panes/ExtensionDomPane.svelte'));
+
 export class PaneRegistry {
   readonly #panes = new Map<string, PaneDescriptor>();
   readonly #listeners = new Set<() => void>();

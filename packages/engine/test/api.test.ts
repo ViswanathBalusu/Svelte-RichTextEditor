@@ -122,6 +122,7 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'suggestionCardFormat'
       | 'suggestionCardChanged'
       | 'suggestionTime'
+      | 'suggestionIntroduction'
       | 'setGlyphCoverage'
       | 'missingGlyphs'
       | 'glyphNotice'
