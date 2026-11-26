@@ -3211,6 +3211,8 @@ Lane FE-118-130, round 5 (2026-11-13, nothing ticked). FND-007 defines the metri
 
 **Notes (lane w1, 2026-11-26):** nothing new ticked. Criterion 3 needs the `docedit-reference` runner and a hosted run of `.github/workflows/perf.yml`, neither of which exists on this machine. Blocked on the runner.
 
+**Notes (lane w1, 2026-11-26):** nothing new ticked. Criterion 1 stays unmet: typing on `pages-300` is over its targets (see the Evidence above). Criterion 2 needs the navigation and comments panes measured on the document. Criterion 4 needs a table-heavy 300-page fixture and a profile of it, which `packages/perf` does not have yet; that is buildable on this machine and was not built in this round. Criterion 6 needs the `docedit-reference` runner. Blocked on the typing work and the runner, with criterion 4 left for a later round.
+
 ## Frontend tests (02 §14)
 
 ### FE-121 Run the editing core in Node.js without a browser
