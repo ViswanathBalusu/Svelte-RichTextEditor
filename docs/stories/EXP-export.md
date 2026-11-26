@@ -1244,6 +1244,8 @@ Lane w2 (2026-11-17): criterion 2 is ticked (FE-070 is built; see Evidence). Cri
 
 **Notes (lane w2, 2026-11-26):** criterion 5 stays unticked. Owner decision 106 (docs/owner-decisions-2026-11-15.md) makes the gate's CPU limit a tunable limit whose default comes from a measurement on the reference machine, "open until measured"; the reference machine is not here, and 04 §12 still gives no CPU figure for a commit that sets an equation. For information only, not a measurement of record: on this Windows 11 host, Node.js 24.22.2, `mathGate` (the lexical scan and KaTeX) took 3.5 ms and 5.2 ms per call, mean of 20 warm calls, for two 4,000-character values at brace depth 50 (`{`x50 around `x` padding, and around `a+b=` repeated); both were accepted. A one-off script, not kept in the repository. The tunable limit itself is not built, because its default has no measured basis yet.
 
+Lane w2 (2026-11-26, second look): criterion 5 stays unticked and nothing new could be ticked. Checked again against the integrated tree: the admission control (`packages/authority/src/room/admission.ts`) is unchanged and no gate CPU budget has been added anywhere (the only matches for a budget are the tenant quotas of BE-091, which count other things). The criterion needs the number that decision 106 leaves open until it is measured on the reference machine; a test with a limit invented here would be compared with a figure nobody set, so none was written. Blocked on the reference-machine measurement.
+
 ### EXP-052 Typeset equations
 
 | Type | Phase | Size | Priority | Persona |
