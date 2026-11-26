@@ -1741,13 +1741,17 @@ As an integrating developer, I want mentions, assigned tasks and finished jobs a
 **Acceptance criteria**
 
 - [x] Given thread and comment activity, when it happens, then `dep.thread.created`, `dep.thread.resolved`, `dep.thread.reopened`, `dep.thread.deleted` and `dep.comment.created` are raised.
-- [ ] Given a comment that mentions people, when it is stored, then `dep.comment.mentioned` is raised for the mentions; given a thread assigned to someone, then `dep.task.assigned` is raised.
-- [ ] Given an export or import job, when it ends, then `dep.export.completed`, `dep.export.failed`, `dep.import.completed` or `dep.import.failed` is raised.
+- [x] Given a comment that mentions people, when it is stored, then `dep.comment.mentioned` is raised for the mentions; given a thread assigned to someone, then `dep.task.assigned` is raised.
+- [x] Given an export or import job, when it ends, then `dep.export.completed`, `dep.export.failed`, `dep.import.completed` or `dep.import.failed` is raised.
 - [x] Given any of these events, when it is delivered, then no e-mail or text message is sent by the document service.
 
 **Evidence:** services/document-service/src/control-plane/pro-073-no-messages.test.ts (criterion 4, a guard: the package declares no mail or SMS client, no source file under src imports one, and no source names an SMTP or sendmail endpoint; the check is shown not to be vacuous; Node.js, 2026-11-13, 5 passed). This is a static check of what the service links and contains, not a run of a delivery.
 
 **Evidence (lane V-PRO-069-085, 2026-11-14): criterion 1 in memory and PostgreSQL storage.** `services/document-service/test/control-plane/pro-073-v-pro-069-085-thread-events.test.ts` (2 passed, `pnpm vitest run` on that file): a thread created, resolved, reopened and deleted, and a comment created, through the running thread routes, each raise their `dep.*.v1` event with `seq` (thread-routes.ts now adds the head `seq` to these four emitters), and each body passes `toCloudEvent` and the schema of its type. Criterion 2 (mentions and assignment) stays open: no mention or assignment code exists.
+
+**Evidence (lane w5, 2026-11-26): criteria 2 and 3.** Criterion 2: services/document-service/test/control-plane/pro-060-mentions.test.ts (memory storage, 6 passed: `dep.comment.mentioned` once for each distinct mentioned principal, none for a reply without one or a refused reply; thread-routes.ts, mentions.ts) and services/document-service/test/control-plane/ux-032-task-assigned.test.ts (memory: `dep.task.assigned` once when a person is assigned). Criterion 3: services/document-service/src/control-plane/export-jobs.test.ts (export completed and failed) and services/document-service/src/control-plane/exp-098-import-job.test.ts (memory: `dep.import.completed.v1` and `dep.import.failed.v1` with the job id; imports.ts, built by EXP-098 after the earlier notes). Node.js 22.18, `pnpm exec vitest run --project node`, 2026-11-26. The PostgreSQL variants are skipped on this machine (no database), so only memory storage was run.
+
+**Notes (lane w5, 2026-11-26):** All four criteria are ticked. The notes below are stale: mention and assignment events and the import job were built by PRO-060, UX-032 and EXP-098 since.
 
 **Notes:** Lane PRO-071-084, 2026-11-13. Criterion 3: the export half is built and tested (`dep.export.completed.v1` and `dep.export.failed.v1` in src/control-plane/exports.ts, export-jobs.test.ts); the import half is not, because imports are refused until EXP defines them (handlers.ts, `templates and imports are not offered yet`), so no `dep.import.*` event is raised. Criteria 1 and 2 are not built: there is no thread, comment or mention code in services/document-service/src (PRO-059 and PRO-060 are unbuilt), so `dep.thread.*`, `dep.comment.*`, `dep.comment.mentioned` and `dep.task.assigned` have no raise site. Criterion 3 stays unticked as a whole for the import half.
 
