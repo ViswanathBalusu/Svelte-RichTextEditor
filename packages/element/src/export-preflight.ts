@@ -143,6 +143,26 @@ export interface PreflightInput {
   fonts?(): Promise<unknown>;
   /** The shared check; the default loads `@docedit/export-latex/preflight` on first use. */
   load?(): Promise<Preflight>;
+  /**
+   * The heights of the document's table rows, for the check of a row taller than a page (EXP-039).
+   * The default is the editor's own page layout over the canvas measurer (owner decision 114); where
+   * canvas measurement is not available it gives none, and that check is not made.
+   */
+  measure?(content: unknown): Promise<TableMeasure | null> | TableMeasure | null;
+}
+
+/** The converter's measure of table rows (`table-measure.ts` of the converter). */
+type TableMeasure = NonNullable<Parameters<Preflight>[2]>;
+
+/** The editor's own layout, loaded on first use, over the canvas measurer. */
+async function layoutMeasure(content: unknown): Promise<TableMeasure | null> {
+  const { canvasMeasurerAvailable } = await import('./canvas-measure.ts');
+  if (!canvasMeasurerAvailable()) return null;
+  const [{ pageProviders }, { measureTables }] = await Promise.all([
+    import('./page-view/providers.ts'),
+    import('../../layout/src/table-measure.ts'),
+  ]);
+  return measureTables(content as Parameters<typeof measureTables>[0], pageProviders());
 }
 
 const loadShared = async (): Promise<Preflight> =>
@@ -171,9 +191,20 @@ export async function exportPreflight(
     }
   }
   const preflight = await (input.load ?? loadShared)();
+  // A measure that cannot be made gives no row check, never a wrong one.
+  let measure: TableMeasure | null;
+  try {
+    measure = (await (input.measure ?? layoutMeasure)(content)) ?? null;
+  } catch {
+    measure = null;
+  }
   // A job is a final export unless its request says `preview` (09 §9.1).
   const final = options?.profile !== 'preview';
-  return preflight(content as unknown as Parameters<Preflight>[0], fonts ?? undefined).map((w) => ({
+  return preflight(
+    content as unknown as Parameters<Preflight>[0],
+    fonts ?? undefined,
+    measure ?? undefined,
+  ).map((w) => ({
     severity: w.code === 'glyph_missing' && final ? 'error' : 'warning',
     code: w.code,
     blockId: w.blockId,

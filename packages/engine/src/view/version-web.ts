@@ -26,6 +26,14 @@ export class VersionView extends VersionDocument {
     return unmount;
   }
 
+  /**
+   * The version's core as a host for the element's read-only pages (FE-095): the layout reads the
+   * content through it and takes no input. The core is in `view` mode, so nothing can change it.
+   */
+  pageHost(): Pick<EditorCore, 'attachPageView'> {
+    return this.core as EditorCore;
+  }
+
   /** Draws `changes` (the `changes` of a comparison whose newer version is this one). */
   showComparison(changes: readonly ComparisonChange[]): void {
     this.#changes = changes;

@@ -6,6 +6,7 @@
 import type { CertificateFacts } from './certificate.ts';
 import type { CounterEffect } from '@docedit/model';
 import type { CodeRange } from './fonts/coverage.ts';
+import type { TableMeasure } from './table-measure.ts';
 
 /** A font file on the worker's read-only font path, named by its SHA-256 (09 §5). */
 export interface FontFace {
@@ -36,6 +37,13 @@ export interface FontFamily {
   italic: FontFace;
   boldItalic: FontFace;
   licence: string;
+  /**
+   * Whether a job may load the family on the server (EXP-048; owner decision 62). The service sets
+   * it for a tenant's own font from the flag the administrator gave on upload. `false`: the family
+   * is used on screen only; a job does not load it, uses the fallback chain and names the family in
+   * a diagnostic. Absent: permitted (the default set, whose licences were checked when it was built).
+   */
+  serverUse?: boolean;
 }
 
 /** A face of the fallback chain (09 §3.2, Missing glyphs; EXP-026, EXP-047). */
@@ -117,6 +125,12 @@ export interface ConvertOptions {
    * a warning and the compile goes on.
    */
   profile?: 'final' | 'preview';
+  /**
+   * The heights of the rows of the document's tables, from the editor's page layout (EXP-039;
+   * owner decision 114; `table-measure.ts`). With it a row taller than a page is split at paragraph
+   * boundaries; without it no row is split and none is reported.
+   */
+  tableMeasure?: TableMeasure;
   /** Document assets by identifier (EXP-014). An asset not listed is not attached. */
   assets?: Readonly<Record<string, AssetInput>>;
   /**

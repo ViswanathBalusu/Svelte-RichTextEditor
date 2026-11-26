@@ -79,6 +79,27 @@ describe.skipIf(!hasDom)('painting a line from runs (FE-101)', () => {
     }
   });
 
+  it('ends the shaping run between two runs of one face, so a pair is not kerned across them (FE-094)', () => {
+    const source: PaintSource = {
+      lineText: () => '',
+      fontFamily: 'serif',
+      fontSizePt: 11,
+      runs: () => [run('colour'), run(', '), run('bold', { bold: true })],
+    };
+    const root = document.createElement('div');
+    document.body.append(root);
+    try {
+      paintTree(root, tree, source);
+      const runs = [...root.querySelectorAll<HTMLElement>('.de-run')];
+      expect(runs[0]!.style.unicodeBidi).toBe('');
+      expect(runs[1]!.style.unicodeBidi).toBe('isolate');
+      expect(runs[2]!.style.unicodeBidi).toBe('');
+      expect(runs.map((r) => r.textContent).join('')).toBe('colour, bold');
+    } finally {
+      root.remove();
+    }
+  });
+
   it('keeps the old single-face painting when the source gives no runs', () => {
     const source: PaintSource = { lineText: () => 'plain', fontFamily: 'serif', fontSizePt: 11 };
     const root = document.createElement('div');

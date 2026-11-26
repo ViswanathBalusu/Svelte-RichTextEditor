@@ -46,7 +46,7 @@ import {
   verifyParticipantCode,
   type AccessCodeProblem,
 } from '../workflow/access-code-service.ts';
-import { acceptConsent, type ConsentProblem } from '../workflow/consent-service.ts';
+import { acceptConsent, readConsent, type ConsentProblem } from '../workflow/consent-service.ts';
 import { recordOf } from '../workflow/record.ts';
 import { signField, type SignProblem } from '../workflow/sign-service.ts';
 import { completeMyPart, type CompleteProblem } from '../workflow/complete-service.ts';
@@ -771,6 +771,54 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     );
   };
 
+  /**
+   * `GET /documents/{id}/workflow/participants/{pid}/consent` (12 §8.1 step 1; FRW-044 criterion 1;
+   * path assumed, G95; ADR 0427, proposed). The caller is the participant, as for the acceptance. The
+   * answer is the text the service holds for the consent the workflow names, with its identifier and
+   * version, and the time of the acceptance on record or null. The client shows the text and offers
+   * the accept control; it never sends the text back, and the hash stays the service's.
+   */
+  const readConsentRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const pid = ctx.params['pid']!;
+    if (!d.consentTexts || !d.evidence || !d.workflows)
+      throw new ApiError('not_found', 'this server keeps no consent texts');
+    const identity = ctx.caller.identity;
+    await liveDocument(ctx, doc);
+    const current = await store().read(ctx.caller.tenant, doc);
+    if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    if (!current.participants.some((p) => p.id === pid))
+      throw new ApiError('not_found', `document ${doc} has no such participant`);
+    if (ctx.caller.kind !== 'user' || identity === null || identity.docs[doc] === undefined)
+      throw new ApiError('forbidden', 'only the participant reads the consent text');
+    const bound = bindParticipant(
+      {
+        sub: identity.sub,
+        ...(identity.asserted?.wfp !== undefined ? { wfp: identity.asserted.wfp } : {}),
+      },
+      recordOf(current),
+    );
+    if (!bound.ok || bound.participant.id !== pid)
+      throw new ApiError('forbidden', 'the token is not bound to this participant');
+    const out = await readConsent(
+      { workflows: d.workflows, evidence: d.evidence, texts: d.consentTexts, now: d.now },
+      k.refOf(ctx, doc),
+      pid,
+    );
+    if (!out.ok) throw consentProblem(doc, out.problem);
+    return json(
+      200,
+      {
+        textId: out.view.textId,
+        version: out.view.version,
+        text: out.view.text,
+        acceptedAt:
+          out.view.acceptedAtMs === null ? null : new Date(out.view.acceptedAtMs).toISOString(),
+      },
+      { 'Cache-Control': 'no-store' },
+    );
+  };
+
   /** The answer to a problem of the signing. */
   const signProblem = (doc: string, p: SignProblem): ApiError => {
     switch (p.code) {
@@ -1108,6 +1156,7 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     remindWorkflow: remindWorkflowRoute,
     participantVerify: verifyAccessCodeRoute,
     participantConsent: consentRoute,
+    getParticipantConsent: readConsentRoute,
     participantComplete: completeRoute,
     signField: signRoute,
     registerAccessCode: registerAccessCodeRoute,

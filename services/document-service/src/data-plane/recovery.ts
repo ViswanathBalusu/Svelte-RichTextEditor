@@ -9,12 +9,14 @@
  *   content at 0); the room's checkpoints are written from the durable state, so a mismatch means
  *   corruption (BE-020 criterion 5, before older checkpoints are thinned).
  * - `affected` and `newIncarnation` are the operator procedure after a database recovery: the
- *   documents whose checkpoints reach past the restored head get a new incarnation, an audit
- *   event, and their checkpoints beyond the head set aside, so that every client reloads.
+ *   documents whose checkpoints or cold segments reach past the restored head get a new
+ *   incarnation, an audit event, and those checkpoints and segments set aside, so that every
+ *   client reloads.
  */
 import { randomUUID } from 'node:crypto';
 import { isSnapshot, type LogCommit } from '@docedit/authority';
 import { uuid7, type JsonEnvelope } from '@docedit/model';
+import type { SegmentRange, SegmentStore } from '../objects/segments.ts';
 import type { Pool } from '../storage/db.ts';
 import type {
   AuditStore,
@@ -32,6 +34,8 @@ export interface RecoveryStores {
   checkpoints: CheckpointStore;
   index?: CheckpointIndex | undefined;
   audit?: AuditStore | undefined;
+  /** Cold segments in the object store (HIS-029); absent: none are listed or set aside. */
+  segments?: SegmentStore | undefined;
 }
 
 export interface Rebuilt {
@@ -158,8 +162,10 @@ export interface Affected {
   tenant: string;
   doc: string;
   head: number;
-  /** The newest checkpoint beyond the head. */
-  checkpoint: number;
+  /** The newest checkpoint beyond the head; null when only segments reach past it. */
+  checkpoint: number | null;
+  /** The cold segments whose range ends past the head; absent when there are none. */
+  segments?: SegmentRange[];
 }
 
 /**
@@ -182,6 +188,42 @@ export async function affected(pool: Pool): Promise<Affected[]> {
   }));
 }
 
+/**
+ * The selection of BE-078 criterion 1 over PostgreSQL and the object store: the documents of
+ * `affected` (checkpoints past the head), and the documents with a cold segment whose range ends
+ * past the head. The restored database cannot name those segments, so the object store is listed
+ * (one listing of the whole store, then the head of each document that has a segment).
+ */
+export async function affectedWithSegments(
+  pool: Pool,
+  s: RecoveryStores & { segments: SegmentStore },
+): Promise<Affected[]> {
+  const byDoc = new Map<string, Affected>();
+  for (const a of await affected(pool)) byDoc.set(`${a.tenant}/${a.doc}`, a);
+  for (const ref of await s.segments.documents()) {
+    const key = `${ref.tenant}/${ref.doc}`;
+    const found = byDoc.get(key);
+    const head = found ? found.head : await headOf(s, ref);
+    if (head === null) continue;
+    const segments = await s.segments.beyond(ref, head);
+    if (segments.length === 0) continue;
+    byDoc.set(key, {
+      ...(found ?? { tenant: ref.tenant, doc: ref.doc, head, checkpoint: null }),
+      segments,
+    });
+  }
+  return [...byDoc.values()];
+}
+
+/** The head of a document, or null when the database has none (an object of a document it lost). */
+async function headOf(s: RecoveryStores, ref: DocRef): Promise<number | null> {
+  try {
+    return (await s.logs.head(ref)).seq;
+  } catch {
+    return null;
+  }
+}
+
 /** Whether the object store holds a checkpoint beyond the head (for stores without an index). */
 export async function beyondHead(s: RecoveryStores, ref: DocRef): Promise<number | null> {
   return (await beyond(s, ref))?.checkpoint ?? null;
@@ -190,9 +232,16 @@ export async function beyondHead(s: RecoveryStores, ref: DocRef): Promise<number
 async function beyond(s: RecoveryStores, ref: DocRef): Promise<Affected | null> {
   const head = await s.logs.head(ref);
   const newest = await s.checkpoints.latest(ref, Number.MAX_SAFE_INTEGER);
-  return newest && newest.seq > head.seq
-    ? { tenant: ref.tenant, doc: ref.doc, head: head.seq, checkpoint: newest.seq }
-    : null;
+  const segments = s.segments ? await s.segments.beyond(ref, head.seq) : [];
+  const checkpoint = newest && newest.seq > head.seq ? newest.seq : null;
+  if (checkpoint === null && segments.length === 0) return null;
+  return {
+    tenant: ref.tenant,
+    doc: ref.doc,
+    head: head.seq,
+    checkpoint,
+    ...(segments.length > 0 ? { segments } : {}),
+  };
 }
 
 /**
@@ -221,6 +270,8 @@ export interface IncarnationChange {
   setAside: number[];
   /** Whether the object store set its copies aside too (it needs `setAside`). */
   objectsSetAside: boolean;
+  /** Cold segments set aside in the object store (those whose range ended past the head). */
+  segmentsSetAside: SegmentRange[];
 }
 
 export interface Incarnating extends LogStore {
@@ -240,6 +291,7 @@ export async function newIncarnation(
   const head = (await s.logs.head(ref)).seq;
   const asideIndex = s.index ? await s.index.setAside(ref, head) : [];
   const asideObjects = s.checkpoints.setAside ? await s.checkpoints.setAside(ref, head) : [];
+  const asideSegments = s.segments ? await s.segments.setAside(ref, head) : [];
   const after = randomUUID();
   const { before } = await s.logs.newIncarnation(ref, after);
   const setAside = [...new Set([...asideIndex, ...asideObjects])].sort((a, b) => a - b);
@@ -250,7 +302,13 @@ export async function newIncarnation(
       doc: ref.doc,
       actor: opts.actor ?? 'system',
       kind: 'incarnation.changed',
-      data: { before, after, head, setAside },
+      data: {
+        before,
+        after,
+        head,
+        setAside,
+        ...(asideSegments.length > 0 ? { segments: asideSegments } : {}),
+      },
       at: (opts.now ?? Date.now)(),
     },
   ]);
@@ -261,6 +319,7 @@ export async function newIncarnation(
     head,
     setAside,
     objectsSetAside: s.checkpoints.setAside !== undefined,
+    segmentsSetAside: asideSegments,
   };
 }
 

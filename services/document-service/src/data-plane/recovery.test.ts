@@ -13,7 +13,8 @@ import { baseDoc, posInside } from '../../../../packages/authority/test/fixtures
 import { insertText } from '../../test/data-plane/client.ts';
 import { BASE_JSON, REQUIRES, startPlane, type Plane } from '../../test/data-plane/support.ts';
 import { ObjectCheckpointStore } from '../objects/checkpoints.ts';
-import { MemoryObjectStore } from '../objects/store.ts';
+import { ObjectSegmentStore, parseSegmentKey } from '../objects/segments.ts';
+import { MemoryObjectStore, objectKeys } from '../objects/store.ts';
 import type { MemoryStore } from '../storage/memory.ts';
 import { MemoryAudit, MemoryCheckpointIndex } from './memory-ports.ts';
 import { Metrics } from './metrics.ts';
@@ -238,6 +239,85 @@ describe('new incarnation after a database recovery (BE-078)', () => {
     expect(await objects.get(p.ref(rewound), 3)).toBeNull();
     expect(await objects.get(p.ref(behind), 2)).not.toBeNull();
     // Run again, the command finds nothing left to change.
+    expect(await affectedAmong(stores, refs)).toEqual([]);
+  });
+});
+
+describe('cold segments past the restored head (BE-078, HIS-029)', () => {
+  it('lists the documents whose segments reach past the head, and sets only those segments aside', async () => {
+    const store = new MemoryObjectStore();
+    const objects = new ObjectCheckpointStore(store);
+    const segments = new ObjectSegmentStore(store);
+    const p = await plane({ deps: { checkpoints: objects } });
+    const docs = [await p.createDocument(), await p.createDocument(), await p.createDocument()];
+    const [rewound, whole, bare] = docs as [string, string, string];
+    const refs = docs.map((d) => p.ref(d));
+    for (const ref of refs) await objects.put(ref, 0, (await p.checkpoints.get(ref, 0))!);
+    for (const d of docs) await writeCommits(p, d, 3);
+    await p.close();
+    planes = [];
+
+    const put = (doc: string, from: number, to: number, text: string) =>
+      store.put(objectKeys.segment(p.tenant, doc, from, to), new TextEncoder().encode(text));
+    // `rewound`: the database is restored to seq 1; a segment of 1 to 1 was moved before that
+    // point, and a segment of 1 to 3 was written after it.
+    (p.stores.logs as MemoryStore).rewindForTest(p.ref(rewound), 1);
+    await put(rewound, 1, 1, 'old');
+    await put(rewound, 1, 3, 'newer');
+    // `whole`: every segment ends at or below the head. `bare`: no segment.
+    await put(whole, 1, 3, 'kept');
+
+    const stores = { logs: logsOf(p), checkpoints: objects, segments };
+    const incarnations = () =>
+      Promise.all(refs.map(async (r) => (await p.stores.logs.head(r)).incarnation));
+    const before = await incarnations();
+
+    expect(parseSegmentKey(objectKeys.segment(p.tenant, whole, 1, 3))).toEqual({
+      tenant: p.tenant,
+      doc: whole,
+      from: 1,
+      to: 3,
+    });
+    expect(parseSegmentKey(objectKeys.checkpoint(p.tenant, whole, 3))).toBeNull();
+    expect((await segments.documents()).map((r) => r.doc).sort()).toEqual([rewound, whole].sort());
+
+    const selected = await affectedAmong(stores, refs);
+    expect(selected).toEqual([
+      { tenant: p.tenant, doc: rewound, head: 1, checkpoint: 3, segments: [{ from: 1, to: 3 }] },
+    ]);
+
+    // The dry run changes nothing.
+    expect(await runIncarnation(stores, selected, { dryRun: true })).toEqual([]);
+    expect(await store.exists(objectKeys.segment(p.tenant, rewound, 1, 3))).toBe(true);
+    expect(await incarnations()).toEqual(before);
+
+    const audit = new MemoryAudit();
+    const [change] = await runIncarnation({ ...stores, audit }, selected, {
+      dryRun: false,
+      actor: 'operator',
+    });
+    expect(change!.segmentsSetAside).toEqual([{ from: 1, to: 3 }]);
+    // The segment past the head left the segments prefix and is kept under `aside`.
+    expect(await store.exists(objectKeys.segment(p.tenant, rewound, 1, 3))).toBe(false);
+    const aside = (await store.list(`tenants/${p.tenant}/docs/${rewound}/aside/`)).filter((k) =>
+      k.includes('/segments/'),
+    );
+    expect(aside).toHaveLength(1);
+    expect(aside[0]).toMatch(/\/segments\/1-3\.payloads\.zst$/);
+    expect(new TextDecoder().decode((await store.get(aside[0]!))!)).toBe('newer');
+    // The segment at or below the head, and the other documents' segments, are untouched.
+    expect(await store.exists(objectKeys.segment(p.tenant, rewound, 1, 1))).toBe(true);
+    expect(await store.exists(objectKeys.segment(p.tenant, whole, 1, 3))).toBe(true);
+    expect(await store.list(objectKeys.segments(p.tenant, bare))).toEqual([]);
+    // A new incarnation, audited with the segments; the unselected documents keep theirs.
+    const after = await incarnations();
+    expect(after[0]).toBe(change!.after);
+    expect(after.slice(1)).toEqual(before.slice(1));
+    const events = await audit.query(p.tenant, { doc: rewound, limit: 10 });
+    expect(events.find((e) => e.kind === 'incarnation.changed')?.data).toMatchObject({
+      segments: [{ from: 1, to: 3 }],
+    });
+    // Run again, nothing is left to select.
     expect(await affectedAmong(stores, refs)).toEqual([]);
   });
 });

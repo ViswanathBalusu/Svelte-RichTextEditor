@@ -39,6 +39,31 @@ export interface StoredComment {
   createdAt: number;
   /** When the body was last edited (PRO-060 criterion 5); null while it never was. */
   editedAt: number | null;
+  /** The people (`sub`) who hold each reaction, in the order they reacted (UX-033; ADR 0424). */
+  reactions?: Record<string, string[]>;
+}
+
+/** The reactions after `user` took or left `reaction`; the map is not changed, and an empty list is dropped. */
+export function withReaction(
+  held: Readonly<Record<string, readonly string[]>> | null | undefined,
+  reaction: string,
+  user: string,
+  on: boolean,
+): Record<string, string[]> {
+  const others = Object.entries(held ?? {})
+    .filter(([name]) => name !== reaction)
+    .map(([name, users]): [string, string[]] => [name, [...users]]);
+  const users = held?.[reaction] ?? [];
+  const next = on
+    ? users.includes(user)
+      ? [...users]
+      : [...users, user]
+    : users.filter((u) => u !== user);
+  return Object.fromEntries(next.length > 0 ? [...others, [reaction, next]] : others);
+}
+/** Whether a stored map holds a reaction. */
+function hasReactions(map: Record<string, string[]> | null | undefined): boolean {
+  return !!map && Object.values(map).some((users) => users.length > 0);
 }
 
 /** A change to a thread's state or assignee (PRO-060 criterion 2). */
@@ -116,6 +141,14 @@ export interface ThreadStore {
   ): Promise<StoredComment | undefined>;
   /** Soft-deletes a live comment (its row stays, its body leaves reads); false when there is none. */
   deleteComment(tenant: string, cid: string): Promise<boolean>;
+  /** Adds `user` to a reaction of a live comment, or removes them; undefined when there is none (UX-033). */
+  react(
+    tenant: string,
+    cid: string,
+    reaction: string,
+    user: string,
+    on: boolean,
+  ): Promise<StoredComment | undefined>;
 }
 
 interface ThreadRow {
@@ -136,6 +169,7 @@ interface CommentRow {
   body: unknown;
   created_at: Date;
   edited_at: Date | null;
+  reactions?: Record<string, string[]> | null;
 }
 
 /** Threads and comments in PostgreSQL, under the tenant's row-level security. */
@@ -308,7 +342,7 @@ export class PgThreadStore implements ThreadStore {
       const r = await c.query<CommentRow>(
         `update comments set body = $2, edited_at = $3
           where id = $1 and deleted_at is null
-          returning id, author, body, created_at, edited_at`,
+          returning id, author, body, created_at, edited_at, reactions`,
         [cid, JSON.stringify(body), new Date(at)],
       );
       const row = r.rows[0];
@@ -319,6 +353,40 @@ export class PgThreadStore implements ThreadStore {
         body: row.body,
         createdAt: millis(row.created_at) ?? 0,
         editedAt: millis(row.edited_at),
+        ...(hasReactions(row.reactions) ? { reactions: row.reactions! } : {}),
+      };
+    });
+  }
+
+  react(
+    tenant: string,
+    cid: string,
+    reaction: string,
+    user: string,
+    on: boolean,
+  ): Promise<StoredComment | undefined> {
+    if (!isUuid(cid)) return Promise.resolve(undefined);
+    return inTenant(this.#pool, tenant, async (c) => {
+      // The row is locked while the map is read and written, so two reactions at once both stay.
+      const r = await c.query<CommentRow>(
+        `select id, author, body, created_at, edited_at, reactions from comments
+          where id = $1 and deleted_at is null for update`,
+        [cid],
+      );
+      const row = r.rows[0];
+      if (!row) return undefined;
+      const next = withReaction(row.reactions, reaction, user, on);
+      await c.query('update comments set reactions = $2 where id = $1', [
+        cid,
+        JSON.stringify(next),
+      ]);
+      return {
+        id: row.id,
+        author: row.author,
+        body: row.body,
+        createdAt: millis(row.created_at) ?? 0,
+        editedAt: millis(row.edited_at),
+        ...(hasReactions(next) ? { reactions: next } : {}),
       };
     });
   }
@@ -344,7 +412,7 @@ export class PgThreadStore implements ThreadStore {
     const row = r.rows[0];
     if (!row) return undefined;
     const cs = await c.query<CommentRow>(
-      `select id, author, body, created_at, edited_at from comments
+      `select id, author, body, created_at, edited_at, reactions from comments
         where thread_id = $1 and deleted_at is null order by created_at, id`,
       [id],
     );
@@ -364,6 +432,7 @@ export class PgThreadStore implements ThreadStore {
         body: x.body,
         createdAt: millis(x.created_at) ?? 0,
         editedAt: millis(x.edited_at),
+        ...(hasReactions(x.reactions) ? { reactions: x.reactions! } : {}),
       })),
     };
   }
@@ -456,6 +525,27 @@ export class MemoryThreadStore implements ThreadStore {
         c.body = body;
         c.editedAt = at;
         return { ...c };
+      }
+    }
+    return undefined;
+  }
+
+  async react(
+    tenant: string,
+    cid: string,
+    reaction: string,
+    user: string,
+    on: boolean,
+  ): Promise<StoredComment | undefined> {
+    if (this.#deleted.has(cid)) return undefined;
+    for (const t of this.#threads.values()) {
+      if (t.tenant !== tenant) continue;
+      const c = t.comments.find((x) => x.id === cid);
+      if (c) {
+        const next = withReaction(c.reactions, reaction, user, on);
+        if (hasReactions(next)) c.reactions = next;
+        else delete c.reactions;
+        return { ...c, ...(c.reactions ? { reactions: { ...c.reactions } } : {}) };
       }
     }
     return undefined;

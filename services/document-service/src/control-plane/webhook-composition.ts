@@ -34,6 +34,11 @@ import {
   type Transport,
 } from './webhook-egress.ts';
 import {
+  MemorySecretStore,
+  SecretBackedSubscriptionStore,
+  type SecretStore,
+} from './secret-store.ts';
+import {
   MemorySubscriptionStore,
   WebhookSubscriptions,
   type SubscriptionStore,
@@ -58,6 +63,8 @@ export interface ComposeWebhooksInput {
   logger: Logger;
   /** The subscription store; absent, an in-memory one. */
   store?: SubscriptionStore;
+  /** Where the subscriptions' secrets are kept; absent, in memory. Not used with `routes`. */
+  secrets?: SecretStore;
   /** The `/webhooks` routes; absent, built over `store`. Given, `store` must be given too. */
   routes?: WebhookSubscriptions;
   overrides?: WebhookOverrides;
@@ -112,7 +119,14 @@ export function composeWebhooks(input: ComposeWebhooksInput): ComposedWebhooks {
     throw new Error(
       'parts.webhooks needs parts.webhookStore when webhooks are delivered, so that the routes and the dispatcher share one store',
     );
-  const store = input.store ?? new MemorySubscriptionStore();
+  // The subscriptions' secrets live in the secret store (BE-057 criterion 6): the store the routes
+  // and the dispatcher share holds references, and gives back values only to those who sign.
+  const store = input.routes
+    ? (input.store ?? new MemorySubscriptionStore())
+    : new SecretBackedSubscriptionStore(
+        input.store ?? new MemorySubscriptionStore(),
+        input.secrets ?? new MemorySecretStore(),
+      );
   const routes = input.routes ?? new WebhookSubscriptions({ store, now: input.now });
   const deliveries = overrides.deliveries ?? new MemoryDeliveryStore();
   const transport =

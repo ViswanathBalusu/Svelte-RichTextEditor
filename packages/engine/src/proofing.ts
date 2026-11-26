@@ -26,6 +26,8 @@
  */
 import type {
   CancelSignal,
+  DictionaryEntry,
+  DictionaryScope,
   ProofingBlock,
   ProofingPort as ProtocolProofingPort,
 } from '@docedit/protocol';
@@ -39,15 +41,13 @@ export const DEFAULT_DEBOUNCE_MS = 400;
 export const UNDETERMINED = 'und';
 
 /**
- * The proofing port with the custom dictionary members of 13 §6.1 ("supports custom dictionaries").
- * The protocol's `ProofingPort` has `addWord` only (PRO-092); listing and removing are proposed here,
- * as optional members, until the protocol names them (UX-042 Notes). A port without all three has no
- * dictionary controls.
+ * The proofing port, with the custom dictionary members of 13 §6.1 ("supports custom dictionaries"):
+ * `listWords` and `removeWord` beside `addWord` (the protocol's port, UX-042; owner decision 34: one
+ * list for each person and one shared list for the tenant). A port without both has no dictionary
+ * controls.
  */
-export interface ProofingPort extends ProtocolProofingPort {
-  listWords?(lang: string): Promise<string[]>;
-  removeWord?(word: string, lang: string): Promise<void>;
-}
+export type ProofingPort = ProtocolProofingPort;
+export type { DictionaryEntry, DictionaryScope };
 
 export interface ProofingClock {
   setTimeout(fn: () => void, ms: number): unknown;
@@ -488,20 +488,17 @@ export class ProofingController {
   }
 
   /** Adds the finding's text to the port's custom dictionary, then checks again. */
-  async addToDictionary(id: string): Promise<boolean> {
+  addToDictionary(id: string): Promise<boolean> {
     const f = this.find(id);
-    if (!f || !this.dictionary) return false;
-    try {
-      await this.#port.addWord(f.text, f.lang);
-    } catch {
-      this.#set('unavailable');
-      return false;
-    }
-    this.recheck();
-    return true;
+    return f ? this.addWord(f.text, f.lang) : Promise.resolve(false);
   }
 
-  async words(lang: string): Promise<string[] | null> {
+  /** Adds a word to a custom dictionary, the person's or the tenant's, then checks again. */
+  addWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean> {
+    return this.#change(scope, () => this.#port.addWord(word, lang, scope ? { scope } : undefined));
+  }
+
+  async words(lang: string): Promise<DictionaryEntry[] | null> {
     if (!this.dictionary || this.#port.listWords === undefined) return null;
     try {
       return await this.#port.listWords(lang);
@@ -510,18 +507,27 @@ export class ProofingController {
     }
   }
 
-  async removeWord(word: string, lang: string): Promise<boolean> {
-    if (!this.dictionary || this.#port.removeWord === undefined) return false;
+  removeWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean> {
+    return this.#change(scope, () =>
+      this.#port.removeWord!(word, lang, scope ? { scope } : undefined),
+    );
+  }
+
+  /**
+   * A change to a dictionary, then a new check. A port that fails is unavailable; a refusal of the
+   * tenant's list (only an administrator changes it) says nothing about the port.
+   */
+  async #change(scope: DictionaryScope | undefined, call: () => Promise<void>): Promise<boolean> {
+    if (!this.dictionary) return false;
     try {
-      await this.#port.removeWord(word, lang);
+      await call();
     } catch {
-      this.#set('unavailable');
+      if (scope !== 'tenant') this.#set('unavailable');
       return false;
     }
     this.recheck();
     return true;
   }
-
   info(selectionHead: number): ProofingInfo {
     const found = this.locate();
     const current = this.currentId();

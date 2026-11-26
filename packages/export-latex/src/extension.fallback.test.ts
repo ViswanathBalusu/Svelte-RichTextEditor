@@ -6,7 +6,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { blockLines, doc, nid, para, run } from '../test/docs.ts';
+import { blockLines, decodeStrings, doc, nid, para, run } from '../test/docs.ts';
 
 const PNG_SHA = 'e'.repeat(64);
 const PNG_BYTES = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);

@@ -38,6 +38,13 @@ export interface PdfViewerOptions {
 
 export type Isolation = 'cross-origin' | 'opaque';
 
+/** One page drawn for printing: the bitmap, and the page's size in PDF points (1/72 inch). */
+export interface PrintPage {
+  readonly width: number;
+  readonly height: number;
+  readonly bitmap: ImageBitmap;
+}
+
 export class PdfViewerError extends Error {
   readonly code: 'unavailable' | 'load_failed';
   constructor(code: 'unavailable' | 'load_failed', message: string) {
@@ -221,6 +228,38 @@ export class PdfViewerFrame {
     await this.#ready;
     const message: ToViewer = { type: 'page', page };
     this.#port?.postMessage(message);
+  }
+
+  /**
+   * Draws every page of the open PDF for printing (FE-073) and resolves with the pages in order,
+   * each a bitmap and its size in PDF points. The caller owns the bitmaps (close them when done).
+   * Rejects when the viewer fails or is destroyed first.
+   */
+  async renderAll(dpi = 150): Promise<PrintPage[]> {
+    await this.#ready;
+    if (this.#destroyed) throw new PdfViewerError('unavailable', 'the viewer was closed');
+    return new Promise((resolve, reject) => {
+      const pages: PrintPage[] = [];
+      const settle = (run: () => void): void => {
+        stop();
+        this.#opening.delete(closed);
+        run();
+      };
+      const closed = (e: Error): void => settle(() => reject(e));
+      const stop = this.onMessage((m) => {
+        if (m.type === 'print-page')
+          pages.push({ width: m.width, height: m.height, bitmap: m.bitmap });
+        else if (m.type === 'print-done') settle(() => resolve(pages));
+        else if (m.type === 'failed')
+          settle(() => {
+            for (const p of pages) p.bitmap.close();
+            reject(new PdfViewerError('load_failed', m.message));
+          });
+      });
+      this.#opening.add(closed);
+      const message: ToViewer = { type: 'render-all', dpi };
+      this.#port?.postMessage(message);
+    });
   }
 
   /** Removes the frame; its document and PDF.js worker end with it. */

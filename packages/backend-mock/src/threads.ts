@@ -35,7 +35,12 @@ interface CommentRecord {
   body: CommentBodyPart[];
   createdAt: number;
   editedAt: number | null;
+  /** Reactions by name, each with the `sub` of the people in the order they reacted (ADR 0424). */
+  reactions?: Map<string, string[]>;
 }
+
+/** The reactions of a comment (ADR 0424), in this order on the wire. */
+const REACTIONS: readonly string[] = ['thumbsUp', 'heart', 'laugh', 'celebrate', 'eyes', 'done'];
 
 interface ThreadRecord {
   id: string;
@@ -162,6 +167,14 @@ export class MockThreads {
       editedAt: c.editedAt === null ? null : formatTimestamp(c.editedAt),
       etag: tagOfComment(c),
       body: c.body.map((p) => ({ ...p })),
+      ...(c.reactions && c.reactions.size > 0
+        ? {
+            reactions: REACTIONS.filter((r) => (c.reactions!.get(r)?.length ?? 0) > 0).map((r) => ({
+              reaction: r as 'thumbsUp',
+              users: c.reactions!.get(r)!.map(principal),
+            })),
+          }
+        : {}),
     };
   }
 
@@ -397,6 +410,32 @@ export class MockThreads {
     this.announce('comment.updated', `/comments/${cid}`, { thread: t.id }, (x) =>
       this.canRead(x, t.id),
     );
+    return { value: this.commentWire(rec), etag: tagOfComment(rec) };
+  }
+
+  /**
+   * Adds the caller to a reaction of a comment, or takes the caller out of it (13 §5; ADR 0424).
+   * Both are idempotent, need `comment` in the thread's scope, make no commit and leave the
+   * comment's entity tag as it is.
+   */
+  react(c: Connection, cid: string, reaction: string, on: boolean): Tagged<Comment> {
+    if (!REACTIONS.includes(reaction))
+      throw new PortError('validation_failed', 'not a known reaction');
+    const { t, rec } = this.findComment(c, cid);
+    this.allow(c, t.id, 'reply');
+    const map = (rec.reactions ??= new Map());
+    const users = map.get(reaction) ?? [];
+    const held = users.includes(c.sub);
+    if (on && !held) map.set(reaction, [...users, c.sub]);
+    if (!on && held) {
+      const rest = users.filter((u) => u !== c.sub);
+      if (rest.length > 0) map.set(reaction, rest);
+      else map.delete(reaction);
+    }
+    if (on !== held)
+      this.announce('comment.reacted', `/comments/${cid}`, { thread: t.id }, (x) =>
+        this.canRead(x, t.id),
+      );
     return { value: this.commentWire(rec), etag: tagOfComment(rec) };
   }
 

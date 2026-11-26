@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   bareRoutes,
   isBareIdentifierOperation,
+  TENANT_RESOURCES,
   untestedBareRoutes,
   type BareRoute,
 } from '../src/identifiers.ts';
@@ -34,11 +35,13 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
     ]);
   });
 
-  it('leaves out only the routes of the document itself and those for the service credential alone', () => {
+  it('leaves out only the routes of the document itself, those for the service credential alone and the tenant resources', () => {
     const left = DEP1.operations
       .filter((o) => o.path.includes('{') && !isBareIdentifierOperation(o))
       .filter((o) => !o.path.startsWith('/documents/{id}'));
     expect(left.map((o) => o.path.split('/')[1])).toEqual([
+      'tenant-fonts',
+      'tenant-fonts',
       'webhooks',
       'webhooks',
       'webhooks',
@@ -49,7 +52,8 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
       'bulk-sends',
       'templates',
     ]);
-    for (const o of left) expect(o.security).toEqual(['service']);
+    for (const o of left.filter((x) => !TENANT_RESOURCES.includes(x.path.split('/')[1] ?? '')))
+      expect(o.security).toEqual(['service']);
   });
 
   it('gives every route an entry, and a feature that the definition names', () => {

@@ -10,6 +10,7 @@ export { default as ExportDialog } from './ExportDialog.svelte';
 export { default as LanguageDialog } from './LanguageDialog.svelte';
 export { default as MathEditorDialog } from './MathEditorDialog.svelte';
 export { default as ParagraphDialog } from './ParagraphDialog.svelte';
+export { default as TableSizeDialog } from './TableSizeDialog.svelte';
 export { default as RegionDialog } from './RegionDialog.svelte';
 export { default as SendDialog } from './SendDialog.svelte';
 export { default as SignatureDialog } from './SignatureDialog.svelte';

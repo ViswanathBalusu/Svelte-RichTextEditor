@@ -330,6 +330,9 @@ export function outcomeCheck(input: OutcomeInput): OutcomeVerdict {
       if (d.type === 'settings') {
         if (trackChanges(before) && !trackChanges(after) && !manage)
           deny(d.scope, operationNeeds('settings.track_changes_off'));
+        // Owner decision 118: only a user with manage switches it on, too.
+        else if (!trackChanges(before) && trackChanges(after) && !manage)
+          deny(d.scope, operationNeeds('settings.track_changes_on'));
         continue;
       }
       const users = new Set<string>();

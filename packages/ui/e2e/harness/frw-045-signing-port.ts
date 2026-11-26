@@ -62,6 +62,8 @@ export function signingService(
     activate(field) {
       request.set({ ...field, n: ++n });
     },
+    // Three signature and initials fields in the document; each signing is one more signed (FRW-048).
+    progress: () => ({ signed: log.signs.length, total: 3 }),
     adopted: (kind) => kept[kind],
     async adopt(kind, how, image, filename): Promise<AdoptOutcome> {
       log.adopts.push({ kind, mode: how, type: image.type, size: image.size, filename });

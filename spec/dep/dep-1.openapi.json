@@ -3369,6 +3369,194 @@
         ]
       }
     },
+    "/comments/{cid}/reactions/{reaction}": {
+      "post": {
+        "operationId": "addReaction",
+        "summary": "Adds the caller to a reaction of a comment; adding it again changes nothing. It makes no commit (13 §5; ADR 0424).",
+        "description": "Adds the caller to a reaction of a comment; adding it again changes nothing. It makes no commit (13 §5; ADR 0424). Requires: comment in the scopes of the target (07 §12). Only when the server announces the feature `reactions`. Specified in 05 §6.2; 13 §5.",
+        "tags": [
+          "comments"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Comment identifier.",
+              "$comment": "gaps: G59",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Comment identifier."
+          },
+          {
+            "name": "reaction",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "A reaction to a comment, one of a fixed set (ADR 0424).",
+              "type": "string",
+              "enum": [
+                "thumbsUp",
+                "heart",
+                "laugh",
+                "celebrate",
+                "eyes",
+                "done"
+              ]
+            },
+            "description": "A reaction to a comment, one of a fixed set (ADR 0424)."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchOptional"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §6.2; 13 §5",
+        "x-dep-owner": "PRO",
+        "x-dep-requires": "comment in the scopes of the target",
+        "x-dep-feature": "reactions"
+      },
+      "delete": {
+        "operationId": "removeReaction",
+        "summary": "Takes the caller out of a reaction of a comment; removing one that is not held changes nothing (ADR 0424).",
+        "description": "Takes the caller out of a reaction of a comment; removing one that is not held changes nothing (ADR 0424). Requires: comment in the scopes of the target (07 §12). Only when the server announces the feature `reactions`. Specified in 05 §6.2; 13 §5.",
+        "tags": [
+          "comments"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Comment identifier.",
+              "$comment": "gaps: G59",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Comment identifier."
+          },
+          {
+            "name": "reaction",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "A reaction to a comment, one of a fixed set (ADR 0424).",
+              "type": "string",
+              "enum": [
+                "thumbsUp",
+                "heart",
+                "laugh",
+                "celebrate",
+                "eyes",
+                "done"
+              ]
+            },
+            "description": "A reaction to a comment, one of a fixed set (ADR 0424)."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchOptional"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §6.2; 13 §5",
+        "x-dep-owner": "PRO",
+        "x-dep-requires": "comment in the scopes of the target",
+        "x-dep-feature": "reactions"
+      }
+    },
     "/documents/{id}/assets": {
       "post": {
         "operationId": "createAsset",
@@ -8178,6 +8366,92 @@
         "x-dep-gaps": [
           "G95"
         ]
+      },
+      "get": {
+        "operationId": "getParticipantConsent",
+        "summary": "The consent text the workflow names, for the participant it is bound to, with the time of their acceptance of it or null (12 §8.1 step 1; FRW-044). The method is assumed (ADR 0427, proposed).",
+        "description": "The consent text the workflow names, for the participant it is bound to, with the time of their acceptance of it or null (12 §8.1 step 1; FRW-044). The method is assumed (ADR 0427, proposed). Only when the server announces the feature `workflow`. Specified in 12 §8.1, §10.",
+        "tags": [
+          "workflow"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Participant identifier.",
+              "$comment": "gaps: G59",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Participant identifier."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowConsentText"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §8.1, §10",
+        "x-dep-owner": "FRW",
+        "x-dep-feature": "workflow",
+        "x-dep-codes": [
+          "conflict"
+        ],
+        "x-dep-gaps": [
+          "G95"
+        ]
       }
     },
     "/documents/{id}/workflow/participants/{pid}/complete": {
@@ -8367,6 +8641,141 @@
         "x-dep-spec": "12 §8.1, §10",
         "x-dep-owner": "FRW",
         "x-dep-feature": "sign",
+        "x-dep-gaps": [
+          "G95"
+        ]
+      }
+    },
+    "/workflow/capture-settings": {
+      "get": {
+        "operationId": "getWorkflowCaptureSettings",
+        "summary": "The tenant setting for IP address and user agent capture in workflow evidence; on when none is set (12 §7; FRW-042). The path is assumed (ADR 0426, proposed).",
+        "description": "The tenant setting for IP address and user agent capture in workflow evidence; on when none is set (12 §7; FRW-042). The path is assumed (ADR 0426, proposed). Requires: Service credential (07 §12). Only when the server announces the feature `workflow`. Specified in 12 §7, §10; 13 §10.",
+        "tags": [
+          "workflow"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowCaptureSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §7, §10; 13 §10",
+        "x-dep-owner": "FRW",
+        "x-dep-requires": "Service credential",
+        "x-dep-feature": "workflow",
+        "x-dep-gaps": [
+          "G95"
+        ]
+      },
+      "put": {
+        "operationId": "setWorkflowCaptureSettings",
+        "summary": "Switches IP address and user agent capture in workflow evidence on or off for the tenant; audited with actor and time, and applies to later events only (12 §7; FRW-042). The path is assumed (ADR 0426, proposed).",
+        "description": "Switches IP address and user agent capture in workflow evidence on or off for the tenant; audited with actor and time, and applies to later events only (12 §7; FRW-042). The path is assumed (ADR 0426, proposed). Requires: Service credential (07 §12). Only when the server announces the feature `workflow`. Specified in 12 §7, §10; 13 §10.",
+        "tags": [
+          "workflow"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowCaptureSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowCaptureSettings"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §7, §10; 13 §10",
+        "x-dep-owner": "FRW",
+        "x-dep-requires": "Service credential",
+        "x-dep-feature": "workflow",
         "x-dep-gaps": [
           "G95"
         ]
@@ -10537,6 +10946,7 @@
           "suggest-enforced",
           "history",
           "comments",
+          "reactions",
           "assets",
           "exports",
           "leases",
@@ -12203,6 +12613,37 @@
           }
         }
       },
+      "ReactionCount": {
+        "title": "ReactionCount",
+        "description": "One reaction of a comment with the people who made it (ADR 0424).",
+        "$comment": "05 §6.2; 13 §5",
+        "type": "object",
+        "properties": {
+          "reaction": {
+            "type": "string",
+            "enum": [
+              "thumbsUp",
+              "heart",
+              "laugh",
+              "celebrate",
+              "eyes",
+              "done"
+            ]
+          },
+          "users": {
+            "description": "The people who reacted, `user:<id>`, in the order they reacted.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "reaction",
+          "users"
+        ]
+      },
       "Comment": {
         "title": "Comment",
         "description": "A comment of a thread (ADR 0417). Its entity tag is the `If-Match` of an edit.",
@@ -12246,6 +12687,13 @@
               "$ref": "#/components/schemas/CommentBodyPart"
             },
             "minItems": 1
+          },
+          "reactions": {
+            "description": "Present when the service announces the feature `reactions`; a reaction nobody holds is left out (ADR 0424).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReactionCount"
+            }
           }
         },
         "required": [
@@ -14265,6 +14713,62 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "WorkflowConsentText": {
+        "title": "WorkflowConsentText",
+        "description": "The consent text and the participant’s acceptance of it (12 §6.1, §8.1 step 1; FRW-044).",
+        "$comment": "12 §6.1, §8.1, §10; gaps: G95",
+        "type": "object",
+        "properties": {
+          "textId": {
+            "description": "The identifier of the consent text the workflow names.",
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "description": "The version of the text.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "text": {
+            "description": "The text the service holds for that identifier and version, to be shown in full before any signing action.",
+            "type": "string",
+            "minLength": 1
+          },
+          "acceptedAt": {
+            "description": "The server time of the acceptance on record for this very text (ISO 8601), or null when the participant has not accepted it.",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "textId",
+          "version",
+          "text",
+          "acceptedAt"
+        ]
+      },
+      "WorkflowCaptureSettings": {
+        "title": "WorkflowCaptureSettings",
+        "description": "The tenant setting for network identity capture in workflow evidence (12 §7; FRW-042).",
+        "$comment": "12 §7, §10; 13 §10; gaps: G95",
+        "type": "object",
+        "properties": {
+          "captureNetworkIdentity": {
+            "description": "Whether the IP address and the user agent of a participant are recorded in their evidence. On by default; off keeps neither (12 §7). A change applies to events after it; evidence already stored is not rewritten.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "captureNetworkIdentity"
         ]
       },
       "WorkflowPlaceholder": {

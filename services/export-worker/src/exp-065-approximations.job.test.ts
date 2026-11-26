@@ -2,8 +2,8 @@
  * EXP-065 criterion 2 (export worker, Node.js only, no sandbox): when the converter approximates a
  * construct, the job's result carries a warning for it, naming the block it came from. The compile
  * is replaced by a fake, so these tests need no Podman. The document is in
- * test/approximations.ts. Split rows have no warning in the converter, so that case is not here
- * (see the story Notes).
+ * test/approximations.ts. The split row (`row_split`) and the paragraph that cannot be cut
+ * (`block_taller_than_page`) come from EXP-039, which measures rows with the editor's layout.
  */
 import { JobRunner, MemoryJobQueue, type JobRecord } from '@docedit/document-service';
 import { uuid7, type CdmEnvelope } from '@docedit/model';

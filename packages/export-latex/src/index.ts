@@ -54,6 +54,14 @@ export type { EmitterName, Tex } from './emit.ts';
 export { ATTRIBUTE_EMITTERS } from './attributes.ts';
 export { fontCoverage, covers, mergeRanges, FontFormatError } from './fonts/coverage.ts';
 export type { CodeRange } from './fonts/coverage.ts';
+export type {
+  BlockHeight,
+  CellHeights,
+  RowHeight,
+  TableHeights,
+  TableMeasure,
+} from './table-measure.ts';
+export { serverFonts, serverUse, type ServerFonts } from './server-fonts.ts';
 export { preflight } from './preflight.ts';
 export type { PreflightWarning } from './preflight.ts';
 export { texArchive, archiveReadme, tar, CLASS_LICENCE } from './archive.ts';

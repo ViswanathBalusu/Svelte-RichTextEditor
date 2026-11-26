@@ -20,6 +20,8 @@ export const APPROX = {
   spanCell: ident('spanCellApx'),
   colsBreak: ident('colsBreakApx'),
   boxTable: ident('boxTableApx'),
+  tallTable: ident('tallTableApx'),
+  tallPara: ident('tallParaApx'),
 } as const;
 
 /** The code each construct must produce, with the block it names. */
@@ -28,6 +30,8 @@ export const EXPECTED: ReadonlyArray<{ code: string; blockId: string }> = [
   { code: 'continuous_break_geometry', blockId: APPROX.geomBreak },
   { code: 'span_taller_than_rows', blockId: APPROX.spanCell },
   { code: 'table_cannot_span_pages', blockId: APPROX.boxTable },
+  { code: 'row_split', blockId: APPROX.tallTable },
+  { code: 'block_taller_than_page', blockId: APPROX.tallPara },
 ];
 
 const para = (id: string, attrs: J, content: J[]): J => ({
@@ -92,6 +96,29 @@ export function approximatingDocument(): CdmEnvelope {
         ]),
         row(ident('rowSpanApx02'), [
           cell(ident('cellSpanAp3'), [para(ident('paraSpanThree'), {}, [text('B.')])]),
+        ]),
+      ],
+    ),
+    // A body row taller than a page (set as continuation rows), whose other cell holds one
+    // paragraph taller than a page (it cannot be cut). Single-column section.
+    table(
+      APPROX.tallTable,
+      [4000, 4000],
+      [
+        row(ident('rowTallHead01'), [
+          cell(ident('cellTallHd01'), [para(ident('paraTallHd01'), {}, [text('Head')])]),
+          cell(ident('cellTallHd02'), [para(ident('paraTallHd02'), {}, [text('Side')])]),
+        ]),
+        row(ident('rowTallBody01'), [
+          cell(
+            ident('cellTallBd01'),
+            Array.from({ length: 300 }, (_, i) =>
+              para(ident(`paraTallBd${i}`), {}, [text(`Line ${i + 1}`)]),
+            ),
+          ),
+          cell(ident('cellTallBd02'), [
+            para(APPROX.tallPara, {}, [text('word '.repeat(3000).trim())]),
+          ]),
         ]),
       ],
     ),
