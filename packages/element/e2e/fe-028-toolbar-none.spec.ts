@@ -5,7 +5,7 @@
  * (see the story's evidence for the browsers actually run).
  */
 import { expect, test, type Page } from '@playwright/test';
-import { mountEditor, openEmbed } from './embed-helpers.ts';
+import { mountEditor, openEmbed, selectionSynced } from './embed-helpers.ts';
 
 const editor = 'doc-editor[data-test="one"]';
 const surface = (page: Page) => page.locator(`${editor} .de-editing-surface`);
@@ -47,7 +47,7 @@ test.describe('FE-028 the host toolbar mirrors bold from de-command-state', () =
     await page.keyboard.press('End');
     await page.keyboard.press('Shift+Home');
     // The editor has the selection a moment after the keys (selectionchange); Bold before that acts on the caret.
-    await page.waitForTimeout(250);
+    await selectionSynced(page, 'one');
     await page.keyboard.press('Control+B');
     await expect.poll(() => pressed(page)).toBe('true');
 

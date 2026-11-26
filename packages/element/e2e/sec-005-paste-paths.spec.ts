@@ -28,7 +28,7 @@ import { readFileSync } from 'node:fs';
 import { validate } from '@docedit/model/validate';
 import { type Page, expect, test } from '@playwright/test';
 import { PAYLOADS } from '../../../tests/security/test/support/payloads.ts';
-import { mountEditor, openEmbed } from './embed-helpers.ts';
+import { mountEditor, openEmbed, selectionSynced } from './embed-helpers.ts';
 
 const TOKEN = `w8-sec-005-${Date.now().toString(36)}`;
 
@@ -296,6 +296,7 @@ for (const sample of SAMPLES) {
     const surface = page.locator(`doc-editor[data-test="${name}"] .de-editing-surface`);
     await surface.locator('p').last().click();
     await page.keyboard.press('End');
+    await selectionSynced(page, name);
     const before = JSON.stringify(await stored(page, name));
 
     // The plain-text part says something else, so the text that shows tells which part was used.
@@ -331,6 +332,7 @@ test('SEC-005: a pasted embedded fragment brings nothing the model does not know
   await surface.locator('p').last().click();
   await page.keyboard.press('Home');
   await page.keyboard.press('Shift+End');
+  await selectionSynced(page, name);
   // The copy the component makes (its own handler runs first, the listener reads the result).
   await page.evaluate(() => {
     document.addEventListener(
@@ -349,6 +351,7 @@ test('SEC-005: a pasted embedded fragment brings nothing the model does not know
   const original = decodeURIComponent(m![1]!);
   expect(original).toContain('Last paragraph.');
   await page.keyboard.press('End');
+  await selectionSynced(page, name);
 
   type Node = { type?: string; text?: string; attrs?: unknown; marks?: unknown; content?: Node[] };
   /** The copied HTML with its fragment rewritten by `change`, which gets the fragment's JSON. */
@@ -485,6 +488,7 @@ test('SEC-005: every payload of the corpus pasted as plain text stays text', asy
   const surface = page.locator(`doc-editor[data-test="${name}"] .de-editing-surface`);
   await surface.locator('p').last().click();
   await page.keyboard.press('End');
+  await selectionSynced(page, name);
   for (const [i, payload] of PAYLOADS.entries()) {
     await paste(page, name, { text: ` PLAIN-${i} ${payload}` });
     await expect

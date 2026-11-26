@@ -6,7 +6,7 @@
  * backend; the built-in toolbar is the one of the same element.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { mountEditor, openEmbed } from './embed-helpers.ts';
+import { mountEditor, openEmbed, selectionSynced } from './embed-helpers.ts';
 
 const editor = (name: string) => `doc-editor[data-test="${name}"]`;
 const surface = (page: Page, name = 'one') => page.locator(`${editor(name)} .de-editing-surface`);
@@ -48,7 +48,11 @@ test.describe('UX-005 a host-built toolbar on the mounted element', () => {
     const first = surface(page).locator('p').first();
 
     const walk: Array<{ at: string; state: Awaited<ReturnType<typeof bothStates>> }> = [];
-    const record = async (at: string) => {
+    // The editor takes a native selection change a moment after the keys (selectionchange, S1 §4.2),
+    // and the host and the toolbar both read its state. They agree on the old state, too, so the
+    // wait is for the editor to have the browser's selection, and then for the two to agree.
+    const record = async (at: string, active: boolean) => {
+      await selectionSynced(page, 'one');
       await expect
         .poll(
           async () => {
@@ -56,7 +60,8 @@ test.describe('UX-005 a host-built toolbar on the mounted element', () => {
             return (
               s.toolbar !== null &&
               s.toolbar.enabled === s.host.enabled &&
-              s.toolbar.active === s.host.active
+              s.toolbar.active === s.host.active &&
+              s.host.active === active
             );
           },
           { message: `the host and the toolbar agree at: ${at}` },
@@ -67,19 +72,19 @@ test.describe('UX-005 a host-built toolbar on the mounted element', () => {
 
     await first.click();
     await page.keyboard.press('Home');
-    await record('caret in plain text');
+    await record('caret in plain text', false);
     await last.click();
     await page.keyboard.press('End');
     await page.keyboard.press('Shift+Home');
-    await record('plain selection');
+    await record('plain selection', false);
     await page.keyboard.press('Control+B');
-    await record('bold selection');
+    await record('bold selection', true);
     await first.click();
     await page.keyboard.press('Home');
-    await record('caret back in plain text');
+    await record('caret back in plain text', false);
     await last.click();
     await page.keyboard.press('End');
-    await record('caret in bold text');
+    await record('caret in bold text', true);
 
     expect(walk.map((w) => w.state.host.active)).toEqual([false, false, true, false, true]);
     expect(walk.every((w) => w.state.host.enabled)).toBe(true);

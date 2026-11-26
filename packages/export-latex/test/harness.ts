@@ -109,10 +109,24 @@ export async function compileBundle(
   options: { maxPasses?: number; minPasses?: number } = {},
 ): Promise<Compiled> {
   const files: Record<string, string | Uint8Array> = { ...bundle.files, ...bundle.assets };
-  const compile = await compileInSandbox(files, {
+  const result = await compileInSandbox(files, {
     ...(options.maxPasses !== undefined ? { maxPasses: options.maxPasses } : {}),
     ...(options.minPasses !== undefined ? { minPasses: options.minPasses } : {}),
   });
+  // compileInSandbox starts a container that never reached TeX once more. Print the first failure,
+  // so that the cause stays on record even when the second start worked.
+  if (result.stderr.startsWith('[first start failed')) console.warn(result.stderr.split('\n')[0]);
+  // A job that leaves no log (the runtime refused it, or killed it) would fail a test that prints
+  // the log with no reason. Say what the sandbox reported.
+  const compile =
+    !result.ok && result.log === ''
+      ? {
+          ...result,
+          log:
+            `[the sandbox wrote no log: exit code ${result.exitCode}, timed out ${result.timedOut}, ` +
+            `cancelled ${result.cancelled}, wall ${result.wallMs} ms, stderr: ${result.stderr.slice(-1500)}]`,
+        }
+      : result;
   let raw: Compiled['raw'] = null;
   let layout: Compiled['layout'] = null;
   let layoutErrors: string[] = [];

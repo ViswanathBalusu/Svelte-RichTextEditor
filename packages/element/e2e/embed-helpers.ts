@@ -182,5 +182,54 @@ export function bodyText(page: Page, name = 'one'): Promise<string> {
   }, name);
 }
 
+/**
+ * Waits until the editor has taken the selection the browser made. The editor reads a native
+ * selection change (a click, Home, Shift+End, a double click) on `selectionchange`, in a later task
+ * (S1 §4.2), and a key or a command sent before that acts on the earlier selection, which can be
+ * stale by a whole word. The browser moves its own selection while the key is dispatched, so this
+ * compares the editor's anchor and head with the positions of the browser's selection in the body.
+ * Waiting on that state, not on a fixed delay, holds on a slow runner too.
+ */
+export async function selectionSynced(page: Page, name = 'one'): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (n) => {
+          const el = document.querySelector(`doc-editor[data-test="${n}"]`)!;
+          const e = (
+            window as unknown as {
+              __embed: {
+                harness(el: Element): Promise<{
+                  view: {
+                    state: { selection: { anchor: number; head: number } };
+                    domSelectionRange(): {
+                      anchorNode: Node | null;
+                      anchorOffset: number;
+                      focusNode: Node | null;
+                      focusOffset: number;
+                    };
+                    posAtDOM(node: Node, offset: number): number;
+                  };
+                }>;
+              };
+            }
+          ).__embed;
+          const { view } = await e.harness(el);
+          const dom = view.domSelectionRange();
+          if (!dom.anchorNode || !dom.focusNode) return false;
+          try {
+            return (
+              view.posAtDOM(dom.anchorNode, dom.anchorOffset) === view.state.selection.anchor &&
+              view.posAtDOM(dom.focusNode, dom.focusOffset) === view.state.selection.head
+            );
+          } catch {
+            return false;
+          }
+        }, name),
+      { message: 'the editor has taken the selection the browser made' },
+    )
+    .toBe(true);
+}
+
 /** The XOR-encoded bytes of an export, decoded in the page (the filtered browsers; spike S2 §2). */
 export const FILTERED_BROWSERS = new Set(['firefox', 'msedge']);

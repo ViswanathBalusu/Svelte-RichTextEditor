@@ -228,6 +228,13 @@ test('validateFields() returns the required and invalid fields and changes nothi
   expect(second.find((r) => r.key === 'tenant.email')?.problems.map((p) => p.code)).not.toContain(
     'required',
   );
+  // The typed value reaches the server on its own, a moment after the field loses focus. Wait for
+  // that, so that the reads below compare the stored value with itself and not with the typing.
+  await expect
+    .poll(async () => JSON.stringify(await confirmed(page, 'fill')), {
+      message: 'the typed value is stored',
+    })
+    .toContain('not-an-address');
   // Calling it again, however often, changes no stored value and sends no commit.
   const stored = JSON.stringify(await confirmed(page, 'fill'));
   await call(page, 'validateFields');

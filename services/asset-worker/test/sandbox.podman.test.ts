@@ -157,8 +157,13 @@ await attempt('shm', () => fs.readdirSync('/dev/shm'));` +
       for (const [p, v] of Object.entries(writes)) expect(v, p).not.toBe('WRITTEN');
       expect(out['mkdirTmp']).not.toBe('MADE');
       expect(String(out['shm'])).toMatch(/^error:/);
-      // Only the kernel's own file systems are mounted read-write; none of them stores files.
-      for (const m of out['rwMounts'] as string[]) expect(m, m).toMatch(/ (proc|devpts|mqueue)$/);
+      // Only the kernel's own file systems are mounted read-write; none of them stores files. A
+      // rootless runtime also binds the standard device nodes from the host (it cannot make them),
+      // and they are writable by nature; no other device file system is allowed.
+      for (const m of out['rwMounts'] as string[])
+        expect(m, m).toMatch(
+          /^(\S+ (proc|devpts|mqueue)|\/dev\/(null|zero|full|tty|random|urandom) devtmpfs)$/,
+        );
     });
 
     it('has no credentials: nothing secret in its environment, its files or /run/secrets', async () => {

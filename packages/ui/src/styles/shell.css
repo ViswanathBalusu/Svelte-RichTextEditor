@@ -260,7 +260,11 @@
   display: inline-flex;
   align-items: center;
   gap: var(--_de-space-3);
-  flex: 0 0 auto;
+  /* Wrap, so that at 320 CSS pixels with a larger default font, or a wider face, the two states
+     fall under one another and the header does not scroll sideways (FE-106). */
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  min-inline-size: 0;
   font-size: 0.9em;
   color: var(--_de-text-muted);
 }
