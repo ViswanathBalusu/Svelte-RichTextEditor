@@ -28,6 +28,24 @@ export interface DocPosition {
 export type SpanWidth = (blockId: string, from: number, to: number) => number;
 
 /**
+ * One run of a line for bidirectional text (WASM-015): a range `[from, to)` of logical offsets of
+ * the block and its embedding level (UAX #9; an odd level is right to left). A line's runs come in
+ * visual order, left to right, and tile the line: that is what the kernel's `bidi.visualRuns` returns.
+ */
+export interface LineRun {
+  readonly from: number;
+  readonly to: number;
+  readonly level: number;
+}
+
+/**
+ * The visual runs of the line `[from, to)` of a block, or null when the line is in one direction
+ * and in logical order. Optional everywhere it is accepted: without it every line is laid out from
+ * left to right in logical order, as before.
+ */
+export type LineRuns = (blockId: string, from: number, to: number) => readonly LineRun[] | null;
+
+/**
  * The box of a table cell on a page, in page points: the cell's `x` and `width` and its row's `y`
  * and `height`. One object per laid-out cell, shared by every line of that cell.
  */
@@ -184,18 +202,95 @@ export function lastOffsetOf(lines: readonly PaintedLine[], i: number): number {
   return Math.max(line.from, line.to - 1);
 }
 
+/** The runs of a line that need reordering, or null when logical order is also visual order. */
+function reorderedRuns(line: PaintedLine, runs: LineRuns | undefined): readonly LineRun[] | null {
+  const visual = runs?.(line.blockId, line.from, line.to) ?? null;
+  if (visual === null || visual.every((r) => r.level % 2 === 0)) return null;
+  return visual;
+}
+
+function spanOf(line: PaintedLine, a: number, b: number, span: SpanWidth): number {
+  return b <= a ? 0 : span(line.blockId, a, b);
+}
+
+/**
+ * The x of a logical offset inside a line, relative to the line's left edge. In a line with
+ * reordered runs it is the sum of the widths of the runs to its left, plus the offset's place in its
+ * own run, measured from the run's right edge when the run is right to left. An offset between two
+ * runs belongs to the run that starts there, as an offset at a wrap point belongs to the line that
+ * starts there; the end of the line belongs to the run that ends there.
+ */
+function offsetX(
+  line: PaintedLine,
+  offset: number,
+  span: SpanWidth,
+  visual: readonly LineRun[] | null,
+): number {
+  if (visual === null) return offset === line.from ? 0 : span(line.blockId, line.from, offset);
+  let owner = visual.findIndex((r) => r.from <= offset && offset < r.to);
+  if (owner < 0) owner = visual.findIndex((r) => r.to === offset && r.from < r.to);
+  if (owner < 0) owner = 0;
+  let x = 0;
+  for (let k = 0; k < owner; k++) x += spanOf(line, visual[k]!.from, visual[k]!.to, span);
+  const run = visual[owner]!;
+  const inside = Math.min(Math.max(offset, run.from), run.to);
+  const part = spanOf(line, run.from, inside, span);
+  return run.level % 2 === 0 ? x + part : x + spanOf(line, run.from, run.to, span) - part;
+}
+
+/**
+ * The stretches of the logical range `[a, b)` of a line, relative to its left edge, in visual
+ * order. A range that crosses runs of different directions gives one stretch for each part that is
+ * contiguous on the page; parts that touch are joined.
+ */
+function rangeBands(
+  line: PaintedLine,
+  a: number,
+  b: number,
+  span: SpanWidth,
+  visual: readonly LineRun[] | null,
+): Array<[number, number]> {
+  if (visual === null) return [[offsetX(line, a, span, null), offsetX(line, b, span, null)]];
+  const bands: Array<[number, number]> = [];
+  let x = 0;
+  for (const run of visual) {
+    const full = spanOf(line, run.from, run.to, span);
+    const from = Math.max(a, run.from);
+    const to = Math.min(b, run.to);
+    if (to > from) {
+      const lead = spanOf(line, run.from, from, span);
+      const trail = spanOf(line, run.from, to, span);
+      const band: [number, number] =
+        run.level % 2 === 0 ? [x + lead, x + trail] : [x + full - trail, x + full - lead];
+      const last = bands[bands.length - 1];
+      if (last !== undefined && Math.abs(last[1] - band[0]) < 1e-9) last[1] = band[1];
+      else bands.push(band);
+    }
+    x += full;
+  }
+  return bands;
+}
+
 /**
  * The offset of the position nearest to page point `x` inside line `i`. The candidates are the
- * offsets that belong to that line, so the result always maps back to it (`lineIndexFor`).
+ * offsets that belong to that line, so the result always maps back to it (`lineIndexFor`). With
+ * `runs`, the horizontal position of each candidate follows the line's visual order (WASM-015).
  */
-function offsetAtX(lines: readonly PaintedLine[], i: number, x: number, span: SpanWidth): number {
+function offsetAtX(
+  lines: readonly PaintedLine[],
+  i: number,
+  x: number,
+  span: SpanWidth,
+  runs?: LineRuns,
+): number {
   const line = lines[i]!;
+  const visual = reorderedRuns(line, runs);
   const last = lastOffsetOf(lines, i);
   const rel = x - line.x;
   let best = line.from;
   let bestDistance = Infinity;
   for (let o = line.from; o <= last; o++) {
-    const w = o === line.from ? 0 : span(line.blockId, line.from, o);
+    const w = offsetX(line, o, span, visual);
     const distance = Math.abs(rel - w);
     if (distance < bestDistance) {
       best = o;
@@ -220,6 +315,7 @@ export function hitTest(
   x: number,
   y: number,
   span: SpanWidth,
+  runs?: LineRuns,
 ): DocPosition | null {
   const lines = paintedLines(tree);
   let chosen = -1;
@@ -240,7 +336,7 @@ export function hitTest(
     }
   }
   if (chosen < 0) return null;
-  return { blockId: lines[chosen]!.blockId, offset: offsetAtX(lines, chosen, x, span) };
+  return { blockId: lines[chosen]!.blockId, offset: offsetAtX(lines, chosen, x, span, runs) };
 }
 
 /**
@@ -251,12 +347,13 @@ export function caretGeometry(
   tree: LayoutTree,
   pos: DocPosition,
   span: SpanWidth,
+  runs?: LineRuns,
 ): CaretGeometry | null {
   const lines = paintedLines(tree);
   const i = lineIndexFor(lines, pos);
   if (i < 0) return null;
   const line = lines[i]!;
-  const offsetWidth = pos.offset === line.from ? 0 : span(line.blockId, line.from, pos.offset);
+  const offsetWidth = offsetX(line, pos.offset, span, reorderedRuns(line, runs));
   return { page: line.page, x: line.x + offsetWidth, y: line.y, height: line.height };
 }
 
@@ -270,6 +367,7 @@ export function selectionRects(
   anchor: DocPosition,
   head: DocPosition,
   span: SpanWidth,
+  runs?: LineRuns,
 ): SelectionRect[] {
   const lines = paintedLines(tree);
   const ia = lineIndexFor(lines, anchor);
@@ -288,15 +386,16 @@ export function selectionRects(
     const a = i === first ? startPos.offset : line.from;
     const b = i === last ? endPos.offset : line.to;
     if (b <= a) continue;
-    const left = a === line.from ? 0 : span(line.blockId, line.from, a);
-    const right = b === line.from ? 0 : span(line.blockId, line.from, b);
-    out.push({
-      page: line.page,
-      x: line.x + left,
-      y: line.y,
-      width: right - left,
-      height: line.height,
-    });
+    // In a line with reordered runs a selection can be several rectangles, in visual order.
+    for (const [left, right] of rangeBands(line, a, b, span, reorderedRuns(line, runs))) {
+      out.push({
+        page: line.page,
+        x: line.x + left,
+        y: line.y,
+        width: right - left,
+        height: line.height,
+      });
+    }
   }
   return out;
 }
@@ -315,6 +414,7 @@ export function moveVertical(
   direction: 'up' | 'down',
   goalX: number | undefined,
   span: SpanWidth,
+  runs?: LineRuns,
 ): { readonly pos: DocPosition; readonly goalX: number | undefined } {
   const lines = paintedLines(tree);
   const i = lineIndexFor(lines, pos);
@@ -322,10 +422,9 @@ export function moveVertical(
   const j = direction === 'down' ? i + 1 : i - 1;
   if (j < 0 || j >= lines.length) return { pos, goalX };
   const here = lines[i]!;
-  const x =
-    goalX ?? here.x + (pos.offset === here.from ? 0 : span(here.blockId, here.from, pos.offset));
+  const x = goalX ?? here.x + offsetX(here, pos.offset, span, reorderedRuns(here, runs));
   return {
-    pos: { blockId: lines[j]!.blockId, offset: offsetAtX(lines, j, x, span) },
+    pos: { blockId: lines[j]!.blockId, offset: offsetAtX(lines, j, x, span, runs) },
     goalX: x,
   };
 }
@@ -365,13 +464,13 @@ export function movePage(
   direction: 'up' | 'down',
   goalX: number | undefined,
   span: SpanWidth,
+  runs?: LineRuns,
 ): { readonly pos: DocPosition; readonly goalX: number | undefined } {
   const lines = paintedLines(tree);
   const i = lineIndexFor(lines, pos);
   if (i < 0) return { pos, goalX };
   const here = lines[i]!;
-  const x =
-    goalX ?? here.x + (pos.offset === here.from ? 0 : span(here.blockId, here.from, pos.offset));
+  const x = goalX ?? here.x + offsetX(here, pos.offset, span, reorderedRuns(here, runs));
   const step = direction === 'down' ? 1 : -1;
   let target = -1;
   for (let p = here.page + step; p >= 0 && p < tree.pages.length && target < 0; p += step) {
@@ -393,7 +492,7 @@ export function movePage(
     target = direction === 'down' ? lines.length - 1 : 0;
   }
   return {
-    pos: { blockId: lines[target]!.blockId, offset: offsetAtX(lines, target, x, span) },
+    pos: { blockId: lines[target]!.blockId, offset: offsetAtX(lines, target, x, span, runs) },
     goalX: x,
   };
 }
