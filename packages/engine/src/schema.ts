@@ -336,7 +336,8 @@ const NODE_RENDERING: Record<string, Partial<NodeSpec>> = {
     ],
     leafText: () => '\n',
   },
-  tab: { toDOM: () => ['span', { class: 'de-tab' }, '\t'], leafText: () => '\t' },
+  // Not `de-tab`: the shell's tab strip styles that class (padding, border), in the same shadow root.
+  tab: { toDOM: () => ['span', { class: 'de-doc-tab' }, '\t'], leafText: () => '\t' },
   equation: {
     toDOM: (node) => [
       'span',

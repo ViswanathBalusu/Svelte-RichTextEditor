@@ -1827,7 +1827,8 @@ uler): the indents and tab stops of the paragraph at the caret. */
   }
 }
 
-.de-paragraph-tab {
+.de-paragraph-tab,
+.de-paragraph-border {
   display: flex;
   flex-wrap: wrap;
   gap: var(--_de-space-2);

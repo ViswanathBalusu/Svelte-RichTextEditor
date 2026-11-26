@@ -493,6 +493,41 @@ export interface TabStopView {
   readonly leader: 'none' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' | 'heavy';
 }
 
+export type ParagraphBorderSideView = 'top' | 'bottom' | 'left' | 'right' | 'between';
+
+/** One border of a paragraph (03 §4.5): width in eighths of a point, space in twentieths. */
+export interface ParagraphBorderView {
+  readonly style: 'none' | 'single' | 'double' | 'dotted' | 'dashed' | 'thick';
+  readonly width?: number;
+  readonly color?: string | null;
+  readonly space?: number;
+}
+
+/**
+ * The options of the paragraph dialog besides indents and tab stops (FE-129 criterion 6). Each
+ * value is the first selected paragraph's own, with the CDM's default when it sets none; `mixed`
+ * names the options the selected paragraphs do not share.
+ */
+export interface ParagraphOptionsView {
+  readonly align: 'start' | 'center' | 'end' | 'justify' | 'distribute';
+  /** Twips. */
+  readonly spaceBefore: number;
+  readonly spaceAfter: number;
+  /** Thousandths of a line under `multiple`, twips under `exact` and `atLeast`. */
+  readonly lineSpacing: number;
+  readonly lineRule: 'multiple' | 'exact' | 'atLeast';
+  readonly keepNext: boolean;
+  readonly keepLines: boolean;
+  readonly pageBreakBefore: boolean;
+  readonly widowControl: boolean;
+  readonly contextualSpacing: boolean;
+  /** The sides that have a border; a side with none is absent. */
+  readonly borders: Readonly<Partial<Record<ParagraphBorderSideView, ParagraphBorderView>>>;
+  /** The fill colour (`#RRGGBB`) of the shading; null for none. */
+  readonly shading: string | null;
+  readonly mixed: readonly string[];
+}
+
 /**
  * The indents and tab stops of the paragraphs at the selection, for the ruler and the paragraph
  * dialog (UX-102; 13 §2). Lengths are twips, as the document stores them. A value the selected
@@ -517,6 +552,8 @@ export interface ParagraphFormatView {
   } | null;
   /** Whether the paragraphs may be changed now. */
   readonly editable: boolean;
+  /** Alignment, spacing, keep rules, borders and shading; absent when the core gives none. */
+  readonly options?: ParagraphOptionsView;
 }
 
 /**

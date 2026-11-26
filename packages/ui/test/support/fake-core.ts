@@ -60,6 +60,23 @@ import type {
 } from '../../src/core-api.ts';
 import type { MarkupView } from '../../src/shell/markup-views.ts';
 
+/** The paragraph options the fake core holds in `ParagraphFormatView.options` (FE-129). */
+const OPTION_DEFAULTS: Record<string, unknown> = {
+  align: 'start',
+  spaceBefore: 0,
+  spaceAfter: 0,
+  lineSpacing: 1000,
+  lineRule: 'multiple',
+  keepNext: false,
+  keepLines: false,
+  pageBreakBefore: false,
+  widowControl: true,
+  contextualSpacing: false,
+  borders: {},
+  shading: null,
+};
+const OPTION_KEYS = Object.keys(OPTION_DEFAULTS);
+
 /** `shared`: every view of the core notifies in one frame pass, as the engine does. */
 export type Notify = 'sync' | 'frame' | 'shared' | ((run: () => void) => void);
 
@@ -884,7 +901,25 @@ export class FakeCore implements CoreApi {
         // No tab stops is the empty list in the view; a null
         // there means the paragraphs differ.
         if ('tabs' in a && a['tabs'] === null) patch.tabs = [];
-        this.paragraphFormat?.set({ ...now, ...patch });
+        // FE-129: the options of the dialog are held in `options`, with the CDM's defaults for a
+        // value that is cleared; borders and shading are whole values.
+        const own: Record<string, unknown> = {};
+        const rest: Record<string, unknown> = { ...patch };
+        for (const key of OPTION_KEYS) {
+          if (!(key in rest)) continue;
+          own[key] = rest[key] ?? OPTION_DEFAULTS[key];
+          delete rest[key];
+        }
+        if ('borders' in own)
+          own['borders'] = Object.fromEntries(
+            Object.entries((own['borders'] ?? {}) as object).filter(
+              ([, b]) => (b as { style: string }).style !== 'none',
+            ),
+          );
+        if ('shading' in own)
+          own['shading'] = (own['shading'] as { fill: string } | null)?.fill ?? null;
+        const options = now.options ? { ...now.options, ...own, mixed: [] } : undefined;
+        this.paragraphFormat?.set({ ...now, ...rest, ...(options ? { options } : {}) });
         this.#bump();
         return true;
       }
