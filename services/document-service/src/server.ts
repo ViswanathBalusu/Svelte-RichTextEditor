@@ -77,6 +77,7 @@ import type {
   WebhookSubscriptions,
 } from './control-plane/webhook-subscriptions.ts';
 import { composeWebhooks, type WebhookOverrides } from './control-plane/webhook-composition.ts';
+import type { SecretStore } from './control-plane/secret-store.ts';
 import type { WebhookDispatcher } from './control-plane/webhook-dispatcher.ts';
 import { abandonedUploadsTask } from './control-plane/asset-sweep.ts';
 import {
@@ -314,6 +315,12 @@ export interface ServiceParts {
    * Absent: an in-memory store, and `webhooks` is built over it.
    */
   webhookStore?: SubscriptionStore;
+  /**
+   * Where the webhook secrets are kept (BE-057 criterion 6; owner decision 70): a port with an
+   * encrypted table (`EncryptedTableSecretStore`) as the default adapter, or an operator's secret
+   * manager. Absent: in memory.
+   */
+  secretStore?: SecretStore;
   /** The retention policies of `/retention` (UX-080). Absent: the routes are not offered. */
   retention?: RetentionService;
   /** The history visibility settings of /history-visibility (HIS-025). Absent: not offered. */
@@ -1007,6 +1014,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         now,
         logger,
         ...(parts.webhookStore ? { store: parts.webhookStore } : {}),
+        ...(parts.secretStore ? { secrets: parts.secretStore } : {}),
         ...(parts.webhooks ? { routes: parts.webhooks } : {}),
         ...(opts.webhooks ? { overrides: opts.webhooks } : {}),
       })
