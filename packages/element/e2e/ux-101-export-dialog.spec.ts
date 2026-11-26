@@ -30,19 +30,51 @@ async function mountWithExports(
   blocks: { here: string; gone: string },
   hold: boolean,
   announced: readonly string[] | null = null,
+  projectRegion = false,
 ): Promise<void> {
   await page.evaluate(
-    async ({ blocks: ids, hold: keep, announced: targets }) => {
+    async ({ blocks: ids, hold: keep, announced: targets, projectRegion: hide }) => {
       const e = (
         window as unknown as {
-          __embed: { backend(sub: string, role: string): unknown; docId: string };
+          __embed: {
+            backend(sub: string, role: string): unknown;
+            docId: string;
+            regionsDocId: string;
+            REGION_IDS: { region: string };
+          };
         }
       ).__embed;
+      const docId = hide ? e.regionsDocId : e.docId;
       const backend = e.backend('ada', 'editor') as {
         features: ReadonlySet<string>;
         connect(): Promise<void>;
         exports?: unknown;
       };
+      if (hide) {
+        // The projection a server would send this reader (ADR 0019): the region is replaced by its
+        // placeholder. The mock service stores no placeholder and does not project per reader.
+        const holder = backend as unknown as {
+          sync: { loadContent(docId: string, seq?: number): Promise<unknown> };
+        };
+        const load = holder.sync.loadContent.bind(holder.sync);
+        const regionId = e.REGION_IDS.region;
+        const project = (node: unknown): unknown => {
+          if (!node || typeof node !== 'object') return node;
+          const n = node as { type?: string; attrs?: { id?: string }; content?: unknown[] };
+          if (n.type === 'region' && n.attrs?.id === regionId)
+            return { type: 'hidden_region', attrs: { id: regionId, title: null } };
+          return n.content ? { ...n, content: n.content.map(project) } : n;
+        };
+        holder.sync = {
+          ...holder.sync,
+          loadContent: async (d: string, s?: number) => {
+            const c = (await load(d, s)) as { envelope?: { doc: unknown }; doc?: unknown };
+            if (c.envelope)
+              return { ...c, envelope: { ...c.envelope, doc: project(c.envelope.doc) } };
+            return { ...c, doc: project(c.doc) };
+          },
+        };
+      }
       const connect = backend.connect.bind(backend);
       backend.connect = async () => {
         await connect();
@@ -52,7 +84,7 @@ async function mountWithExports(
       (window as unknown as { __exportCalls: unknown }).__exportCalls = calls;
       const job = (state: string) => ({
         id: 'job-ux101-1',
-        doc: e.docId,
+        doc: docId,
         target: 'pdf',
         seq: 1,
         state,
@@ -110,7 +142,7 @@ async function mountWithExports(
       };
       const el = document.createElement('doc-editor') as HTMLElement & { backend: unknown };
       el.dataset['test'] = 'export';
-      el.setAttribute('doc-id', e.docId);
+      el.setAttribute('doc-id', docId);
       const ready = new Promise<void>((resolve, reject) => {
         el.addEventListener('de-ready', () => resolve(), { once: true });
         el.addEventListener(
@@ -125,7 +157,7 @@ async function mountWithExports(
       document.getElementById('mount')!.append(el);
       await ready;
     },
-    { blocks, hold, announced },
+    { blocks, hold, announced, projectRegion },
   );
   await expect(page.locator(`${EDITOR} .de-editing-surface`)).toBeVisible();
 }
@@ -154,6 +186,28 @@ function scope(page: Page): Promise<{ scope: string; blockId: string | null }> {
 }
 
 test.describe('the export dialog in the element (UX-101)', () => {
+  test('says that hidden parts are left out when the document has a placeholder (UX-104 criterion 4)', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mountWithExports(page, { here: SPIKE_IDS.last, gone: 'b-not-there' }, false, null, true);
+    await expect(page.locator(`${EDITOR} .de-hidden-region`)).toBeVisible();
+    expect(await openDialog(page)).toBe(true);
+    const dialog = page.locator(`${EDITOR} dialog`);
+    await expect(dialog.locator('[data-export="hidden"]')).toHaveText(
+      'Parts of the document hidden from you are left out of the export.',
+    );
+  });
+
+  test('does not say it when nothing is hidden (UX-104 criterion 4)', async ({ page }) => {
+    await openEmbed(page);
+    await mountWithExports(page, { here: SPIKE_IDS.last, gone: 'b-not-there' }, false);
+    expect(await openDialog(page)).toBe(true);
+    const dialog = page.locator(`${EDITOR} dialog`);
+    await expect(dialog.getByRole('radio').first()).toBeVisible();
+    await expect(dialog.locator('[data-export="hidden"]')).toHaveCount(0);
+  });
+
   test('offers the PDF and the LaTeX bundle first, sends the options of EXP-005, and shows the finished job', async ({
     page,
   }) => {
