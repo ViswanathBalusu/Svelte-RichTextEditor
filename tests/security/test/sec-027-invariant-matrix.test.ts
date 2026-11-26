@@ -34,8 +34,8 @@
  *   I7, I10, I11) and not the ones about styles (I5), LaTeX (I8), links (I9), extensions (I12) or
  *   fields (I13 to I15), whose nodes are leaves or definitions.
  *
- * Not covered here: the asset arm of I4 over the wire. The data plane does not yet give the Room
- * the document's attached assets (SEC-037 Notes), so only a Room built with that set refuses it.
+ * Not covered here: the asset arm of I4 over the wire. It is sec-027-i4-asset-arm-wire.test.ts
+ * (the data plane gives the Room the document's attached assets since BE-044).
  * Node.js only (vitest). No network.
  */
 import { Fragment, type Mark, type Node, Slice } from 'prosemirror-model';

@@ -490,18 +490,13 @@
       "builtBy": ["CDM-013", "SYN-001", "SYN-006"],
       "provenBy": "SEC-027",
       "phase": "1a",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "corrupting-commits.test.ts",
         "corrupting-limits.test.ts",
         "sec-027-attribute-grammar.test.ts",
-        "sec-027-invariant-matrix.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 2,
-          "what": "every invariant violated with each allowed step type that can violate it"
-        }
+        "sec-027-invariant-matrix.test.ts",
+        "sec-027-i4-asset-arm-wire.test.ts"
       ],
       "boundaries": ["element-to-service"],
       "specRows": ["Corrupting the document"]
