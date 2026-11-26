@@ -58,9 +58,8 @@
       "labels": { "org.docedit.env": "demo" }
     },
     "mail": {
-      "x-note": "The development mail sink (UX-098 criterion 5; owner decision 131): Mailpit takes every message the host sends and shows it in a web page and an API on 127.0.0.1, and delivers nothing. The image is pinned by digest. Messages are kept in memory only, so a restart empties it.",
-      "image": "docker.io/axllent/mailpit:v1.21.8@sha256:b68fac5c01d90c31cd2dcabed60bec3ca0c9680dadac87c527c6a43c85e5b814",
-      "network_mode": "host",
+      "x-note": "The development mail sink (UX-098 criterion 5; owner decision 131): Mailpit takes every message the host sends and shows it in a web page and an API on 127.0.0.1, and delivers nothing. The image is pinned by digest in infra/containers/compose.base.json. Messages are kept in memory only, so a restart empties it.",
+      "extends": { "file": "../../infra/containers/compose.base.json", "service": "mail" },
       "command": [
         "--smtp",
         "127.0.0.1:${DOCEDIT_DEMO_MAIL_SMTP_PORT}",

@@ -32,6 +32,11 @@
         "retries": 60
       }
     },
+    "mail": {
+      "x-note": "Mailpit v1.21.8 (MIT), the development mail sink of the reference host's demo stack (UX-098 criterion 5; owner decision 131), pinned by its multi-arch index digest. The demo file adds its ports and its health check.",
+      "image": "docker.io/axllent/mailpit:v1.21.8@sha256:b68fac5c01d90c31cd2dcabed60bec3ca0c9680dadac87c527c6a43c85e5b814",
+      "network_mode": "host"
+    },
     "export-sandbox": {
       "x-note": "The settings of the compile sandbox of 09 §9.3: no network, a read-only root, a small scratch directory, no capabilities, an unprivileged user. The image is built from services/export-worker/Containerfile; each file that extends this names the image and the build, because the tag differs. Memory, CPU and process limits are set per job by services/export-worker/src/sandbox.ts.",
       "network_mode": "none",
