@@ -13,6 +13,7 @@
 import type { LayoutTree } from '../../layout/src/tree.ts';
 import {
   caretGeometry,
+  selectionBoxRects,
   selectionRects,
   type DocPosition,
   type SpanWidth,
@@ -88,6 +89,13 @@ export function paintSelection(
 
   let rectCount = 0;
   for (const r of selectionRects(tree, selection.anchor, selection.head, span)) {
+    const page = pages[r.page];
+    if (!page) continue;
+    box(page, 'de-selection', r.x, r.y, r.width, r.height, 'Highlight', true);
+    rectCount++;
+  }
+  // The boxes the selection holds whole, such as the placeholder of a hidden region (FE-141).
+  for (const r of selectionBoxRects(tree, selection.anchor, selection.head)) {
     const page = pages[r.page];
     if (!page) continue;
     box(page, 'de-selection', r.x, r.y, r.width, r.height, 'Highlight', true);

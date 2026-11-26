@@ -365,7 +365,13 @@ export function pageItems(
         items.push({
           kind: 'box',
           blockId: b.id,
-          width: math ? Math.min(math.width, columnWidth) : b.width,
+          // A placeholder (FE-141) is as wide as the column.
+          width:
+            b.what === 'placeholder'
+              ? columnWidth
+              : math
+                ? Math.min(math.width, columnWidth)
+                : b.width,
           height: math ? math.height : b.height,
           keepNext: b.keepNext,
           ...(b.start !== undefined ? { from: b.start } : {}),

@@ -152,6 +152,28 @@ export function wordBoundary(text: string, offset: number, direction: 'left' | '
 const samePoint = (a: DocPosition, b: DocPosition): boolean =>
   a.blockId === b.blockId && a.offset === b.offset;
 
+/**
+ * The placeholder of a hidden region in the page view (FE-141 criterion 1): the same element as the
+ * web view's (`.de-hidden-region`, a note named with the title), so that the stylesheet's colours and
+ * border apply. The painter sets its place and size (the fixed height of the layout, 2.5 times the
+ * font size); the margin is taken off, as the layout places it, and the text size is the font size
+ * the height came from. It is not editable, not selectable and holds nothing.
+ */
+function placeholder(doc: Document, title: string | null, heightPt: number): HTMLElement {
+  const el = doc.createElement('div');
+  el.className = 'de-hidden-region';
+  el.setAttribute('role', 'note');
+  el.setAttribute('aria-label', title ? `Hidden region: ${title}` : 'Hidden region');
+  el.setAttribute('contenteditable', 'false');
+  el.textContent = title || 'Hidden region';
+  const s = el.style;
+  s.margin = '0';
+  s.fontSize = `${heightPt / 2.5}pt`;
+  s.lineHeight = '1.2';
+  s.userSelect = 'none';
+  return el;
+}
+
 /** Mounts the page view. Throws when the document cannot be laid out the first time. */
 export function mountPageView(options: PageViewOptions): MountedPageView {
   const doc = options.parent.ownerDocument;
@@ -262,11 +284,20 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
     tree = result.tree;
     text = new FlowText(flow, providers.measurer);
     status = pageStatus(result);
+    // The placeholders of hidden regions (ADR 0019; FE-141): the title of each, by block identifier.
+    const placeholders = new Map<string, string | null>();
+    for (const section of flow.sections)
+      for (const b of section.blocks)
+        if (b.kind === 'box' && b.what === 'placeholder') placeholders.set(b.id, b.title ?? null);
     // Mount the new window before the old one goes, so the scroll position is kept.
     const old = win;
     const fresh = mountPageWindow(scroller, result.tree, source(text), {
       justify: (blockId) => text?.justified(blockId) === true,
       pageGap: PAGE_GAP_PT,
+      control: (box) => {
+        const title = placeholders.get(box.blockId);
+        return title === undefined ? null : placeholder(doc, title, box.height);
+      },
     });
     win = fresh;
     old?.dispose();
