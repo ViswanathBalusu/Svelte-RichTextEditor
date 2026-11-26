@@ -1,9 +1,9 @@
 /**
- * The extensions section of the integration guide (UX-050 criterion 4, UX-052 criterion 4; 13
- * section 7). A test cannot judge the prose. It checks that the section is there and says what the
- * criteria ask: that tier 1 runs in the page with the host's trust, and that it lists the
- * accessibility requirements a panel is held to. It also checks the facts the list rests on, in
- * the editor's own tests: the pane host's keys, the status item's text alternative, and axe.
+ * The browser-extension statement of the integration guide (SEC-011 criterion 3; ADR 0425; 10 §6).
+ * The guide must say that extensions run with the user's privileges and cannot be prevented, and
+ * what the editor guarantees: their edits arrive as ordinary input and pass the same checks. A test
+ * cannot judge the prose; it checks that the statement is in the limits section and that the
+ * decision record and the spec agree with it.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -14,62 +14,64 @@ const HOST = join(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = join(HOST, '..', '..');
 const GUIDE = readFileSync(join(HOST, 'docs', 'integration-guide.md'), 'utf8');
 
-function section(title: string): string {
-  const start = GUIDE.indexOf(`\n## ${title}`);
+function limitsSection(): string {
+  const start = GUIDE.indexOf('\n## Limits of the embedding\n');
   if (start < 0) return '';
   const rest = GUIDE.slice(start + 1);
   const next = rest.indexOf('\n## ', 1);
   return next < 0 ? rest : rest.slice(0, next);
 }
 
-const EXTENSIONS = section('Extensions (UX-050, UX-052; 13 section 7)');
+describe('integration guide, browser extensions (SEC-011 criterion 3)', () => {
+  const bullet =
+    limitsSection()
+      .split('\n')
+      .find((l) => l.startsWith('- **Browser extensions (SEC-011).**')) ?? '';
 
-describe('integration guide, extensions (UX-050 criterion 4)', () => {
-  it('has the section', () => {
-    expect(EXTENSIONS).not.toBe('');
+  it('says extensions run with the user privileges and cannot be prevented', () => {
+    expect(bullet).not.toBe('');
+    expect(bullet).toContain("runs with the user's privileges");
+    expect(bullet).toContain('cannot prevent it');
   });
 
-  it('says a tier 1 extension runs in the page with the host’s trust', () => {
-    expect(EXTENSIONS).toContain('Tier 1 extensions run in the page, with the host');
-    expect(EXTENSIONS).toContain('trust');
-    expect(EXTENSIONS).toContain('the user’s token'.replace('’', "'"));
-    expect(EXTENSIONS).toContain('does not sandbox');
+  it('says what the editor guarantees', () => {
+    expect(bullet).toContain('arrives as ordinary input');
+    expect(bullet).toContain('schema keeps only valid content');
+    expect(bullet).toContain('permission_denied');
   });
 
-  it('says how a bad entry is reported', () => {
-    expect(EXTENSIONS).toContain('`de-error`');
-    expect(EXTENSIONS).toContain('`fatal` false');
+  it('says what it does not promise', () => {
+    expect(bullet).toContain('does not promise that an extension cannot read');
   });
 });
 
-describe('integration guide, extension panels (UX-052 criterion 4)', () => {
-  const requirements = EXTENSIONS.split('\n').filter((l) => /^\d+\. \*\*/.test(l));
+describe('the decision record of the policy (SEC-011 criterion 1)', () => {
+  const adr = readFileSync(
+    join(REPO, 'docs', 'adr', '0425-w8-SEC-011-browser-extension-policy.md'),
+    'utf8',
+  );
 
-  it('lists the accessibility requirements, numbered, with a bold lead each', () => {
-    expect(requirements.length).toBeGreaterThanOrEqual(6);
-    expect(EXTENSIONS).toContain('same accessibility bar as a built-in panel');
+  it('is accepted on owner decision 199 and states the position and the guarantee', () => {
+    expect(adr).toContain('**Status:** accepted');
+    expect(adr).toContain('owner decision 199');
+    expect(adr).toContain("run in the user's browser with the user's privileges");
+    expect(adr).toContain('cannot prevent');
+    expect(adr).toContain('ordinary input');
+    expect(adr).toContain('`permission_denied`');
   });
 
-  it.each([
-    ['a heading and accessible names', 'accessible name'],
-    ['keyboard use, Ctrl+F6 and Escape', 'Ctrl+F6'],
-    ['focus taken on opening', 'moves focus into the panel'],
-    ['a text alternative for a status item', 'text alternative'],
-    ['the --de- properties', '`--de-`'],
-    ['axe with no violations', 'axe with no violations'],
-    ['the strict content security policy', 'strict content security policy'],
-  ])('states the requirement on %s', (_name, phrase) => {
-    expect(EXTENSIONS.toLowerCase()).toContain(phrase.toLowerCase());
-  });
-
-  it('is backed by the editor’s own browser tests of a contributed panel', () => {
-    const spec = readFileSync(
-      join(REPO, 'packages', 'ui', 'e2e', 'extension-contributions.spec.ts'),
-      'utf8',
+  it('is cited by the spec and the guide', () => {
+    expect(readFileSync(join(REPO, 'docs', 'spec', '10-security.md'), 'utf8')).toContain(
+      'ADR 0425',
     );
-    expect(spec).toContain("press('Control+F6')");
-    expect(spec).toContain('axe(page)');
-    expect(spec).toContain('.de-visually-hidden');
-    expect(spec).toContain('--de-text');
+    expect(bulletOf()).toContain('ADR 0425');
   });
 });
+
+function bulletOf(): string {
+  return (
+    limitsSection()
+      .split('\n')
+      .find((l) => l.startsWith('- **Browser extensions (SEC-011).**')) ?? ''
+  );
+}

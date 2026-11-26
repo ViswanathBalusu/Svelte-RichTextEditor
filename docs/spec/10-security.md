@@ -140,7 +140,7 @@ Lock files, dependency review, a software bill of materials per release, signed 
 
 ## 6. Open issues
 
-- A policy for browser extensions that read or modify editor content (grammar checkers, translators). They run with the user's privileges and cannot be prevented, but their edits arrive as ordinary input and pass the same checks.
+- Browser extensions that read or modify editor content (grammar checkers, translators): decided (owner decision 199; ADR 0425). They run with the user's privileges and cannot be prevented, but their edits arrive as ordinary input and pass the same checks. The integration guide states the position.
 - Abuse handling for hosted mode (malware distribution through assets, phishing documents) needs an operational policy.
 - Key management details for per-document encryption keys and for tenant-owned sealing keys.
 - Anchoring chain heads in a public transparency log: decided yes (owner decision 143). A salted periodic root per tenant is published, never a per-document hash (ADR 0409; stories SEC-065 to SEC-068). The choice of log is proposed in that ADR.

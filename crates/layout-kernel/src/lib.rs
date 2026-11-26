@@ -49,7 +49,7 @@ thread_local! {
 
 /// The version of the call interface. It changes when a call of the kernel changes its meaning, or
 /// when a call is added.
-pub const ABI_VERSION: u32 = 7;
+pub const ABI_VERSION: u32 = 8;
 
 /// The version of the crate, as `major.minor.patch`.
 #[wasm_bindgen]
@@ -552,6 +552,14 @@ pub fn line_break_opportunities(text: &[u16]) -> Vec<u32> {
     segment::line_breaks(text)
 }
 
+/// The same as `line_break_opportunities` for text in a language (WASM-016): `language` is a BCP 47
+/// tag, and the rules of its family apply: Chinese curly quotes, Korean breaking at spaces only, and
+/// the strict Japanese rules (the default). An unknown or empty tag gives the default answer.
+#[wasm_bindgen]
+pub fn line_break_opportunities_for(text: &[u16], language: &str) -> Vec<u32> {
+    segment::line_breaks_for(text, language)
+}
+
 /// The extended grapheme cluster boundaries of a text by UAX #29 (WASM-007), ascending, as UTF-16
 /// offsets: the start, the start of every cluster after the first, and the end of the text.
 #[wasm_bindgen]
@@ -661,7 +669,7 @@ mod tests {
     #[test]
     fn reports_the_crate_version_and_the_interface_version() {
         assert_eq!(kernel_version(), env!("CARGO_PKG_VERSION"));
-        assert_eq!(abi_version(), 7);
+        assert_eq!(abi_version(), 8);
     }
 
     #[test]

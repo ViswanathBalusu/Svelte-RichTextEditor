@@ -70,9 +70,11 @@ export const BUDGET_GZIP_BYTES = 320_000;
  * (docs/spikes/2026-11-06-s10-text-kernel.md, section 3.3), rounded up to 420,000. The kernel with
  * WASM-007 (Unicode segmentation: two crates, their data, and the kernel's corrections to one of
  * them) measured 425,827 bytes of gzip at level 9 on 2026-11-20, which is 19,817 more than the
- * kernel without it, and so the figure is now 426,000: the measurement rounded up to the next
- * thousand, as S10's was. That is a change to a proposed figure, for the owner to confirm or to
- * answer another way. One other way was measured: the smallest optimisation level for the whole
+ * kernel without it, and so the figure became 426,000: the measurement rounded up to the next
+ * thousand, as S10's was. With WASM-016 (the language rules for Chinese quotes and Korean breaking
+ * at spaces, and the new call that takes a language tag) the module measured 426,606 bytes of gzip
+ * at level 9 on 2026-11-25, 779 more than before, and the figure is now 427,000, by the same rule.
+ * Both are changes to a proposed figure, for the owner to confirm or to answer another way. One other way was measured: the smallest optimisation level for the whole
  * module gives 410,592 bytes and a slower kernel (WASM-007 Notes have the times). The budget is
  * what the kernel may grow to, so that it never costs much more than the prototype the owner chose
  * on.
@@ -86,9 +88,9 @@ export const MODULE_BUDGETS: ReadonlyArray<{
   {
     name: 'layout kernel',
     match: /(^|\/)docedit_layout_kernel_bg[^/]*\.wasm$/,
-    gzipBytes: 426_000,
+    gzipBytes: 427_000,
     source:
-      'S10 report section 3.3: the Rust prototype was 419,844 bytes of gzip; the kernel with segmentation (WASM-007) measured 425,827',
+      'S10 report section 3.3: the Rust prototype was 419,844 bytes of gzip; the kernel with segmentation (WASM-007) measured 425,827 and with language rules (WASM-016) 426,606',
   },
 ];
 
