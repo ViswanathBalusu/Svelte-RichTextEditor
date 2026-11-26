@@ -688,6 +688,8 @@
 % \DEfieldno{k}: the field box that follows is reported in layout.json under number k (EXP-058).
 % Used inside a group, so the attribute ends with the field.
 \newcommand\DEfieldno[1]{\DE@attr@field=#1\relax}
+% A value wider than its field is reported in the log as "docedit: field too wide N", N being the
+% field's number (\DEfieldno); the worker maps N to the field's identifier (EXP-033 criterion 6).
 % The value is set inside the span, so its marked content belongs to the span that carries the
 % label and not to the paragraph around it (EXP-111 criterion 6).
 \newcommand\DEff[4]{%
@@ -696,7 +698,7 @@
   \setbox\DE@ffbox\hbox{#2}%
   \ifdim#1>\z@
     \ifdim\wd\DE@ffbox>#1\relax
-      \typeout{docedit-warning: field_too_wide block \the\DE@attr@block}%
+      \typeout{docedit: field too wide \the\DE@attr@field}%
     \fi
   \fi
   \DE@ffshow{#1}}

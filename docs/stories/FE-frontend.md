@@ -2266,6 +2266,8 @@ Round 2 (layout packet, 2026-11-13): criterion 4 stays open because tables are n
 
 **Notes (lane w1, 2026-11-26, third pass):** still blocked, nothing new ticked. Checked again: decisions 196 to 220 accept the proposed defaults, but ADR 0206 item 2 proposes none for a table taller than a page ("No default is given for it"), and decision 178 covers only `keepNext`; the closing paragraph of `docs/owner-decisions-2026-11-15.md` does not mention it. 03 §10 (the spec line) is a limit of the LaTeX writer, not a rule of the page view. `table-columns.test.ts` and `paginate-regions.test.ts` still pass. The smallest change that would meet the criterion is a rewording, for the owner to accept or refuse: "Given a table that fits on a page in a multi-column section, when it is laid out, then it does not span pages; a table taller than a page spans pages and is reported as overflowing". With that wording the built rule meets it; I have not changed the criterion, because the wording is the owner's.
 
+**Notes (lane w1, 2026-11-26, fourth pass):** still blocked, nothing new ticked, and nothing to build: the layout side is done and passing (`table-columns.test.ts`, `paginate-regions.test.ts`). Searched `docs/owner-decisions-2026-11-15.md` again for FE-085, ADR 0206 and 'taller than a page': only decision 178 (`keepNext`) names this story. The one open point is the owner's choice among the three options of ADR 0206 item 2, or the rewording above. Building one option now would decide it silently.
+
 ### FE-086 Lay out page sections with their own size and orientation
 
 | Type | Phase | Size | Priority | Persona |
