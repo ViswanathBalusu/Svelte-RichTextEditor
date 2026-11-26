@@ -75,6 +75,8 @@ export interface Ctx {
   readonly labels: DocumentLabels;
   readonly families: ReadonlyMap<string, FamilyInfo>;
   readonly defaultFamily: FamilyInfo;
+  /** Families of the manifest that a job may not load (EXP-048): reported once, not per block. */
+  readonly screenOnlyFamilies: ReadonlySet<string>;
   readonly fallbackCoverage: readonly (readonly CodeRange[])[] | null;
   readonly assets: Readonly<Record<string, AssetInput>>;
   readonly diagnostics: Diagnostic[];

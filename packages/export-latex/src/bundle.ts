@@ -37,6 +37,13 @@ export interface FontFamily {
   italic: FontFace;
   boldItalic: FontFace;
   licence: string;
+  /**
+   * Whether a job may load the family on the server (EXP-048; owner decision 62). The service sets
+   * it for a tenant's own font from the flag the administrator gave on upload. `false`: the family
+   * is used on screen only; a job does not load it, uses the fallback chain and names the family in
+   * a diagnostic. Absent: permitted (the default set, whose licences were checked when it was built).
+   */
+  serverUse?: boolean;
 }
 
 /** A face of the fallback chain (09 §3.2, Missing glyphs; EXP-026, EXP-047). */

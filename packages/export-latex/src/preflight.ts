@@ -28,6 +28,7 @@ import {
 } from '@docedit/model';
 import type { FontFace, FontManifest } from './bundle.ts';
 import { covers, mergeRanges, type CodeRange } from './fonts/coverage.ts';
+import { serverUse } from './server-fonts.ts';
 import { planRowSplit, type TableMeasure } from './table-measure.ts';
 
 export interface PreflightWarning {
@@ -78,7 +79,8 @@ export function preflight(
     string,
     Record<'regular' | 'bold' | 'italic' | 'boldItalic', FontFace>
   >();
-  for (const f of fonts?.families ?? []) families.set(f.name, f);
+  // A family a job may not load (EXP-048) is the default family in the PDF, so it is checked as such.
+  for (const f of fonts?.families ?? []) if (serverUse(f)) families.set(f.name, f);
   const defaultFamily = fonts?.defaultFamily ?? null;
   const chain = fonts ? (fonts.fallback ?? [fonts.math]) : [];
   const fallback: CodeRange[][] | null = chain.every((f) => f.coverage)

@@ -61,6 +61,7 @@ export type {
   TableHeights,
   TableMeasure,
 } from './table-measure.ts';
+export { serverFonts, serverUse, type ServerFonts } from './server-fonts.ts';
 export { preflight } from './preflight.ts';
 export type { PreflightWarning } from './preflight.ts';
 export { texArchive, archiveReadme, tar, CLASS_LICENCE } from './archive.ts';
