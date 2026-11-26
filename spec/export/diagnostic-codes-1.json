@@ -168,6 +168,18 @@
       "origin": "converter"
     },
     {
+      "code": "docx_approximation",
+      "severity": "warning",
+      "message": "The DOCX writer approximated or left out a construct of the document.",
+      "origin": "worker"
+    },
+    {
+      "code": "docx_writer_failed",
+      "severity": "error",
+      "message": "The DOCX writer could not write the document.",
+      "origin": "worker"
+    },
+    {
       "code": "enum_unknown",
       "severity": "warning",
       "message": "A value has no entry in the table of its kind; the default is used.",

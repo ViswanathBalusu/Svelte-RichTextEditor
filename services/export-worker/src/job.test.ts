@@ -472,7 +472,7 @@ describe('the export job handler (EXP-001)', () => {
     const untagged = await h.run({ options: { pdfStandard: 'ua-2', tagging: 'off' } });
     expect(untagged.error?.code).toBe('validation_failed');
     expect(codes(untagged)).toContain('option_unsupported');
-    const docx = await h.run({ target: 'docx' });
+    const docx = await h.run({ target: 'rtf' });
     expect(docx.error?.code).toBe('validation_failed');
     // Only the projected view compiled; the refused options did not.
     expect(calls).toHaveLength(1);

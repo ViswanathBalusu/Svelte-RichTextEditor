@@ -164,7 +164,7 @@ describe('EXP-086 cdm job through the export worker (criterion 4)', () => {
   });
 
   it('refuses a target this worker does not write, with the same code as before', async () => {
-    const run = await runJob('docx');
+    const run = await runJob('rtf');
     expect(run.job.state).toBe('failed');
     expect(run.job.error?.code).toBe('validation_failed');
     expect(run.stored).toEqual([]);

@@ -37,6 +37,7 @@ export type {
   SuggestionAccess,
   Tagging,
 } from './bundle.ts';
+export { settleSuggestions } from './suggestions.ts';
 export { mathGate, mathGateReason, scanMath, MATH_LIMITS, DIMENSION_BOUNDS } from './math/gate.ts';
 export type { GateResult } from './math/gate.ts';
 export { ALLOW_LIST } from './math/allow-list.ts';

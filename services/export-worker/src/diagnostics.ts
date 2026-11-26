@@ -102,6 +102,14 @@ export const CODES = {
     severity: 'error',
     message: 'The bundle is not the state the sealing export is pinned to; nothing was compiled.',
   },
+  docx_approximation: {
+    severity: 'warning',
+    message: 'The DOCX writer approximated or left out a construct of the document.',
+  },
+  docx_writer_failed: {
+    severity: 'error',
+    message: 'The DOCX writer could not write the document.',
+  },
   seal_pair_differs: {
     severity: 'error',
     message: 'The two compiles for sealing did not give the same PDF; nothing is sealed.',
