@@ -147,6 +147,13 @@
         "docedit.cls": "1dccccb2fb63837fe9a3afaf02e03e64d82e7d411f0a8c00f77a17b51a6e49f2",
         "docedit.lua": "930d7f27adc175abfbdd9b1c05b751f31a444e68bd995294833c9ab42db53d52"
       }
+    },
+    {
+      "version": "0.2.21",
+      "files": {
+        "docedit.cls": "fff6f7d37114b53804b4f8302d96011afc4b78c55c87c7ff302891f74fd887ec",
+        "docedit.lua": "930d7f27adc175abfbdd9b1c05b751f31a444e68bd995294833c9ab42db53d52"
+      }
     }
   ]
 }

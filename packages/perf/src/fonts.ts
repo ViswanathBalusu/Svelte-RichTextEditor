@@ -5,8 +5,8 @@
  */
 import manifestJson from '../fonts/manifest.json' with { type: 'json' };
 
-/** What a face is used for: Latin text, Chinese and Japanese, or Korean. */
-export type FontRole = 'latin' | 'cjk' | 'hangul';
+/** What a face is used for: Latin text, Chinese and Japanese, Korean, Arabic or Tamil. */
+export type FontRole = 'latin' | 'cjk' | 'hangul' | 'arabic' | 'tamil';
 
 export interface FontManifestEntry {
   /** Path inside `fonts/`. */

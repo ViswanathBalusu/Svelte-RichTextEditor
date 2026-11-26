@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-26 v0.2.20 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-26 v0.2.21 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -389,12 +389,24 @@
 % Blocks. #1 is always the block number from the converter (map.json maps it to the block id).
 % Every paragraph starts with \prevdepth at -1000pt: its first line box follows the previous
 % material directly, and the gap between them is the converter's \DEgap (03 §7).
-\newcommand\DE@par[3]{%
-  \par\begingroup
+\newcommand\DE@par@set[3]{%
+  \begingroup
     #1\DE@defaults #2\DE@apply
     \prevdepth=-1000pt
     \indent #3\par
   \endgroup}
+\newcommand\DE@par[3]{%
+  \par
+  \ifdim\DE@lead>\z@
+    \setbox\DE@leadbox\vbox{\DE@par@set{#1}{#2}{#3}}%
+    \setbox\DE@leadtop\vtop{\unvcopy\DE@leadbox}%
+    \hrule\@height\ht\DE@leadtop\@depth-\ht\DE@leadtop\@width\z@
+    \nointerlineskip\vskip\DE@lead\relax
+    \DE@lead=\z@
+    \unvbox\DE@leadbox
+  \else
+    \DE@par@set{#1}{#2}{#3}%
+  \fi}
 % \DEp{n}{properties}{content}: a body paragraph; \DEcp in a table cell; \DEsp in a story.
 \newcommand\DEp[3]{\DE@par{\DE@attr@block=#1\relax\DE@attr@area=1\relax}{#2}{#3}}
 \newcommand\DEcp[3]{\DE@par{\DE@attr@block=#1\relax\DE@attr@area=\DE@cellarea\relax}{#2}{#3}}
@@ -404,6 +416,21 @@
 % dropped at a page break, \DEgapkeep (the top of a page) is not.
 \newcommand*\DEgap[1]{\vskip #1\relax}
 \newcommand*\DEgapkeep[1]{\par\vspace*{#1}}
+% \DEcpg{n}{gap}{properties}{content}: the first paragraph of a table cell, with the gap above it
+% (CDM-043). A cell is a \vtop, whose reference point is the baseline of its first box, or its top
+% when the first thing is glue. A plain \vskip would put the reference point at the top of the
+% cell, one line above where the cell's neighbours have theirs. So the paragraph is set in a box
+% first, and the gap follows a rule of no thickness that is as high as the paragraph's first line:
+% the reference point is where the first baseline would be without the gap, and the first
+% baseline is the gap lower. \DE@par takes the gap from \DE@lead.
+\newdimen\DE@lead
+\newbox\DE@leadbox
+\newbox\DE@leadtop
+\newcommand\DEcpg[4]{\DE@lead=#2\relax
+  \DE@par{\DE@attr@block=#1\relax\DE@attr@area=\DE@cellarea\relax}{#3}{#4}}
+% The gap after the last block of a table cell. The column box ends with \unskip, which removes
+% glue and leaves a kern, so this is a kern (CDM-043).
+\newcommand*\DEcellend[1]{\par\kern #1\relax}
 % \penalty rather than \nopagebreak, which longtable redefines for use between rows.
 \newcommand*\DEkeep{\penalty\@M}
 \newcommand*\DEpb{\par\newpage}
@@ -501,8 +528,16 @@
   \expandafter\gdef\csname DE@fnmark@\the\numexpr\c@footnote+1\endcsname{#3}%
   \DEa{#1}{\footnotemark}%
   \expandafter\xdef\csname DE@fnnum@#2\endcsname{\the\c@footnote}}
+% \DEfngap{gap} comes before the note it belongs to: the space above the note's first line, which is
+% the larger of the spacings of the note before and this one (03 §7, CDM-043). The next note
+% takes it, as a vertical skip at the top of its paragraph in the insertion.
+\def\DE@fngap{0pt}
+\newcommand*\DEfngap[1]{\gdef\DE@fngap{#1}}
+\newcommand*\DE@fn@gapped{%
+  \let\DE@fn@make\@makefntext
+  \def\@makefntext##1{\vskip\DE@fngap\relax\gdef\DE@fngap{0pt}\DE@fn@make{##1}}}
 \newcommand\DEfntext[4]{%
-  {\DE@noattrs\DE@attr@block=#1\relax\DE@attr@area=2\relax
+  {\DE@noattrs\DE@attr@block=#1\relax\DE@attr@area=2\relax\DE@fn@gapped
    \footnotetext[\csname DE@fnnum@#1\endcsname]{\DE@defaults #3\DE@apply #4}}}
 
 % \DEfn{offset}{n}{mark}{properties}{content}: a footnote set directly with \footnote, for the
@@ -512,7 +547,8 @@
 \newcommand\DEfn[5]{%
   \expandafter\gdef\csname DE@fnmark@\the\numexpr\c@footnote+1\endcsname{#3}%
   \DEa{#1}{\let\DE@fn@make\@makefntext
-    \def\@makefntext##1{\DE@noattrs\DE@attr@block=#2\relax\DE@attr@area=2\relax\DE@fn@make{##1}}%
+    \def\@makefntext##1{\vskip\DE@fngap\relax\gdef\DE@fngap{0pt}%
+      \DE@noattrs\DE@attr@block=#2\relax\DE@attr@area=2\relax\DE@fn@make{##1}}%
     \footnote{\DE@defaults #4\DE@apply #5}}%
   \expandafter\xdef\csname DE@fnnum@#2\endcsname{\the\c@footnote}}
 
