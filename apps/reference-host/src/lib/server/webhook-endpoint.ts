@@ -11,9 +11,16 @@
  * the seen identifiers and the queue in durable storage.
  */
 import { SEED_DIR } from './config.ts';
+import { handleWorkflowEvent } from './send-for-completion.ts';
+import { workflowDeps } from './workflow-runtime.ts';
 import { Directory } from './directory.ts';
 import { logSink, mailSink, notifier, type NotificationSink } from './webhook-notifications.ts';
-import { MemorySeenStore, WebhookReceiver, WorkQueue } from './webhook-receiver.ts';
+import {
+  MemorySeenStore,
+  WebhookReceiver,
+  WorkQueue,
+  type ReceivedEvent,
+} from './webhook-receiver.ts';
 
 export const WEBHOOK_SECRETS_ENV = 'DOCEDIT_HOST_WEBHOOK_SECRETS';
 
@@ -35,12 +42,18 @@ export function composeWebhookEndpoint(opts: {
   /** Read on every delivery, so that a rotation needs no restart. */
   secrets: () => readonly string[];
   sink: NotificationSink;
+  /** More work for each verified event, after the notification (send for completion, UX-099). */
+  onEvent?: (event: ReceivedEvent) => Promise<void>;
   /** The receiver's clock in Unix seconds. */
   now?: () => number;
   /** Runs `run` later; defaults to `setTimeout(run, 0)`. */
   defer?: (run: () => void) => void;
 }): WebhookEndpoint {
-  const queue = new WorkQueue(notifier(opts.sink));
+  const notify = notifier(opts.sink);
+  const queue = new WorkQueue(async (event) => {
+    await notify(event);
+    await opts.onEvent?.(event);
+  });
   const receiver = new WebhookReceiver({
     secrets: opts.secrets,
     seen: new MemorySeenStore(),
@@ -99,6 +112,10 @@ export function sinkFromEnv(env: NodeJS.ProcessEnv = process.env): NotificationS
 
 /** The endpoint of this process: secrets from the environment, notifications by e-mail or log. */
 export function webhookEndpoint(): WebhookEndpoint {
-  composed ??= composeWebhookEndpoint({ secrets: () => secretsFromEnv(), sink: sinkFromEnv() });
+  composed ??= composeWebhookEndpoint({
+    secrets: () => secretsFromEnv(),
+    sink: sinkFromEnv(),
+    onEvent: async (event) => handleWorkflowEvent(await workflowDeps(), event),
+  });
   return composed;
 }

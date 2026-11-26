@@ -181,6 +181,8 @@
     bind:dialog={shareDialog}
   />
 
+  <p><a href="{data.base}/docs/{data.doc.id}/send">Send for completion</a></p>
+
   <section class="panel" aria-labelledby="regions-heading">
     <h2 id="regions-heading">Who can edit each region</h2>
     <p class="muted">
