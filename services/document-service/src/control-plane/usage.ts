@@ -16,12 +16,7 @@
  * that this story does not build.
  */
 import type { QuotaDimension } from './quotas.ts';
-
-/** The month a Unix time in milliseconds counts in, as `YYYY-MM` in UTC. */
-function monthOf(at: number): string {
-  const d = new Date(at);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
+import { monthOf } from './month.ts';
 
 /** The dimensions whose figure is a peak or a level recorded by the node. */
 export type RecordedDimension = Exclude<QuotaDimension, 'exportMinutes'>;

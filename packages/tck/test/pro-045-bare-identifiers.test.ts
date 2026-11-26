@@ -57,8 +57,10 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
       'bulk-sends',
       'templates',
     ]);
-    for (const o of left.filter((x) => !TENANT_RESOURCES.includes(x.path.split('/')[1] ?? '')))
-      expect(o.security).toEqual(['service']);
+    for (const o of left.filter((x) => !TENANT_RESOURCES.includes(x.path.split('/')[1] ?? ''))) {
+      // The tenant registry takes the operator credential alone (decision 68, UX-076).
+      expect(o.security).toEqual(o.path.startsWith('/tenants/') ? ['operator'] : ['service']);
+    }
   });
 
   it('gives every route an entry, and a feature that the definition names', () => {

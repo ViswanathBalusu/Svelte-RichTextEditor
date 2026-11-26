@@ -44,6 +44,9 @@ export function bareRoutes(): string[] {
   const out: string[] = [];
   for (const [path, item] of Object.entries(SPEC.paths)) {
     if (!path.includes('{') || path.startsWith('/documents/{id}')) continue;
+    // The tenant routes take the operator credential alone (decision 68): no user token or tenant
+    // credential reaches them, so no identifier of another tenant can be tried (row 14 of the kit).
+    if (path.startsWith('/tenants/')) continue;
     for (const m of METHODS) if (m in item) out.push(`${m.toUpperCase()} ${path}`);
   }
   return out.sort();

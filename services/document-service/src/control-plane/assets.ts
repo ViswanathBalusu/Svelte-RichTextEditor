@@ -126,6 +126,12 @@ export interface AssetRegistry {
    * it is set only when no other row names that object, since ready objects are shared by hash.
    */
   removeOrphan(tenant: string, id: string): Promise<{ removed: boolean; objectKey: string | null }>;
+  /**
+   * Attaches a ready asset to its document from commit `seq` on, as a `doc_assets` row, though no
+   * content names it: the original Word file of an import (EXP-108 criterion 3). An attached asset
+   * is never selected as an orphan. The in-memory registry keeps no attachments and does nothing.
+   */
+  attach(tenant: string, doc: string, id: string, seq: number): Promise<void>;
 }
 
 const clone = <T>(v: T): T => structuredClone(v);
@@ -244,6 +250,10 @@ export class MemoryAssetRegistry implements AssetRegistry {
     _id: string,
   ): Promise<{ removed: boolean; objectKey: string | null }> {
     return { removed: false, objectKey: null };
+  }
+
+  async attach(_tenant: string, _doc: string, _id: string, _seq: number): Promise<void> {
+    // No attachments are kept in memory (see orphanedReady).
   }
 }
 

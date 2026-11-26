@@ -131,9 +131,14 @@ describe('reading a cursor list to its end (PRO-040 criterion 5)', () => {
 });
 
 describe('the list routes the kit walks (PRO-040 criterion 5)', () => {
-  it('are every GET of the protocol definition that answers with a list', () => {
+  it('are every GET of the protocol definition that answers with a list, except the operator routes', () => {
     const fromDefinition = DEP1.operations
-      .filter((o) => o.method === 'GET' && o.success.list === true)
+      .filter(
+        (o) =>
+          o.method === 'GET' &&
+          o.success.list === true &&
+          !(o.security.length > 0 && o.security.every((c) => c === 'operator')),
+      )
       .map((o) => o.path);
     expect(listRoutes().map((r) => r.path)).toEqual(fromDefinition);
     expect(fromDefinition).toEqual(

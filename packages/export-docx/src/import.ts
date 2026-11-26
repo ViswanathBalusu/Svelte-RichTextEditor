@@ -29,6 +29,7 @@ import {
 import {
   BUILT_IN_STYLES,
   CDM1,
+  LINK_HREF_PATTERN,
   PRESERVED_STYLE_BYTES,
   indexDefinition,
   type JsonValue,
@@ -42,6 +43,7 @@ import {
   buildFragment,
 } from './assets.ts';
 import { NodeHasher } from './hash.ts';
+import { NumberingImport } from './import-numbering.ts';
 import { payloadDigests } from './integrity.ts';
 import { valuesToMarks } from './marks.ts';
 import { pname } from './names.ts';
@@ -250,6 +252,78 @@ const W_DELTEXT = w('delText');
 const W_TBL = w('tbl');
 const W_TR = w('tr');
 const W_TC = w('tc');
+
+/** Row spans taken from `w:vMerge`, and the continuation cells that a row span absorbs. */
+interface VMergePlan {
+  spans: Map<XmlElement, number>;
+  absorbed: Set<XmlElement>;
+}
+
+/** Children of `w:tcPr` that a continuation cell may not carry: a tracked change of the cell. */
+const CELL_REVISIONS = new Set([w('cellIns'), w('cellDel'), w('cellMerge')]);
+
+/** The merge of a cell: `restart` starts a vertical merge, `continue` extends the one above. */
+function vMergeOf(tc: XmlElement): 'restart' | 'continue' | null {
+  const tcPr = child(tc, NS.w, 'tcPr');
+  const vm = tcPr ? child(tcPr, NS.w, 'vMerge') : undefined;
+  if (!vm) return null;
+  return attr(vm, NS.w, 'val') === 'restart' ? 'restart' : 'continue';
+}
+
+/**
+ * Whether a continuation cell holds nothing that a row span would lose from the model: no tracked
+ * change of the cell and one or more paragraphs with no content. Its properties and its element
+ * stay in the row's source-map gap (A2); a continuation cell with content is not merged.
+ */
+function isEmptyContinuation(tc: XmlElement): boolean {
+  const tcPr = child(tc, NS.w, 'tcPr');
+  if (tcPr && elements(tcPr).some((e) => CELL_REVISIONS.has(nameOf(e)))) return false;
+  const rest = elements(tc).filter((e) => e !== tcPr);
+  return (
+    rest.length > 0 &&
+    rest.every((p) => nameOf(p) === w('p') && elements(p).every((e) => nameOf(e) === w('pPr')))
+  );
+}
+
+/** Row spans of the vertical merges in the rows of one table (EXP-101, criterion 1). */
+function planVMerges(rows: readonly XmlElement[]): VMergePlan {
+  const plan: VMergePlan = { spans: new Map(), absorbed: new Set() };
+  const grid = rows.map((r) => {
+    const cells = new Map<number, { tc: XmlElement; span: number }>();
+    let col = 0;
+    for (const tc of elements(r)) {
+      if (nameOf(tc) !== W_TC) continue;
+      const tcPr = child(tc, NS.w, 'tcPr');
+      const gs = tcPr ? child(tcPr, NS.w, 'gridSpan') : undefined;
+      const span = gs ? Number(attr(gs, NS.w, 'val') ?? '1') : 1;
+      cells.set(col, { tc, span });
+      col += span;
+    }
+    return cells;
+  });
+  for (const [i, cells] of grid.entries()) {
+    for (const [col, { tc, span }] of cells) {
+      if (vMergeOf(tc) !== 'restart') continue;
+      let n = 1;
+      for (let j = i + 1; j < grid.length; j++) {
+        const below = grid[j]!.get(col);
+        if (
+          !below ||
+          below.span !== span ||
+          vMergeOf(below.tc) !== 'continue' ||
+          !isEmptyContinuation(below.tc)
+        )
+          break;
+        plan.absorbed.add(below.tc);
+        n++;
+      }
+      if (n > 1) plan.spans.set(tc, n);
+    }
+  }
+  // A row must keep one cell of its own; a table where a row would have none is imported without spans.
+  const bare = grid.some((cells) => [...cells.values()].every((c) => plan.absorbed.has(c.tc)));
+  return bare ? { spans: new Map(), absorbed: new Set() } : plan;
+}
 const W_PPR = w('pPr');
 const W_RPR = w('rPr');
 const W_SECTPR = w('sectPr');
@@ -529,6 +603,9 @@ function refersToRelationships(el: XmlElement): boolean {
 /** The report kind of a drawing anchored to the page or a paragraph (EXP-107, criterion 1). */
 export const FLOATING_KIND = 'floating object';
 
+/** The report kind of a hyperlink whose address the link allow-list (I9) does not accept (EXP-102). */
+export const REFUSED_LINK_KIND = 'hyperlink with a refused address';
+
 /** Elements that hold a drawing as a run child: a floating one among them is reported as such. */
 const DRAWING_HOSTS: ReadonlySet<string> = new Set([W_DRAWING, MC_ALTERNATE]);
 
@@ -589,6 +666,8 @@ class Importer {
   private readonly multiParagraphNotes = new Set<string>();
   /** The block whose content is being imported, for the report. */
   private block_: string | null = null;
+  /** The vertical merges of the table being read: row spans, and the cells they absorb (EXP-101). */
+  private vMerges: VMergePlan = { spans: new Map(), absorbed: new Set() };
   private preserveUsed = false;
   readonly ctx: LensContext;
 
@@ -715,7 +794,29 @@ class Importer {
       }
     }
 
-    // Styles first: paragraphs refer to them.
+    // Numbering before the styles: a style may be numbered (headings).
+    const numberingRel = mainRels.list.find((r) => r.type === REL.numbering && !r.external);
+    const numberingPart = numberingRel ? resolveTarget(mainPart, numberingRel.target) : null;
+    const numberingBytes = numberingPart ? this.read(numberingPart) : undefined;
+    this.numberingImport = new NumberingImport(
+      numberingBytes ? this.parse(numberingPart!, numberingBytes).root : null,
+      () => nodeId(),
+      (message) => this.warnings.push(message),
+    );
+    for (const d of this.numberingImport.sources) {
+      this.count(this.stats.nodes, 'numbering_def');
+      const target: DefSource = {
+        part: numberingPart!,
+        start: d.start,
+        end: d.end,
+        hash: '',
+        wordId: d.abstractId,
+      };
+      this.sm.defs[String(d.node.attrs!['id'])] = target;
+      this.pending.push({ node: d.node, target });
+    }
+
+    // Styles next: paragraphs refer to them.
     const stylesRel = mainRels.list.find((r) => r.type === REL.styles && !r.external);
     const styleDefs = stylesRel ? this.styles(resolveTarget(mainPart, stylesRel.target)) : [];
     this.ensureDefaultStyle(styleDefs);
@@ -791,7 +892,12 @@ class Importer {
     }
 
     // Definitions: settings, styles, page setups (shared trees are appended by shareTrees).
-    const defsContent: JsonNode[] = [settings, ...styleDefs, ...pageSetups];
+    const defsContent: JsonNode[] = [
+      settings,
+      ...styleDefs,
+      ...this.numberingImport.defs,
+      ...pageSetups,
+    ];
     const envelope: JsonEnvelope = {
       cdm: 1,
       requires: [],
@@ -968,6 +1074,8 @@ class Importer {
   private evenAndOddHeaders = false;
   /** The document language of w:docDefaults (EXP-100 criterion 5), read by `styles()`. */
   private docLang: string | null = null;
+  /** The numbering part, read before the styles and the paragraphs that refer to it (EXP-100 criterion 3). */
+  private numberingImport: NumberingImport | null = null;
   /**
    * The paragraph and run values of w:docDefaults (EXP-100 criterion 5). They sit below every style
    * in Word, so they are merged into the default paragraph style (proposed in ADR 0372).
@@ -1069,6 +1177,18 @@ class Importer {
       if (s.builtIn) attrs['builtIn'] = true;
       for (const [k, v] of Object.entries(read.values))
         if (k !== 'name' && v !== null) attrs[k] = v;
+      if (s.kind === 'paragraph') {
+        // A numbered style (headings): its numbering joins the list of its definition (03 §7.1).
+        const numPr = child(child(s.el, NS.w, 'pPr') ?? s.el, NS.w, 'numPr');
+        if (numPr) {
+          const n = this.numberingImport?.forStyle(
+            attr(child(numPr, NS.w, 'numId') ?? numPr, NS.w, 'val'),
+            attr(child(numPr, NS.w, 'ilvl') ?? numPr, NS.w, 'val'),
+            s.wordId,
+          );
+          if (n) attrs['numbering'] = n;
+        }
+      }
       if (s.kind === 'paragraph' && s.id === this.defaultStyle) this.applyDocDefaults(attrs);
       const extra = attrsOf(s.el, (n) => n === w('type') || n === w('styleId'));
       const body: TreeBody = {};
@@ -1401,6 +1521,18 @@ class Importer {
         sectPr = child(pPr, NS.w, 'sectPr') ?? null;
         const read = readContainer(PPR, elements(pPr), this.ctx, this.stats);
         for (const [k, v] of Object.entries(read.values)) if (v !== null) attrs[k] = v;
+        // The list the paragraph is in (EXP-100 criterion 3). The `w:numPr` stays in the residue.
+        const numPr = child(pPr, NS.w, 'numPr');
+        if (numPr && this.numberingImport) {
+          const n = this.numberingImport.forParagraph(
+            attr(child(numPr, NS.w, 'numId') ?? numPr, NS.w, 'val'),
+            attr(child(numPr, NS.w, 'ilvl') ?? numPr, NS.w, 'val'),
+          );
+          if (n) {
+            attrs['numbering'] = n.numbering;
+            if (n.restart !== null) attrs['numberingRestart'] = n.restart;
+          }
+        }
         const pPrAttrs = attrsOf(pPr);
         if (read.residue.length || Object.keys(pPrAttrs).length) {
           const holder: TreeElement = { name: W_PPR };
@@ -1498,6 +1630,7 @@ class Importer {
       }
       if (span !== grid.length) return null;
     }
+    this.vMerges = planVMerges(rows);
     let tblPrRead;
     try {
       tblPrRead = tblPr ? readContainer(TBLPR, elements(tblPr), this.ctx, this.stats) : null;
@@ -1626,6 +1759,8 @@ class Importer {
     let gapStart = headEnd;
     for (const c of elements(tr)) {
       if (nameOf(c) !== W_TC) continue;
+      // A continuation cell absorbed by a row span stays in the gap of the source map (EXP-101).
+      if (this.vMerges.absorbed.has(c)) continue;
       const cell = await this.cell(c, pc);
       if (!cell) return null;
       order.push(String(cell.attrs!['id']));
@@ -1677,6 +1812,8 @@ class Importer {
       if (e instanceof NotRepresentable) return null;
       throw e;
     }
+    const rowspan = this.vMerges.spans.get(tc);
+    if (rowspan !== undefined) attrs['rowspan'] = rowspan;
     const cellIdentityTree = splitIdentity(body, IDENTITY_ATTRS);
     if (this.preserve && (body.attrs || body.children)) {
       if (!this.fits(body, 'table_cell')) return null;
@@ -2003,6 +2140,7 @@ class Importer {
     // A floating drawing is reported on its own line too, beside its content kind (EXP-107).
     if (DRAWING_HOSTS.has(nameOf(el)) && isAnchored(el))
       this.note(FLOATING_KIND, 'preserved', PRESERVED_MESSAGE);
+    if (nameOf(el) === w('hyperlink')) this.checkLinkAddress(el, pc);
     if (label === 'equation' || label === 'field' || label === 'field code') {
       try {
         this.atomTreeStat(label, toTree(el));
@@ -2047,6 +2185,22 @@ class Importer {
     }
     this.note(label, 'preserved', PRESERVED_MESSAGE);
     return { type, attrs };
+  }
+
+  /**
+   * A hyperlink is kept whole as a preserved atom (A2) and never followed. An external address that
+   * the link allow-list (I9) does not accept is reported, so that the author knows it stays as it
+   * was in the file and will not become a link in the editor (EXP-102, criterion 4).
+   */
+  checkLinkAddress(el: XmlElement, pc: PartCtx): void {
+    const id = attr(el, NS.r, 'id');
+    const rel = id ? pc.rels.byId.get(id) : undefined;
+    if (!rel || !rel.external || new RegExp(LINK_HREF_PATTERN).test(rel.target)) return;
+    this.note(
+      REFUSED_LINK_KIND,
+      'preserved',
+      'preserved, not editable: the address is not an allowed link address and is never followed',
+    );
   }
 
   atomSize(el: XmlElement): [number, number] | null {
