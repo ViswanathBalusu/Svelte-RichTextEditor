@@ -13,12 +13,7 @@
 import type { Schema } from 'prosemirror-model';
 import type { CdmDefinition } from '../definition/grammar.ts';
 import { buildSchema } from '../prosemirror/index.ts';
-import {
-  readDocument,
-  type ReadOptions,
-  type ReadResult,
-  type SupportedVersions,
-} from './read.ts';
+import { readDocument, type ReadOptions, type ReadResult, type SupportedVersions } from './read.ts';
 
 export interface ReaderSet {
   /** The lowest and the highest major version the set holds. */
