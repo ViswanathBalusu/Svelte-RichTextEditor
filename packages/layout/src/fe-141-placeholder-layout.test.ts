@@ -90,7 +90,10 @@ describe('the placeholder of a hidden region in the layout (FE-141 criterion 1)'
     para('pa', 'before the region'),
     region('r1', null),
     region('r2', 'Payroll'),
-    region('r3', 'A very long title that would not fit on one line of the column at all, however wide'),
+    region(
+      'r3',
+      'A very long title that would not fit on one line of the column at all, however wide',
+    ),
     para('pz', 'after the region'),
   ];
   const flow = toFlow(envelope(body));
@@ -121,7 +124,11 @@ describe('the placeholder of a hidden region in the layout (FE-141 criterion 1)'
   });
 
   it('paints a selection that runs across them as holding them whole, and no other selection', () => {
-    const across = selectionBoxRects(tree, { blockId: 'pa', offset: 2 }, { blockId: 'pz', offset: 3 });
+    const across = selectionBoxRects(
+      tree,
+      { blockId: 'pa', offset: 2 },
+      { blockId: 'pz', offset: 3 },
+    );
     expect(across).toHaveLength(3);
     expect(across.map((r) => r.y)).toEqual(placed.map((b) => b.y));
     // The same selection, taken from the other end.

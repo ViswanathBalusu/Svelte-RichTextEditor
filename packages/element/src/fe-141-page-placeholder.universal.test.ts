@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax -- the scroll event here is the browser's own, made to drive the view; it is not a component event (FE-022) */
 /**
  * FE-141 criterion 1 in the page view (02 §9.6; ADR 0019), in a real browser (Chromium, Firefox,
  * WebKit through `pnpm test:browsers`; skipped in Node.js, which has no canvas). A projection with
@@ -42,7 +43,13 @@ function projection() {
             },
             {
               type: 'style_def',
-              attrs: { id: 'Normal', kind: 'paragraph', name: 'Normal', builtIn: true, fontSize: 220 },
+              attrs: {
+                id: 'Normal',
+                kind: 'paragraph',
+                name: 'Normal',
+                builtIn: true,
+                fontSize: 220,
+              },
             },
             {
               type: 'page_setup',
@@ -80,7 +87,10 @@ afterEach(() => {
 });
 
 function setup(readOnly: boolean) {
-  const core = new EditorCore({ doc: projection() as never, schedule: (run) => queueMicrotask(run) });
+  const core = new EditorCore({
+    doc: projection() as never,
+    schedule: (run) => queueMicrotask(run),
+  });
   const parent = document.createElement('div');
   parent.style.cssText = 'width:900px;';
   document.body.append(parent);
