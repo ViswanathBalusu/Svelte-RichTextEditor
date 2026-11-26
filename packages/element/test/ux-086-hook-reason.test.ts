@@ -20,7 +20,7 @@ function refusing(): Backend {
       });
     },
     async get() {
-      return { id: 'job-1' } as unknown as ExportJob;
+      return { value: { id: 'job-1' } as unknown as ExportJob, etag: '"1"' };
     },
     async cancel() {},
   };

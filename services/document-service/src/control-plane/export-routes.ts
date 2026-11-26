@@ -2,7 +2,7 @@
  * Export and preview jobs (05 §6.2; 09 §9.1; EXP-004 to EXP-008, EXP-123; BE-050, BE-051; review
  * SR-C4; D68, D69, D144). See exports.ts for the kinds, the request key and the preview window.
  */
-import { formatTimestamp, uuid7 } from '@docedit/model';
+import { formatTimestamp } from '@docedit/model';
 import type { CreateExportRequest, ExportJob } from '@docedit/protocol';
 import { objectKeys } from '../objects/store.ts';
 import type { Access } from '@docedit/authority';

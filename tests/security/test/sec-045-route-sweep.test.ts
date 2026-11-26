@@ -145,6 +145,9 @@ const NOT_OFFERED = 'this server does not offer the route';
 const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   createImport: 'this server does not import Word files',
   getImport: 'no import job',
+  // UX-087: the handler exists; B has made no bundle export, and the sweep names an identifier of none.
+  // The tenant scope of the lookup is proven in bare-identifiers.test.ts.
+  getBundleExport: 'no bundle export',
   // HIS-042: the handler exists; no commit of B's document introduced the suggestion that the
   // sweep names, and the route answers that with not_found for the owner as well.
   getSuggestionIntroduction: 'no commit introduced this suggestion',
