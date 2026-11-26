@@ -96,9 +96,9 @@ describe('UX-057 criterion 1: inserting creates an extension_inline with mandato
       true,
     );
     const doc = state().doc;
-    expect(api.insertExtensionInline(caret(), { ...DRAFT, payload: 'a'.repeat(4095) })).toMatchObject(
-      { ok: false, reason: 'payload_too_large' },
-    );
+    expect(
+      api.insertExtensionInline(caret(), { ...DRAFT, payload: 'a'.repeat(4095) }),
+    ).toMatchObject({ ok: false, reason: 'payload_too_large' });
     expect(state().doc).toBe(doc);
     expect(inlines()).toHaveLength(1);
   });

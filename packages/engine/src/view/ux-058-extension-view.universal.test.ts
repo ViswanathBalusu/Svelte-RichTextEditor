@@ -95,63 +95,73 @@ async function draw(
   }
 }
 
-describe.skipIf(!isBrowser)('a custom block without its extension in the web view (UX-058 criterion 1)', () => {
-  it('draws the notice, the fallback picture from the signed URL and the fallback text', async () => {
-    const { block, imgs } = await draw(async () => PNG, {
-      fallbackAsset: 'aFallback0000001',
-      fallbackText: 'Sales by month',
-    });
-    expect(block.getAttribute('role')).toBe('group');
-    expect(block.querySelector('.de-extension-notice')?.textContent).toBe(EXTENSION_NOTICE);
-    expect(imgs).toHaveLength(1);
-    expect(imgs[0]?.src).toBe(PNG.url);
-    expect(imgs[0]?.alt).toBe('');
-    expect(imgs[0]?.closest('.de-extension-image')?.getAttribute('aria-label')).toBe(
-      'Sales by month',
-    );
-    expect(block.querySelector('.de-extension-text')?.textContent).toBe('Sales by month');
-    expect(block.innerHTML).not.toContain(MARKER);
-  });
-
-  it('draws the notice and the text alone for a text-only fallback, and asks for no picture', async () => {
-    let asked = 0;
-    const { block, imgs } = await draw(
-      async () => {
-        asked++;
-        return PNG;
-      },
-      { fallbackText: 'A chart of three values' },
-    );
-    expect(asked).toBe(0);
-    expect(imgs).toHaveLength(0);
-    expect(block.querySelector('.de-extension-notice')?.textContent).toBe(EXTENSION_NOTICE);
-    expect(block.querySelector('.de-extension-text')?.textContent).toBe('A chart of three values');
-  });
-
-  it('keeps the notice and the placeholder when the picture cannot be drawn', async () => {
-    const answers: Array<[string, AssetImageLookup | undefined]> = [
-      ['no lookup', undefined],
-      ['a failed lookup', () => Promise.reject(new Error('no'))],
-      ['a data URL', async () => ({ url: 'data:image/png;base64,AAAA', contentType: 'image/png' })],
-      [
-        'an SVG',
-        async () => ({ url: 'https://assets.example.test/a.svg', contentType: 'image/svg+xml' }),
-      ],
-    ];
-    for (const [name, lookup] of answers) {
-      const { block, imgs } = await draw(lookup, {
+describe.skipIf(!isBrowser)(
+  'a custom block without its extension in the web view (UX-058 criterion 1)',
+  () => {
+    it('draws the notice, the fallback picture from the signed URL and the fallback text', async () => {
+      const { block, imgs } = await draw(async () => PNG, {
         fallbackAsset: 'aFallback0000001',
-        fallbackText: 'Sales',
+        fallbackText: 'Sales by month',
       });
-      expect(imgs, name).toHaveLength(0);
-      expect(block.querySelector('.de-extension-notice')?.textContent, name).toBe(EXTENSION_NOTICE);
-      expect(block.querySelector('.de-extension-image'), name).not.toBeNull();
-    }
-  });
+      expect(block.getAttribute('role')).toBe('group');
+      expect(block.querySelector('.de-extension-notice')?.textContent).toBe(EXTENSION_NOTICE);
+      expect(imgs).toHaveLength(1);
+      expect(imgs[0]?.src).toBe(PNG.url);
+      expect(imgs[0]?.alt).toBe('');
+      expect(imgs[0]?.closest('.de-extension-image')?.getAttribute('aria-label')).toBe(
+        'Sales by month',
+      );
+      expect(block.querySelector('.de-extension-text')?.textContent).toBe('Sales by month');
+      expect(block.innerHTML).not.toContain(MARKER);
+    });
 
-  it('stays editable around the block: text typed beside it lands, and the block is kept', async () => {
-    const { editedText, blockStillThere } = await draw(undefined, { fallbackText: 'Chart' });
-    expect(editedText.startsWith('Edited. ')).toBe(true);
-    expect(blockStillThere).toBe(true);
-  });
-});
+    it('draws the notice and the text alone for a text-only fallback, and asks for no picture', async () => {
+      let asked = 0;
+      const { block, imgs } = await draw(
+        async () => {
+          asked++;
+          return PNG;
+        },
+        { fallbackText: 'A chart of three values' },
+      );
+      expect(asked).toBe(0);
+      expect(imgs).toHaveLength(0);
+      expect(block.querySelector('.de-extension-notice')?.textContent).toBe(EXTENSION_NOTICE);
+      expect(block.querySelector('.de-extension-text')?.textContent).toBe(
+        'A chart of three values',
+      );
+    });
+
+    it('keeps the notice and the placeholder when the picture cannot be drawn', async () => {
+      const answers: Array<[string, AssetImageLookup | undefined]> = [
+        ['no lookup', undefined],
+        ['a failed lookup', () => Promise.reject(new Error('no'))],
+        [
+          'a data URL',
+          async () => ({ url: 'data:image/png;base64,AAAA', contentType: 'image/png' }),
+        ],
+        [
+          'an SVG',
+          async () => ({ url: 'https://assets.example.test/a.svg', contentType: 'image/svg+xml' }),
+        ],
+      ];
+      for (const [name, lookup] of answers) {
+        const { block, imgs } = await draw(lookup, {
+          fallbackAsset: 'aFallback0000001',
+          fallbackText: 'Sales',
+        });
+        expect(imgs, name).toHaveLength(0);
+        expect(block.querySelector('.de-extension-notice')?.textContent, name).toBe(
+          EXTENSION_NOTICE,
+        );
+        expect(block.querySelector('.de-extension-image'), name).not.toBeNull();
+      }
+    });
+
+    it('stays editable around the block: text typed beside it lands, and the block is kept', async () => {
+      const { editedText, blockStillThere } = await draw(undefined, { fallbackText: 'Chart' });
+      expect(editedText.startsWith('Edited. ')).toBe(true);
+      expect(blockStillThere).toBe(true);
+    });
+  },
+);

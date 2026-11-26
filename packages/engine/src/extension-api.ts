@@ -360,7 +360,11 @@ export class ExtensionApi implements ExtensionDocumentApi {
     const state = this.#host.state();
     const type = state.schema.nodes['extension_inline'];
     if (!type)
-      return { ok: false, reason: 'unsupported', message: 'this build has no inline custom content' };
+      return {
+        ok: false,
+        reason: 'unsupported',
+        message: 'this build has no inline custom content',
+      };
     let node: PMNode;
     try {
       node = type.create({
