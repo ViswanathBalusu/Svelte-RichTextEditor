@@ -1347,7 +1347,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
     peaks: usagePeaks,
     now: () => Date.now(),
     minutesUsed: (tenant, at) => compileBudget.usedMinutes(tenant, at),
-    ...(parts.assetRegistry ? { storedBytes: (t: string) => parts.assetRegistry!.storedBytes(t) } : {}),
+    ...(parts.assetRegistry
+      ? { storedBytes: (t: string) => parts.assetRegistry!.storedBytes(t) }
+      : {}),
   });
   // The seal step (FRW-052 criterion 5, FRW-053): when the final export of a completed workflow has
   // finished, its PDF goes to the signing service, is stored write-once and the workflow becomes
