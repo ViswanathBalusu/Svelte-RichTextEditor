@@ -2028,6 +2028,8 @@ As a maintainer, I want one layout engine API with injected measurement, break-o
 
 **Notes (lane w1, 2026-11-18):** Criterion 6 stays unticked, and nothing in it can be built now. The owner's decisions of 2026-11-17 (`docs/owner-decisions-2026-11-15.md`, items 26 to 29) settle the page view (the full editable view, condition C-WASM), the Rust WebAssembly module in the browser (overriding S10), and that page breaks follow the house class. None of them says to adopt or fork the layout core S7 recommended (Docen's block and flow layers, `docs/spikes/2026-11-06-s7-layout-core.md`). `layoutFlow` uses no forked core, so there is no adapter to put behind the API, and a test of the condition would be a stand-in. If the owner decides not to fork a core (the engine and the Rust kernels of the WASM epic stay behind this API), the criterion's condition never holds and it can be struck; if the owner decides to fork Docen, the adapter is the first piece of work and FE-078 to FE-087 are its checks. The decision is the owner's; none is taken here. `packages/layout/src/docen.ts` stays a spike adapter with a stand-in canvas.
 
+**Notes (lane w1, 2026-11-26):** Nothing new ticked. Checked against docs/owner-decisions-2026-11-15.md: decisions 26 to 29 build the page view and keep the house page breaks, but none decides whether to adopt or fork the layout core S7 recommended, so criterion 6 stays open and the earlier note stands.
+
 ### FE-077 Convert the document into flow blocks
 
 | Type | Phase | Size | Priority | Persona |
