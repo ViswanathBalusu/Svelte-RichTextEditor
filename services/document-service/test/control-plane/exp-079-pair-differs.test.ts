@@ -72,7 +72,10 @@ describe('a sealing export whose two compiles differ (EXP-079 criterion 4)', () 
       code: 'compile_pair_differs',
       retryable: false,
     });
-    const entries = await t.audit.query(tenant, { kind: 'workflow.finalisation_failed' });
+    const entries = await t.audit.query(tenant, {
+      kind: 'workflow.finalisation_failed',
+      limit: 10,
+    });
     expect(entries).toHaveLength(1);
     // Nothing was fetched or sealed, and asking again does not alert again.
     expect(t.sealed()).toBe(0);
