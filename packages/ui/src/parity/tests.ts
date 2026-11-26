@@ -232,6 +232,18 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/element/test/ux-021-pages.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-102 closed (2026-11-25): the ruler and the paragraph dialog in the shell and in
+  // the element, and the arithmetic of the markers and of the dialog's patch in Node.js.
+  [
+    'rulers',
+    [
+      { path: 'packages/ui/e2e/ux-102-ruler.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-102-ruler.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/ruler.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/ux-102-paragraph-dialog.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/ux-102-paragraph-format-info.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-016 closed (2026-11-20): the indicator's words in the shell, the return of a
   // visit that ended unsaved in the element and against the demo stack, and the outage and flush
   // on the element's own path.

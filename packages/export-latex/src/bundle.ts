@@ -52,6 +52,13 @@ export interface FontManifest {
   /** The family used when a document names one the manifest lacks. */
   defaultFamily: string;
   /**
+   * Ordered lines that name an open family to use for a family the manifest lacks (Calibri to
+   * Carlito; FE-062, owner decision 125). The first line that names a family decides. The editor
+   * reads the same lines from `GET /fonts`, so a document family gets the same file on screen and in
+   * the export. A line whose replacement is not a family of the manifest is ignored. Absent: none.
+   */
+  substitutes?: Array<{ family: string; replacement: string }>;
+  /**
    * The fallback chain, in order: a character a family lacks is taken from the first face here
    * that has it. Absent: the math face is the only fallback, because it is always on the font path.
    */

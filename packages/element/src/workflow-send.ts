@@ -24,7 +24,7 @@ import { failuresFromViolations, type SendFailure } from '@docedit/ui/send-check
 /** What the service needs of the session: the port and the document it is for. */
 export interface WorkflowSendSource {
   readonly port: Pick<WorkflowPort, 'get' | 'act'> &
-    Partial<Pick<WorkflowPort, 'onChange' | 'participant'>>;
+    Partial<Pick<WorkflowPort, 'onChange' | 'participant' | 'put'>>;
   readonly docId: string;
 }
 

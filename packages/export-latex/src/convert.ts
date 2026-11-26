@@ -51,7 +51,7 @@ import { mergeRanges, type CodeRange } from './fonts/coverage.ts';
 import { LANGUAGES } from './languages.ts';
 import { pageSetups, setupIndex, setupTex, storiesTex } from './page.ts';
 import { preflight } from './preflight.ts';
-import { styleMacro } from './props.ts';
+import { styleMacro, substituteKey } from './props.ts';
 
 /** The house class version (EXP-015): raised with every change to docedit.cls or docedit.lua. */
 export const CLASS_VERSION = '0.2.16';
@@ -95,6 +95,13 @@ function familiesOf(options: ConvertOptions): { map: Map<string, FamilyInfo>; de
       : null;
     map.set(family.name, { n: i + 1, family, coverage });
   });
+  // A family the manifest lacks takes the family of the first substitute line that names it
+  // (FE-062). The lines are kept under their normalised names, which a real family cannot have.
+  for (const line of options.fonts.substitutes ?? []) {
+    const target = map.get(line.replacement);
+    const key = substituteKey(line.family);
+    if (target && !map.has(key)) map.set(key, target);
+  }
   const def = map.get(options.fonts.defaultFamily) ?? [...map.values()][0];
   if (!def) throw new RangeError('the font manifest has no family');
   return { map, def };

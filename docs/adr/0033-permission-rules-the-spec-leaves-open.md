@@ -33,9 +33,13 @@ ProseMirror never leaves half a region in the tree, and the outcome check alread
 
 ### 4. `structure` stays document-level (PRM-063, the specification's default)
 
+**Reversed by owner decision 128 (2026-11-15); the design is ADR 0424.**
+
 No part of `structure` is grantable per region. The role table, P2 and 07 §5.3 stay as they are. A region-only editor can apply existing styles in the region but cannot create or change definitions, page setups, headers or footers (PRM-030). The integration guide must say so when it is written.
 
 ### 5. No size quota per region (PRM-064, the specification's default)
+
+**Settled by owner decision 134 (2026-11-15): no quota; the risk below is recorded and accepted.**
 
 Version 1 has no per-region quota. The risk stays: a user who may edit only one region can grow the document up to the 16 MiB limit of I7, and add fields up to the limits of I15. If a quota is wanted, `quota_exceeded` (05 §5.8) exists, and the outcome check can compare a region's canonical size before and after, at a cost proportional to the changed region.
 

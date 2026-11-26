@@ -13,7 +13,7 @@
  * sends and the webhook ping and replay are not composed in this scenario; the story Notes name
  * where they are proven.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -66,6 +66,9 @@ const CATALOGUE: Record<string, 'probed' | 'not-served'> = {
   // The tenant registry (UX-077): a key and an origin belong to a tenant, not to a document.
   'DELETE /keys/{kid}': 'probed',
   'DELETE /origins/{origin}': 'probed',
+  // BE-048: a font a tenant added is named by its hash, in the tenant's own prefix.
+  'GET /tenant-fonts/{sha256}': 'probed',
+  'DELETE /tenant-fonts/{sha256}': 'probed',
   'GET /imports/{jid}': 'probed',
   'GET /threads/{tid}': 'probed',
   'PATCH /threads/{tid}': 'probed',
@@ -521,6 +524,41 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(JSON.stringify(originsB.json)).toContain(h.b.origin);
         const keysA = await h.call('GET', '/v1/keys', { token: h.a.apiKey });
         expect(JSON.stringify(keysA.json)).toContain(kidA);
+      },
+    );
+
+    t()(
+      "a credential of tenant A cannot read or remove tenant B's font, and a user token cannot remove its own tenant's",
+      async () => {
+        const bytes = new TextEncoder().encode('font bytes of tenant B');
+        const sha256 = createHash('sha256').update(bytes).digest('hex');
+        await h.parts.objects.put(`tenants/${h.b.id}/fonts/${sha256}`, bytes);
+        await h.parts.tenantFonts!.add({
+          tenant: h.b.id,
+          sha256,
+          family: 'Bare Sans',
+          style: 'regular',
+          weight: 400,
+          italic: false,
+          format: 'truetype',
+          bytes: bytes.length,
+          licence: 'Test licence',
+          serverUse: true,
+          addedBy: 'bare-identifiers',
+          addedAt: 1,
+        });
+        const own = await h.call('GET', `/v1/tenant-fonts/${sha256}`, { token: h.b.apiKey });
+        expect(own.status).toBe(200);
+        const read = await h.call('GET', `/v1/tenant-fonts/${sha256}`, { token: h.a.apiKey });
+        expect(read.status).toBe(404);
+        expect(read.text).not.toContain(sha256.slice(8, 40));
+        const del = await h.call('DELETE', `/v1/tenant-fonts/${sha256}`, { token: h.a.apiKey });
+        expect(del.status).toBe(404);
+        const asUser = await h.call('DELETE', `/v1/tenant-fonts/${sha256}`, { token: tokenA });
+        expect(asUser.status).toBe(403);
+        // Nothing landed: the font and its file are still tenant B's.
+        const after = await h.call('GET', `/v1/tenant-fonts/${sha256}`, { token: h.b.apiKey });
+        expect(after.status).toBe(200);
       },
     );
 

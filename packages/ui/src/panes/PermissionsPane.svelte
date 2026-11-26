@@ -249,7 +249,33 @@
     shell.announce(done ? 'permissions.policy.set' : 'permissions.policy.failed');
   }
 
-  const POLICY_HELP: Readonly<Record<'inherit' | 'restricted', StringKey>> = {
+  // State (PRM-048 criterion 4): only with `manage`, and only when the backend offers the route. The
+  // list follows the change by itself (a state change raises `perm.changed`).
+  const STATES = ['draft', 'in_review', 'approved'] as const;
+  let stateChoice = $state<{ region: string; state: RegionSummary['state'] } | null>(null);
+  let stateBusy = $state(false);
+  const chosenState = $derived(
+    stateChoice && stateChoice.region === selected?.id
+      ? stateChoice.state
+      : (selected?.state ?? 'draft'),
+  );
+
+  async function changeState(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    if (!selected || !manage || !core.setRegionState || chosenState === selected.state) return;
+    stateBusy = true;
+    try {
+      await core.setRegionState(selected.id, chosenState);
+      stateChoice = null;
+      shell.announce('permissions.stateChange.changed');
+    } catch {
+      shell.announce('permissions.stateChange.failed');
+    } finally {
+      stateBusy = false;
+    }
+  }
+
+  const POLICY_HELP:Readonly<Record<'inherit' | 'restricted', StringKey>> = {
     inherit: 'permissions.policy.inherit.help',
     restricted: 'permissions.policy.restricted.help',
   };
@@ -372,6 +398,32 @@
         </fieldset>
       {:else}
         <p>{tr.t('permissions.policy.confidential')}</p>
+      {/if}
+      {#if manage && core.setRegionState && selected.title !== null}
+        <form class="de-form" onsubmit={changeState} data-region-state>
+          <label class="de-field" for={`${id}-state`}>{tr.t('permissions.stateChange.label')}</label>
+          <select
+            id={`${id}-state`}
+            class="de-input"
+            value={chosenState}
+            disabled={stateBusy}
+            onchange={(e) =>
+              (stateChoice = {
+                region: selected.id,
+                state: e.currentTarget.value as RegionSummary['state'],
+              })}
+          >
+            {#each STATES as state (state)}
+              <option value={state}>{tr.t(`permissions.state.${state}`)}</option>
+            {/each}
+          </select>
+          <button
+            type="submit"
+            class="de-button"
+            disabled={stateBusy || chosenState === selected.state}
+            >{tr.t('permissions.stateChange.save')}</button
+          >
+        </form>
       {/if}
       {#if !manage}
         <p class="de-hint" id={`${id}-readonly`}>{tr.t('permissions.readOnly')}</p>

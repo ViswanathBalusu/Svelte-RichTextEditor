@@ -1,6 +1,6 @@
 # Backlog by phase
 
-Generated on 2026-11-21 from the epic files in this folder; regenerate it whenever a story's fields change. 1007 stories. Within a phase, stories are ordered by priority, then by epic in build order (foundations, decisions and spikes, model, sync, permissions, protocol, backend, security, frontend, shell, history, export, fields and workflow, WebAssembly). Order within a phase is not a dependency order: each story's **Depends on** line is.
+Generated on 2026-11-26 from the epic files in this folder; regenerate it whenever a story's fields change. 1007 stories. Within a phase, stories are ordered by priority, then by epic in build order (foundations, decisions and spikes, model, sync, permissions, protocol, backend, security, frontend, shell, history, export, fields and workflow, WebAssembly). Order within a phase is not a dependency order: each story's **Depends on** line is.
 
 ## Phase 0: decisions, spikes and notes (47)
 

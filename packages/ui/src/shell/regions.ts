@@ -35,8 +35,17 @@ export function whoCanEdit(region: RegionSummary, tr: Translator, nameOf: NameOf
   const editors = region.editors;
   if (!editors)
     return region.title === null ? tr.t('reason.access.hidden') : tr.t('region.editors.none');
-  if (editors.leasedTo)
-    return tr.t('region.editors.lease', { name: nameOf(`user:${editors.leasedTo}`) });
+  if (editors.leasedTo) {
+    const name = nameOf(`user:${editors.leasedTo}`);
+    const until = editors.leaseExpiresAt ? new Date(editors.leaseExpiresAt) : null;
+    // The holder and when the lease runs out (PRM-048 criterion 3); the holder alone if the time is unreadable.
+    if (until && !Number.isNaN(until.getTime()))
+      return tr.t('region.editors.leaseUntil', {
+        name,
+        when: tr.date(until, { dateStyle: 'medium', timeStyle: 'short' }),
+      });
+    return tr.t('region.editors.lease', { name });
+  }
   // A name is said once: the host's directory names people, not groups, so several groups share one
   // neutral word, as people do until the directory has answered for them.
   const names = [...new Set(editors.principals.map(nameOf))];

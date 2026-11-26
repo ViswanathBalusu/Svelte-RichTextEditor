@@ -201,7 +201,8 @@ interface HostedChannel {
   /** The gateway's token of the channel's visibility class. */
   gatewayView: string;
   /** The submit whose commit is waiting for its answer on this channel (05 §5.3). */
-  inflight: ({ commit: string; envelope: string } & Timing) | null;
+  /** The commit sent and not yet answered, with the envelopes of later copies of it (SEC-015). */
+  inflight: ({ commit: string; envelope: string; copies: string[] } & Timing) | null;
 }
 
 interface Answering {
@@ -257,6 +258,9 @@ interface Request {
 
 /** Channel keys of requesters can never be those of sessions (`<session>#<ch>`). */
 const REQUESTER = '\u0000request:';
+/** Copies of one commit in flight on a channel that wait for its answer; more get usy (SEC-015). */
+const MAX_COPIES = 4096;
+const isBusy = (e: DepEvent): boolean => e.t === 'sync.reject' && e.d.code === 'busy';
 
 /**
  * Who a server-authored commit is checked as (04 §10; ADR 0053 D124): the control plane authorised
@@ -906,6 +910,14 @@ ecentHead, keeping one entry older than the window. */
   #submitNow(key: string, commit: Commit, envelope: string): void {
     const ch = this.#channels.get(key);
     if (!ch || this.#stopped) return;
+    // SEC-015: a copy of the commit that is still being stored on this channel is not a new commit.
+    // It is answered with the commit's own answer, once, when that comes. Beyond the cap the room
+    // answers usy as before.
+    const waiting = ch.inflight;
+    if (waiting !== null && waiting.commit === commit.id && waiting.copies.length < MAX_COPIES) {
+      waiting.copies.push(envelope);
+      return;
+    }
     const span = this.#deps.tracer.start('dep.commit', ch.port.trace, {
       tenant: this.ref.tenant,
       doc: this.ref.doc,
@@ -934,7 +946,7 @@ ecentHead, keeping one entry older than the window. */
     this.#apply(this.#gateway.submit(key, commit), { answering });
     // No answer yet: the commit waits for storage, or for the copy another channel submitted.
     if (!answering.answered && this.#channels.get(key) === ch)
-      ch.inflight = { commit: commit.id, envelope, ...timing };
+      ch.inflight = { commit: commit.id, envelope, copies: [], ...timing };
   }
 
   presence(key: string, update: PresenceUpdate): void {
@@ -1194,7 +1206,11 @@ ecentHead, keeping one entry older than the window. */
             re = ch.inflight.envelope;
             timing = ch.inflight;
           }
-          if (ch.inflight && ch.inflight.commit === e.d.id) ch.inflight = null;
+          // A usy answer to a copy is not the answer to the commit in flight: it leaves it in place.
+          const own =
+            ch.inflight && ch.inflight.commit === e.d.id && !isBusy(e) ? ch.inflight : null;
+          const copies = own ? own.copies : [];
+          if (own) ch.inflight = null;
           // Every refusal sent to a channel, the room's and the gateway's alike (PRM-051).
           if (e.t === 'sync.reject')
             this.#auditRejection(ch.conn.sub, ch.conn.agent, ch.port.session, e.d);
@@ -1208,6 +1224,7 @@ ecentHead, keeping one entry older than the window. */
           }
           this.#observe(e, timing);
           ch.port.send(e, re);
+          for (const copy of copies) ch.port.send(e, copy);
           break;
         }
         case 'ch.closed':

@@ -1548,6 +1548,10 @@
       "capability": "character-and-paragraph-formatting"
     },
     {
+      "id": "format.paragraph",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
       "id": "insert.crossReference",
       "capability": "editing"
     },

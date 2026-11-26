@@ -47,6 +47,31 @@ Time until a client that is `L` seconds behind exceeds `maxRebaseSteps` = 5,000 
 | 20 | 125 s | 50 s |
 | 50 | 50 s | 20 s |
 
+Run: `node --expose-gc packages/authority/scripts/syn-038-calibrate.ts stale` on the reference machine of ADR 0037 (i9-10900KF, Node.js 22.18.0), 2026-11-25. This is a simulation.
+
+
+Model: each other editor types 2 steps a second while active, and 30 % of them are active at any moment, so the room accepts `editors x 0.3 x 2` steps a second from others. A client class has a lag drawn from a lognormal distribution with the median and sigma shown; the distance of its commit is a Poisson count of the others' steps in that lag. 200,000 commits per cell, seed 1. The medians and sigmas are assumptions, chosen to show a fast link, a slow link and a return after a drop; they are not recordings. Not modelled: `stale_base` for a base before the oldest commit the room holds, or before a snapshot commit.
+
+| Client class | Median lag | Sigma | Other editors | stale at 1,000 | stale at 2,500 | stale at 5,000 | stale at 10,000 | stale at 20,000 |
+|---|---|---|---|---|---|---|---|---|
+| fast (lag between base and submission) | 0.3 s | 0.5 | 5 | 0.000 % | 0.000 % | 0.000 % | 0.000 % | 0.000 % |
+| fast (lag between base and submission) | 0.3 s | 0.5 | 50 | 0.000 % | 0.000 % | 0.000 % | 0.000 % | 0.000 % |
+| slow (lag between base and submission) | 3 s | 0.8 | 5 | 0.000 % | 0.000 % | 0.000 % | 0.000 % | 0.000 % |
+| slow (lag between base and submission) | 3 s | 0.8 | 50 | 0.136 % | 0.003 % | 0.000 % | 0.000 % | 0.000 % |
+| returning after a disconnection (time away) | 60 s | 1.5 | 5 | 12.541 % | 3.989 % | 1.304 % | 0.355 % | 0.074 % |
+| returning after a disconnection (time away) | 60 s | 1.5 | 50 | 65.153 % | 41.140 % | 24.716 % | 12.611 % | 5.423 % |
+
+Memory of the position maps kept for a room at each limit, from the measured 120 bytes per step map (table above):
+
+| maxRebaseSteps | Maps kept per room (KiB) |
+|---|---|
+| 1,000 | 117 |
+| 2,500 | 293 |
+| 5,000 | 586 |
+| 10,000 | 1172 |
+| 20,000 | 2344 |
+
+
 ## Cost estimate against measured time (SYN-038 criterion 3; SYN-037, 04 §12)
 
 Each commit has `S` one-character inserts and a base `D` steps behind the head of a document. The measured time is what the room does for it in steps 2 to 7: `parseSteps`, `rebaseOver`, `applySteps` of the mapped steps and `checkInvariants`. The estimate is `defaultCost` of `src/room/admission.ts` in units (fan-out 1). 9 runs each, median; milliseconds. The last column is milliseconds per unit.
@@ -135,7 +160,7 @@ What the window buys is CPU. Every commit costs the room 6 ms (1 page), about 34
 
 Rebasing is cheap compared with the rest of a commit. A commit of one step that is 5,000 steps behind costs 0.4 ms, and 50 steps cost 7 ms; at 20,000 steps behind, 50 steps cost 27 ms. The position maps cost about 120 bytes per accepted step: 0.6 MiB at 5,000 steps and 2.3 MiB at 20,000 steps, for each room that keeps them. The distance term of the cost estimate is therefore small in practice (see 4).
 
-The rate of `stale_base` was not measured. It depends on how far behind real clients fall, and no data on that exists. The model table gives the lag at which a client passes 5,000 steps for a given number of other editors and typing rate; it is arithmetic, not a measurement.
+The rate of `stale_base` for real clients was not measured: no data on how far behind they fall exists. The simulation above (lane w9, 2026-11-25) gives the rate for stated lag models. At 5,000 steps a fast client (median lag 0.3 s) and a slow client (3 s) are refused in none of 200,000 commits, with 5 or 50 other editors. A client returning after a drop (median 60 s, sigma 1.5) is refused 1.3 % of the time among 5 other editors and 24.7 % among 50. At 10,000 steps those figures fall to 0.36 % and 12.6 %; at 20,000, to 0.07 % and 5.4 %. A raised limit costs 120 bytes a step (1.1 MiB at 10,000, 2.3 MiB at 20,000 per room) and rebase CPU that stays below 30 ms at 20,000 steps for 50 steps. Clients that return after a long time are better served by catch-up (section 5) than by a larger limit, so the limit protects the room, not the returning client. The lag models are assumptions.
 
 ### 3. Rolling hash (criterion 6)
 
@@ -168,7 +193,7 @@ Each value is a proposal. None is applied.
 | Default | Now | Recommendation | Basis |
 |---|---|---|---|
 | Batching window | about 100 ms | 200 ms | Section 1: a third fewer commits, little loss of attribution resolution, each commit costing 34 to 156 ms on 20 to 100 pages. Revisit when the invariant check is incremental. |
-| `maxRebaseSteps` | 5,000 | keep 5,000 | Section 2: rebase and map memory are small at that distance (0.4 to 7 ms, 0.6 MiB). The rate of `stale_base` is unmeasured. |
+| `maxRebaseSteps` | 5,000 | keep 5,000 | Section 2: rebase and map memory are small at that distance (0.4 to 7 ms, 0.6 MiB). Simulated: no refusals for fast or slow clients; returning clients are better served by catch-up. The rate for real clients is unmeasured. |
 | Cost estimate | steps x distance + size | replace by an estimate in milliseconds that takes the document's canonical size as an input: about 0.2 to 0.3 ms per 1,000 bytes, plus about 0.0002 to 0.0004 ms per step per 1,000 bytes, plus about 0.00003 ms per step per step of distance | Section 4. `CostInput` needs a document size. These are the measured ranges, not fitted constants. |
 | Per-connection budget | none calibrated | 250 ms of room CPU per second, burst 300 ms | Twice a typist's demand on 20 pages at a 100 ms window (110 ms a second), and above the cost of a 500-step commit on 100 pages (281 ms). Below a typist's demand on 100 pages. |
 | Per-tenant budget | none calibrated | 500 ms of room CPU per second | Half of the one thread that serves all rooms of a process. |
@@ -181,7 +206,7 @@ The budgets are not safe to switch on for documents of 100 pages: a typist alone
 ## What remains unmeasured
 
 - Recorded editing traces. The batching and pipelining results rest on the synthetic trace.
-- The rate of `stale_base` for real clients, which needs the distribution of client lag.
+- The rate of `stale_base` for real clients, which needs recorded client lag. Section 2 simulates it from assumed lag distributions.
 - Real networks. The round trip is a fixed number in the simulation.
 - Storage and PostgreSQL time, and the acknowledgement latency end to end (SYN-015 criterion 5; SYN-040 criterion 3).
 - The server's cost of rebasing pipelined commits, and the combined hash inside a room.

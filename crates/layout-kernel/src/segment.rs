@@ -38,16 +38,18 @@
 //! Database of the same version. One tailoring of the crate stays: a character of class SA (Thai,
 //! Lao, Khmer and the like) is taken as AL whatever its General_Category, where the default rule
 //! LB1 takes a combining mark of that class as CM. No break is found inside such text (that needs a
-//! dictionary), and no rule of a language is applied: East Asian and South-East Asian rules are
-//! WASM-016.
+//! dictionary; WASM-016 has no dictionary data yet). Rules of a language are applied only when the
+//! caller names one (`line_breaks_for`, `tailor`): Chinese quotes, Korean breaking at spaces only,
+//! and the strict Japanese rules that are the default.
 
 use unicode_linebreak::BreakClass::{
     Alphabetic as AL, Ambiguous as AI, CarriageReturn as CR, CloseParenthesis as CP,
     ClosePunctuation as CL, CombiningMark as CM, ComplexContext as SA,
-    ConditionalJapaneseStarter as CJ, EmojiModifier as EM, HebrewLetter as HL,
-    InfixSeparator as IS, LineFeed as LF, Mandatory as BK, NextLine as NL, NonStarter as NS,
-    Numeric as NU, OpenPunctuation as OP, Postfix as PO, Prefix as PR, Space as SP,
-    Surrogate as SG, Symbol as SY, Unknown as XX, ZeroWidthJoiner as ZWJ, ZeroWidthSpace as ZW,
+    ConditionalJapaneseStarter as CJ, EmojiModifier as EM, Exclamation as EX, HebrewLetter as HL,
+    Ideographic as ID, InfixSeparator as IS, LineFeed as LF, Mandatory as BK, NextLine as NL,
+    NonStarter as NS, Numeric as NU, OpenPunctuation as OP, Postfix as PO, Prefix as PR,
+    Space as SP, Surrogate as SG, Symbol as SY, Unknown as XX, ZeroWidthJoiner as ZWJ,
+    ZeroWidthSpace as ZW,
 };
 use unicode_linebreak::{break_property, linebreaks, BreakClass, BreakOpportunity};
 use unicode_segmentation::UnicodeSegmentation;
@@ -172,6 +174,124 @@ fn correct(chars: &[char], found: &mut [u8]) {
     }
 }
 
+/// The language families whose line breaking differs from the default rules (WASM-016; the plan of
+/// FE-112, section 3). Any other language, and an empty tag, takes the default rules.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Family {
+    Default,
+    Japanese,
+    Chinese,
+    Korean,
+}
+
+/// The family of a BCP 47 language tag, from its primary subtag (`ja`, `zh-Hant-TW`, `ko_KR`), in
+/// either case. The three-letter codes of ISO 639-2 for the same languages are read too.
+#[must_use]
+pub fn family_of(tag: &str) -> Family {
+    let primary = tag.split(['-', '_']).next().unwrap_or("");
+    if primary.eq_ignore_ascii_case("ja") || primary.eq_ignore_ascii_case("jpn") {
+        Family::Japanese
+    } else if ["zh", "zho", "chi", "cmn", "yue"]
+        .iter()
+        .any(|code| primary.eq_ignore_ascii_case(code))
+    {
+        Family::Chinese
+    } else if primary.eq_ignore_ascii_case("ko") || primary.eq_ignore_ascii_case("kor") {
+        Family::Korean
+    } else {
+        Family::Default
+    }
+}
+
+/// A Hangul letter: the jamo, the compatibility jamo, the syllables and their extensions, and the
+/// halfwidth forms.
+fn is_hangul(c: char) -> bool {
+    matches!(u32::from(c),
+        0x1100..=0x11FF | 0x3130..=0x318F | 0xA960..=0xA97F | 0xAC00..=0xD7FF | 0xFFA0..=0xFFDC)
+}
+
+/// A character that belongs to a word for Korean line breaking: a Hangul letter, an ideograph, a
+/// letter or a digit.
+fn is_word_char(c: char) -> bool {
+    is_hangul(c) || matches!(class_of(c), ID | AL | HL | NU)
+}
+
+/// The index of the character that a break before `i` follows, skipping combining marks and joiners
+/// (which stay with the character before them, rule LB9).
+fn base_before(chars: &[char], i: usize) -> Option<usize> {
+    let mut j = i.checked_sub(1)?;
+    while matches!(class_of(chars[j]), CM | ZWJ) {
+        j = j.checked_sub(1)?;
+    }
+    Some(j)
+}
+
+/// Changes the opportunities of the default rules into those of a language (WASM-016). Mandatory
+/// breaks are never touched.
+///
+/// - **Chinese.** The curly quotes are not ambiguous: U+2018 and U+201C open and U+2019 and U+201D
+///   close, so they take the rules of an opening and a closing bracket. No break follows an opening
+///   quote (and the spaces after it), and one is allowed before it after an ideograph or a closing
+///   mark; no break precedes a closing quote, and one is allowed after it before an ideograph, an
+///   opening bracket or an opening quote. The default rule LB19 keeps both sides of every quote
+///   unbroken, which leaves a Chinese sentence in quotes with no place to break.
+/// - **Korean.** Lines break at spaces only, as Korean is written with spaces between words: no
+///   break between two characters that are Hangul letters, ideographs, letters or digits. A break
+///   after a space, a hyphen or punctuation stays.
+/// - **Japanese.** The default rules are the strict ones the plan asks for (small kana, the
+///   prolonged sound mark and the iteration marks cannot start a line, closing brackets and
+///   punctuation cannot start one, opening brackets cannot end one, and the ideographic space takes
+///   no break before it), so nothing is changed; `tests/segmentation.rs` and the tests of this file
+///   hold samples.
+fn tailor(chars: &[char], found: &mut [u8], family: Family) {
+    if family == Family::Default || family == Family::Japanese {
+        return;
+    }
+    for i in 1..chars.len() {
+        if found[i] == MANDATORY {
+            continue;
+        }
+        let Some(j) = base_before(chars, i) else {
+            continue;
+        };
+        let (before, after) = (chars[j], chars[i]);
+        match family {
+            Family::Chinese => {
+                let is_open = |c: char| matches!(c, '\u{2018}' | '\u{201C}');
+                let is_close = |c: char| matches!(c, '\u{2019}' | '\u{201D}');
+                // After an opening quote and the spaces behind it: no break.
+                let mut k = j;
+                while k > 0 && class_of(chars[k]) == SP {
+                    k -= 1;
+                }
+                if is_open(chars[k]) && found[i] == ALLOWED {
+                    found[i] = NONE;
+                    continue;
+                }
+                if is_close(after) {
+                    found[i] = NONE;
+                } else if found[i] == NONE {
+                    // Before an opening quote, or after a closing one: a break where the quote
+                    // is next to an ideograph, a bracket or the other kind of quote.
+                    let before_open = is_open(after)
+                        && (matches!(class_of(before), ID | CL | CP | EX | NS) || is_close(before));
+                    let after_close =
+                        is_close(before) && (matches!(class_of(after), ID | OP) || is_open(after));
+                    if before_open || after_close {
+                        found[i] = ALLOWED;
+                    }
+                }
+            }
+            Family::Korean => {
+                if found[i] == ALLOWED && is_word_char(before) && is_word_char(after) {
+                    found[i] = NONE;
+                }
+            }
+            Family::Default | Family::Japanese => {}
+        }
+    }
+}
+
 /// The line-break opportunities of `text` by UAX #14, as pairs `[offset, mandatory]` for each
 /// opportunity, ascending: the UTF-16 offset of the first unit after the break, and 1 when the
 /// break is mandatory (after a hard line break, and at the end of the text) or 0 when it is
@@ -179,6 +299,17 @@ fn correct(chars: &[char], found: &mut [u8]) {
 /// has none.
 #[must_use]
 pub fn line_breaks(text: &[u16]) -> Vec<u32> {
+    line_breaks_in(text, Family::Default)
+}
+
+/// `line_breaks` for text in a language (WASM-016): `language` is a BCP 47 tag, and the rules of its
+/// family apply (`tailor`). An unknown tag, or an empty one, gives the answer of `line_breaks`.
+#[must_use]
+pub fn line_breaks_for(text: &[u16], language: &str) -> Vec<u32> {
+    line_breaks_in(text, family_of(language))
+}
+
+fn line_breaks_in(text: &[u16], family: Family) -> Vec<u32> {
     let (s, starts) = decode(text);
     let chars: Vec<char> = s.chars().collect();
     let mut found = vec![NONE; chars.len() + 1];
@@ -188,6 +319,7 @@ pub fn line_breaks(text: &[u16]) -> Vec<u32> {
         found[index_at(&starts, &mut from, byte)] = if mandatory { MANDATORY } else { ALLOWED };
     }
     correct(&chars, &mut found);
+    tailor(&chars, &mut found, family);
     let mut out = Vec::new();
     for (i, &kind) in found.iter().enumerate() {
         if kind != NONE {
@@ -262,6 +394,96 @@ mod tests {
         let text = [0x61u16, 0xD800, 0x62];
         assert_eq!(grapheme_boundaries(&text), vec![0, 1, 2, 3]);
         assert_eq!(line_breaks(&text), vec![3, 1]);
+    }
+
+    /// The offsets of the opportunities of `s` for text in `language`, without the kind of each.
+    fn offsets_in(s: &str, language: &str) -> Vec<u32> {
+        line_breaks_for(&units(s), language)
+            .chunks_exact(2)
+            .map(|pair| pair[0])
+            .collect()
+    }
+
+    #[test]
+    fn the_family_comes_from_the_primary_subtag() {
+        for (tag, family) in [
+            ("ja", Family::Japanese),
+            ("JA-JP", Family::Japanese),
+            ("jpn", Family::Japanese),
+            ("zh", Family::Chinese),
+            ("zh-Hant-TW", Family::Chinese),
+            ("yue_HK", Family::Chinese),
+            ("ko-KR", Family::Korean),
+            ("kor", Family::Korean),
+            ("en", Family::Default),
+            ("", Family::Default),
+            ("jaa", Family::Default),
+            ("x-ja", Family::Default),
+        ] {
+            assert_eq!(family_of(tag), family, "{tag}");
+        }
+    }
+
+    #[test]
+    fn japanese_uses_the_strict_rules_the_plan_names() {
+        // Kinsoku: no line starts with 、 or 。 or a small kana or ー, none ends with an opening
+        // bracket, and no break goes before the ideographic space.
+        assert_eq!(offsets_in("今日は、晴れ", "ja"), vec![1, 2, 4, 5, 6]);
+        assert_eq!(offsets_in("きゃく", "ja"), vec![2, 3]);
+        assert_eq!(offsets_in("カーペット", "ja"), vec![2, 4, 5]);
+        assert_eq!(offsets_in("字「語」", "ja"), vec![1, 4]);
+        assert_eq!(offsets_in("あ\u{3000}い", "ja"), vec![2, 3]);
+        // Nothing is changed from the default rules, which are the strict ones.
+        for s in [
+            "今日は、晴れ",
+            "きゃく",
+            "カーペット",
+            "字「語」",
+            "あ\u{3000}い",
+        ] {
+            assert_eq!(offsets_in(s, "ja"), offsets(s), "{s}");
+        }
+    }
+
+    #[test]
+    fn chinese_breaks_around_its_curly_quotes() {
+        // 他说“你好”，再见: the default rule keeps both sides of a quote together.
+        let text = "他说\u{201C}你好\u{201D}，再见";
+        assert_eq!(offsets(text), vec![1, 4, 7, 8, 9]);
+        assert_eq!(offsets_in(text, "zh"), vec![1, 2, 4, 7, 8, 9]);
+        // No punctuation after the closing quote: a break is allowed there in Chinese.
+        let bare = "\u{201C}你好\u{201D}再见";
+        assert_eq!(offsets(bare), vec![2, 5, 6]);
+        assert_eq!(offsets_in(bare, "zh-Hans"), vec![2, 4, 5, 6]);
+        // Nothing follows an opening quote, not even after spaces.
+        assert_eq!(offsets_in("你\u{201C} 好", "zh"), vec![1, 4]);
+        // Latin text in a Chinese run breaks as it does anywhere.
+        let latin = "He said \u{201C}hi\u{201D} now";
+        assert_eq!(offsets_in(latin, "zh"), offsets(latin));
+        // Another language is not changed.
+        assert_eq!(offsets_in(text, "ja"), offsets(text));
+    }
+
+    #[test]
+    fn korean_breaks_at_spaces_only() {
+        let text = "한국어 문장을 씁니다";
+        assert_eq!(offsets_in(text, "ko"), vec![4, 8, 11]);
+        assert_eq!(offsets(text), vec![1, 2, 4, 5, 6, 8, 9, 10, 11]);
+        // A hyphen is a place to break, and Latin letters stay with Hangul.
+        assert_eq!(offsets_in("가-나", "ko-KR"), vec![2, 3]);
+        assert_eq!(offsets_in("한abc", "ko"), vec![4]);
+        // A hard break is kept.
+        assert_eq!(line_breaks_for(&units("한\n국"), "ko"), vec![2, 1, 3, 1]);
+    }
+
+    #[test]
+    fn an_unknown_or_empty_language_gives_the_default_answer() {
+        let text = "한국어 문장을 씁니다";
+        assert_eq!(line_breaks_for(&units(text), ""), line_breaks(&units(text)));
+        assert_eq!(
+            line_breaks_for(&units(text), "en"),
+            line_breaks(&units(text))
+        );
     }
 
     #[test]
