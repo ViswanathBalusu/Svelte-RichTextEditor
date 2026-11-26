@@ -4,13 +4,15 @@
  * compile-minute budget read them at the next request. Memory storage, and PostgreSQL in Podman
  * where it is available. Test values only.
  *
- * Not covered: the storage quota of an import (no import route exists, PRO-066) and the usage
- * figures an administrator reads (UX-076 has no usage route).
+ * An import starts from a Word file uploaded as an asset, so the storage quota of an import is the
+ * one of that upload (ADR 0371). Not covered: the usage figures an administrator reads (UX-076 and
+ * UX-078 have no usage route).
  */
 import { randomUUID } from 'node:crypto';
 import { unsandboxed } from '@docedit/asset-worker';
 import { checkProblem } from '@docedit/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
+import { DOCX_CONTENT_TYPE } from '../../src/control-plane/imports.ts';
 import type { JobHandler } from '../../src/control-plane/jobs/runner.ts';
 import { hashSecret } from '../../src/control-plane/tenants.ts';
 import { newApiKey } from '../../src/control-plane/tokens.ts';
@@ -115,6 +117,52 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect((await upload(1000)).status).toBe(201);
         expect(await h.parts.assetRegistry!.storedBytes(h.tenant)).toBe(2000);
         expectQuotaRefusal(await upload(1));
+      },
+    );
+
+    it.skipIf(skip)(
+      'answers the upload of a Word file for an import over the storage quota with quota_exceeded, so no import can start from it (criterion 1, the import half)',
+      async () => {
+        const h = await startHarness(storage, {
+          assetWorker: { sandbox: unsandboxed(), allowUnsandboxed: true },
+          importer: async () => {
+            throw new Error('no import job runs in this test');
+          },
+          config: { jobIdleMs: 20 },
+        });
+        harnesses.push(h);
+        const doc = await h.createDocument({ content: documentWithRegions() });
+        const editor = h.userToken({ [doc]: 'editor' });
+        const upload = (size: number) =>
+          h.call('POST', `/v1/documents/${doc}/assets`, {
+            token: editor,
+            body: { filename: 'draft.docx', mime: DOCX_CONTENT_TYPE, size },
+          });
+        const startImport = (asset: string) =>
+          h.call('POST', `/v1/documents/${doc}/imports`, {
+            token: h.apiKey,
+            body: { asset, format: 'docx' },
+          });
+
+        await putQuotas(h, { storage: 1000 });
+        const admitted = await upload(900);
+        expect(admitted.status, admitted.text).toBe(201);
+        // The Word file that would take the tenant past its quota is refused at the upload, and
+        // nothing is stored for it: the import has no asset to start from.
+        const refused = await upload(101);
+        expectQuotaRefusal(refused);
+        expect(await h.parts.assetRegistry!.storedBytes(h.tenant)).toBe(900);
+        const missing = await startImport(uuid7());
+        expect(missing.status).toBe(404);
+
+        // The asset that was admitted is the one an import may use: it is not yet ready (the
+        // worker has not accepted a file that was never sent), and the answer says so, not
+        // `quota_exceeded`.
+        const pending = await startImport(admitted.json.id as string);
+        expect(pending.json.code).not.toBe('quota_exceeded');
+
+        await putQuotas(h, { storage: 2000 });
+        expect((await upload(101)).status).toBe(201);
       },
     );
 
