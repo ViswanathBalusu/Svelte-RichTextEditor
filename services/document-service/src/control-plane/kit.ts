@@ -71,7 +71,7 @@ import type { CaptureSettingsPort } from '../workflow/capture-settings.ts';
 import type { SealedPdfStore } from '../workflow/sealed-store.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import type { TemplateStore } from '../workflow/template-store.ts';
-import type { DocxImporter } from './imports.ts';
+import type { DocxImporter } from './import-port.ts';
 
 export interface HandlerDeps {
   documents: DocumentStore;
