@@ -115,6 +115,7 @@ export class MockBackend implements Backend {
     };
     this.sync = {
       loadContent: (docId, seq) => this.loadContent(docId, seq),
+      document: async (docId) => this.doc(docId).resource(),
       open: (docId, opts) => this.open(docId, opts.resume),
     };
     this.permissions = {

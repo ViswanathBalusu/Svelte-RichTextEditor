@@ -24,7 +24,9 @@ import {
   type PrincipalInfo,
   type SearchPrincipals,
   type SyncChannel,
+  type SyncPort,
 } from '@docedit/protocol';
+import { classificationView, type NoticeSource } from './classification-shell.ts';
 import {
   App,
   PeopleDirectory,
@@ -106,6 +108,12 @@ export interface MountOptions {
    * `regions` read the shell offers the permissions pane; with its grants reads, the grant controls.
    */
   permissions?: PermissionsPort | null;
+  /**
+   * The session's metadata read and notices, when the backend has the read (UX-085 criterion 2).
+   * With them the status bar shows the document's classification label and follows
+   * `document.updated`; without them the core has no `classification` view and the bar shows none.
+   */
+  classification?: { document: NonNullable<SyncPort['document']>; notices: NoticeSource };
   /**
    * The export dialog's jobs (UX-101), when the backend has the exports port. Without it the shell
    * offers no export command.
@@ -836,6 +844,17 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
       // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
       permissions: core.permissions,
+      // The classification label of the status bar (UX-085 criterion 2): the document resource,
+      // read again at every `document.updated`.
+      ...(options.classification
+        ? {
+            classification: classificationView(
+              options.classification.document,
+              options.docId,
+              options.classification.notices,
+            ),
+          }
+        : {}),
       // The lock indicators of the regions the user cannot edit (PRM-026): the core shades them from
       // the access and draws the shell's words, which hold the names of the host's directory.
       setRegionLabels: (labels, defaults) => core.setRegionLabels(labels, defaults),

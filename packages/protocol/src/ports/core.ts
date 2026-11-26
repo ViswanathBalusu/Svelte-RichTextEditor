@@ -100,6 +100,14 @@ export interface SyncPort {
    */
   loadContent(docId: string, seq?: number): Promise<Content>;
   /**
+   * `GET /documents/{id}`: the metadata of the document, with its ETag (05 §6.2). The interface reads
+   * the classification label from it (UX-085; PRO-048) and fetches it again on `document.updated`
+   * (owner decision 216). A reader ignores the fields it does not know (PRO-005). Optional: a
+   * backend without a metadata read leaves the label out of the status bar. Not in `CORE_MEMBERS`;
+   * each implementation has its own test.
+   */
+  document?(docId: string): Promise<Tagged<W.DocumentResource>>;
+  /**
    * Opens a document channel (`ch.open`). Without `resume` the server answers `catchUp: "reload"`,
    * and the caller fetches the content at `opened.head`. Rejects with a PortError carrying the
    * `ch.rejected` code.
