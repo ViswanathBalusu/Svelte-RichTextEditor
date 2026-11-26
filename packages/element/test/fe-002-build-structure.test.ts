@@ -285,3 +285,47 @@ describe('the configuration that makes the shape (FE-002)', () => {
       expect(statics.test(readFileSync(resolve(packages, file), 'utf8')), file).toBe(false);
   });
 });
+
+// Pseudo-random text does not compress, so the gzip size of a chunk is close to its length.
+function noise(bytes: number, seed: number): string {
+  let state = seed;
+  let out = '';
+  for (let i = 0; i < bytes; i++) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    out += String.fromCharCode(35 + ((state >>> 16) % 56));
+  }
+  return out;
+}
+
+describe('the size budget of the first interactive editor (FE-002 criterion 3)', () => {
+  const sized = (editorBytes: number, depBytes: number): ChunkInfo[] =>
+    good.map((c) =>
+      c === editor
+        ? { ...c, code: `export const a = "${noise(editorBytes, 7)}";` }
+        : c === dep
+          ? { ...c, code: `export const d = "${noise(depBytes, 11)}";` }
+          : c,
+    );
+  const reportOf = (chunks: ChunkInfo[]) => bundleReport(chunks, null);
+
+  it('reads 320 kB of gzip as the budget, and accepts a set below it in both configurations', () => {
+    const report = reportOf(sized(250_000, 50_000));
+    expect(report.budgetGzipBytes).toBe(320_000);
+    expect(report.firstInteractive.size.gzip).toBeLessThan(320_000);
+    expect(report.firstInteractiveWithDep?.size.gzip).toBeLessThan(320_000);
+    expect(report.withinBudget).toBe(true);
+  });
+
+  it('fails when the host-backend set is over the budget', () => {
+    const report = reportOf(sized(480_000, 1_000));
+    expect(report.firstInteractive.size.gzip).toBeGreaterThan(320_000);
+    expect(report.withinBudget).toBe(false);
+  });
+
+  it('fails when only the set with the DEP client is over the budget', () => {
+    const report = reportOf(sized(380_000, 120_000));
+    expect(report.firstInteractive.size.gzip).toBeLessThanOrEqual(320_000);
+    expect(report.firstInteractiveWithDep?.size.gzip).toBeGreaterThan(320_000);
+    expect(report.withinBudget).toBe(false);
+  });
+});
