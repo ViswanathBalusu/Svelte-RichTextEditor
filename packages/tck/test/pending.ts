@@ -53,7 +53,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'close 4429': `rate limits: ${FAULTS}`,
   'close 4500': `an internal error: ${FAULTS}`,
   'error slow_consumer': `a client that stops reading: ${FAULTS}`,
-  'error workflow_active': WORKFLOW,
   'error internal': FAULTS,
   'event comment.reacted':
     'the notice follows the reaction routes; the kit scenario of the reactions profile covers the routes and refusals only (UX-033; ADR 0424)',
