@@ -570,6 +570,7 @@
     | 'sign'
     | 'alt'
     | 'crossReference'
+    | 'paragraph'
     | null
   >(null);
   // The picture that was just inserted without alternative text (FE-132 criterion 5).
@@ -687,6 +688,12 @@
         }
       }),
     );
+  }
+
+  // The element that holds the text, which the ruler lines up with (UX-102).
+  let bodyHostEl = $state<HTMLElement | null>(null);
+  function paragraphChanged(done: boolean): void {
+    announce(done ? 'announce.paragraph.set' : 'announce.paragraph.failed');
   }
 
   function applyLanguage(lang: string | null): void {
@@ -1095,6 +1102,7 @@
       add(host1b['format.painter']);
     add(host1b['format.applyFormat']);
     add(host1b['format.language']);
+    if (core.paragraphFormat) add(host1b['format.paragraph']);
     add(host1b['insert.region']);
     if (core.referenceTargets) add(host1b['insert.crossReference']);
     if (core.threads) add(host1b['review.comment']);
@@ -1595,6 +1603,16 @@
       <FillBar fill={core.fill} onFinish={finishFill} />
     {/await}
   {/if}
+  {#if core.paragraphFormat && mode.toolbar !== 'none'}
+    {#await import('./components/Ruler.svelte') then { default: Ruler }}
+      <Ruler
+        body={bodyHostEl}
+        {zoom}
+        onDialog={() => (dialog = 'paragraph')}
+        onChanged={paragraphChanged}
+      />
+    {/await}
+  {/if}
   <div class="de-workspace">
     <div
       bind:this={pageEl}
@@ -1608,6 +1626,7 @@
     >
       <div class="de-body-frame">
         <div
+          bind:this={bodyHostEl}
           class="de-body-host"
           style:zoom={zoom === DEFAULT_ZOOM ? undefined : String(zoom)}
           {@attach (node) => core.mountBody(node)}
@@ -1727,6 +1746,7 @@
       AltTextDialog,
       CrossReferenceDialog,
       LanguageDialog,
+      ParagraphDialog,
       RegionDialog,
       CommentBox,
       ExportDialog,
@@ -1753,6 +1773,16 @@
           dialog = null;
           altAsset = null;
         }}
+      />
+    {:else if dialog === 'paragraph' && core.paragraphFormat?.get()}
+      <ParagraphDialog
+        format={core.paragraphFormat.get()!}
+        onApply={(patch) => {
+          const done = core.runNamed?.('setParagraphFormat', patch) ?? false;
+          paragraphChanged(done);
+          return done;
+        }}
+        onClose={() => (dialog = null)}
       />
     {:else if dialog === 'language'}
       <LanguageDialog

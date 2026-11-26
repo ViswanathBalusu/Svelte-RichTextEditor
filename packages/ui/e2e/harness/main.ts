@@ -16,6 +16,7 @@ import type {
   ClassificationLabel,
   CommentAnchor,
   DocumentStats,
+  ParagraphFormatView,
   EditorMode,
   ExportJobView,
   ExportTarget,
@@ -168,6 +169,8 @@ export interface MountOptions {
   /** A view with that many pages is shown (UX-021); absent: the web view, which has no pages. */
   pages?: number;
   language?: string | null;
+  /** The indents and tab stops at the selection (UX-102); absent: no ruler. */
+  paragraphFormat?: ParagraphFormatView | null;
   exportTargets?: ExportTarget[] | null;
   projected?: boolean;
   grants?: RegionGrant[] | null;
@@ -610,6 +613,7 @@ function mountShell(options: MountOptions = {}): void {
     ...(options.regions ? { regions: options.regions } : {}),
     ...(options.stats ? { stats: options.stats } : {}),
     ...(options.language !== undefined ? { language: options.language } : {}),
+    ...(options.paragraphFormat !== undefined ? { paragraphFormat: options.paragraphFormat } : {}),
     ...(options.exportTargets !== undefined ? { exportTargets: options.exportTargets } : {}),
     ...(options.projected ? { projected: true } : {}),
     ...(options.grants !== undefined ? { grants: options.grants } : {}),
@@ -1074,6 +1078,10 @@ const harness = {
   setStyles: (styles: StyleSummary[]) => need().core.styles?.set(styles),
   setRegions: (regions: RegionSummary[]) => need().core.regions?.set(regions),
   setStats: (stats: DocumentStats) => need().core.stats?.set(stats),
+  /** The indents and tab stops the fake core holds (UX-102). */
+  paragraphFormat: () => need().core.paragraphFormat?.get() ?? null,
+  /** Another paragraph under the caret (UX-102). */
+  setParagraphFormat: (next: ParagraphFormatView | null) => need().core.paragraphFormat?.set(next),
   /** As a view with pages does (UX-021): another page shown, a new layout, or no pages (null). */
   setPages: (next: { count?: number; current?: number; revision?: number } | null) =>
     pagesHandle?.set(next),
