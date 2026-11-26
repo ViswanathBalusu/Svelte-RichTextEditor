@@ -96,7 +96,7 @@ describe.skipIf(!isBrowser)('signature and initials fields (FRW-046 criterion 1)
         m.host.querySelector(`[data-field="${SIGNED_TENANT}"]`)?.hasAttribute('data-signed'),
       ).toBe(true);
       const other = m.button(SIGN_LANDLORD);
-      expect(other.textContent).toBe('Not signed');
+      expect(other.textContent).toBe('Not signed (another signer)');
       expect(other.disabled).toBe(true);
       other.click();
       expect(m.core.signRequest.get()).toBeNull();

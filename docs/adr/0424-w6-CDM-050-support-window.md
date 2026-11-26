@@ -16,3 +16,13 @@ Status: proposed. Lane w6, 2026-11-26. The first point rests on owner decision 7
 
 - A minimum duration in time for the window (point 2).
 - Whether an operator may extend the window for a tenant that still embeds old components. 03 §11.3 already makes enabling n+1 an operator's act, gated on every node and component supporting it.
+
+## Added 2026-11-26 (lane w6, second pass): the identifier on the stamp (criterion 2)
+
+Proposed, as no owner answer names one (ADR 0353 item 6 left it open):
+
+- The package identifier is `<name>@<version>` as npm writes it, for example `@docedit/model@0.0.0`. The model package exposes it with the `cdm` version through `modelStampIdentity()` (`@docedit/model/definition`); a test keeps `MODEL_PACKAGE.version` equal to `package.json`.
+- The authority package exposes the three values a commit stamp needs, `cdm`, `engine` and `package`, through `commitStampIdentity()`. The room already writes `cdm` and `engine` on each commit; it does not yet write `package`, because a new member on a stored commit changes the commit schema and the wire format. That change belongs with the owner's word on whether history should record it.
+- The engine identifier stays `pm-steps/1` (`ENGINE`).
+
+Owner decisions 196 to 220 accept the proposed defaults in bulk, so points 1 to 3 above count as accepted. The minimum duration in time and the per-tenant extension stay with the owner, as listed under "Not decided here".
