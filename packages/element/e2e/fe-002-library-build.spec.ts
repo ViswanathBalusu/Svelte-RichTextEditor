@@ -49,9 +49,12 @@ function registryPanes(): string[] {
     registry.indexOf('export const BUILT_IN_PANES'),
     registry.indexOf('export const loadSandboxPane'),
   );
-  return [...builtIn.matchAll(/load\(import\('\.\.\/panes\/(\w+)\.svelte'\)\)/g)]
-    .map((m) => m[1]!)
-    .sort();
+  // The pane of a tier 1 extension's panel (`loadDomPane`, UX-052) is a chunk of its own in the
+  // library build too; the sandbox pane is not (the unit test of the structure counts both).
+  return [
+    ...builtIn.matchAll(/load\(import\('\.\.\/panes\/(\w+)\.svelte'\)\)/g).map((m) => m[1]!),
+    'ExtensionDomPane',
+  ].sort();
 }
 
 /**

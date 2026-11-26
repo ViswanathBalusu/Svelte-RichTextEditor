@@ -2,13 +2,13 @@
  * PRO-086 criteria 3 and 4 (lane w5), on the production element in a browser.
  *
  * Criterion 3: `print()` asks the backend's exports port for a typeset PDF (`target: 'pdf'`), polls
- * the job, and prints the file at the job's URL in a hidden frame of the element's shadow root. It
- * prints nothing else: the frame loads the job's URL and nothing of the page, the host page's
- * `window.print` is not called, and the frame is removed after `afterprint`. The stand-in port
- * completes at once with a blob URL of an HTML page that stands for the PDF (a headless browser has
- * no PDF viewer and shows no print dialogue, so what the real print path sends cannot be seen; see
- * FE-073's Notes). The frame's window is the same window that receives `print()`, so the test
- * replaces that window's `print` right after the frame is added and counts the call.
+ * the job, has the PDF viewer draw the file at the job's URL in a frame of its own, and prints the
+ * pages from a print-only `blob:` frame of the element's shadow root (FE-073). It prints nothing
+ * else: the host page's `window.print` is not called, and the frame is removed after `afterprint`.
+ * The stand-in port completes at once with the demo's sample PDF (a headless browser shows no print
+ * dialogue, so what the real print path sends cannot be seen; see FE-073's Notes). The print frame's
+ * window is the one that receives `print()`, so the test replaces that window's `print` right after
+ * the frame is added and counts the call. The viewer's frame is sandboxed and is only counted.
  *
  * Criterion 4: with `no-export` in the access, `requestExport` rejects with `forbidden` and the
  * reason `no-export`; with `no-print`, `print()` resolves `{ status: 'refused', reason: 'no-print' }`.
@@ -42,10 +42,7 @@ async function mount(page: Page): Promise<void> {
       backend.features = new Set([...backend.features, 'exports']);
     };
     const probe: Probe = { requests: [], printed: [] };
-    const page = new Blob(['<!doctype html><title>typeset pdf</title><p>stands for the PDF</p>'], {
-      type: 'text/html',
-    });
-    const url = URL.createObjectURL(page);
+    const url = '/exports/sample.pdf';
     backend.exports = {
       request: async (docId: string, body: unknown) => {
         probe.requests.push({ docId, body });
@@ -70,6 +67,8 @@ async function mount(page: Page): Promise<void> {
     );
     el.backend = backend;
     el.setAttribute('doc-id', e.docId);
+    // The page's own copy of the viewer: the module of the demo build has none beside it.
+    (el as unknown as { config: unknown }).config = { pdfViewerUrl: '/lib/viewer/pdf-viewer.html' };
     document.getElementById('mount')!.append(el);
     await ready;
   });
@@ -117,11 +116,18 @@ test('PRO-086 criterion 3: print() prints the PDF of the export job, in a frame,
     };
     const probe = (window as unknown as { __probe: Probe }).__probe;
     const frames: Array<{ src: string; printedInFrame: number; sameWindowAsHost: boolean }> = [];
+    const viewerFrames: string[] = [];
     let removed = 0;
     new MutationObserver((records) => {
       for (const r of records) {
         for (const n of Array.from(r.addedNodes)) {
           if (!(n instanceof HTMLIFrameElement)) continue;
+          // The PDF viewer's frame draws the pages and is removed again; it is sandboxed, so its
+          // window is not touched. The frame that prints is the blob: document of the page's origin.
+          if (!n.src.startsWith('blob:')) {
+            viewerFrames.push(n.src);
+            continue;
+          }
           const win = n.contentWindow as (Window & { print: () => void }) | null;
           const record = { src: n.src, printedInFrame: 0, sameWindowAsHost: win === window };
           frames.push(record);
@@ -139,6 +145,7 @@ test('PRO-086 criterion 3: print() prints the PDF of the export job, in a frame,
     return {
       outcome,
       frames,
+      viewerFrames,
       removed,
       requests: probe.requests,
       hostPrinted: probe.printed,
@@ -150,6 +157,8 @@ test('PRO-086 criterion 3: print() prints the PDF of the export job, in a frame,
   expect(facts.requests).toHaveLength(1);
   expect(facts.requests[0]?.body).toMatchObject({ target: 'pdf' });
   expect(facts.outcome).toEqual({ status: 'printed' });
+  expect(facts.viewerFrames).toHaveLength(1);
+  expect(facts.viewerFrames[0]).toMatch(/\/lib\/viewer\/pdf-viewer\.html$/);
   expect(facts.frames).toHaveLength(1);
   expect(facts.frames[0]?.src).toMatch(/^blob:/);
   expect(facts.frames[0]?.sameWindowAsHost).toBe(false);
