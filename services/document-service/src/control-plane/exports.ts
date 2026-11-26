@@ -129,9 +129,9 @@ export function exportRequestKey(parts: {
   classification?: string | null;
   /** What `accept` checks a block deletion against (EXP-081): the owners and the `edit` scopes. */
   suggestionAccess?: unknown;
-  /** The comment threads of a comments: margin export (EXP-084): they change without a commit. */
+  /** The comment threads of a `comments: margin` export (EXP-084): they change without a commit. */
   commentThreads?: unknown;
-  /** The pictures an html export carries (EXP-087): identifier to hash and type. */
+  /** The pictures an `html` export carries (EXP-087): identifier to hash and type. */
   assets?: unknown;
 }): string {
   return createHash('sha256')

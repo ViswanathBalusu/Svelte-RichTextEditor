@@ -101,7 +101,7 @@ export interface CommentMessage {
  * A comment thread at the exported seq (EXP-084; ADR 0228 decision 1; docs/adr/0428). Threads are
  * not in the document (03 section 4; 07 section 6): the control plane maps each range to the seq,
  * finds the paragraph it starts in and reads the words it covers, and the converter only places
- * the note. It never reads a user identity: uthor is a display name the service resolved.
+ * the note. It never reads a user identity: `author` is a display name the service resolved.
  */
 export interface CommentThread {
   readonly id: string;
@@ -120,14 +120,13 @@ export interface CommentThread {
 /**
  * What the exporter needs to check a suggestion against the permission rules (09 §10; owner decision
  * 111; docs/adr/0370-w2-exp-081-unverifiable-suggestion-marks.md): the owner of each suggestion
- * identifier and the scopes where the requester holds dit. Accepting a suggestion changes the
- * content, so it needs dit there (07 §5.2 P1); the suggester's own grant does not count (P4).
+ * identifier and the scopes where the requester holds `edit`. Accepting a suggestion changes the
+ * content, so it needs `edit` there (07 §5.2 P1); the suggester's own grant does not count (P4).
  */
 export interface SuggestionAccess {
   /** Suggestion identifier to the user (or import label) that owns it. */
   readonly owners: Readonly<Record<string, string>>;
-  /** Scopes (ody, 
-egion:<id>) where the requester has dit, or ll for a service credential. */
+  /** Scopes (`body`, `region:<id>`) where the requester has `edit`, or `all` for a service credential. */
   readonly edit: 'all' | readonly string[];
 }
 
@@ -187,18 +186,17 @@ export interface ConvertOptions {
    */
   suggestions?: Suggestions;
   /**
-   * margin (09 section 10) prints the open comment threads of commentThreads in the right
-   * margin; 
-one (the default) prints none. A thread that cannot stand beside its paragraph (a
+   * `margin` (09 section 10) prints the open comment threads of `commentThreads` in the right
+   * margin; `none` (the default) prints none. A thread that cannot stand beside its paragraph (a
    * detached range, a paragraph in a table cell, a heading, a header or a hidden paragraph) is
    * listed at the end of the document with a warning (EXP-084).
    */
   comments?: 'none' | 'margin';
-  /** The threads at the exported seq, written by the control plane (EXP-084). */
+  /** The threads at the exported `seq`, written by the control plane (EXP-084). */
   commentThreads?: readonly CommentThread[];
   /**
    * The owners of the suggestion identifiers and the requester's grants (owner decision 111). With
-   * it, a whole-block deletion is honoured under ccept only if it passes (EXP-081). Absent: the
+   * it, a whole-block deletion is honoured under `accept` only if it passes (EXP-081). Absent: the
    * converter cannot check and honours the deletion, as before; the service always supplies it.
    */
   suggestionAccess?: SuggestionAccess;

@@ -149,9 +149,9 @@ export interface ExportHandlerDeps {
     opts: SandboxOptions,
   ) => Promise<CompileResult>;
   /**
-   * The bytes of a final asset by its SHA-256 (AssetStore.getFinal; EXP-087 criterion 6). Absent:
-   * no picture travels with an html export, and each is written as its alternative text with the
-   * warning image_asset_missing.
+   * The bytes of a final asset by its SHA-256 (`AssetStore.getFinal`; EXP-087 criterion 6). Absent:
+   * no picture travels with an `html` export, and each is written as its alternative text with the
+   * warning `image_asset_missing`.
    */
   assetBytes?: (tenant: string, sha256: string) => Promise<Uint8Array | null>;
   /** The image that compiles; its identifier goes into the result manifest. */
@@ -226,7 +226,7 @@ interface Payload {
   certificate: CertificateFacts | null;
   /** The owners of the suggestion identifiers and the requester's grants (EXP-081); or null. */
   suggestionAccess: SuggestionAccess | null;
-  /** The comment threads at the exported seq (EXP-084), written by the control plane; or none. */
+  /** The comment threads at the exported `seq` (EXP-084), written by the control plane; or none. */
   commentThreads: CommentThread[];
   /** The ready assets of the document that the exported content names, by identifier (EXP-087). */
   assets: Record<string, { sha256: string; mediaType: string }>;
@@ -240,7 +240,7 @@ const HTML_PICTURES: Readonly<Record<string, string>> = {
   'image/webp': '.webp',
 };
 
-/** The assets of a payload, or invalid when they are not the shape the control plane writes. */
+/** The assets of a payload, or `invalid` when they are not the shape the control plane writes. */
 function readAssets(v: unknown): Payload['assets'] | 'invalid' {
   if (v === undefined || v === null) return {};
   if (typeof v !== 'object' || Array.isArray(v)) return 'invalid';
@@ -262,7 +262,7 @@ function readAssets(v: unknown): Payload['assets'] | 'invalid' {
   return out;
 }
 
-/** The comment threads of a payload, or invalid when they are not the shape the control plane writes. */
+/** The comment threads of a payload, or `invalid` when they are not the shape the control plane writes. */
 function readCommentThreads(v: unknown): CommentThread[] | 'invalid' {
   if (v === undefined || v === null) return [];
   if (!Array.isArray(v) || v.length > 1000) return 'invalid';
@@ -295,7 +295,7 @@ function readCommentThreads(v: unknown): CommentThread[] | 'invalid' {
   return out;
 }
 
-/** The access of a payload, or invalid when it is not the shape the control plane writes. */
+/** The access of a payload, or `invalid` when it is not the shape the control plane writes. */
 function readSuggestionAccess(v: unknown): SuggestionAccess | null | 'invalid' {
   if (v === undefined || v === null) return null;
   if (typeof v !== 'object' || Array.isArray(v)) return 'invalid';
@@ -531,7 +531,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     // The HTML target (09 §11; EXP-087): the direct writer reads the projected envelope. It needs no
     // font and no sandbox. The writer's diagnostics are the job's, so a construct HTML cannot
     // express is named in the result (criterion 4). Pictures travel with the page when the worker
-    // can read the asset bytes (deps.assetBytes; criterion 6).
+    // can read the asset bytes (`deps.assetBytes`; criterion 6).
     if (payload.target === 'html') {
       const htmlContent = await contentAt(
         deps.stores,
@@ -750,7 +750,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         fields: plan.fields,
         ...(plan.suggestions ? { suggestions: plan.suggestions } : {}),
         ...(payload.suggestionAccess ? { suggestionAccess: payload.suggestionAccess } : {}),
-        // The comment threads at the exported seq (EXP-084): the control plane wrote them.
+        // The comment threads at the exported `seq` (EXP-084): the control plane wrote them.
         ...(plan.comments === 'margin'
           ? { comments: 'margin' as const, commentThreads: payload.commentThreads }
           : {}),

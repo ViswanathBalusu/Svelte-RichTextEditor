@@ -47,7 +47,7 @@ function editScopesOf(a: Access): string[] {
 }
 
 /**
- * The ready assets of doc that content names through an sset attribute (EXP-087): identifier
+ * The ready assets of `doc` that `content` names through an `asset` attribute (EXP-087): identifier
  * to hash and type. An asset that is not ready, or was uploaded for another document, is left out.
  */
 export async function exportAssets(
@@ -230,14 +230,14 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
                   ),
           }
         : null;
-    // margin prints the open comment threads at the exported seq (EXP-084). They are not in the
+    // `margin` prints the open comment threads at the exported `seq` (EXP-084). They are not in the
     // document, so the job carries them; they are part of the request key, since a comment can
     // be added without a commit.
     const commentThreads =
       options['comments'] === 'margin' && (body.target === 'pdf' || body.target === 'tex')
         ? await commentThreadsAt(d, { ref, seq, doc: content.doc, view })
         : null;
-    // The pictures of an html export travel with the page (EXP-087 criterion 6): the ready assets
+    // The pictures of an `html` export travel with the page (EXP-087 criterion 6): the ready assets
     // of this document that the readable content names, by identifier, with their hash and type.
     // The worker reads the bytes by hash; an asset of another document is never named.
     const assets =

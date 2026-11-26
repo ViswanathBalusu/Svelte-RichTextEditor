@@ -8,6 +8,7 @@
  * The writer uses only what the caller passes. Comment threads live outside the document (03 §4;
  * 07 §6), so the caller maps them to the exported `seq` and gives each author label and date.
  */
+import type { JsonNode } from '@docedit/model';
 import { NS } from './ooxml.ts';
 import { ROOT_DECLARATIONS, XML_DECLARATION, el, textElement } from './writer-xml.ts';
 
@@ -28,6 +29,15 @@ export interface CommentThread {
   messages: readonly CommentMessage[];
   /** Whether the thread is resolved (Word's `done`). */
   done?: boolean;
+  /**
+   * The text the thread is on, as positions in the paragraph's inline content (UTF-16 units of the
+   * text, one for each atom such as a tab, a break or a field), from the start to the end, mapped by the
+   * caller to the exported seq (owner decision 102: the exact range). Absent: the whole paragraph.
+   * An end past the end of the paragraph is cut to it: a range that runs on into the next
+   * paragraph is anchored to the end of the paragraph where it starts.
+   */
+  from?: number;
+  to?: number;
 }
 
 /** Content types and relationship types of the comment parts (ECMA-376 Part 1; MS-DOCX). */
@@ -168,4 +178,62 @@ export function commentsExtendedXml(plan: CommentPlan, used: ReadonlySet<number>
       );
   });
   return `${XML_DECLARATION}<w15:commentsEx xmlns:w15="${W15}" xmlns:w14="${NS.w14}">${items.join('')}</w15:commentsEx>`;
+}
+
+/** A comment range that a thread names with `from` and `to`, or null for the whole paragraph. */
+export function rangeOf(thread: CommentThread): { from: number; to: number } | null {
+  const { from, to } = thread;
+  if (from === undefined || to === undefined) return null;
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) return null;
+  return { from, to };
+}
+
+/** The type of the internal node that carries a comment marker through the inline writer. */
+export const ANCHOR_NODE = 'x_comment_anchor';
+
+/** A marker to write at a position of a paragraph's inline content. */
+export interface AnchorMarker {
+  offset: number;
+  raw: string;
+}
+
+/**
+ * The inline content of a paragraph with the markers woven in at their positions: a text node is
+ * split where a marker falls inside it, and an atom counts as one position. A marker past the end
+ * is written at the end. Markers at one position keep the order they were given in. The content is
+ * not changed; with no markers it is returned as it is.
+ */
+export function weaveAnchors(
+  content: readonly JsonNode[],
+  markers: readonly AnchorMarker[],
+): readonly JsonNode[] {
+  if (markers.length === 0) return content;
+  const sorted = markers
+    .map((m, i) => ({ ...m, i }))
+    .sort((a, b) => a.offset - b.offset || a.i - b.i);
+  const out: JsonNode[] = [];
+  const anchor = (raw: string): JsonNode => ({ type: ANCHOR_NODE, attrs: { raw } }) as JsonNode;
+  let next = 0;
+  let pos = 0;
+  for (const node of content) {
+    if (node.type !== 'text') {
+      while (next < sorted.length && sorted[next]!.offset <= pos)
+        out.push(anchor(sorted[next++]!.raw));
+      out.push(node);
+      pos += 1;
+      continue;
+    }
+    let text = node.text ?? '';
+    while (text.length > 0) {
+      while (next < sorted.length && sorted[next]!.offset <= pos)
+        out.push(anchor(sorted[next++]!.raw));
+      const cut =
+        next < sorted.length ? Math.min(text.length, sorted[next]!.offset - pos) : text.length;
+      out.push({ ...node, text: text.slice(0, cut) });
+      text = text.slice(cut);
+      pos += cut;
+    }
+  }
+  while (next < sorted.length) out.push(anchor(sorted[next++]!.raw));
+  return out;
 }

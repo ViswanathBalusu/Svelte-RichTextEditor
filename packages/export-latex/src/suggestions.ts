@@ -94,7 +94,7 @@ function verifiable(m: Mark): boolean {
 
 /**
  * Whether a block deletion passes the permission rules (09 §10; owner decision 111): the identifier
- * has a known owner and it is the mark's author, and the requester holds dit in the block's
+ * has a known owner and it is the mark's author, and the requester holds `edit` in the block's
  * scope. A suggester's own grant to suggest never accepts a suggestion (07 §5.2 P4).
  */
 function permitted(m: Mark, scope: string, access: SuggestionAccess): boolean {
