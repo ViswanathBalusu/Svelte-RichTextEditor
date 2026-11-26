@@ -3207,6 +3207,8 @@ Lane FE-118-130, round 5 (2026-11-13, nothing ticked). FND-007 defines the metri
 
 **Notes (lane w1, 2026-11-26):** nothing ticked. The owner decisions do not name the extensions: decision 199 (SEC-011) sets the trust position for browser extensions, not the list of grammar checkers and password managers that criterion 1 needs, and the maintainers have not chosen that list. No browser run with the extensions was made. Blocked on the list, and on a person observing each extension in each supported browser.
 
+**Notes (lane w1, 2026-11-26):** nothing ticked and no new typing run. Decision 22 confirms the reference machine, but the recorded median (40 ms against 16 ms) still fails criterion 1, and criterion 2 needs the `docedit-reference` runner, which is not registered. Blocked on the typing work and the runner.
+
 ## Frontend tests (02 §14)
 
 ### FE-121 Run the editing core in Node.js without a browser
