@@ -1382,6 +1382,10 @@
   let miniDismissed = $state(false);
   const miniAnchor = $derived.by(() => {
     void selection.current;
+    // A selection that moves to other text of the same kind gives the same summary (marks, style,
+    // scope), so the summary alone does not say that the end of the selection moved; the revision
+    // moves with every selection and every change.
+    void revision?.current;
     const r = core.caretRect?.() ?? pageEl?.getBoundingClientRect() ?? null;
     return r ? { x: r.x, y: r.y } : null;
   });
