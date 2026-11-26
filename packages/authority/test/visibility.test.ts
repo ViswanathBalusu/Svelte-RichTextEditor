@@ -322,6 +322,28 @@ describe('confidential regions and their readers (PRM-066)', () => {
     // Restricted and inherit regions stay readable by everyone (07 §1).
     expect(hiddenSet(USERS.frank, doc, perms, NOW).regions.has('rLegal000000000B')).toBe(false);
   });
+
+  it('gives a reader without access a neutral placeholder: the title stays hidden by default (decision 129)', () => {
+    const doc = docWith([2, 0, 0], [false]); // Terms is confidential and titled "Terms"
+    const perms = morePermissions();
+    const hidden = hiddenSet(USERS.carol, doc, perms, NOW);
+    expect(hidden.titles).toBe(false);
+    const placeholders = (h: typeof hidden): Record<string, unknown>[] => {
+      const p = project(doc, h, projectionSchema()).doc;
+      const found: Record<string, unknown>[] = [];
+      p.descendants((n) => {
+        if (n.type.name === 'hidden_region') found.push({ ...n.attrs });
+        return true;
+      });
+      return found;
+    };
+    const neutral = placeholders(hidden);
+    expect(neutral).toEqual([{ id: 'rTerms000000000A', title: null }]);
+    expect(JSON.stringify(project(doc, hidden).doc.toJSON())).not.toContain('Terms"');
+    // The document-wide option that shows titles carries the region's title (ADR 0019).
+    const shown = visibility(() => NOW, { titles: true })(USERS.carol, doc, perms);
+    expect(placeholders(shown)).toEqual([{ id: 'rTerms000000000A', title: 'Terms' }]);
+  });
 });
 
 describe('making a region confidential through the room (PRM-066)', () => {
