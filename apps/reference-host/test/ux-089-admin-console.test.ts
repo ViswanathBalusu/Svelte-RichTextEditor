@@ -110,12 +110,12 @@ describe('UX-089 console against a mock of the published API only', () => {
 
   it('shows that the mock would catch a private endpoint', async () => {
     const mock = createAdminMock();
-    const res = await mock.fetch(`${MOCK_BASE}/tenants`, {
+    const res = await mock.fetch(`${MOCK_BASE}/internal/state`, {
       headers: { Authorization: `Bearer ${SERVICE_CREDENTIAL}` },
     });
     expect(res.status).toBe(404);
     expect((await mock.fetch(`${MOCK_BASE}/admin/usage`, { method: 'POST' })).status).toBe(404);
-    expect(mock.unpublished).toEqual(['GET /v1/tenants', 'POST /v1/admin/usage']);
+    expect(mock.unpublished).toEqual(['GET /v1/internal/state', 'POST /v1/admin/usage']);
   });
 
   it('sends the credential as a bearer header, never in a URL, and `If-Match` on updates', async () => {
