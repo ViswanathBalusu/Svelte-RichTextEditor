@@ -71,7 +71,6 @@ import type { CaptureSettingsPort } from '../workflow/capture-settings.ts';
 import type { SealedPdfStore } from '../workflow/sealed-store.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import type { TemplateStore } from '../workflow/template-store.ts';
-import type { DocxImporter } from './imports.ts';
 
 export interface HandlerDeps {
   documents: DocumentStore;
@@ -219,7 +218,14 @@ export interface HandlerDeps {
   /** True when this node runs the import job (EXP-098); otherwise `/imports` is `not_found`. */
   importsOffered?: boolean;
   /** The Word importer of this node, for `POST /documents` with an import (EXP-098 criterion 6). */
-  importer?: DocxImporter;
+  importer?: (
+    bytes: Uint8Array,
+    opts: { signal: AbortSignal },
+  ) => Promise<{
+    envelope: unknown;
+    warnings: ReadonlyArray<string | Record<string, unknown>>;
+    preservation?: Record<string, unknown>;
+  }>;
 }
 
 export const json = (
