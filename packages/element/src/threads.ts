@@ -237,15 +237,11 @@ export function threadsService(core: ThreadsCore, source: ThreadsSource): Elemen
     };
   };
 
-  let copies = 0;
-  const linkListeners = new Set<() => void>();
+  // What became of the last address the host gave; it moves with `changes`, and `n` tells it apart.
   let lastCopy: { n: number; ok: boolean } | null = null;
   const linkCopied: ReadView<{ n: number; ok: boolean } | null> = {
     get: () => lastCopy,
-    subscribe(listener) {
-      linkListeners.add(listener);
-      return () => void linkListeners.delete(listener);
-    },
+    subscribe: changes.subscribe,
   };
 
   return {
@@ -262,8 +258,8 @@ export function threadsService(core: ThreadsCore, source: ThreadsSource): Elemen
         }
       : {}),
     linkResult(ok: boolean) {
-      lastCopy = { n: ++copies, ok };
-      for (const listener of [...linkListeners]) listener();
+      lastCopy = { n: (lastCopy?.n ?? 0) + 1, ok };
+      bump();
     },
     changes,
     reveal(thread) {

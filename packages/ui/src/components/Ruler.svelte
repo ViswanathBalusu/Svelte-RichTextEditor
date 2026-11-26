@@ -42,11 +42,9 @@
     zoom: number;
     /** Opens the paragraph dialog. */
     onDialog: () => void;
-    /** Told after each change the ruler asked for: whether the core took it. */
-    onChanged: (done: boolean) => void;
   }
 
-  let { body, zoom, onDialog, onChanged }: Props = $props();
+  let { body, zoom, onDialog }: Props = $props();
 
   const shell = useShell()!;
   const core = shell.core;
@@ -122,7 +120,8 @@
 
   function run(patch: Record<string, unknown> | null): void {
     if (!patch) return;
-    onChanged(core.runNamed?.('setParagraphFormat', patch) ?? false);
+    const done = core.runNamed?.('setParagraphFormat', patch) ?? false;
+    shell.announce(done ? 'announce.paragraph.set' : 'announce.paragraph.failed');
   }
 
   function nameOf(kind: MarkerKind): string {
@@ -280,5 +279,5 @@
       >{tr.t('ruler.dialog')}</button
     >
   </div>
-  <p class="de-ruler-note de-hint">{margins}</p>
+  <p class="de-hint">{margins}</p>
 </div>

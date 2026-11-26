@@ -1232,16 +1232,14 @@ export class DocEditorElement extends Base {
    * else shown.
    */
   async openComment(marker: string): Promise<'open' | 'unavailable' | 'not-loaded'> {
-    for (let i = 0; i < 100 && !this.#mounted; i++) await new Promise((r) => setTimeout(r, 50));
-    const mounted = this.#mounted;
-    if (!mounted) return 'not-loaded';
-    // The threads are listed once the document is shown; give that a moment.
-    for (let i = 0; i < 40; i++) {
-      const outcome = await mounted.openLinkedComment(marker);
-      if (outcome === 'open') return outcome;
-      await new Promise((r) => setTimeout(r, 50));
+    // The document may still be loading, and its threads are listed once it is shown: ask until
+    // the thread is there or about five seconds have passed.
+    let outcome: 'open' | 'unavailable' | 'not-loaded' = 'not-loaded';
+    for (let i = 0; i < 100 && outcome !== 'open'; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 50));
+      outcome = (await this.#mounted?.openLinkedComment(marker)) ?? 'not-loaded';
     }
-    return mounted.openLinkedComment(marker);
+    return outcome;
   }
   /**
    * Prints the typeset PDF of the loaded document (02 §9.8; FE-073). When the access lists

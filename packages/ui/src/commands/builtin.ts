@@ -592,7 +592,6 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       changesContent: true,
       capability: 'character-and-paragraph-formatting',
       needs: 'setParagraphFormat',
-      contextMenu: ['text'],
       run: () => host.openDialog('paragraph'),
     },
     // A reference to a heading, a numbered paragraph, a caption, an equation or a bookmark (FE-134

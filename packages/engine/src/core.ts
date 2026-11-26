@@ -533,6 +533,7 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'hasNextEditableRegion',
   'canCopyFormat',
   'canPasteFormat',
+  'canSetTrackedForEveryone',
 ];
 
 /**
@@ -879,6 +880,8 @@ export class DocumentCore implements DocumentApi {
   readonly direction: ReadValue<'ltr' | 'rtl'>;
   /** The document's default language, a BCP 47 tag, or null when it sets none (UX-018). */
   readonly language: ReadValue<string | null>;
+  /** `settings.trackChanges` is `everyone` (UX-038): every user edits as suggestions. */
+  readonly trackedForEveryone: ReadValue<boolean>;
   /** The words in the body; null until the first count, which is made off the typing path (UX-018). */
   readonly words: ReadValue<number | null>;
   /**
@@ -1105,6 +1108,7 @@ export class DocumentCore implements DocumentApi {
     this.revision = new ReadValue<number>(0, Object.is, hub);
     this.direction = new ReadValue<'ltr' | 'rtl'>('ltr', Object.is, hub);
     this.language = new ReadValue<string | null>(null, Object.is, hub);
+    this.trackedForEveryone = new ReadValue<boolean>(false, Object.is, hub);
     this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.paragraphFormat = new ReadValue<ParagraphFormatInfo | null>(null, sameJson, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
@@ -1666,6 +1670,7 @@ export class DocumentCore implements DocumentApi {
           this.styles.set(styleSummaries(state.doc));
         this.direction.set(stylesOf(state.doc).settings.dir);
         this.language.set(stylesOf(state.doc).settings.lang ?? null);
+        this.trackedForEveryone.set(this.#trackChangesSetting() === 'everyone');
         // The count is made later, off the typing path (UX-018 criterion 1).
         this.#words.changed();
       }
@@ -1764,6 +1769,8 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('copyFormat').enabled;
       case 'canPasteFormat':
         return this.queryCommand('pasteFormat').enabled;
+      case 'canSetTrackedForEveryone':
+        return !this.#locked() && (this.#accessValue?.caps.includes('manage') ?? false);
       default:
         return undefined;
     }
@@ -3997,6 +4004,32 @@ one or original. It is a
     return { ok: true, id };
   }
 
+  /**
+   * Turns "tracked changes for everyone" on or off (UX-038; owner decision 118: only a user with
+   * `manage`). A refusal is recorded for the shell as any refused edit is, and the document is left
+   * as it was. True when the setting now has the value asked for, also when it already had.
+   */
+  setTrackedForEveryone(on: boolean): boolean {
+    if (!this.query('canSetTrackedForEveryone')) {
+      this.#refused(
+        this.#locked()
+          ? { reason: 'read-only', scopes: [] }
+          : { reason: 'scope', scopes: ['defs'] },
+      );
+      return false;
+    }
+    if ((this.#trackChangesSetting() === 'everyone') === on) return true;
+    const doc = this.#state.doc;
+    let at = -1;
+    doc.descendants((node, pos) => {
+      if (node.type.name === 'settings') at = pos;
+      return at < 0;
+    });
+    if (at < 0) return false;
+    const attrs = { ...doc.nodeAt(at)!.attrs, trackChanges: on ? 'everyone' : 'off' };
+    this.dispatchTransaction(this.#state.tr.setNodeMarkup(at, undefined, attrs));
+    return true;
+  }
   deleteStyle(id: string): StyleEditResult {
     const check = this.checkStyleEdit('delete', id);
     if (!check.ok) return this.#styleFailed(check);

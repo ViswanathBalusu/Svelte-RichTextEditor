@@ -542,6 +542,8 @@ export type CoreQueryName =
   | 'hasNextEditableRegion'
   // UX-009: the selection has formatting to take; formatting was taken and may be put here.
   | 'canCopyFormat'
+  // UX-038: the user may switch settings.trackChanges (manage, and the document is not locked).
+  | 'canSetTrackedForEveryone'
   | 'canPasteFormat';
 
 /** `de-status.connection` (05 §8.1), plus `detached` before any channel is attached. */

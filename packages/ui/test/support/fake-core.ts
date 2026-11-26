@@ -443,6 +443,7 @@ export const FAKE_COMMANDS = [
   'deleteStyle',
   'setLanguage',
   'setParagraphFormat',
+  'setTrackedForEveryone',
   'markRegion',
   'setRegionPolicy',
   'renameRegion',
@@ -467,6 +468,7 @@ export const FAKE_QUERIES = [
   'canMarkRegion',
   'hasNextEditableRegion',
   'canInsertField',
+  'canSetTrackedForEveryone',
 ];
 
 /** One frame pass for every view that changed, as the engine does (B1): one rAF callback. */
@@ -931,6 +933,12 @@ export class FakeCore implements CoreApi {
       case 'deleteStyle':
         this.styles?.set((this.styles.get() ?? []).filter((x) => x.id !== a['id']));
         return true;
+      case 'setTrackedForEveryone': {
+        // As the core does (UX-038): only a user with manage changes the setting.
+        if (!this.access?.get().caps.includes('manage')) return false;
+        this.trackedForEveryone?.set(a['on'] === true);
+        return true;
+      }
       case 'setParagraphFormat': {
         // As the engine does: a patch of indents and tabs on the paragraphs at the selection.
         const now = this.paragraphFormat?.get();
@@ -1245,6 +1253,8 @@ export class FakeCore implements CoreApi {
       if (answer !== undefined) return answer;
     }
     switch (name) {
+      case 'canSetTrackedForEveryone':
+        return this.access?.get().caps.includes('manage') ?? false;
       case 'canEditSelection':
         return this.#canChange();
       case 'canUndo':

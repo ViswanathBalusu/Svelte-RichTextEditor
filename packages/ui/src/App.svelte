@@ -700,10 +700,6 @@
 
   // The element that holds the text, which the ruler lines up with (UX-102).
   let bodyHostEl = $state<HTMLElement | null>(null);
-  function paragraphChanged(done: boolean): void {
-    announce(done ? 'announce.paragraph.set' : 'announce.paragraph.failed');
-  }
-
   function applyLanguage(lang: string | null): void {
     dialog = null;
     const done = core.runNamed?.('setLanguage', { lang }) ?? false;
@@ -1617,7 +1613,6 @@
         body={bodyHostEl}
         {zoom}
         onDialog={() => (dialog = 'paragraph')}
-        onChanged={paragraphChanged}
       />
     {/await}
   {/if}
@@ -1783,15 +1778,7 @@
         }}
       />
     {:else if dialog === 'paragraph' && core.paragraphFormat?.get()}
-      <ParagraphDialog
-        format={core.paragraphFormat.get()!}
-        onApply={(patch) => {
-          const done = core.runNamed?.('setParagraphFormat', patch) ?? false;
-          paragraphChanged(done);
-          return done;
-        }}
-        onClose={() => (dialog = null)}
-      />
+      <ParagraphDialog format={core.paragraphFormat.get()!} onClose={() => (dialog = null)} />
     {:else if dialog === 'language'}
       <LanguageDialog
         initial={selection.current.lang ?? null}

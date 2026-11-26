@@ -139,7 +139,7 @@ test.describe('the ruler (UX-102)', () => {
     page,
   }) => {
     await open(page, { extended: true, paragraphFormat: format() });
-    const note = page.locator('.de-ruler-note');
+    const note = page.locator('.de-ruler > .de-hint');
     await expect(note).toContainText(
       'The PDF has margins of 2.5 cm on the left and 2.5 cm on the right',
     );

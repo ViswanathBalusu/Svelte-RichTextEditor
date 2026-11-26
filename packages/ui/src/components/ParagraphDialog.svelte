@@ -14,12 +14,10 @@
 
   interface Props {
     format: ParagraphFormatView;
-    /** Runs the patch; true when the core took it. */
-    onApply: (patch: Record<string, unknown>) => boolean;
     onClose: () => void;
   }
 
-  let { format, onApply, onClose }: Props = $props();
+  let { format, onClose }: Props = $props();
 
   const shell = useShell()!;
   const tr = $derived(shell.strings.current);
@@ -80,7 +78,9 @@
       onClose();
       return;
     }
-    if (onApply(result.patch)) onClose();
+    const done = shell.core.runNamed?.('setParagraphFormat', result.patch) ?? false;
+    shell.announce(done ? 'announce.paragraph.set' : 'announce.paragraph.failed');
+    if (done) onClose();
   }
 
   const bad = (field: DialogField): boolean => invalid.includes(field);

@@ -565,6 +565,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'discardRecovered',
         'setLanguage',
         'setParagraphFormat',
+        'setTrackedForEveryone',
         'paragraphStyle',
         'characterStyle',
         'tableStyle',
@@ -593,6 +594,11 @@ export function mountEditor(options: MountOptions): MountedEditor {
         if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
         // The ruler and the paragraph dialog (UX-102): the args are the patch of indents and tab
         // stops; the core checks every value and the user's right to change the paragraphs.
+        // The review pane's switch (UX-038): { on }; the core needs manage, and the server checks again.
+        if (name === 'setTrackedForEveryone') {
+          const on = (args as { on?: unknown } | undefined)?.on;
+          return typeof on === 'boolean' && core.setTrackedForEveryone(on);
+        }
         if (name === 'setParagraphFormat') {
           if (args === null || typeof args !== 'object' || Array.isArray(args)) return false;
           return core.run('setParagraphFormat', {
@@ -684,6 +690,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       language: core.language,
       // The indents and tab stops at the selection, for the ruler and the paragraph dialog (UX-102).
       paragraphFormat: core.paragraphFormat,
+      // `settings.trackChanges` is `everyone` (UX-038): the mode switcher shows review with the reason.
+      trackedForEveryone: core.trackedForEveryone,
       // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
       // port `proofing.get().available` is false and the shell shows no proofing control.
       // The assistant pane, offered only while the backend's assistant port is attached (UX-045).

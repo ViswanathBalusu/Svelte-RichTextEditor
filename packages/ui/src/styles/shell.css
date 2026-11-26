@@ -1709,27 +1709,21 @@
   border-radius: 4px;
 }
 
-/* The ruler (UX-102; part 
-uler): the indents and tab stops of the paragraph at the caret. */
+/* The ruler (UX-102; part `ruler`): the indents and tab stops of the paragraph at the caret. */
 .de-ruler {
-  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--_de-space-2);
-  padding-inline: var(--_de-space-4);
-  padding-block: var(--_de-space-1);
+  padding: var(--_de-space-1) var(--_de-space-4);
   background: var(--_de-surface);
   border-block-end: 1px solid var(--_de-border);
-  color: var(--_de-text);
 }
 
 .de-ruler-track {
   position: relative;
-  flex: 0 0 auto;
-  /* Tall enough for two targets of 24 pixels one above the other: the first-line marker over the left one. */
+  /* Room for two targets of 24 pixels one above the other: the first-line marker over the left one. */
   block-size: max(3em, 52px);
-  margin-block: var(--_de-space-1);
   background: var(--_de-control-background);
   border: 1px solid var(--_de-border);
   box-sizing: border-box;
@@ -1746,7 +1740,6 @@ uler): the indents and tab stops of the paragraph at the caret. */
   padding-inline-start: 2px;
   border-inline-start: 1px solid var(--_de-border-strong);
   font-size: 0.7em;
-  line-height: 1.2;
   color: var(--_de-text-muted);
   user-select: none;
 }
@@ -1764,48 +1757,28 @@ uler): the indents and tab stops of the paragraph at the caret. */
 .de-ruler-marker::before {
   content: '';
   position: absolute;
-  inset-inline-start: 6px;
-  inset-block-end: 3px;
-  inline-size: 12px;
+  inset: auto 6px 3px;
   block-size: 10px;
   background: var(--_de-control-active-border);
-}
-
-.de-ruler-marker[data-marker='left']::before {
   clip-path: polygon(0 100%, 100% 100%, 100% 55%, 50% 0, 0 55%);
-  inset-block-end: 3px;
 }
 
 .de-ruler-marker[data-marker='firstLine'] {
-  inset-block-start: 0;
-  inset-block-end: auto;
+  inset-block: 0 auto;
 }
 
 .de-ruler-marker[data-marker='firstLine']::before {
+  inset-block: 3px auto;
   clip-path: polygon(0 0, 100% 0, 100% 45%, 50% 100%, 0 45%);
-  inset-block-start: 3px;
-  inset-block-end: auto;
-}
-
-.de-ruler-marker[data-marker='right']::before {
-  clip-path: polygon(0 55%, 50% 0, 100% 55%, 100% 100%, 0 100%);
 }
 
 .de-ruler-tabstop::before {
-  inline-size: 8px;
-  block-size: 10px;
-  inset-inline-start: 8px;
   background: var(--_de-text);
   clip-path: polygon(40% 0, 60% 0, 60% 70%, 100% 70%, 100% 100%, 0 100%, 0 70%, 40% 70%);
 }
 
-.de-ruler-tabstop[data-align='right']::before {
-  transform: scaleX(-1);
-}
-
 .de-ruler-marker:focus-visible {
   outline: 2px solid var(--_de-focus);
-  outline-offset: 0;
 }
 
 .de-ruler-marker[aria-disabled='true'] {
@@ -1813,17 +1786,9 @@ uler): the indents and tab stops of the paragraph at the caret. */
   opacity: 0.6;
 }
 
-.de-ruler-note {
-  flex: 1 1 14em;
-  margin: 0;
-}
-
 @media (forced-colors: active) {
   .de-ruler-marker::before {
     background: CanvasText;
-  }
-  .de-ruler-marker:focus-visible {
-    outline-color: Highlight;
   }
 }
 
@@ -1831,43 +1796,15 @@ uler): the indents and tab stops of the paragraph at the caret. */
   display: flex;
   flex-wrap: wrap;
   gap: var(--_de-space-2);
-  margin-block-end: var(--_de-space-2);
 }
-
-/* Reactions to a comment (UX-033): small toggle buttons, a count beside the picture. */
+/* Reactions to a comment (UX-033): toggle buttons that are list buttons, with a count beside the picture. */
 .de-reactions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--_de-space-1);
-  margin-block: var(--_de-space-1);
-}
-
-.de-reaction {
-  font: inherit;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25em;
-  min-block-size: max(1.6em, 24px);
-  min-inline-size: 24px;
-  padding-inline: 0.5em;
-  color: inherit;
-  background: var(--_de-control-background);
-  border: 1px solid var(--_de-border-strong);
-  border-radius: var(--_de-radius);
-  cursor: pointer;
 }
 
 .de-reaction[aria-pressed='true'] {
   background: var(--_de-control-active);
   border-color: var(--_de-control-active-border);
-}
-
-.de-reaction:disabled {
-  color: var(--_de-control-disabled-text);
-  cursor: default;
-}
-
-.de-reaction:focus-visible {
-  outline: 2px solid var(--_de-focus);
-  outline-offset: 1px;
 }

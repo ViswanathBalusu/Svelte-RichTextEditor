@@ -303,10 +303,13 @@ export type CoreQueryName1b =
  *   `page` as the format; inserts a `ref` field at the caret (FE-134 criterion 2);
  * - `setParagraphFormat`: a patch of `indentLeft`, `indentRight`, `indentFirstLine` (twips) and
  *   `tabs` (the whole list, or null for none) for the selected paragraphs; the ruler and the
- *   paragraph dialog both run it (UX-102 criterion 2; FE-129).
+ *   paragraph dialog both run it (UX-102 criterion 2; FE-129);
+ * - `setTrackedForEveryone`: `{ on }`; switches `settings.trackChanges` between `everyone` and `off`,
+ *   for a user with `manage` only (UX-038; owner decision 118).
  */
 export type CoreCommandName =
   | 'setParagraphFormat'
+  | 'setTrackedForEveryone'
   | 'copyFormat'
   | 'pasteFormat'
   | 'paragraphStyle'

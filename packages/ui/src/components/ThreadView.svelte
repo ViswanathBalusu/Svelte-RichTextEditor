@@ -443,7 +443,7 @@
                 {@const name = tr.t(REACTION_NAMES[r.reaction])}
                 <button
                   type="button"
-                  class="de-reaction"
+                  class="de-list-button de-reaction"
                   data-reaction={r.reaction}
                   aria-pressed={r.mine}
                   aria-label={tr.t('comments.reactions.button', { name, count: r.count })}
