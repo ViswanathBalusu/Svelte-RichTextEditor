@@ -51,7 +51,8 @@ import { bulkSendRoutes } from './bulk-send.ts';
 import { historyListRoutes } from './history-list-route.ts';
 import { historyReadRoutes } from './history-reads.ts';
 import { historyRoutes } from './history-routes.ts';
-import { importRoutes } from './imports.ts';
+import { asApiError, attachAndStore, importRoutes, prepareImport } from './imports.ts';
+import { JobFailure } from './jobs/runner.ts';
 import { activityRoutes } from './activity-route.ts';
 import { connectRoutes } from './connect-route.ts';
 import { restoreRoutes } from './restore-route.ts';
@@ -273,11 +274,14 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
         { ETag: docEtag(made.record), Location: `${rest}/documents/${made.record.id}` },
       );
     }
-    if (body.import !== undefined)
-      throw new ApiError('validation_failed', 'imports are not offered yet (D62)', {
-        violations: [{ path: '/import', rule: 'not supported by this server' }],
-      });
+    // EXP-098 criterion 6 (owner decision 108): the file is read first, the document is created,
+    // the source file is attached to it, then the content is written; a failure removes the document.
+    const prepared =
+      body.import !== undefined
+        ? await prepareImport(d, ctx.caller.tenant, body.import, new AbortController().signal)
+        : undefined;
     let envelope: JsonEnvelope = emptyDocument();
+    if (prepared) envelope = { ...envelope, requires: prepared.requires };
     if (body.content !== undefined) {
       // A new document has no attached assets and no retired regions (I3, I4).
       const read = readDocument(body.content, {
@@ -306,12 +310,35 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     } catch (e) {
       k.translate(e);
     }
-    k.wrote(ctx, id, 0);
-    emit(ctx, 'dep.document.created', id, { seq: 0 });
-    return json(201, documentResource(record), {
-      ETag: docEtag(record),
-      Location: `${rest}/documents/${id}`,
-    });
+    let seq = 0;
+    let imported: { asset: string; warnings: unknown[] } | undefined;
+    if (prepared) {
+      try {
+        const done = await attachAndStore(d, ref, ctx.caller.actor, prepared);
+        seq = done.seq;
+        imported = {
+          asset: done.asset,
+          warnings: prepared.imported.warnings.map((w) =>
+            typeof w === 'string' ? { message: w } : { ...w },
+          ),
+        };
+      } catch (e) {
+        // A failed import leaves no document behind (owner decision 108).
+        await d.documents.remove(ref, { actor: ctx.caller.actor }).catch(() => undefined);
+        throw e instanceof JobFailure ? asApiError(e) : e;
+      }
+      record = (await d.documents.get(ref)) ?? record;
+    }
+    k.wrote(ctx, id, seq);
+    emit(ctx, 'dep.document.created', id, { seq });
+    return json(
+      201,
+      imported ? { ...documentResource(record), import: imported } : documentResource(record),
+      {
+        ETag: docEtag(record),
+        Location: `${rest}/documents/${id}`,
+      },
+    );
   };
 
   const getDocument: Handler = async (ctx) => {

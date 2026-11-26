@@ -20,7 +20,10 @@ const bodyOf = (env: JsonEnvelope): JsonNode => env.doc.content!.find((n) => n.t
 const documentXml = (bytes: Uint8Array): string => {
   const zip = readZip(bytes);
   return new TextDecoder().decode(
-    entryData(zip, zip.entries.find((e) => e.name === 'word/document.xml')!),
+    entryData(
+      zip,
+      zip.entries.find((e) => e.name === 'word/document.xml')!,
+    ),
   );
 };
 
