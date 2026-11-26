@@ -19,6 +19,11 @@
  */
 import { SHA256_HEX_PATTERN } from '@docedit/model';
 import type { CaptureSettings } from './capture.ts';
+import {
+  type AssertedAuthentication,
+  type HostAuthenticationClaims,
+  presentAssertedAuthentication,
+} from './asserted-authentication.ts';
 import { AUTHENTICATION_PHRASE, NATIVE_SIGNING_DESCRIPTION } from './language.ts';
 
 /** The event kinds a certificate lists, in the order they are reported when two share a time. */
@@ -45,6 +50,8 @@ export interface CertificateParticipantInput {
   readonly id: string;
   readonly label: string;
   readonly events: readonly CertificateEventInput[];
+  /** The claims the host gave for this participant, as given (SEC-043). Absent when it gave none. */
+  readonly authentication?: HostAuthenticationClaims;
 }
 
 export interface CertificateInput {
@@ -69,6 +76,8 @@ export interface CertificateParticipantFact {
   readonly id: string;
   readonly label: string;
   readonly events: readonly CertificateEventFact[];
+  /** The host's claims, shown as asserted and unchecked (SEC-043). Absent when there are none. */
+  readonly authentication?: AssertedAuthentication;
 }
 
 export interface CertificateFacts {
@@ -141,7 +150,14 @@ export function buildCertificateFacts(input: CertificateInput): CertificateFacts
           a.serverTimeMs - b.serverTimeMs ||
           (KIND_ORDER.get(a.kind) ?? 0) - (KIND_ORDER.get(b.kind) ?? 0),
       );
-    return { id: p.id, label: p.label, events };
+    const authentication =
+      p.authentication === undefined ? undefined : presentAssertedAuthentication(p.authentication);
+    return {
+      id: p.id,
+      label: p.label,
+      events,
+      ...(authentication === undefined ? {} : { authentication }),
+    };
   });
 
   return {

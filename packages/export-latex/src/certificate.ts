@@ -31,6 +31,8 @@ export interface CertificateParticipant {
   readonly id: string;
   readonly label: string;
   readonly events: readonly CertificateEvent[];
+  /** The host's authentication claims, already worded as asserted and unchecked (SEC-043). */
+  readonly authentication?: { readonly text: string };
 }
 
 export interface CertificateFacts {
@@ -89,6 +91,7 @@ export function certificateBlocks(facts: CertificateFacts): J[] {
   add(`Chain head at completion (SHA-256): ${facts.chainHeadHash}`);
   for (const p of facts.participants) {
     add(`${p.label} (${p.id})`, { bold: true });
+    if (p.authentication !== undefined) add(p.authentication.text);
     for (const e of p.events) {
       const network =
         facts.networkIdentityIncluded && (e.ipAddress !== undefined || e.userAgent !== undefined)
@@ -161,6 +164,11 @@ export function readCertificateFacts(value: unknown): CertificateFacts | null | 
     const q = p as Record<string, unknown>;
     if (!isText(q['id']) || !isText(q['label']) || !Array.isArray(q['events'])) return 'invalid';
     if (q['events'].length > 256) return 'invalid';
+    const auth = q['authentication'];
+    if (auth !== undefined) {
+      if (auth === null || typeof auth !== 'object' || Array.isArray(auth)) return 'invalid';
+      if (!isText((auth as Record<string, unknown>)['text'], 2048)) return 'invalid';
+    }
     for (const e of q['events'] as unknown[]) {
       if (e === null || typeof e !== 'object') return 'invalid';
       const r = e as Record<string, unknown>;

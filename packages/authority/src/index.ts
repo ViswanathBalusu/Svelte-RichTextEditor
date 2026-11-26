@@ -399,6 +399,11 @@ export {
   type SignatureProvider,
 } from './workflow/provider.ts';
 export {
+  type AssertedAuthentication,
+  type HostAuthenticationClaims,
+  presentAssertedAuthentication,
+} from './workflow/asserted-authentication.ts';
+export {
   AUTHENTICATION_PHRASE,
   NATIVE_SIGNING_DESCRIPTION,
   OVERCLAIM_PHRASES,

@@ -136,3 +136,18 @@ describe('a name or an evidence string is data, never TeX (FRW-050 criteria 3 an
     expect(decodeStrings(main)).toContain('input');
   });
 });
+
+describe('the host authentication claims are printed as given (SEC-043 criterion 2)', () => {
+  const text =
+    'Authentication as asserted by the host and recorded as given (amr: pwd, otp). The platform did not check these values.';
+  it('prints the asserted sentence under the participant', async () => {
+    const f = facts();
+    const withAuth = {
+      ...f,
+      participants: [{ ...f.participants[0]!, authentication: { text } }],
+    };
+    const b = await run(doc(body()), { certificate: withAuth });
+    expect(b.ok).toBe(true);
+    expect(textOf(b)).toContain(text);
+  });
+});

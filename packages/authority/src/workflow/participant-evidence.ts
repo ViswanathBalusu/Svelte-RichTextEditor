@@ -20,6 +20,10 @@
  * (FRW-041). Nothing here reads a request.
  */
 import { sha256HexBytes } from '@docedit/model';
+import {
+  type AssertedAuthentication,
+  presentAssertedAuthentication,
+} from './asserted-authentication.ts';
 import { type CaptureSettings, captureEvidence } from './capture.ts';
 
 export type ParticipantKind = 'filler' | 'signer' | 'approver' | 'cc';
@@ -88,6 +92,8 @@ export interface SigningFact {
 export interface ParticipantFacts {
   readonly session: string;
   readonly amr: readonly string[] | null;
+  /** `auth_time` of the token, in seconds, as given. Optional: absent when the host gave none. */
+  readonly authTimeSeconds?: number | null;
   readonly viewedAtMs: number | null;
   readonly consent: ConsentFact | null;
   readonly signings: readonly SigningFact[];
@@ -103,6 +109,8 @@ export interface ParticipantEvidence {
   readonly ipAddress?: string | null;
   readonly userAgent?: string | null;
   readonly amr?: readonly string[];
+  /** The host's claims as asserted and unchecked (SEC-043); present when `amr` or `auth_time` is. */
+  readonly authentication?: AssertedAuthentication;
   readonly viewedAtMs?: number;
   readonly consent?: ConsentFact;
   readonly signings: readonly SigningFact[];
@@ -140,6 +148,19 @@ export function buildParticipantEvidence(
   if (it['completedAtMs'] !== undefined) record.completedAtMs = it['completedAtMs'] as number;
   if (network.ipAddress !== undefined) record.ipAddress = network.ipAddress;
   if (network.userAgent !== undefined) record.userAgent = network.userAgent;
+  if (applies.has('amr')) {
+    // The raw claims stay in the record as given. A value that cannot be worded as an assertion
+    // (an odd `amr` string, a time out of range) gets no wording rather than failing the record.
+    try {
+      const authentication = presentAssertedAuthentication({
+        amr: facts.amr,
+        authTimeSeconds: facts.authTimeSeconds ?? null,
+      });
+      if (authentication !== undefined) record.authentication = authentication;
+    } catch (e) {
+      if (!(e instanceof RangeError)) throw e;
+    }
+  }
   if (applies.has('consent') && facts.consent !== null) record.consent = facts.consent;
   return record;
 }
