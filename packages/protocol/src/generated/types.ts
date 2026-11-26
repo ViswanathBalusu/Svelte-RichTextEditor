@@ -757,6 +757,8 @@ export interface ExportOptions {
   timeZone?: string;
   /** Append the certificate of completion (12). */
   certificate?: boolean;
+  /** What the compile reports of the layout (09 §7.1). `lines` asks for line starts, for page-break reconciliation in the page view (L1); it is refused with `forbidden` unless the tenant has enabled page-break reconciliation, which is off by default (06 §10; BE-051). Default `blocks`. */
+  layout?: "blocks" | "lines";
 }
 
 export interface CreateExportRequest {
@@ -998,6 +1000,50 @@ export interface Hold {
   placedBy: string;
   /** When the hold was placed, ISO 8601 in UTC. */
   placedAt: string;
+}
+
+/** A font file and its licence declaration (BE-048). */
+export interface TenantFontRequest {
+  /** The file name, for the administrator only. */
+  filename?: string;
+  /** The declared type of the file. */
+  mime: "font/ttf" | "font/otf" | "font/woff2";
+  /** The font file, base64. */
+  content: string;
+  /** The licence declaration the administrator makes for the file. */
+  licence: string;
+  /** Whether the licence allows the font on a server, so in a PDF. A font without it is shown on screen only and replaced in the PDF (decision 62). */
+  serverUse: boolean;
+}
+
+/** A font a tenant added (BE-048). */
+export interface TenantFont {
+  /** The SHA-256 of the file, lower-case hex. */
+  sha256: string;
+  /** The family name the font file declares. */
+  family: string;
+  /** The face. */
+  style: "regular" | "bold" | "italic" | "boldItalic";
+  /** The format found in the file. */
+  format: "truetype" | "opentype" | "woff2";
+  /** The size of the file. */
+  bytes: number;
+  /** The licence declaration. */
+  licence: string;
+  /** Whether the declaration allows server-side use. */
+  serverUse: boolean;
+  /** Where the file is read, with a credential of the tenant. */
+  url: string;
+}
+
+/** The file of a font a tenant added (BE-048). */
+export interface TenantFontFile {
+  /** The SHA-256 of the file. */
+  sha256: string;
+  /** The type of the file. */
+  mime: "font/ttf" | "font/otf" | "font/woff2";
+  /** The font file, base64. */
+  content: string;
 }
 
 /** The body of an erasure of a person (HIS-038; 08 section 13). */
@@ -2136,6 +2182,33 @@ export interface Operations {
     query: Record<string, never>;
     body: never;
     response: FontManifest;
+  };
+  /** POST /tenant-fonts: Adds a font file for the tenant with a licence declaration. The file is checked in the sandbox and stored under the tenant by its hash; a file that fails is refused and nothing is published (BE-048). (06 §12; 13 §10) */
+  addTenantFont: {
+    method: "POST";
+    path: "/tenant-fonts";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: TenantFontRequest;
+    response: TenantFont;
+  };
+  /** GET /tenant-fonts/{sha256}: The file of a font the tenant added, for any user or service of the tenant. Another tenant gets not_found, even for the same hash (BE-048). (06 §12; 13 §10) */
+  getTenantFont: {
+    method: "GET";
+    path: "/tenant-fonts/{sha256}";
+    params: { sha256: string };
+    query: Record<string, never>;
+    body: never;
+    response: TenantFontFile;
+  };
+  /** DELETE /tenant-fonts/{sha256}: Removes a font the tenant added and its file; audited. Exports that use it fall back to the fallback chain with a warning (BE-048; EXP-048). (06 §12; 13 §10) */
+  removeTenantFont: {
+    method: "DELETE";
+    path: "/tenant-fonts/{sha256}";
+    params: { sha256: string };
+    query: Record<string, never>;
+    body: never;
+    response: TenantFont;
   };
   /** GET /webhooks: Webhook subscriptions. (05 §6.2, §7) */
   listWebhooks: {

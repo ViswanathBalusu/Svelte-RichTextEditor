@@ -1,9 +1,8 @@
 /**
  * Table shading, cell margins, vertical alignment and table alignment, checked on the compiled PDF
- * (Node.js only, sandbox): EXP-038 criterion 4, for the properties it names other than banded rows.
- * Banded rows are not shaded: 03 §4.3 gives `bandedRows` no colour (ADR 0143, question 19), so that
- * part of the criterion stays unticked. The header row shading, which a table style sets, has a
- * test of its own in this file.
+ * (Node.js only, sandbox): EXP-038 criterion 4. Banded rows take one fixed light grey (owner
+ * decision 50, 2026-11-15). The header row shading and the banded rows, which a table style sets,
+ * have tests of their own in this file.
  *
  * The first page is rendered with `pdftoppm` at 100 dpi and the pixels of each fill colour are read;
  * word positions come from `pdftotext -bbox`.
@@ -268,6 +267,45 @@ describe.skipIf(!ready)(
         expect(px(w.xMin)).toBeLessThan(red.maxX);
       }
       expect(px(at(ws, 'BODYA').yMin)).toBeGreaterThan(red.maxY);
+    }, 300_000);
+
+    it('shades every other body row with a light grey when the table style sets bandedRows (decision 50)', async () => {
+      const style: J = {
+        type: 'style_def',
+        attrs: { id: 'Banded', kind: 'table', name: 'Banded', bandedRows: true },
+      };
+      const banded = table({ grid: [1440, 1440], style: 'Banded' }, [
+        row(cell('ROWONE'), cell('XONE')),
+        row(cell('ROWTWO'), cell('XTWO')),
+        row(cell('ROWTHREE'), cell('XTHREE')),
+        row(cell('ROWFOUR'), cell('XFOUR')),
+      ]);
+      const c = await convertAndCompile(doc([para('before'), banded], { styles: [style] }), {
+        profile: 'preview',
+        title: 'table-banded-rows',
+        instant: INSTANT,
+        timeZone: 'Europe/London',
+        suggestions: 'accept',
+      } as never);
+      if (!c.compile.ok || !c.compile.pdf)
+        throw new Error(`the compile failed:\n${firstError(c.compile.log)}`);
+      const img = renderFirstPage(c.compile.pdf);
+      const ws = words(c.compile.pdf);
+      const px = (pt: number): number => Math.round((pt * DPI) / 72);
+      // The pixel just left of a word, inside its cell margin, on the middle of its line.
+      const backdrop = (text: string): [number, number, number] => {
+        const w = at(ws, text);
+        const x = px(w.xMin) - 3;
+        const y = px(w.yMin + 4);
+        const k = (y * img.width + x) * 3;
+        return [img.rgb[k]!, img.rgb[k + 1]!, img.rgb[k + 2]!];
+      };
+      const grey = (p: [number, number, number]): boolean => p.every((v) => v >= 238 && v <= 246);
+      const white = (p: [number, number, number]): boolean => p.every((v) => v >= 253);
+      expect(grey(backdrop('ROWONE')), JSON.stringify(backdrop('ROWONE'))).toBe(true);
+      expect(white(backdrop('ROWTWO')), JSON.stringify(backdrop('ROWTWO'))).toBe(true);
+      expect(grey(backdrop('ROWTHREE')), JSON.stringify(backdrop('ROWTHREE'))).toBe(true);
+      expect(white(backdrop('ROWFOUR')), JSON.stringify(backdrop('ROWFOUR'))).toBe(true);
     }, 300_000);
   },
 );

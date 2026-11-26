@@ -9,6 +9,7 @@
  */
 import { AssetError, type FailureReason } from './errors.ts';
 import { decodeFrame, encodeFrame, REPLY_MAGIC, REQUEST_MAGIC } from './frame.ts';
+import { isFontType, processFont, type FontInfo } from './font.ts';
 import { processGif } from './gif.ts';
 import { processJpeg } from './jpeg.ts';
 import { checkContentLimits, type ContentLimits } from './limits.ts';
@@ -126,6 +127,8 @@ export interface SandboxRequest {
   v: 1;
   declared: string;
   limits: ContentLimits;
+  /** What the upload is for; absent means a document asset. `font` is an administrator's font (BE-048). */
+  purpose?: 'asset' | 'font';
 }
 
 /** The reply the sandbox sends; the body holds the outputs in order. */
@@ -143,6 +146,38 @@ export type SandboxReply =
     }
   | { v: 1; ok: false; reason: FailureReason; message: string; detected?: string };
 
+/** The reply to a font check (BE-048): the file is kept as uploaded, so there are no outputs. */
+export type FontReply =
+  { v: 1; ok: true; font: FontInfo } | { v: 1; ok: false; reason: FailureReason; message: string };
+
+/** Checks one font upload as bytes in and a reply out; never throws for a bad file. */
+export function processFontRequest(
+  input: Uint8Array,
+  declared: string,
+  limits: ContentLimits,
+): FontReply {
+  const t = normaliseMime(declared);
+  if (!isFontType(t))
+    return {
+      v: 1,
+      ok: false,
+      reason: 'unsupported_type',
+      message: `the type ${t.slice(0, 100)} is not a font type`,
+    };
+  try {
+    return { v: 1, ok: true, font: processFont(input, t, limits) };
+  } catch (e) {
+    if (e instanceof AssetError) return { v: 1, ok: false, reason: e.reason, message: e.message };
+    const msg = e instanceof Error ? `${e.name}: ${e.message}` : 'error';
+    return {
+      v: 1,
+      ok: false,
+      reason: 'decode_failed',
+      message: `processing failed (${msg.slice(0, 120)})`,
+    };
+  }
+}
+
 /** The whole job: a request frame in, a reply frame out. */
 export async function handleRequest(frame: Uint8Array): Promise<Uint8Array> {
   let req: SandboxRequest;
@@ -152,7 +187,14 @@ export async function handleRequest(frame: Uint8Array): Promise<Uint8Array> {
     const h = d.header as Partial<SandboxRequest>;
     if (h.v !== 1 || typeof h.declared !== 'string') throw new Error('bad request');
     checkContentLimits(h.limits);
-    req = { v: 1, declared: h.declared, limits: h.limits };
+    if (h.purpose !== undefined && h.purpose !== 'asset' && h.purpose !== 'font')
+      throw new Error('bad purpose');
+    req = {
+      v: 1,
+      declared: h.declared,
+      limits: h.limits,
+      ...(h.purpose ? { purpose: h.purpose } : {}),
+    };
     body = d.body;
   } catch {
     const reply: SandboxReply = {
@@ -163,6 +205,8 @@ export async function handleRequest(frame: Uint8Array): Promise<Uint8Array> {
     };
     return encodeFrame(REPLY_MAGIC, reply, []);
   }
+  if (req.purpose === 'font')
+    return encodeFrame(REPLY_MAGIC, processFontRequest(body, req.declared, req.limits), []);
   const r = await processAsset(body, req.declared, req.limits);
   if (!r.ok) {
     const reply: SandboxReply = { v: 1, ok: false, reason: r.reason, message: r.message };

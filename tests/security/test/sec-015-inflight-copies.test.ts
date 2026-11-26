@@ -83,7 +83,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     });
 
     (skip ? it.skip : it)(
-      'stores one commit, gives the acknowledged copies one acknowledgement, and the room goes on',
+      'stores one commit, answers every copy with the same acknowledgement, and the room goes on',
       async () => {
         const token = await h.mintToken(h.a, 'cai', { [doc]: 'editor' });
         const c = await WireClient.connect(h.wsUrl, { origin: h.a.origin });
@@ -129,12 +129,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
           }
           tally = Object.fromEntries(kinds);
-          // What holds today: the copies that are acknowledged carry one acknowledgement (on
-          // PostgreSQL none may be: every copy can arrive before the commit is stored).
-          const acks = new Set(
-            answers.filter((m) => m.t === 'sync.ack').map((m) => JSON.stringify(m.d)),
-          );
-          expect(acks.size, 'the acknowledgements are the same').toBeLessThanOrEqual(1);
+          // Every one of the thousand submits is answered, with the stored commit's acknowledgement.
+          expect(tally).toEqual({ 'sync.ack': COPIES });
+          const acks = new Set(answers.map((m) => JSON.stringify(m.d)));
+          expect(acks.size, 'the acknowledgements are the same').toBe(1);
           console.info(`SEC-015 in-flight copies (${storage}): ${JSON.stringify(tally)}`);
         } finally {
           open();
@@ -166,13 +164,5 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       },
       120_000,
     );
-
-    // The criterion itself. It does not hold (2026-11-15): a copy that arrives while the commit is
-    // being stored is refused with `busy` (one commit in flight on a channel), and one of the
-    // thousand submits gets no answer at all. The test is an expected failure until the room
-    // answers every copy with the stored commit's acknowledgement; it then reports.
-    (skip ? it.skip : it.fails)('acknowledges every one of the thousand copies', () => {
-      expect(tally).toEqual({ 'sync.ack': COPIES });
-    });
   });
 }

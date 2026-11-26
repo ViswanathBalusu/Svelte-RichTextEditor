@@ -30,6 +30,7 @@
  *
  * Runs on memory and on PostgreSQL (skipped when PostgreSQL is not available).
  */
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -86,6 +87,7 @@ const withIdentifier = operations.filter((o) => o.params.length > 0);
 
 /** The path parameters the suite has an identifier of tenant B for. */
 const KNOWN_PARAMS = [
+  'sha256',
   'id',
   'rid',
   'tid',
@@ -372,6 +374,24 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       ids['origin'] = 'https://sweep-b.example.test';
       await h.parts.registry.addOrigin(h.b.id, ids['origin']);
       ids['import'] = uuid7();
+      // B's font (BE-048): the file in B's prefix and its row, named by the hash of its bytes.
+      const fontBytes = new TextEncoder().encode(`sweep font ${uuid7()}`);
+      ids['sha256'] = createHash('sha256').update(fontBytes).digest('hex');
+      await h.parts.objects.put(`tenants/${h.b.id}/fonts/${ids['sha256']}`, fontBytes);
+      await h.parts.tenantFonts!.add({
+        tenant: h.b.id,
+        sha256: ids['sha256'],
+        family: 'Sweep Sans',
+        style: 'regular',
+        weight: 400,
+        italic: false,
+        format: 'truetype',
+        bytes: fontBytes.length,
+        licence: 'Sweep licence',
+        serverUse: true,
+        addedBy: 'sweep',
+        addedAt: 1,
+      });
       ids['pid'] = 'participant-1';
       ids['fid'] = 'ffField000000001';
       ids['sid'] = 'ssSuggest0000001';

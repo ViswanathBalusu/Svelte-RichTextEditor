@@ -12,6 +12,7 @@ import { EN_GB_FIELDS_PANE } from './late/fieldsPane.ts';
 import { EN_GB_FILL_BAR } from './late/fillBar.ts';
 import { EN_GB_HISTORY_PANE } from './late/historyPane.ts';
 import { EN_GB_OUTLINE_PANE } from './late/outlinePane.ts';
+import { EN_GB_PARTICIPANTS_PANE } from './late/participantsPane.ts';
 import { EN_GB_PDF_PANE } from './late/pdfPane.ts';
 import { EN_GB_PERMISSIONS_PANE } from './late/permissionsPane.ts';
 import { EN_GB_RECOVERED_PANE } from './late/recoveredPane.ts';
@@ -34,6 +35,7 @@ export const EN_GB = {
   ...EN_GB_FILL_BAR,
   ...EN_GB_HISTORY_PANE,
   ...EN_GB_OUTLINE_PANE,
+  ...EN_GB_PARTICIPANTS_PANE,
   ...EN_GB_PDF_PANE,
   ...EN_GB_PERMISSIONS_PANE,
   ...EN_GB_RECOVERED_PANE,

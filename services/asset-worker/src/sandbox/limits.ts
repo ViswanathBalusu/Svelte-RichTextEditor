@@ -49,6 +49,12 @@ export interface ContentLimits {
   svgMaxDrawn: number;
   /** Most path commands across an SVG file, after `<use>` expansion. */
   svgMaxPathCommands: number;
+  /** Largest upload of a font file (TrueType, OpenType or WOFF2), bytes (BE-048). */
+  fontMaxBytes: number;
+  /** Most tables in a font file. */
+  fontMaxTables: number;
+  /** Largest size of a WOFF2 file after its compressed block is expanded, bytes. */
+  fontMaxExpandedBytes: number;
   /** JPEG re-encoding quality, 1 to 100. */
   jpegQuality: number;
 }
@@ -76,6 +82,9 @@ export const DEFAULT_CONTENT_LIMITS: Readonly<ContentLimits> = Object.freeze({
   svgMaxDepth: 64,
   svgMaxDrawn: 50_000,
   svgMaxPathCommands: 500_000,
+  fontMaxBytes: 8 * 1024 * 1024,
+  fontMaxTables: 64,
+  fontMaxExpandedBytes: 32 * 1024 * 1024,
   jpegQuality: 90,
 });
 
