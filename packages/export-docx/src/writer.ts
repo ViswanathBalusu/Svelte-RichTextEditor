@@ -148,7 +148,7 @@ export interface WriteOptions {
    * placeholder and named in the warnings with its block identifier, and the rest of the document
    * is written as usual (EXP-096, as EXP-051 does for the PDF). Without it no equation is checked.
    */
-  mathGate?: (latex: string) => string | null;
+  mathGate?: (latex: string, display: boolean) => string | null;
 }
 
 /** The text that stands in for an equation that fails the math gate. */
@@ -412,8 +412,8 @@ class DirectWriter {
   }
 
   /** Whether the injected math gate refuses the equation; if so, the warning names the block (EXP-096). */
-  refusedByGate(latex: string, block: string): boolean {
-    const reason = this.opts.mathGate?.(latex) ?? null;
+  refusedByGate(latex: string, block: string, display: boolean): boolean {
+    const reason = this.opts.mathGate?.(latex, display) ?? null;
     if (reason === null) return false;
     this.warn(
       `an equation that fails the math gate is replaced by a placeholder (block ${block}: ${reason})`,
@@ -861,7 +861,7 @@ class DirectWriter {
         return this.figureXml(n, pc, cx);
       case 'equation_block': {
         const id = String(n.attrs?.['id']);
-        if (this.refusedByGate(String(n.attrs?.['latex'] ?? ''), id))
+        if (this.refusedByGate(String(n.attrs?.['latex'] ?? ''), id, true))
           return el(
             'w:p',
             {},
@@ -1634,7 +1634,7 @@ class DirectWriter {
       case 'form_field':
         return this.formFieldXml(node, rPr());
       case 'equation':
-        if (this.refusedByGate(String(a['latex'] ?? ''), cx.seqBlock ?? 'unknown'))
+        if (this.refusedByGate(String(a['latex'] ?? ''), cx.seqBlock ?? 'unknown', false))
           return el('w:r', {}, rPr(), textElement(inDel ? 'w:delText' : 'w:t', MATH_PLACEHOLDER));
         this.warn(
           'an equation is written as its LaTeX source: Office math needs the converter of EXP-054',
