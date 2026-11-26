@@ -1185,6 +1185,10 @@ const harness = {
   /** Another client replies (comment.created): the pane is told and shows it without a reload. */
   remoteReply: (id: string, author: string, text: string) =>
     need().core.threads!.remoteReply(id, author, text),
+  /** The link of a comment can be asked for, as when the element has a host listener (UX-034). */
+  offerLinks: () => need().core.threads!.offerLinks(),
+  /** The host gave an address, and it was copied or was not (UX-034). */
+  answerLink: (ok: boolean) => need().core.threads!.answerLink(ok),
   /** Reactions are offered, as when the backend announces the feature (UX-033). */
   offerReactions: () => need().core.threads!.offerReactions(),
   /** Another client reacts to a comment (comment.reacted; UX-033). */

@@ -33,6 +33,7 @@
   } from '../shell/comment-rules.ts';
   import { PRECONDITION_FAILED, writeOutcome } from '../shell/comment-threads.ts';
   import {
+    REACTION_NAMES,
     REACTION_SYMBOLS,
     reactionPeople,
     reactionStates,
@@ -145,6 +146,19 @@
     const sub = subOf(principal);
     return (sub === null ? null : directory.lookup(sub).name) ?? tr.t('people.fallback');
   }
+
+  // The answer to a request for a link (UX-034): the host gave an address, and it was copied or not.
+  // svelte-ignore state_referenced_locally
+  const linkAnswer = threads.linkCopied ? live(threads.linkCopied) : null;
+  // svelte-ignore state_referenced_locally
+  let seenLink = threads.linkCopied?.get()?.n ?? 0;
+  $effect(() => {
+    const answer = linkAnswer?.current;
+    if (!answer || answer.n === seenLink) return;
+    seenLink = answer.n;
+    if (answer.ok) shell.announce('comments.link.copied');
+    else message = 'comments.link.failed';
+  });
 
   /** Takes a reaction or leaves it (UX-033). It needs no tag and makes no commit; the view follows changes. */
   async function react(c: CommentView, reaction: ReactionName, on: boolean): Promise<void> {
@@ -412,12 +426,21 @@
               onclick={() => removeComment(c)}>{tr.t('comments.thread.deleteComment')}</button
             >
           {/if}
+          {#if threads.requestLink}
+            <button
+              type="button"
+              class="de-list-button"
+              data-comment-link
+              onclick={() => threads.requestLink?.(shown.id, c.id)}
+              >{tr.t('comments.link.copy')}</button
+            >
+          {/if}
           {#if threads.react}
             <!-- Reactions (UX-033): offered only when the backend announces them. A toggle button
               has a name, a pressed state and a count; the people behind each are named below. -->
             <div class="de-reactions" role="group" aria-label={tr.t('comments.reactions.label')} data-reactions>
               {#each reactionStates(c.reactions, self) as r (r.reaction)}
-                {@const name = tr.t(`comments.reaction.${r.reaction}`)}
+                {@const name = tr.t(REACTION_NAMES[r.reaction])}
                 <button
                   type="button"
                   class="de-reaction"
@@ -436,7 +459,7 @@
             {#each reactionStates(c.reactions, self).filter((r) => r.count > 0) as r (r.reaction)}
               <p class="de-hint" data-reaction-people={r.reaction}>
                 {tr.t('comments.reactions.people', {
-                  name: tr.t(`comments.reaction.${r.reaction}`),
+                  name: tr.t(REACTION_NAMES[r.reaction]),
                   people: reactionPeople(r, mentionName) ?? '',
                 })}
               </p>

@@ -37,6 +37,11 @@ export interface ThreadsSource {
   /** Whether the backend announced the feature 
 eactions (UX-033); without it no reaction is offered. */
   readonly reactions?: boolean;
+  /**
+   * Called when the user asks for a comment's link (UX-034; owner decision 88): the element raises
+   * de-comment-link-request and the host builds the address. Absent: no control is offered.
+   */
+  readonly onLinkRequest?: (request: { thread: string; comment: string }) => void;
 }
 
 /** A thread as the service last gave it. */
@@ -78,7 +83,10 @@ export type ThreadsCore = Pick<
   | 'pickedThread'
 >;
 
-export function threadsService(core: ThreadsCore, source: ThreadsSource): ThreadsService {
+/** The thread service, and the element's way to say what became of the address the host gave. */
+export type ElementThreads = ThreadsService & { linkResult(ok: boolean): void };
+
+export function threadsService(core: ThreadsCore, source: ThreadsSource): ElementThreads {
   const { port, docId } = source;
   const held = new Map<string, Held>();
   const listeners = new Set<() => void>();
@@ -229,8 +237,34 @@ export function threadsService(core: ThreadsCore, source: ThreadsSource): Thread
     };
   };
 
+  let copies = 0;
+  const linkListeners = new Set<() => void>();
+  let lastCopy: { n: number; ok: boolean } | null = null;
+  const linkCopied: ReadView<{ n: number; ok: boolean } | null> = {
+    get: () => lastCopy,
+    subscribe(listener) {
+      linkListeners.add(listener);
+      return () => void linkListeners.delete(listener);
+    },
+  };
+
   return {
     self: principal,
+    // The address of a comment is the host's to build (owner decision 88); this asks for it.
+    ...(source.onLinkRequest
+      ? {
+          requestLink(id: string, commentId: string) {
+            if (!commentOf(id, commentId)) return false;
+            source.onLinkRequest?.({ thread: id, comment: commentId });
+            return true;
+          },
+          linkCopied,
+        }
+      : {}),
+    linkResult(ok: boolean) {
+      lastCopy = { n: ++copies, ok };
+      for (const listener of [...linkListeners]) listener();
+    },
     changes,
     reveal(thread) {
       const t = held.get(thread.id)?.thread.target;

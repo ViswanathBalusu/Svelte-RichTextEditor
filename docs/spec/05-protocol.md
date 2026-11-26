@@ -406,6 +406,7 @@ The embedding API has its own version, exposed as the static property `DocEditor
 | `exec(command, args?)` | Runs a command and answers `{ ok, reason }`. `ok` is false when nothing ran, and `reason` is then a code: `unknown`, `unannounced`, `no-access`, `mode`, `not-applicable`, `no-effect` or `not-loaded` (never a message, never content). Owner decision 188 |
 | `queryCommand(command)` | Asks whether a command is enabled and active: `{ enabled, active }` |
 | `requestExport(options): Promise<{ jobId }>`, `print()` | `print()` prints the typeset PDF |
+| `copyCommentLink(address): Promise<boolean>`, `openComment(marker): Promise<"open" \| "unavailable" \| "not-loaded">` | The host owns the address of a comment (UX-034; owner decision 88). The host answers `de-comment-link-request` by building an address from its own page address and calling `copyCommentLink`, which copies it. When someone follows the address, the host passes the marker back to `openComment`, which opens the comments pane at the thread. A deleted comment, or one the user may not view, gives `unavailable` and a message, and shows nothing else |
 | `focus()`, `destroy()` | |
 
 All events are `CustomEvent`s with `bubbles: true` and `composed: true`. They carry identifiers and counts, never document content.
@@ -421,6 +422,7 @@ All events are `CustomEvent`s with `bubbles: true` and `composed: true`. They ca
 | `de-export-progress`, `de-export-completed`, `de-export-failed` | Job state |
 | `de-auth-required` | `getToken` failed or the token was refused |
 | `de-share-request`, `de-fork-request` | The user asked for something the host owns. `de-fork-request` carries `{ docId, atSeq }` (HIS-022) |
+| `de-comment-link-request` | The user asked for the link to a comment: `{ docId, thread, comment, marker }`, identifiers only. The marker is the comment identifier, opaque to the host (UX-034) |
 | `de-diagnostic` | `{ feature, kind, ms, bytes, streaming, code, directive, fallback }`: a lazily loaded feature loaded, failed to load or is not available, and which directive the host lacks (WASM-002, WASM-003; proposed, ADR 0410). No content |
 | `de-error` | `{ code, message, fatal }` |
 

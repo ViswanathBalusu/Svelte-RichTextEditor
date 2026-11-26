@@ -292,6 +292,25 @@ export class FakeThreads implements ThreadsService {
     }));
   }
 
+  /** Asks the host for a comment's link (UX-034); present only after `offerLinks`. */
+  requestLink?: NonNullable<ThreadsService['requestLink']>;
+  /** What became of the address the host gave (UX-034); present only after `offerLinks`. */
+  linkCopied?: Value<{ readonly n: number; readonly ok: boolean } | null>;
+  #copies = 0;
+
+  /** Offers the link of a comment, as an element with a host listener does. */
+  offerLinks(): void {
+    this.linkCopied = new Value<{ readonly n: number; readonly ok: boolean } | null>(null);
+    this.requestLink = (id, commentId) => {
+      this.writes.push({ op: 'requestLink', id, commentId });
+      return true;
+    };
+  }
+
+  /** The host gave an address and it was copied, or was not (UX-034). */
+  answerLink(ok: boolean): void {
+    this.linkCopied?.set({ n: ++this.#copies, ok });
+  }
   /** Takes a reaction or leaves it (UX-033); present only after `offerReactions`. */
   react?: NonNullable<ThreadsService['react']>;
 

@@ -2015,6 +2015,17 @@ export interface ThreadsService {
   /** Deletes a comment. */
   deleteComment?(id: string, commentId: string, etag: string): Promise<ThreadWrite>;
   /**
+   * Asks the host for the address of a comment (UX-034; owner decision 88): the element raises
+   * `de-comment-link-request` with the identifiers and a marker, and the host builds the address
+   * from its own page address. False when the element can ask nobody. Absent: no control is offered.
+   */
+  requestLink?(id: string, commentId: string): boolean;
+  /**
+   * What became of the last address the host gave: it was copied (`ok`) or it could not be. `n`
+   * counts the answers, so the same outcome twice is two changes. Null before the first.
+   */
+  readonly linkCopied?: ReadView<{ readonly n: number; readonly ok: boolean } | null>;
+  /**
    * Adds the user to a reaction of a comment (`on`), or takes them out of it (UX-033). Absent
    * unless the backend announces the feature `reactions`: then no reaction control is offered.
    * It makes no commit and needs no tag; a user may react again to the same reaction safely.

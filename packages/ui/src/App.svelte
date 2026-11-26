@@ -248,7 +248,15 @@
 
   /** Follows a link to a comment by its identifier; resolves to what the pane showed. */
   export async function openLinkedComment(commentId: string): Promise<'open' | 'unavailable'> {
-    const found = core.threads?.list().find((t) => t.id === commentId);
+    // The marker the host passes back is a comment's identifier (owner decision 88; UX-034); the
+    // identifier of a thread, whose first comment it names, is taken as well.
+    const found = core.threads
+      ?.list()
+      .find(
+        (t) =>
+          t.id === commentId ||
+          (core.threads?.detail?.(t.id)?.comments.some((c) => c.id === commentId) ?? false),
+      );
     const outcome = resolveCommentLink(
       found
         ? {

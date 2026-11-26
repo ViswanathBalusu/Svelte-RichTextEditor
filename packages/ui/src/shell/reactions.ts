@@ -2,7 +2,9 @@
  * Reactions to a comment as the thread view shows them (UX-033; 13 §5; ADR 0424): the six reactions
  * a comment takes, how many people hold each, and whether the user is one of them. No DOM here.
  */
+import '../i18n/late/commentsPane.ts';
 import type { ReactionName, ReactionView } from '../core-api.ts';
+import type { StringKey } from '../i18n/en-GB.ts';
 
 /** The reactions, in the order the service lists them and the buttons are laid out. */
 export const REACTIONS: readonly ReactionName[] = [
@@ -22,6 +24,16 @@ export const REACTION_SYMBOLS: Readonly<Record<ReactionName, string>> = {
   celebrate: '\u{1F389}',
   eyes: '\u{1F440}',
   done: '\u2705',
+};
+
+/** The string that names each reaction: a table, so no key is built at run time (FND-008). */
+export const REACTION_NAMES: Readonly<Record<ReactionName, StringKey>> = {
+  thumbsUp: 'comments.reaction.thumbsUp',
+  heart: 'comments.reaction.heart',
+  laugh: 'comments.reaction.laugh',
+  celebrate: 'comments.reaction.celebrate',
+  eyes: 'comments.reaction.eyes',
+  done: 'comments.reaction.done',
 };
 
 export interface ReactionState {

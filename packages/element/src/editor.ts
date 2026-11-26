@@ -211,6 +211,14 @@ export interface MountedEditor extends EditorHandle {
    * the published element does not expose it). Resolves false when the pane is not offered.
    */
   openPane(id: string): Promise<boolean>;
+  /**
+   * Shows the thread of a comment the host named by its marker (UX-034; owner decision 88): opens
+   * the comments pane and focuses the thread. 'unavailable' for a comment that is deleted or that
+   * the user may not view, which show the same message and nothing else.
+   */
+  openLinkedComment(marker: string): Promise<'open' | 'unavailable'>;
+  /** Tells the shell whether the address the host gave was copied (UX-034). */
+  linkResult(ok: boolean): void;
   /** Replaces the host's string replacements while the shell is mounted (UX-063, UX-064). */
   setStrings(overrides: StringOverrides): void;
   /** Replaces the host's icons while the shell is mounted (UX-063). */
@@ -953,6 +961,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     openPane(id: string) {
       return app.openPaneById(id);
+    },
+    openLinkedComment(marker: string) {
+      return app.openLinkedComment(marker);
+    },
+    linkResult(ok: boolean) {
+      threads?.linkResult(ok);
     },
     focus() {
       core.focus();
