@@ -210,10 +210,6 @@ describe('the OpenAPI document: every route is complete (PRO-002 criterion 1)', 
     'GET /workflow/capture-settings',
     'PUT /workflow/capture-settings',
   ];
-  // The routes of the operator row name the operator credential alone (UX-076; decision 68).
-  const operatorRoutes = permissions.matrix
-    .filter((r) => r.requirement.kind === 'operator')
-    .flatMap((r) => r.routes);
   const publicRoutes = permissions.unmatrixedRoutes
     .filter((r) => r.class === 'public')
     .map((r) => r.route);
