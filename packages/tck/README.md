@@ -7,6 +7,11 @@ The kit certifies a DEP backend from the outside. It needs three inputs and noth
 - a service credential, read from the environment (`DEP_TCK_CREDENTIAL`), never from the command line;
 - the test-mode switch of the server, which shortens timers such as token lifetime and lease expiry.
 
+An optional fourth input turns on more checks: a service credential of a second tenant
+(`DEP_TCK_OTHER_CREDENTIAL`). With it the `authz.other-tenant` scenario shows that a caller of another
+tenant sees, changes and opens nothing of the kit's tenant (documents, holds, webhooks, keys, origins,
+audit); without it the scenario is skipped with that reason (UX-076).
+
 The kit mints its own user tokens through `POST /tokens`, registers a webhook that points at itself
 and creates its own documents.
 

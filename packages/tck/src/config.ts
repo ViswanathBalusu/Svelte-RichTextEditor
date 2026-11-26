@@ -37,6 +37,12 @@ export interface KitConfig {
    * half of the `Origin` check are skipped.
    */
   origin?: string;
+  /**
+   * A service credential of a second tenant (UX-076). With it the kit also checks that a caller of
+   * another tenant sees, changes and opens nothing of the kit's tenant; without it those scenarios
+   * are skipped with the reason. It must never be the kit tenant's own credential.
+   */
+  otherCredential?: string;
   /** The authority service for the `authority-service` profile; without it the profile is skipped. */
   authorityService?: AuthorityServiceInput;
   /**
@@ -76,10 +82,18 @@ export interface KitConfig {
 export interface ResolvedConfig extends Required<
   Omit<
     KitConfig,
-    'origin' | 'profiles' | 'scenarios' | 'fuzz' | 'property' | 'authorityService' | 'receiver'
+    | 'origin'
+    | 'otherCredential'
+    | 'profiles'
+    | 'scenarios'
+    | 'fuzz'
+    | 'property'
+    | 'authorityService'
+    | 'receiver'
   >
 > {
   origin: string | undefined;
+  otherCredential: string | undefined;
   receiver: ReceiverOptions | undefined;
   authorityService: AuthorityServiceInput | undefined;
   profiles: readonly string[] | undefined;
@@ -96,6 +110,7 @@ export function resolveConfig(c: KitConfig): ResolvedConfig {
     credential: c.credential,
     testMode: c.testMode,
     origin: c.origin,
+    otherCredential: c.otherCredential,
     receiver: c.receiver,
     authorityService: c.authorityService,
     profiles: c.profiles,
