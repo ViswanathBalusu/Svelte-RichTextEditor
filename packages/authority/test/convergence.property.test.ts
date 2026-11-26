@@ -54,38 +54,44 @@ describe('S3: correctness of the authority', () => {
     const codes = new Map<string, number>();
     const submitted = new Map<string, number>();
     const stored = new Map<string, number>();
-    fc.assert(
-      fc.property(
-        fc.array(op, { minLength: 60, maxLength: 240 }),
-        fc.subarray(CAST, { minLength: 2 }),
-        (ops, users) => {
-          const { failures, sim } = runOnce(ops, users, ['mallory']);
-          totals.ordered += sim.orderChecked;
-          totals.approvedChecked += sim.stats.approvedChecked;
-          totals.commits += sim.storage.log.filter((c) => c.kind === 'steps').length;
-          totals.steps += sim.storage.log.reduce((a, c) => a + c.steps.length, 0);
-          totals.faults += sim.stats.faults;
-          totals.crashes += sim.stats.crashes;
-          totals.fenced += sim.stats.fenced;
-          totals.grants += sim.stats.grantChanges;
-          totals.lost += sim.stats.lostNotifications;
-          for (const [k, v] of sim.stats.rejected) {
-            codes.set(k, (codes.get(k) ?? 0) + v);
-            totals.rejected += v;
-          }
-          add(submitted, sim.stats.submittedTypes);
-          add(stored, sim.storedTypes());
-          for (const c of sim.clients) totals.recovered += c.recovered;
-          // fast-check shrinks a failing schedule; the message of the shrunk one ends with the
-          // sequence as JSON, ready to be saved in REGRESSIONS.
-          expect(
-            failures,
-            `${failures.join('\n')}\nregression: ${JSON.stringify({ users, ops })}`,
-          ).toEqual([]);
-        },
-      ),
-      { numRuns: RUNS, examples: REGRESSIONS.map((r) => [r.ops, r.users]) },
+    const property = fc.property(
+      fc.array(op, { minLength: 60, maxLength: 240 }),
+      fc.subarray(CAST, { minLength: 2 }),
+      (ops, users) => {
+        const { failures, sim } = runOnce(ops, users, ['mallory']);
+        totals.ordered += sim.orderChecked;
+        totals.approvedChecked += sim.stats.approvedChecked;
+        totals.commits += sim.storage.log.filter((c) => c.kind === 'steps').length;
+        totals.steps += sim.storage.log.reduce((a, c) => a + c.steps.length, 0);
+        totals.faults += sim.stats.faults;
+        totals.crashes += sim.stats.crashes;
+        totals.fenced += sim.stats.fenced;
+        totals.grants += sim.stats.grantChanges;
+        totals.lost += sim.stats.lostNotifications;
+        for (const [k, v] of sim.stats.rejected) {
+          codes.set(k, (codes.get(k) ?? 0) + v);
+          totals.rejected += v;
+        }
+        add(submitted, sim.stats.submittedTypes);
+        add(stored, sim.storedTypes());
+        for (const c of sim.clients) totals.recovered += c.recovered;
+        // fast-check shrinks a failing schedule; the message of the shrunk one ends with the
+        // sequence as JSON, ready to be saved in REGRESSIONS.
+        expect(
+          failures,
+          `${failures.join('\n')}\nregression: ${JSON.stringify({ users, ops })}`,
+        ).toEqual([]);
+      },
     );
+    fc.assert(property, { numRuns: RUNS, examples: REGRESSIONS.map((r) => [r.ops, r.users]) });
+    // Removing a mark from a tab needs a stored tab mark first, a chain that
+    // 15 local runs of 300 schedules (2026-11-26) stored 2 to 9 times, so a seed now and then (hosted
+    // CI run 45864375181) stores it never.
+    // Rather than a fixed seed, which would hide a real regression, further rounds run until every
+    // step type has been stored (at most ten rounds; a type still missing then fails below).
+    const unstored = () => ALLOWED_STEP_TYPES.filter((t) => (stored.get(t) ?? 0) === 0);
+    for (let round = 0; round < 10 && unstored().length > 0; round++)
+      fc.assert(property, { numRuns: RUNS });
     console.log(
       `S3 totals over ${RUNS} runs: ${JSON.stringify(totals)}; rejections by code: ${JSON.stringify(Object.fromEntries(codes))}; step types submitted: ${JSON.stringify(Object.fromEntries(submitted))}; stored: ${JSON.stringify(Object.fromEntries(stored))}`,
     );
