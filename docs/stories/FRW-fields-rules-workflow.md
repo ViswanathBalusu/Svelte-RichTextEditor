@@ -2119,6 +2119,8 @@ As a participant who uses a keyboard or a screen reader, I want every field to b
 
 **Notes (lane w4, 2026-11-26):** Criterion 1 is ticked and criterion 3 stays open. Criterion 1: the required marker and `aria-required` now follow a `require` rule (FRW-023, ticked), so the rule-driven part of the criterion is met; the Chromium run of `frw-023-rules-controls.universal.test.ts` has one failing test ("is not drawn and cannot take focus until the rule shows it": the hidden field is drawn at mount, so the rule's first pass runs after the first check; the failure is in FRW-023's test and in the rule timing, not in this criterion; it is left for the FRW-023 owner). Criterion 3 needs a screen reader (NVDA, JAWS or VoiceOver) to announce a field's name, kind, required and invalid state, value and role; none was run here, and the accessibility tree that Chromium reads is not the same as an announcement, so it stays open for a person with the tool.
 
+**Notes (lane w4, 2026-11-26, checked again):** No screen reader is installed on this machine (no NVDA under Program Files; JAWS and VoiceOver are not available on Windows here), and no decision in `docs/owner-decisions-2026-11-15.md` or the later files waives the check. Criterion 3 stays unticked for a person with the tool; the other five are ticked.
+
 ### FRW-080 Keep line and page breaks stable while filling
 
 | Type | Phase | Size | Priority | Persona |
