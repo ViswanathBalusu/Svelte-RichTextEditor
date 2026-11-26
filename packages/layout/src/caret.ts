@@ -401,6 +401,46 @@ export function selectionRects(
 }
 
 /**
+ * The rectangles of the boxes (a figure, a placeholder for a hidden region) that a selection holds
+ * whole (FE-141 criterion 1): a box lies between the lines of the two ends, so it is inside the
+ * selection or outside it, never in part. A box has no text, and a position is never inside it.
+ * The positions may come in either order. Boxes of a repeated header row are left out, as their
+ * lines are in `paintedLines`.
+ */
+export function selectionBoxRects(
+  tree: LayoutTree,
+  anchor: DocPosition,
+  head: DocPosition,
+): SelectionRect[] {
+  const lines = paintedLines(tree);
+  const ia = lineIndexFor(lines, anchor);
+  const ih = lineIndexFor(lines, head);
+  if (ia < 0 || ih < 0 || ia === ih) return [];
+  const first = Math.min(ia, ih);
+  const last = Math.max(ia, ih);
+  const out: SelectionRect[] = [];
+  // `seen` counts the lines before the fragment being read, as `paintedLines` orders them: a box
+  // that follows line `first` and comes before line `last + 1` is between the two ends.
+  let seen = 0;
+  const walk = (fragments: readonly LayoutFragment[], page: number): void => {
+    for (const f of fragments) {
+      if (f.kind === 'paragraph') {
+        seen += f.lines.length;
+      } else if (f.kind === 'table') {
+        for (const row of f.rows) {
+          if (row.repeated) continue;
+          for (const cell of row.cells) walk(cell.fragments, page);
+        }
+      } else if (seen > first && seen <= last) {
+        out.push({ page, x: f.x, y: f.y, width: f.width, height: f.height });
+      }
+    }
+  };
+  tree.pages.forEach((p, index) => walk(p.fragments, index));
+  return out;
+}
+
+/**
  * Moves the caret one painted line up or down, keeping its horizontal position (FE-097 criterion
  * 1). The goal x is taken from the caret the first time and carried on by the caller, so a short
  * line does not pull the caret left for good. A goal x beyond the end of the target line gives that

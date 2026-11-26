@@ -26,6 +26,8 @@ export interface ViewChoice {
 export const VIEW_STRINGS = {
   web: 'Web layout',
   print: 'Page layout',
+  /** The label of the read-only pages (FE-095). */
+  read: 'Reading layout',
   /** The control in the page view's label that shows the web view instead (FE-099 criterion 4). */
   toWeb: 'Use the accessible web layout',
   /** The control in the web view's label, after the author chose it, that returns to the page view. */

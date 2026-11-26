@@ -188,6 +188,47 @@ const PDFJS = /\/node_modules\/pdfjs-dist\//;
 const PROTOCOL_DEFINITION = /\/packages\/protocol\/src\/definition\//;
 
 /**
+ * CSS anchor positioning (FE-020 criterion 3): the properties that make an element anchored and the
+ * `anchor()` and `anchor-size()` functions. Overlays are positioned in script, so none may appear in
+ * the built CSS. The function pattern asks for an argument only anchoring uses, so a script's own
+ * `anchor(` call is not taken for CSS.
+ */
+const ANCHOR_PROPERTY =
+  /(?:^|[;{}\s"'`])(anchor-name|anchor-scope|position-anchor|position-area|position-try(?:-fallbacks|-order)?|position-visibility)\s*:/;
+const ANCHOR_FUNCTION =
+  /\banchor(?:-size)?\(\s*(?:--[\w-]+\s*[,\s]\s*)?(?:top|bottom|left|right|start|end|center|inside|outside|self-start|self-end|width|height|block|inline|\d+%)\b/;
+const ANCHOR_AT_RULE = /@position-try\b/;
+
+/** The files of the build whose CSS uses anchor positioning, and what they use. Empty when none does. */
+export function anchorPositioningViolations(
+  chunks: readonly ChunkInfo[],
+  assets: readonly AssetInfo[] = [],
+): string[] {
+  const out: string[] = [];
+  const texts: Array<{ file: string; text: string }> = [
+    ...chunks.map((c) => ({ file: c.fileName, text: c.code })),
+    ...assets
+      .filter((a) => /\.css$/.test(a.fileName))
+      .map((a) => ({
+        file: a.fileName,
+        text: typeof a.source === 'string' ? a.source : new TextDecoder().decode(a.source),
+      })),
+  ];
+  for (const { file, text } of texts) {
+    const found = [
+      ANCHOR_PROPERTY.exec(text)?.[1],
+      ANCHOR_FUNCTION.exec(text)?.[0].replace(/\(.*/s, '()'),
+      ANCHOR_AT_RULE.test(text) ? '@position-try' : undefined,
+    ].filter((x): x is string => x !== undefined);
+    if (found.length > 0)
+      out.push(
+        `overlays: ${file} uses CSS anchor positioning (${found.join(', ')}); overlays are positioned in script (FE-020)`,
+      );
+  }
+  return out;
+}
+
+/**
  * Reads the shape of the build. `first` is the first interactive set of a host backend (the entry,
  * the editor chunk and their static imports); `viewerFiles` are the files of the viewer frame's
  * page, as `viewer/<path>`.
@@ -269,6 +310,8 @@ export function structureOf(
       violations.push(
         `stylesheet: ${c.fileName} carries the component CSS and does not load with the editor`,
       );
+
+  violations.push(...anchorPositioningViolations(chunks, assets));
 
   // The protocol definition as data is read by the DEP client only. A host that passes its own
   // backend must not pay for it (13 §9); the element repeats the few names it needs.

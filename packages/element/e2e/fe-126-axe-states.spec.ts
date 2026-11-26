@@ -10,6 +10,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { handOverAxe } from './axe-results.ts';
 import { SPIKE_IDS, openPanel, openS1, record } from './helpers.ts';
 import type { Page } from '@playwright/test';
 
@@ -18,6 +19,7 @@ type Summary = Record<string, number>;
 /** Violation counts by rule. `pierced` is true when axe checked a node inside a shadow root. */
 async function summarise(page: Page): Promise<Summary & { pierced?: boolean }> {
   const results = await new AxeBuilder({ page }).analyze();
+  handOverAxe(page, test.info(), results.violations);
   const summary: Summary & { pierced?: boolean } = {};
   for (const v of results.violations) summary[v.id] = v.nodes.length;
   const checked = [...results.passes, ...results.violations, ...results.incomplete];

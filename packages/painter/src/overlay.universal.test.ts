@@ -153,29 +153,50 @@ describe.skipIf(!hasDom)('overlay controls (FE-093)', () => {
     expect(document.activeElement).toBe(over);
   });
 
-  it('keeps the label and the control in the same root, so ARIA references resolve', () => {
+  it('makes the label of a control itself, in the same root, so the ARIA reference resolves (criterion 3)', () => {
     const el = document.createElement('div');
     el.style.width = '600px';
     document.body.appendChild(el);
     host = el;
     const shadow = el.attachShadow({ mode: 'open' });
+    // The caller gives a bare input and a text; the painter builds the label and the reference.
     paintTree(shadow, tree, source, {
-      control: (box) => {
-        const wrap = document.createElement('div');
-        const label = document.createElement('span');
-        label.id = `${box.blockId}-label`;
-        label.textContent = 'Signature';
-        const input = document.createElement('input');
-        input.setAttribute('aria-labelledby', label.id);
-        wrap.append(label, input);
-        return wrap;
-      },
+      control: () => document.createElement('input'),
+      controlLabel: (box) => `Field ${box.blockId}`,
     });
-    const input = inputFor(shadow, 'field-low');
-    const labelId = input.getAttribute('aria-labelledby')!;
-    expect(input.getRootNode()).toBe(shadow);
-    expect(shadow.getElementById(labelId)?.textContent).toBe('Signature');
-    expect(document.getElementById(labelId)).toBeNull();
+    const inputs = [...shadow.querySelectorAll<HTMLInputElement>('input')];
+    expect(inputs.length).toBe(2);
+    const ids = new Set<string>();
+    for (const input of inputs) {
+      const labelId = input.getAttribute('aria-labelledby')!;
+      expect(labelId).toBeTruthy();
+      expect(ids.has(labelId)).toBe(false);
+      ids.add(labelId);
+      const label = shadow.getElementById(labelId);
+      expect(label?.textContent).toBe(`Field ${input.dataset['block']}`);
+      // Label and control are in the one root, and the page's document does not hold the label.
+      expect(label?.getRootNode()).toBe(shadow);
+      expect(input.getRootNode()).toBe(shadow);
+      expect(document.getElementById(labelId)).toBeNull();
+      // The label sits in the overlay of the control and takes no focus and no pointer events.
+      expect(label?.parentElement).toBe(input.parentElement);
+      expect(label?.style.pointerEvents).toBe('none');
+    }
+  });
+
+  it('keeps a label the control already has and makes none for it, and none without a text', () => {
+    const root = mount();
+    paintTree(root, tree, source, {
+      control: (box) => {
+        const input = document.createElement('input');
+        if (box.blockId === 'field-low') input.setAttribute('aria-label', 'Own label');
+        return input;
+      },
+      controlLabel: (box) => (box.blockId === 'field-low' ? 'Ignored' : null),
+    });
+    expect(root.querySelectorAll('.de-control-label').length).toBe(0);
+    expect(root.querySelector('input[aria-label]')?.getAttribute('aria-label')).toBe('Own label');
+    expect(root.querySelectorAll('[aria-labelledby]').length).toBe(0);
   });
 
   it('leaves the painted text under the overlay where the pointer reaches it and it stays selectable', () => {

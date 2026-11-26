@@ -95,6 +95,14 @@ export interface PaintOptions {
    * as it is. The caller builds the element with DOM APIs and reads its value from the document.
    */
   readonly control?: (box: BoxFragment) => HTMLElement | null;
+  /**
+   * The accessible label of the control placed for a box (FE-093 criterion 3). When it returns a
+   * text, the painter puts a visually hidden label element in the same overlay, as the control's
+   * sibling, and points the control's `aria-labelledby` at it, so that the reference resolves in the
+   * root the pages were painted into (a shadow root included). A control that already has
+   * `aria-labelledby` or `aria-label` keeps it, and no label element is made for it.
+   */
+  readonly controlLabel?: (box: BoxFragment) => string | null;
 }
 
 export interface PaintResult {
@@ -105,6 +113,9 @@ export interface PaintResult {
   /** The number of controls placed in the overlay layers (FE-093), across all pages. */
   readonly controlCount: number;
 }
+
+/** Makes the ids of the label elements unique across pages and paints in one document (FE-093). */
+let labelSerial = 0;
 
 /** Characters a trailing run may hold: ordinary space, no-break space and tab. */
 function isBlank(ch: string): boolean {
@@ -304,6 +315,29 @@ export function paintTree(
           cs.width = `${f.width}pt`;
           cs.height = `${f.height}pt`;
           cs.pointerEvents = 'auto';
+          const labelText = options.controlLabel?.(f) ?? null;
+          if (
+            labelText !== null &&
+            labelText !== '' &&
+            !control.hasAttribute('aria-labelledby') &&
+            !control.hasAttribute('aria-label')
+          ) {
+            const label = doc.createElement('span');
+            label.id = `de-control-label-${++labelSerial}`;
+            label.className = 'de-control-label';
+            label.textContent = labelText;
+            // Visually hidden, still in the accessibility tree; set through the style object.
+            const ls = label.style;
+            ls.position = 'absolute';
+            ls.width = '1px';
+            ls.height = '1px';
+            ls.overflow = 'hidden';
+            ls.setProperty('clip-path', 'inset(50%)');
+            ls.whiteSpace = 'nowrap';
+            ls.pointerEvents = 'none';
+            control.setAttribute('aria-labelledby', label.id);
+            overlay.appendChild(label);
+          }
           overlay.appendChild(control);
           controlCount++;
         }

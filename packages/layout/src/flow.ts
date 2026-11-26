@@ -144,7 +144,7 @@ export interface FlowParagraph {
 export interface FlowBox {
   readonly kind: 'box';
   readonly id: string;
-  readonly what: 'figure' | 'equation' | 'preserved' | 'extension';
+  readonly what: 'figure' | 'equation' | 'preserved' | 'extension' | 'placeholder';
   readonly width: number;
   readonly height: number;
   readonly align: 'left' | 'center' | 'right';
@@ -158,6 +158,13 @@ export interface FlowBox {
    * parentheses the painter shows around it (03 §4.3).
    */
   readonly number?: string;
+  /**
+   * For a `placeholder` (a `hidden_region` of a projection, ADR 0019): the title the reader may see,
+   * or null when there is none. Its width is the column's, set when the items are made; its height
+   * is fixed, 2.5 times the default paragraph font size (the `.de-hidden-region` rule of the web
+   * view), whatever the title (FE-141).
+   */
+  readonly title?: string | null;
   /**
    * The CDM range the block covers, as offsets inside it: 0 to the size of its content, or to 1 for
    * an atom (FE-078 criterion 2; `blockSpan`).
@@ -1132,6 +1139,24 @@ function blocksFor(
         defaultScope,
         regionId,
       );
+    }
+    case 'hidden_region': {
+      // A placeholder for a region the reader may not see (ADR 0019; FE-141): one fixed-height box,
+      // as wide as the column, and one position (an atom), so a selection holds it whole.
+      const font = fontOf(ctx, defaultScope, []);
+      return [
+        {
+          kind: 'box',
+          id,
+          what: 'placeholder',
+          width: 0,
+          height: 2.5 * font.sizePt,
+          align: 'left',
+          keepNext: false,
+          regionId,
+          title: str(node.attrs?.['title']) ?? null,
+        },
+      ];
     }
     case 'extension_block':
       return fallbackParagraph(

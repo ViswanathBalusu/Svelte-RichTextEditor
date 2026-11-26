@@ -128,7 +128,11 @@ export async function mountEditor(
     },
   );
   const name = opts.name ?? 'one';
-  if (opts.attributes?.['view'] === 'print') {
+  // `view="read"` with `config.readPages` paints the pages read-only, as `print` does (FE-095).
+  const paged =
+    opts.attributes?.['view'] === 'print' ||
+    (opts.attributes?.['view'] === 'read' && opts.config?.['readPages'] === true);
+  if (paged) {
     await editorShown(page, name);
     return;
   }

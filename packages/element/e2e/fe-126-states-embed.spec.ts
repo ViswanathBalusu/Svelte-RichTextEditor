@@ -11,12 +11,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { clickToolbarCommand, mountEditor, openEmbed } from './embed-helpers.ts';
+import { handOverAxe } from './axe-results.ts';
 import { record } from './helpers.ts';
 
 type Summary = Map<string, number>;
 
 async function summarise(page: Page): Promise<Summary> {
   const results = await new AxeBuilder({ page }).analyze();
+  handOverAxe(page, test.info(), results.violations);
   const summary: Summary = new Map();
   for (const v of results.violations) summary.set(v.id, v.nodes.length);
   return summary;
