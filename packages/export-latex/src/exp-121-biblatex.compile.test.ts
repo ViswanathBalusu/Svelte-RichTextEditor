@@ -54,7 +54,9 @@ const bibliography = (include?: 'all' | 'cited') => ({
 
 const INSTANT = '2026-11-06T10:00:00.000Z';
 
-describe.skipIf(!ready)('EXP-121 biber in the sandbox', () => {
+// Each test compiles in the sandbox, runs biber and validates the PDF twice: on a busy machine
+// (the whole suite in parallel) that is longer than the default of 60 seconds.
+describe.skipIf(!ready)('EXP-121 biber in the sandbox', { timeout: 180_000 }, () => {
   it('compiles a document with citations and a bibliography, and runs biber once', async () => {
     const c = await convertAndCompile(
       doc(
