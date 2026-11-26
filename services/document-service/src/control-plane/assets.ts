@@ -374,6 +374,10 @@ export function assetReferences(doc: JsonNode): { display: Set<string>; fragment
         const v = n.attrs[name];
         if (typeof v === 'string') (FRAGMENT_ATTRIBUTES.has(name) ? fragments : display).add(v);
       }
+    // The fragment of an inline atom's `origin` is a fragment asset too (spike S11).
+    const o = n.attrs?.['origin'];
+    const f = o && typeof o === 'object' ? (o as { fragment?: unknown }).fragment : undefined;
+    if (typeof f === 'string') fragments.add(f);
     if (Array.isArray(n.content)) stack.push(...n.content);
   }
   return { display, fragments };
