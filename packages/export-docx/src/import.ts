@@ -42,6 +42,7 @@ import {
   buildFragment,
 } from './assets.ts';
 import { NodeHasher } from './hash.ts';
+import { NumberingImport } from './import-numbering.ts';
 import { payloadDigests } from './integrity.ts';
 import { valuesToMarks } from './marks.ts';
 import { pname } from './names.ts';
@@ -715,7 +716,29 @@ class Importer {
       }
     }
 
-    // Styles first: paragraphs refer to them.
+    // Numbering before the styles: a style may be numbered (headings).
+    const numberingRel = mainRels.list.find((r) => r.type === REL.numbering && !r.external);
+    const numberingPart = numberingRel ? resolveTarget(mainPart, numberingRel.target) : null;
+    const numberingBytes = numberingPart ? this.read(numberingPart) : undefined;
+    this.numberingImport = new NumberingImport(
+      numberingBytes ? this.parse(numberingPart!, numberingBytes).root : null,
+      () => nodeId(),
+      (message) => this.warnings.push(message),
+    );
+    for (const d of this.numberingImport.sources) {
+      this.count(this.stats.nodes, 'numbering_def');
+      const target: DefSource = {
+        part: numberingPart!,
+        start: d.start,
+        end: d.end,
+        hash: '',
+        wordId: d.abstractId,
+      };
+      this.sm.defs[String(d.node.attrs!['id'])] = target;
+      this.pending.push({ node: d.node, target });
+    }
+
+    // Styles next: paragraphs refer to them.
     const stylesRel = mainRels.list.find((r) => r.type === REL.styles && !r.external);
     const styleDefs = stylesRel ? this.styles(resolveTarget(mainPart, stylesRel.target)) : [];
     this.ensureDefaultStyle(styleDefs);
@@ -791,7 +814,12 @@ class Importer {
     }
 
     // Definitions: settings, styles, page setups (shared trees are appended by shareTrees).
-    const defsContent: JsonNode[] = [settings, ...styleDefs, ...pageSetups];
+    const defsContent: JsonNode[] = [
+      settings,
+      ...styleDefs,
+      ...this.numberingImport.defs,
+      ...pageSetups,
+    ];
     const envelope: JsonEnvelope = {
       cdm: 1,
       requires: [],
@@ -968,6 +996,8 @@ class Importer {
   private evenAndOddHeaders = false;
   /** The document language of w:docDefaults (EXP-100 criterion 5), read by `styles()`. */
   private docLang: string | null = null;
+  /** The numbering part, read before the styles and the paragraphs that refer to it (EXP-100 criterion 3). */
+  private numberingImport: NumberingImport | null = null;
   /**
    * The paragraph and run values of w:docDefaults (EXP-100 criterion 5). They sit below every style
    * in Word, so they are merged into the default paragraph style (proposed in ADR 0372).
@@ -1069,6 +1099,18 @@ class Importer {
       if (s.builtIn) attrs['builtIn'] = true;
       for (const [k, v] of Object.entries(read.values))
         if (k !== 'name' && v !== null) attrs[k] = v;
+      if (s.kind === 'paragraph') {
+        // A numbered style (headings): its numbering joins the list of its definition (03 §7.1).
+        const numPr = child(child(s.el, NS.w, 'pPr') ?? s.el, NS.w, 'numPr');
+        if (numPr) {
+          const n = this.numberingImport?.forStyle(
+            attr(child(numPr, NS.w, 'numId') ?? numPr, NS.w, 'val'),
+            attr(child(numPr, NS.w, 'ilvl') ?? numPr, NS.w, 'val'),
+            s.wordId,
+          );
+          if (n) attrs['numbering'] = n;
+        }
+      }
       if (s.kind === 'paragraph' && s.id === this.defaultStyle) this.applyDocDefaults(attrs);
       const extra = attrsOf(s.el, (n) => n === w('type') || n === w('styleId'));
       const body: TreeBody = {};
@@ -1401,6 +1443,18 @@ class Importer {
         sectPr = child(pPr, NS.w, 'sectPr') ?? null;
         const read = readContainer(PPR, elements(pPr), this.ctx, this.stats);
         for (const [k, v] of Object.entries(read.values)) if (v !== null) attrs[k] = v;
+        // The list the paragraph is in (EXP-100 criterion 3). The `w:numPr` stays in the residue.
+        const numPr = child(pPr, NS.w, 'numPr');
+        if (numPr && this.numberingImport) {
+          const n = this.numberingImport.forParagraph(
+            attr(child(numPr, NS.w, 'numId') ?? numPr, NS.w, 'val'),
+            attr(child(numPr, NS.w, 'ilvl') ?? numPr, NS.w, 'val'),
+          );
+          if (n) {
+            attrs['numbering'] = n.numbering;
+            if (n.restart !== null) attrs['numberingRestart'] = n.restart;
+          }
+        }
         const pPrAttrs = attrsOf(pPr);
         if (read.residue.length || Object.keys(pPrAttrs).length) {
           const holder: TreeElement = { name: W_PPR };
