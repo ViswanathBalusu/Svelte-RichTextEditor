@@ -220,6 +220,7 @@ export {
 export {
   LOG_RECEIPT_FORMAT,
   PUBLIC_ANCHOR_FORMAT,
+  PUBLIC_ROOT_FIELD_REASONS,
   PUBLIC_ROOT_FORMAT,
   PUBLIC_ROOT_MEMBERS,
   PUBLIC_SALT_BYTES,
@@ -228,6 +229,7 @@ export {
   publicEntryText,
   publicLeaf,
   publicRootProof,
+  unlistedPublicEntryFields,
   verifyPublicRootProof,
   type PublicAnchorEvidence,
   type PublicLogReceipt,

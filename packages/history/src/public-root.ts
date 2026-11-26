@@ -177,6 +177,34 @@ export interface PublicRootEntry {
 /** The members of the public entry. A change to this list is a change to what leaves the system. */
 export const PUBLIC_ROOT_MEMBERS = ['format', 'from', 'leaves', 'root', 'to'] as const;
 
+/**
+ * Why each member of the public entry is sent (SEC-068). A member that is added to the entry has to
+ * be listed here with its reason, or the privacy test fails: nothing leaves the system unexplained.
+ */
+export const PUBLIC_ROOT_FIELD_REASONS: Readonly<
+  Record<(typeof PUBLIC_ROOT_MEMBERS)[number], string>
+> = {
+  format: 'names the format, so that a reader knows how to read the entry',
+  from: 'the end of the previous period, so that a relying party can see that no period was left out',
+  leaves: 'the number of leaves, for the size of the tree; it is a count and names no document',
+  root: 'the Merkle root over salted leaves: the only value that vouches for the heads',
+  to: 'the end of this period: the time from which the root covers the heads',
+};
+
+/** The members of an entry's text that are not listed in `PUBLIC_ROOT_FIELD_REASONS`. */
+export function unlistedPublicEntryFields(text: string): string[] {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return ['(not JSON)'];
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return ['(not an object)'];
+  return Object.keys(value).filter(
+    (k) => !Object.prototype.hasOwnProperty.call(PUBLIC_ROOT_FIELD_REASONS, k),
+  );
+}
 function entryProblem(r: Omit<PublicRootEntry, 'format'>): string | null {
   if (typeof r.to !== 'string' || !TIME.test(r.to)) return 'to is a time in UTC with milliseconds';
   if (r.from !== null && (typeof r.from !== 'string' || !TIME.test(r.from)))

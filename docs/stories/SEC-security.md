@@ -1656,10 +1656,14 @@ As a maintainer, I want a test that shows what leaves the system, so that a chan
 
 **Acceptance criteria**
 
-- [ ] Given a tenant with canary document, tenant and user identifiers and canary text, when a root is submitted, then the bytes sent to the log hold none of them and hold no sequence number.
-- [ ] Given two documents with the same head hash in two tenants, when roots are built, then the leaves differ because of the salts.
-- [ ] Given a tenant's salt is destroyed, when a head is checked, then the proof cannot be built, and the public entry stays and links to nothing.
-- [ ] Given a code change that adds a field to the submission, when the test runs, then it fails until the field is listed with a reason.
+- [x] Given a tenant with canary document, tenant and user identifiers and canary text, when a root is submitted, then the bytes sent to the log hold none of them and hold no sequence number.
+- [x] Given two documents with the same head hash in two tenants, when roots are built, then the leaves differ because of the salts.
+- [x] Given a tenant's salt is destroyed, when a head is checked, then the proof cannot be built, and the public entry stays and links to nothing.
+- [x] Given a code change that adds a field to the submission, when the test runs, then it fails until the field is listed with a reason.
+
+**Evidence (lane w8, 2026-11-26):** `services/document-service/test/transparency/sec-068-public-log-privacy.test.ts` (5 tests, run with `pnpm exec vitest run --project node`) and, in `@docedit/history`, `PUBLIC_ROOT_FIELD_REASONS` and `unlistedPublicEntryFields` (`packages/history/src/public-root.ts`). Criterion 1: every request the adapter makes to a local log (method, URL, headers, body, as text and hexadecimal) is recorded and searched for a canary tenant, document and user identifier, canary text, two canary sequence numbers and the chain heads: none is there; the one POST body is exactly the public entry, which has no `seq` member. Criterion 2: the same head in two tenants gives different leaves and roots, and one tenant's salt does not cover the other's root. Criterion 3: after the tenant's salt key is destroyed `PublicRoots.proof` rejects, a new salt cannot be made, the entry stays in the log and in write-once storage, and no guessed salt covers the head; the entry holds no head. Criterion 4: the entry's members must equal `PUBLIC_ROOT_MEMBERS`, each must have a reason in `PUBLIC_ROOT_FIELD_REASONS` (a type error if a member has none), and the test shows `unlistedPublicEntryFields` naming a `tenant` member added to an entry (which `parsePublicEntry` also refuses).
+
+**Notes:** The test searches what the adapter sends over HTTP to the local log; it does not and cannot test what the proposed public log (Rekor) would be sent, which is the same entry through the same port. The search covers the strings and the sequence numbers of the canaries; a leak in another encoding would not be found. Published by design, and listed with reasons: the period's end and the number of leaves (ADR 0409 decision 1).
 
 ## Read restrictions (ADR 0019)
 
