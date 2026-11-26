@@ -3205,6 +3205,8 @@ Lane FE-118-130, round 5 (2026-11-13, nothing ticked). FND-007 defines the metri
 
 **Notes (lane w1, 2026-11-18):** Criterion 3 is ticked from the run above. Criteria 1, 2, 4 and 6 stay open. Criterion 1: typing on `pages-300` is over its targets (56 ms p50 against 16, 64 ms p95 against 50 in the run of 2026-11-14), the cause is recorded, and nothing has been changed to remove it (the whole-document walks of `referenceGuardPlugin` and the browser's selection sync, criterion 5); the navigation and comments panes are not measured on the document. Criterion 2: typing and scrolling figures exist, navigation and the panes are not measured, and no budget report file holds them. Criterion 4: no profile of a table-heavy document exists (the typed paragraph is outside tables), and node views are named only by ProseMirror's update functions. Criterion 6: no CI job runs the perf harness; this needs the hosted runner of FND-007 and a gate script, and was not built here.
 
+**Notes (lane w1, 2026-11-26):** nothing ticked. The owner decisions do not name the extensions: decision 199 (SEC-011) sets the trust position for browser extensions, not the list of grammar checkers and password managers that criterion 1 needs, and the maintainers have not chosen that list. No browser run with the extensions was made. Blocked on the list, and on a person observing each extension in each supported browser.
+
 ## Frontend tests (02 §14)
 
 ### FE-121 Run the editing core in Node.js without a browser
