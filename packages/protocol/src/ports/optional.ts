@@ -242,8 +242,30 @@ export interface ProofingPort {
     request: { docId: string; blocks: readonly ProofingBlock[] },
     opts?: { signal?: CancelSignal },
   ): Promise<ProofingFinding[]>;
-  /** Adds a word to the user's custom dictionary. */
-  addWord(word: string, lang: string): Promise<void>;
+  /** Adds a word to the user's custom dictionary, or with `scope: 'tenant'` to the shared one. */
+  addWord(word: string, lang: string, opts?: { scope?: DictionaryScope }): Promise<void>;
+  /**
+   * The words of the custom dictionaries for a language: the caller's own and the tenant's shared
+   * list (owner decision 34). A port that has this and `removeWord` supports custom dictionaries
+   * (13 §6.1); one that has neither offers no dictionary controls.
+   */
+  listWords?(lang: string): Promise<DictionaryEntry[]>;
+  /** Removes a word from the caller's list, or with `scope: 'tenant'` from the shared one. */
+  removeWord?(word: string, lang: string, opts?: { scope?: DictionaryScope }): Promise<void>;
+}
+
+/**
+ * Whose list a word is on (owner decision 34): one list for each person, and one shared list for the
+ * tenant that an administrator keeps. The port decides who may change the shared one.
+ */
+export type DictionaryScope = 'user' | 'tenant';
+
+/** One word of a custom dictionary. */
+export interface DictionaryEntry {
+  readonly word: string;
+  readonly scope: DictionaryScope;
+  /** Whether the caller may remove it: a shared word only an administrator removes. */
+  readonly removable: boolean;
 }
 
 export type AssistantTask = 'draft' | 'rewrite' | 'summarise' | 'answer';

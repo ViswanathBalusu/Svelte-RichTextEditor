@@ -238,6 +238,8 @@ import {
   assembleAssistantContext,
 } from './assistant-context.ts';
 import {
+  type DictionaryEntry,
+  type DictionaryScope,
   type LocatedFinding,
   NO_PROOFING,
   type ProofingClock,
@@ -1507,16 +1509,20 @@ export class DocumentCore implements DocumentApi {
     return this.#proofing?.addToDictionary(id) ?? Promise.resolve(false);
   }
 
-  /** The words of the custom dictionary for a language; null when the port has no dictionary. */
-  dictionaryWords(lang: string): Promise<string[] | null> {
+  /** The custom dictionaries for a language, the person's and the tenant's; null when the port has none. */
+  dictionaryWords(lang: string): Promise<DictionaryEntry[] | null> {
     return this.#proofing?.words(lang) ?? Promise.resolve(null);
   }
 
-  /** Removes a word from the custom dictionary and checks again. */
-  removeDictionaryWord(word: string, lang: string): Promise<boolean> {
-    return this.#proofing?.removeWord(word, lang) ?? Promise.resolve(false);
+  /** Adds a word to a custom dictionary (UX-042); the port says who may change the shared one. */
+  addDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean> {
+    return this.#proofing?.addWord(word, lang, scope) ?? Promise.resolve(false);
   }
 
+  /** Removes a word from a custom dictionary and checks again. */
+  removeDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean> {
+    return this.#proofing?.removeWord(word, lang, scope) ?? Promise.resolve(false);
+  }
   // --- Suggestion mode (FE-041, FE-042, FE-043) ----------------------------------------------
 
   /** `settings.trackChanges` of the document, read again only when the definitions change. */

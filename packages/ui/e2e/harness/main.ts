@@ -16,6 +16,7 @@ import type {
   ClassificationLabel,
   CommentAnchor,
   DocumentStats,
+  DictionaryEntryView,
   ParagraphFormatView,
   ReactionName,
   EditorMode,
@@ -1093,7 +1094,19 @@ const harness = {
   setDirection: (dir: 'ltr' | 'rtl') => need().core.direction?.set(dir),
   /** As the core does when `document.updated` brings a new label (UX-085). */
   setClassification: (label: ClassificationLabel | null) => need().core.classification?.set(label),
-  /** As the core does when its proofing state changes (UX-041). */
+  /** The custom dictionaries the fake port holds, and whether the person is an administrator (UX-042). */
+  setDictionary: (entries: DictionaryEntryView[], admin = false) => {
+    const d = need().core.dictionary;
+    d.entries.splice(0, d.entries.length, ...entries);
+    d.admin = admin;
+  },
+  /** What the dictionary section asked the port to do (UX-042). */
+  dictionaryCalls: () => [...need().core.dictionary.calls],
+  /** The words now on the fake port, as the section lists them (UX-042). */
+  dictionaryEntries: () =>
+    need().core.dictionary.entries.map((e) => ({
+      ...e,
+    })) /** As the core does when its proofing state changes (UX-041). */,
   setProofing: (status: ProofingStatus) => need().core.proofing?.set(status),
   /** What the shell asked the proofing port to do, in order (UX-041, UX-042). */
   proofingCalls: (): string[] => [...need().core.proofingCalls],

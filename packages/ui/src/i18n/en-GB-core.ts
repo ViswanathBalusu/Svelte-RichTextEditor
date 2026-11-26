@@ -664,8 +664,6 @@ export const EN_GB_CORE = {
   'announce.region.failed': 'The region could not be made.',
   'announce.language.set': 'Language set.',
   'announce.language.failed': 'The language could not be set here.',
-  'announce.paragraph.set': 'Paragraph format changed.',
-  'announce.paragraph.failed': 'The paragraph format could not be changed.',
   'announce.crossRef.inserted': 'Cross-reference inserted.',
   'announce.crossRef.failed': 'The cross-reference could not be inserted here.',
   'announce.altText.set': 'Alternative text set.',

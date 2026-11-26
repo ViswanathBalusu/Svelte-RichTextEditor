@@ -12,6 +12,8 @@ import type { FieldReport, SendProblem, StepJson } from '@docedit/authority';
 export type { FieldReport };
 import type {
   Access,
+  DictionaryEntry,
+  DictionaryScope,
   Limits,
   PresencePeers,
   PresenceUpdate,
@@ -1117,10 +1119,12 @@ export interface DocumentApi {
   ignoreFinding(id: string, everywhere?: boolean): boolean;
   /** Adds the finding's text to the port's custom dictionary; false where the port has none. */
   addFindingToDictionary(id: string): Promise<boolean>;
-  /** The custom dictionary's words for a language; null where the port has no dictionary. */
-  dictionaryWords(lang: string): Promise<string[] | null>;
-  /** Removes a word from the custom dictionary. */
-  removeDictionaryWord(word: string, lang: string): Promise<boolean>;
+  /** The custom dictionaries for a language, the person's and the tenant's; null where the port has none. */
+  dictionaryWords(lang: string): Promise<DictionaryEntry[] | null>;
+  /** Adds a word to a custom dictionary (UX-042). */
+  addDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean>;
+  /** Removes a word from a custom dictionary. */
+  removeDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean>;
   /** Pastes plain text at the selection, one paragraph per line (FE-052); false when refused. */
   pastePlainText(text: string): boolean;
   /** The clipboard payload of the selection (FE-050): `text/html` with the fragment, and `text/plain`. Null for an empty selection; changes nothing. */

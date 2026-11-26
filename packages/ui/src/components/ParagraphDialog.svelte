@@ -79,7 +79,7 @@
       return;
     }
     const done = shell.core.runNamed?.('setParagraphFormat', result.patch) ?? false;
-    shell.announce(done ? 'announce.paragraph.set' : 'announce.paragraph.failed');
+    shell.announceText(tr.t(done ? 'announce.paragraph.set' : 'announce.paragraph.failed'));
     if (done) onClose();
   }
 

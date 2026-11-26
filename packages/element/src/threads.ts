@@ -306,7 +306,6 @@ export function threadsService(core: ThreadsCore, source: ThreadsSource): Elemen
     ...(source.reactions
       ? {
           async react(id: string, commentId: string, reaction: ReactionName, on: boolean) {
-            if (!commentOf(id, commentId)) return { ok: false as const, code: 'not_found' };
             try {
               await (on
                 ? port.addReaction(commentId, reaction)

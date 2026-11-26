@@ -58,7 +58,7 @@ Keyboard shortcuts follow the conventions users already know from word processor
 
 ### 6.1 Proofing port
 
-An optional backend port for spelling and grammar. Results are decorations with suggestions; they never change the document by themselves. The port receives text only from scopes the user can view, with the language from the `lang` mark, and supports custom dictionaries. Autocorrect and automatic formatting are a table in the editing core. This also answers the loss of native spellcheck in the page view, and in the web view too, where a Word-style context menu hides the browser's own suggestions.
+An optional backend port for spelling and grammar. Results are decorations with suggestions; they never change the document by themselves. The port receives text only from scopes the user can view, with the language from the `lang` mark, and supports custom dictionaries: one list for each person and one shared list for the tenant that an administrator keeps (owner decision 34). The port has `addWord`, `listWords` and `removeWord`, each with the list it means; a port that lacks the last two leaves the editor without dictionary controls, and the port decides who may change the shared list. Autocorrect and automatic formatting are a table in the editing core. This also answers the loss of native spellcheck in the page view, and in the web view too, where a Word-style context menu hides the browser's own suggestions.
 
 ### 6.2 Assistant port
 

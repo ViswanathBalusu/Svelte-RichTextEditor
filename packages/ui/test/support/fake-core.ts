@@ -15,6 +15,8 @@ import type {
   DocumentStats,
   EditorMode,
   ExportJobView,
+  DictionaryEntryView,
+  DictionaryScope,
   ParagraphFormatView,
   ReactionName,
   ExportOptions,
@@ -657,6 +659,35 @@ export class FakeCore implements CoreApi {
   /** Spelling and grammar (UX-041, UX-042), with `proofing`; every action is recorded in `proofingCalls`. */
   readonly proofing?: Value<ProofingStatus>;
   readonly proofingCalls: string[] = [];
+  /** The custom dictionaries (UX-042): a word list per scope; a shared word is removable only by an administrator. */
+  readonly dictionary = {
+    entries: [] as DictionaryEntryView[],
+    admin: false,
+    calls: [] as string[],
+    words: (lang: string): Promise<readonly DictionaryEntryView[] | null> => {
+      this.dictionary.calls.push(`words:${lang}`);
+      return Promise.resolve(this.dictionary.entries.map((e) => ({ ...e })));
+    },
+    add: (word: string, lang: string, scope: DictionaryScope): Promise<boolean> => {
+      this.dictionary.calls.push(`add:${lang}:${scope}:${word}`);
+      if (scope === 'tenant' && !this.dictionary.admin) return Promise.resolve(false);
+      this.dictionary.entries.push({
+        word,
+        scope,
+        removable: scope === 'user' || this.dictionary.admin,
+      });
+      return Promise.resolve(true);
+    },
+    remove: (word: string, lang: string, scope: DictionaryScope): Promise<boolean> => {
+      this.dictionary.calls.push(`remove:${lang}:${scope}:${word}`);
+      const at = this.dictionary.entries.findIndex(
+        (e) => e.word === word && e.scope === scope && e.removable,
+      );
+      if (at < 0) return Promise.resolve(false);
+      this.dictionary.entries.splice(at, 1);
+      return Promise.resolve(true);
+    },
+  };
   // Phase 1b (ADR 0052), with `extended`.
   readonly commandNames?: readonly string[];
   readonly queryNames?: readonly string[];

@@ -701,6 +701,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
       applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
       ignoreFinding: (id, everywhere) => core.ignoreFinding(id, everywhere),
       addFindingToDictionary: (id) => core.addFindingToDictionary(id),
+      // The custom dictionaries, shown while the port supports them (UX-042; decision 34).
+      dictionary: {
+        words: (lang) => core.dictionaryWords(lang),
+        add: (word, lang, scope) => core.addDictionaryWord(word, lang, scope),
+        remove: (word, lang, scope) => core.removeDictionaryWord(word, lang, scope),
+      },
       proofingFinding: (id) => core.proofingFinding(id),
       // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
       // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).

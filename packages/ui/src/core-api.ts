@@ -442,6 +442,23 @@ export interface ProofingFindingView {
 }
 
 /** The proofing state the status bar and the menus read (UX-041, UX-042). */
+/** Whose list a dictionary word is on: the person's own, or the tenant's shared one (decision 34). */
+export type DictionaryScope = 'user' | 'tenant';
+
+export interface DictionaryEntryView {
+  readonly word: string;
+  readonly scope: DictionaryScope;
+  /** False for a shared word that only an administrator removes. */
+  readonly removable: boolean;
+}
+
+export interface DictionaryService {
+  /** The words for a language; null when the port cannot list them or the request failed. */
+  words(lang: string): Promise<readonly DictionaryEntryView[] | null>;
+  /** Adds a word; false when the port refused (a shared word needs an administrator) or failed. */
+  add(word: string, lang: string, scope: DictionaryScope): Promise<boolean>;
+  remove(word: string, lang: string, scope: DictionaryScope): Promise<boolean>;
+}
 export interface ProofingStatus {
   /** A proofing port is attached. Without one no proofing control is shown. */
   readonly available: boolean;
@@ -998,6 +1015,11 @@ export interface CoreApi {
   ignoreFinding?(id: string, everywhere?: boolean): boolean;
   /** Adds the finding's text to the port's custom dictionary. */
   addFindingToDictionary?(id: string): Promise<boolean>;
+  /**
+   * The custom dictionaries (UX-042; owner decision 34): the person's own and the tenant's shared
+   * one. Offered, with its controls, only while `proofing` says the port supports dictionaries.
+   */
+  readonly dictionary?: DictionaryService;
   /**
    * The finding with this identifier, while it is shown; null otherwise. The editing surface marks a
    * finding's text with `data-de-finding`, and a context click on the mark asks for that finding
