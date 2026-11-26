@@ -215,6 +215,22 @@ function hex(value: string): string {
   return hexBytes(utf8(value));
 }
 
+/** The most characters of a label that a visible placeholder shows (an unbreakable box must stay under TeX's size limit). */
+export const PLACEHOLDER_LABEL_MAX = 80;
+
+/**
+ * A label for a visible placeholder (`\DEph`, a framed box that does not break): the value cut to
+ * PLACEHOLDER_LABEL_MAX characters, with an ellipsis, so that very long alternative text cannot make
+ * the box wider than TeX allows ("Dimension too large"; SEC-033). The full text stays in the PDF's own
+ * alternative text where it is used; only the placeholder is shortened.
+ */
+export function placeholderLabel(value: string): string {
+  const chars = [...value];
+  return chars.length <= PLACEHOLDER_LABEL_MAX
+    ? value
+    : `${chars.slice(0, PLACEHOLDER_LABEL_MAX - 1).join('')}…`;
+}
+
 /** Bookmarks, metadata, alternative text: `\DEstr{<hex>}`, decoded by docedit.lua. */
 export function pdfString(value: string): Tex {
   return asTex(`\\DEstr{${hex(clean(value))}}`);

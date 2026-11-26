@@ -23,6 +23,8 @@ export type PdfSource = { url: string } | { data: ArrayBuffer };
 export type ToViewer =
   | { type: 'open'; source: PdfSource; strings: PdfViewerStrings }
   | { type: 'page'; page: number }
+  /** Draws every page of the open PDF at `dpi` and sends each as `print-page` (FE-073). */
+  | { type: 'render-all'; dpi: number }
   | { type: 'close' };
 
 export type ViewerFailure = 'load_failed' | 'page_failed';
@@ -32,7 +34,20 @@ export type FromViewer =
   /** `worker`: whether PDF.js runs in its own worker rather than on the frame's main thread. */
   | { type: 'opened'; pages: number; worker: boolean }
   | { type: 'rendered'; page: number; pages: number; scale: number }
-  | { type: 'failed'; code: ViewerFailure; message: string; page?: number };
+  | { type: 'failed'; code: ViewerFailure; message: string; page?: number }
+  /**
+   * One page drawn for printing (FE-073): its bitmap (transferred) and its size in PDF points. The
+   * pages arrive in order, then `print-done`.
+   */
+  | {
+      type: 'print-page';
+      page: number;
+      pages: number;
+      width: number;
+      height: number;
+      bitmap: ImageBitmap;
+    }
+  | { type: 'print-done'; pages: number };
 
 export function isConnectMessage(value: unknown): value is ConnectMessage {
   if (value === null || typeof value !== 'object') return false;

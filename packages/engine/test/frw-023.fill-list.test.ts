@@ -53,6 +53,7 @@ function byField(core: DocumentCore): FieldStatus[] {
     out.push({
       id,
       key: entry.key,
+      kind: entry.kind,
       label: entry.label ?? entry.key,
       required: rule === null ? entry.required : rule.visible ? rule.required : false,
       filled: !empty,

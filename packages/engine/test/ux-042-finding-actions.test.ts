@@ -15,17 +15,24 @@ import { STYLE_IDS } from './fixtures.ts';
 import { blockText, endOf, manualClock, newCore, settle, wordPort } from './proofing-support.ts';
 import { join, newService, posOf, type, until } from './support.ts';
 
-/** A port whose checks follow a word list per language, and whose custom dictionary is kept in a set. */
-function languagePort(bad: Record<string, Record<string, string[]>>) {
+/**
+ * A port whose checks follow a word list per language, and that keeps two custom dictionaries as
+ * the owner asked (decision 34): the person's own and one for the tenant. With `admin` the person
+ * may also change the tenant's; without it the tenant's words are listed as not removable and the
+ * port refuses to change them.
+ */
+function languagePort(bad: Record<string, Record<string, string[]>>, admin = false) {
   const dictionary = new Map<string, Set<string>>();
+  const shared = new Map<string, Set<string>>();
   const requests: Array<{ blockId: string; lang: string }> = [];
+  const listed = (m: Map<string, Set<string>>, lang: string): string[] => [...(m.get(lang) ?? [])];
   const port: ProofingPort = {
     check(request) {
       const found: ProofingFinding[] = [];
       for (const block of request.blocks) {
         requests.push({ blockId: block.blockId, lang: block.lang });
         for (const m of block.text.matchAll(/[\p{L}']+/gu)) {
-          if (dictionary.get(block.lang)?.has(m[0])) continue;
+          if (dictionary.get(block.lang)?.has(m[0]) || shared.get(block.lang)?.has(m[0])) continue;
           const suggestions = bad[block.lang]?.[m[0]];
           if (suggestions === undefined) continue;
           found.push({
@@ -40,21 +47,32 @@ function languagePort(bad: Record<string, Record<string, string[]>>) {
       }
       return Promise.resolve(found);
     },
-    addWord(word, lang) {
-      const set = dictionary.get(lang) ?? new Set<string>();
+    addWord(word, lang, opts) {
+      const into = opts?.scope === 'tenant' ? shared : dictionary;
+      if (into === shared && !admin) return Promise.reject(new Error('forbidden'));
+      const set = into.get(lang) ?? new Set<string>();
       set.add(word);
-      dictionary.set(lang, set);
+      into.set(lang, set);
       return Promise.resolve();
     },
-    listWords: (lang) => Promise.resolve([...(dictionary.get(lang) ?? [])].sort()),
-    removeWord(word, lang) {
-      dictionary.get(lang)?.delete(word);
+    listWords: (lang) =>
+      Promise.resolve([
+        ...listed(dictionary, lang)
+          .sort()
+          .map((word) => ({ word, scope: 'user' as const, removable: true })),
+        ...listed(shared, lang)
+          .sort()
+          .map((word) => ({ word, scope: 'tenant' as const, removable: admin })),
+      ]),
+    removeWord(word, lang, opts) {
+      const from = opts?.scope === 'tenant' ? shared : dictionary;
+      if (from === shared && !admin) return Promise.reject(new Error('forbidden'));
+      from.get(lang)?.delete(word);
       return Promise.resolve();
     },
   };
-  return { port, requests, dictionary };
+  return { port, requests, dictionary, shared };
 }
-
 const text = (core: DocumentCore, id: string): string => blockText(core, id);
 
 describe('UX-042 criterion 1: the actions on a finding', () => {
@@ -188,13 +206,46 @@ describe('UX-042 criterion 3: custom dictionaries', () => {
     expect(await core.addFindingToDictionary(finding!.id)).toBe(true);
     await settle();
     expect(core.proofingFindings()).toEqual([]);
-    expect(await core.dictionaryWords('en-GB')).toEqual(['Plain']);
+    expect(await core.dictionaryWords('en-GB')).toEqual([
+      { word: 'Plain', scope: 'user', removable: true },
+    ]);
     expect(await core.removeDictionaryWord('Plain', 'en-GB')).toBe(true);
     await settle();
     expect(core.proofingFindings().map((f) => f.text)).toEqual(['Plain']);
     expect(await core.dictionaryWords('en-GB')).toEqual([]);
   });
 
+  it('keeps one list for the person and one for the tenant, and only an administrator changes the shared one (decision 34)', async () => {
+    for (const admin of [false, true]) {
+      const lp = languagePort({ 'en-GB': { Plain: ['Plane'], text: ['txt'] } }, admin);
+      const core = newCore();
+      core.attachProofing(lp.port, { clock: manualClock() });
+      await settle();
+      // The person's own list takes a word, and the check honours it.
+      expect(await core.addDictionaryWord('Plain', 'en-GB')).toBe(true);
+      await settle();
+      expect(core.proofingFindings().map((f) => f.text)).not.toContain('Plain');
+      // The shared list: the port refuses for a person who is not an administrator.
+      const added = await core.addDictionaryWord('text', 'en-GB', 'tenant');
+      expect(added).toBe(admin);
+      await settle();
+      const entries = (await core.dictionaryWords('en-GB'))!;
+      expect(entries.filter((e) => e.scope === 'user').map((e) => e.word)).toEqual(['Plain']);
+      expect(entries.filter((e) => e.scope === 'tenant').map((e) => e.word)).toEqual(
+        admin ? ['text'] : [],
+      );
+      if (admin) {
+        expect(core.proofingFindings().map((f) => f.text)).not.toContain('text');
+        // Removing the shared word brings the finding back; the person's own word stays.
+        expect(await core.removeDictionaryWord('text', 'en-GB', 'tenant')).toBe(true);
+        await settle();
+        expect(core.proofingFindings().map((f) => f.text)).toContain('text');
+        expect(await core.dictionaryWords('en-GB')).toEqual([
+          { word: 'Plain', scope: 'user', removable: true },
+        ]);
+      }
+    }
+  });
   it('offers nothing for a port that cannot list or remove words', async () => {
     const core = newCore();
     core.attachProofing(wordPort({ Plain: ['Plane'] }), { clock: manualClock() });

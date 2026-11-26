@@ -446,7 +446,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         for (const route of participant) {
           const [method, template] = route.split(' ') as [string, string];
           const path = '/v1' + withId(template, { id: docB, pid: 'participant-1' });
-          const r = await h.call(method, path, { token: tokenA, body: {} });
+          const r = await h.call(method, path, {
+            token: tokenA,
+            ...(method === 'GET' ? {} : { body: {} }),
+          });
           // The routes a participant token uses answer a user token as an unknown route would.
           expect([403, 404], `${route}`).toContain(r.status);
           noData(r.json);

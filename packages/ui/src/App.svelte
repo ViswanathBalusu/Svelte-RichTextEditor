@@ -248,7 +248,15 @@
 
   /** Follows a link to a comment by its identifier; resolves to what the pane showed. */
   export async function openLinkedComment(commentId: string): Promise<'open' | 'unavailable'> {
-    const found = core.threads?.list().find((t) => t.id === commentId);
+    // The marker the host passes back is a comment's identifier (owner decision 88; UX-034); the
+    // identifier of a thread, whose first comment it names, is taken as well.
+    const found = core.threads
+      ?.list()
+      .find(
+        (t) =>
+          t.id === commentId ||
+          (core.threads?.detail?.(t.id)?.comments.some((c) => c.id === commentId) ?? false),
+      );
     const outcome = resolveCommentLink(
       found
         ? {
@@ -571,6 +579,7 @@
     | 'alt'
     | 'crossReference'
     | 'paragraph'
+    | 'tableSize'
     | null
   >(null);
   // The picture that was just inserted without alternative text (FE-132 criterion 5).
@@ -692,10 +701,6 @@
 
   // The element that holds the text, which the ruler lines up with (UX-102).
   let bodyHostEl = $state<HTMLElement | null>(null);
-  function paragraphChanged(done: boolean): void {
-    announce(done ? 'announce.paragraph.set' : 'announce.paragraph.failed');
-  }
-
   function applyLanguage(lang: string | null): void {
     dialog = null;
     const done = core.runNamed?.('setLanguage', { lang }) ?? false;
@@ -1103,6 +1108,7 @@
     add(host1b['format.applyFormat']);
     add(host1b['format.language']);
     if (core.paragraphFormat) add(host1b['format.paragraph']);
+    if (core.tableSize) add(host1b['table.size']);
     add(host1b['insert.region']);
     if (core.referenceTargets) add(host1b['insert.crossReference']);
     if (core.threads) add(host1b['review.comment']);
@@ -1530,6 +1536,21 @@
       void openPane('fill');
       return;
     }
+    // The participant's part is completed through the service when the core has one (FRW-048): the
+    // answer is said in words, and a field that needs attention has focus.
+    const completion = core.completion;
+    if (completion) {
+      void completion.complete().then(
+        (outcome) => {
+          if (outcome.ok) announce('fill.completed');
+          else if (outcome.reason === 'invalid')
+            announce('fill.completeInvalid', { count: outcome.count });
+          else announce(outcome.reason === 'not_active' ? 'fill.completeNotActive' : 'fill.finishFailed');
+        },
+        () => announce('fill.finishFailed'),
+      );
+      return;
+    }
     const done = core.runNamed?.('finishFill') ?? false;
     announce(done ? 'fill.finished' : 'fill.finishFailed');
   }
@@ -1609,7 +1630,6 @@
         body={bodyHostEl}
         {zoom}
         onDialog={() => (dialog = 'paragraph')}
-        onChanged={paragraphChanged}
       />
     {/await}
   {/if}
@@ -1747,6 +1767,7 @@
       CrossReferenceDialog,
       LanguageDialog,
       ParagraphDialog,
+      TableSizeDialog,
       RegionDialog,
       CommentBox,
       ExportDialog,
@@ -1775,11 +1796,13 @@
         }}
       />
     {:else if dialog === 'paragraph' && core.paragraphFormat?.get()}
-      <ParagraphDialog
-        format={core.paragraphFormat.get()!}
-        onApply={(patch) => {
-          const done = core.runNamed?.('setParagraphFormat', patch) ?? false;
-          paragraphChanged(done);
+      <ParagraphDialog format={core.paragraphFormat.get()!} onClose={() => (dialog = null)} />
+    {:else if dialog === 'tableSize' && core.tableSize?.get()}
+      <TableSizeDialog
+        view={core.tableSize.get()!}
+        onApply={(args) => {
+          const done = core.runNamed?.('setTableSize', args) ?? false;
+          announce(done ? 'announce.tableSize.set' : 'announce.tableSize.failed');
           return done;
         }}
         onClose={() => (dialog = null)}

@@ -16,7 +16,9 @@ import type {
   ClassificationLabel,
   CommentAnchor,
   DocumentStats,
+  DictionaryEntryView,
   ParagraphFormatView,
+  ReactionName,
   EditorMode,
   ExportJobView,
   ExportTarget,
@@ -72,6 +74,11 @@ import {
   type SigningHarnessLog,
   type SigningHarnessMode,
 } from './frw-045-signing-port.ts';
+import {
+  consentService,
+  type ConsentHarnessLog,
+  type ConsentHarnessMode,
+} from './frw-044-consent-port.ts';
 
 const violations: string[] = [];
 document.addEventListener('securitypolicyviolation', (e) => {
@@ -88,6 +95,10 @@ let pagesHandle: ReturnType<typeof fakePages> | null = null;
 /** What the adoption and signing step asked of its service (FRW-045, FRW-046). */
 const signingLog: SigningHarnessLog = { adopts: [], signs: [], dismissed: 0 };
 let signingHandle: ReturnType<typeof signingService> | null = null;
+/** What the consent step asked of its service (FRW-044). */
+const consentLog: ConsentHarnessLog = { loads: 0, accepts: 0, declines: [] };
+/** What finishing asked of its service (FRW-048). */
+const completionLog = { completes: 0 };
 const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
@@ -136,6 +147,10 @@ export interface MountOptions {
   send?: SendHarnessMode;
   /** The adoption and signing step's service of FRW-045 and FRW-046: see harness/frw-045-signing-port.ts; absent: none. */
   signing?: SigningHarnessMode;
+  /** The consent step before signing (FRW-044), with signing: see harness/frw-044-consent-port.ts; absent: no step. */
+  consent?: ConsentHarnessMode;
+  /** Finishing the participant's part (FRW-048): the service answers completed, invalid (2 fields), or not active. */
+  completion?: 'ok' | 'invalid' | 'inactive';
   /** The field properties service of FRW-073: one field, `tenant.name`, that this person may change. */
   fieldProperties?: boolean;
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
@@ -692,7 +707,27 @@ function mountShell(options: MountOptions = {}): void {
     signingLog.signs.length = 0;
     signingLog.dismissed = 0;
     signingHandle = signingService(options.signing, signingLog);
+    if (options.consent) {
+      consentLog.loads = 0;
+      consentLog.accepts = 0;
+      consentLog.declines.length = 0;
+      Object.assign(signingHandle, { consent: consentService(options.consent, consentLog) });
+    }
     Object.assign(core, { signing: signingHandle });
+    if (options.completion) {
+      const answer = options.completion;
+      completionLog.completes = 0;
+      Object.assign(core, {
+        completion: {
+          complete: async () => {
+            completionLog.completes++;
+            if (answer === 'invalid') return { ok: false, reason: 'invalid', count: 2 };
+            if (answer === 'inactive') return { ok: false, reason: 'not_active' };
+            return { ok: true };
+          },
+        },
+      });
+    }
   }
   if (options.accessCode) {
     accessCodeLog.length = 0;
@@ -1095,7 +1130,19 @@ const harness = {
   setDirection: (dir: 'ltr' | 'rtl') => need().core.direction?.set(dir),
   /** As the core does when `document.updated` brings a new label (UX-085). */
   setClassification: (label: ClassificationLabel | null) => need().core.classification?.set(label),
-  /** As the core does when its proofing state changes (UX-041). */
+  /** The custom dictionaries the fake port holds, and whether the person is an administrator (UX-042). */
+  setDictionary: (entries: DictionaryEntryView[], admin = false) => {
+    const d = need().core.dictionary;
+    d.entries.splice(0, d.entries.length, ...entries);
+    d.admin = admin;
+  },
+  /** What the dictionary section asked the port to do (UX-042). */
+  dictionaryCalls: () => [...need().core.dictionary.calls],
+  /** The words now on the fake port, as the section lists them (UX-042). */
+  dictionaryEntries: () =>
+    need().core.dictionary.entries.map((e) => ({
+      ...e,
+    })) /** As the core does when its proofing state changes (UX-041). */,
   setProofing: (status: ProofingStatus) => need().core.proofing?.set(status),
   /** What the shell asked the proofing port to do, in order (UX-041, UX-042). */
   proofingCalls: (): string[] => [...need().core.proofingCalls],
@@ -1125,6 +1172,8 @@ const harness = {
   setSendState: (next: string | null) => sendHandle?.setState(next),
   /** What the adoption and signing step asked of its service (FRW-045), and a field the participant activates (FRW-046). */
   signingLog: () => JSON.parse(JSON.stringify(signingLog)) as SigningHarnessLog,
+  consentLog: () => JSON.parse(JSON.stringify(consentLog)) as ConsentHarnessLog,
+  completionLog: () => ({ ...completionLog }),
   activateSignature: (field: {
     id: string;
     key: string;
@@ -1189,6 +1238,15 @@ const harness = {
   /** Another client replies (comment.created): the pane is told and shows it without a reload. */
   remoteReply: (id: string, author: string, text: string) =>
     need().core.threads!.remoteReply(id, author, text),
+  /** The link of a comment can be asked for, as when the element has a host listener (UX-034). */
+  offerLinks: () => need().core.threads!.offerLinks(),
+  /** The host gave an address, and it was copied or was not (UX-034). */
+  answerLink: (ok: boolean) => need().core.threads!.answerLink(ok),
+  /** Reactions are offered, as when the backend announces the feature (UX-033). */
+  offerReactions: () => need().core.threads!.offerReactions(),
+  /** Another client reacts to a comment (comment.reacted; UX-033). */
+  remoteReact: (id: string, commentId: string, reaction: ReactionName, user: string, on: boolean) =>
+    need().core.threads!.remoteReact(id, commentId, reaction, user, on),
   /** Another client assigns the thread, or clears it with null (thread.updated; UX-032 criterion 2). */
   remoteAssign: (id: string, assignee: string | null) =>
     need().core.threads!.remoteAssign(id, assignee),

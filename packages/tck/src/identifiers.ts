@@ -33,6 +33,12 @@ const BY_RESOURCE: Readonly<Record<string, Omit<BareRoute, 'operation'>>> = {
 };
 
 /**
+ * Resources of the tenant, not of a document (BE-048: the fonts a tenant adds). The tenant is the
+ * scope, so no token of another document is involved and PRO-045 has nothing to resolve.
+ */
+export const TENANT_RESOURCES: readonly string[] = ['tenant-fonts'];
+
+/**
  * Whether an operation is addressed by a bare identifier of a document's resource: its path has a
  * parameter, does not start at `/documents/{id}`, and a user token may call it. A route for the
  * service credential alone (a webhook) is a resource of the tenant, not of a document, so no token
@@ -45,18 +51,10 @@ export function isBareIdentifierOperation(o: {
   return (
     o.path.includes('{') &&
     !o.path.startsWith('/documents/') &&
-    !TENANT_RESOURCES.has(o.path.split('/')[1] ?? '') &&
+    !TENANT_RESOURCES.includes(o.path.split('/')[1] ?? '') &&
     o.security.includes('user')
   );
 }
-
-/**
- * Resources of the tenant, not of a document: the tenant's fonts (BE-048). Any user or service of
- * the tenant may read one by its hash, whichever document the token names, so the rule of a bare
- * identifier (the token must cover the resource's document) does not apply; a tenant's resource
- * of another tenant is `not_found`, which the font route's own tests show.
- */
-export const TENANT_RESOURCES: ReadonlySet<string> = new Set(['tenant-fonts']);
 
 /** Every bare-identifier route of the protocol definition, with its feature and its scenario. */
 export function bareRoutes(): BareRoute[] {

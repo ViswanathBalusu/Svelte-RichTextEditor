@@ -39,6 +39,7 @@ import {
   kvValue,
   lit,
   pdfString,
+  placeholderLabel,
   tex,
   text,
   textChunks,
@@ -254,7 +255,7 @@ function atom(st: InlineState, body: Tex): Tex {
 
 /** A visible placeholder for content the converter cannot set, one offset unit. */
 function placeholderAtom(st: InlineState, label: string): Tex {
-  return atom(st, tex`\DEph{${pdfString(label)}}`);
+  return atom(st, tex`\DEph{${pdfString(placeholderLabel(label))}}`);
 }
 
 /** Inline atoms that markup colours and underlines or strikes through as it does text (EXP-083). */
@@ -352,7 +353,7 @@ export function inlineTex(ctx: Ctx, nodes: readonly J[] | undefined, st: InlineS
             st,
             fb !== null
               ? text(fb)
-              : tex`\DEph{${pdfString(`[${str(attr(n, 'label')) ?? n.type}]`)}}`,
+              : tex`\DEph{${pdfString(placeholderLabel(`[${str(attr(n, 'label')) ?? n.type}]`))}}`,
           ),
         );
         break;
@@ -397,7 +398,7 @@ function imageTex(ctx: Ctx, n: J, st: InlineState): Tex {
   const width = num(attr(n, 'width'));
   const height = num(attr(n, 'height'));
   if (!file || width === null || height === null)
-    return tex`\DEph{${pdfString(alt ? `[image: ${alt}]` : '[image]')}}`;
+    return tex`\DEph{${pdfString(placeholderLabel(alt ? `[image: ${alt}]` : '[image]'))}}`;
   return imageBox(ctx, file, width, height, alt ?? '');
 }
 

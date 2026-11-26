@@ -52,7 +52,7 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
       'bulk-sends',
       'templates',
     ]);
-    for (const o of left.filter((x) => !TENANT_RESOURCES.has(x.path.split('/')[1] ?? '')))
+    for (const o of left.filter((x) => !TENANT_RESOURCES.includes(x.path.split('/')[1] ?? '')))
       expect(o.security).toEqual(['service']);
   });
 

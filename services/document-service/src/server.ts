@@ -138,6 +138,8 @@ import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-sto
 import { PgReminderStore } from './workflow/reminder-store-pg.ts';
 import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-ledger.ts';
 import { PgEvidenceLedger } from './workflow/evidence-ledger-pg.ts';
+import { MemoryCaptureSettings, type CaptureSettingsPort } from './workflow/capture-settings.ts';
+import { PgCaptureSettingsStore } from './workflow/capture-settings-pg.ts';
 import { MemorySealedPdfStore, type SealedPdfStore } from './workflow/sealed-store.ts';
 import { MemoryAccessCodeStore, type AccessCodeStore } from './workflow/access-code-store.ts';
 import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
@@ -390,6 +392,8 @@ export interface ServiceParts {
   reminders?: ReminderStore;
   /** The workflow evidence ledger (FRW-041): evidence in its own workflow table, hashes for the chain. */
   evidence?: EvidenceLedger;
+  /** The tenant's network-capture setting (FRW-042). Absent: the administration routes are not offered. */
+  captureSettings?: CaptureSettingsPort;
   /** The sealed final PDFs (FRW-054): `GET /documents/{id}/workflow/final` reads them. Absent: the route is not offered. */
   sealedPdfs?: SealedPdfStore;
   /** The expiry of each sealed PDF's newest time-stamp, for the renewal task (FRW-056, BE-052). */
@@ -732,6 +736,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     templates: new PgTemplateStore(pool),
     reminders: new PgReminderStore(pool),
     evidence: new PgEvidenceLedger(pool, { now }),
+    captureSettings: new PgCaptureSettingsStore(pool, { now }),
     accessCodes: new PgAccessCodeStore(pool),
     quotaAdmin: quotaAdminOver(
       new PgQuotaStore(pool, (tenant) =>
@@ -764,6 +769,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
   const store = new MemoryStore();
   const audit = new MemoryAudit();
   const visibility = new MemoryVisibilityStore();
+  const capture = new MemoryCaptureSettings(audit, now);
   return {
     logs: store,
     ownership: store,
@@ -790,7 +796,8 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     workflows: new MemoryWorkflowResourceStore(),
     templates: new MemoryTemplateStore(),
     reminders: new MemoryReminderStore(),
-    evidence: new MemoryEvidenceLedger(now),
+    evidence: new MemoryEvidenceLedger(now, (tenant) => capture.settingsOf(tenant)),
+    captureSettings: capture,
     sealedPdfs: new MemorySealedPdfStore(),
     renewals: new MemoryRenewalStore(),
     anchors: new MemoryAnchorStore(),
@@ -1992,6 +1999,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.accessCodes ? { accessCodes: parts.accessCodes } : {}),
     ...(parts.consentTexts ? { consentTexts: parts.consentTexts } : {}),
     ...(parts.evidence ? { evidence: parts.evidence } : {}),
+    ...(parts.captureSettings ? { captureSettings: parts.captureSettings } : {}),
     ...(parts.sealedPdfs ? { sealedPdfs: parts.sealedPdfs } : {}),
     ...(sealing ? { sealing: true } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),

@@ -136,7 +136,7 @@ test('UX-102: the ruler follows the caret, and keys, a drag and the dialog chang
   await expect(ruler).toBeVisible();
   await expect(ruler).toHaveAttribute('part', 'ruler');
   // Criterion 4: the margins are the PDF's, said in words; no page is drawn.
-  await expect(ruler.locator('.de-ruler-note')).toContainText('The PDF has margins of');
+  await expect(ruler.locator('p.de-hint')).toContainText('The PDF has margins of');
 
   // Criterion 1: the caret in the first paragraph.
   await page.locator(`${HOST} .de-editing-surface p`).first().click();

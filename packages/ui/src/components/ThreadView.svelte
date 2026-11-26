@@ -19,6 +19,7 @@
   import type {
     CommentBodyPart,
     CommentView,
+    ReactionName,
     ThreadDetail,
     ThreadWrite,
     ThreadsService,
@@ -31,6 +32,12 @@
     canReply,
   } from '../shell/comment-rules.ts';
   import { PRECONDITION_FAILED, writeOutcome } from '../shell/comment-threads.ts';
+  import {
+    REACTION_NAMES,
+    REACTION_SYMBOLS,
+    reactionPeople,
+    reactionStates,
+  } from '../shell/reactions.ts';
 
   interface Props {
     threads: ThreadsService;
@@ -80,6 +87,8 @@
       c.body.flatMap((p) => (p.type === 'mention' ? [subOf(p.principal) ?? ''] : [])),
     );
     if (shown.assignee) ids.push(subOf(shown.assignee) ?? '');
+    for (const c of shown.comments)
+      for (const r of c.reactions ?? []) for (const u of r.users) ids.push(subOf(u) ?? '');
     directory.request(ids.filter((id) => id !== ''));
   });
 
@@ -138,6 +147,27 @@
     return (sub === null ? null : directory.lookup(sub).name) ?? tr.t('people.fallback');
   }
 
+  // The answer to a request for a link (UX-034): the host gave an address, and it was copied or not.
+  // svelte-ignore state_referenced_locally
+  const linkAnswer = threads.linkCopied ? live(threads.linkCopied) : null;
+  // svelte-ignore state_referenced_locally
+  let seenLink = threads.linkCopied?.get()?.n ?? 0;
+  $effect(() => {
+    const answer = linkAnswer?.current;
+    if (!answer || answer.n === seenLink) return;
+    seenLink = answer.n;
+    if (answer.ok) shell.announce('comments.link.copied');
+    else message = 'comments.link.failed';
+  });
+
+  /** Takes a reaction or leaves it (UX-033). It needs no tag and makes no commit; the view follows changes. */
+  async function react(c: CommentView, reaction: ReactionName, on: boolean): Promise<void> {
+    await send(
+      () => threads.react?.(shown.id, c.id, reaction, on),
+      on ? 'comments.reactions.added' : 'comments.reactions.removed',
+    );
+  }
+
   function plain(parts: readonly CommentBodyPart[]): string {
     return parts.map((p) => (p.type === 'text' ? p.text : `@${mentionName(p.principal)}`)).join('');
   }
@@ -161,7 +191,8 @@
         return false;
       }
       if (answer.ok) {
-        latest = answer.detail;
+        // A write that keeps the tag (a reaction) pins nothing: the view follows the port's changes.
+        latest = answer.detail.etag === detail.etag ? null : answer.detail;
         shell.announce(done);
         return true;
       }
@@ -394,6 +425,45 @@
               disabled={busy}
               onclick={() => removeComment(c)}>{tr.t('comments.thread.deleteComment')}</button
             >
+          {/if}
+          {#if threads.requestLink}
+            <button
+              type="button"
+              class="de-list-button"
+              data-comment-link
+              onclick={() => threads.requestLink?.(shown.id, c.id)}
+              >{tr.t('comments.link.copy')}</button
+            >
+          {/if}
+          {#if threads.react}
+            <!-- Reactions (UX-033): offered only when the backend announces them. A toggle button
+              has a name, a pressed state and a count; the people behind each are named below. -->
+            <div class="de-reactions" role="group" aria-label={tr.t('comments.reactions.label')} data-reactions>
+              {#each reactionStates(c.reactions, self) as r (r.reaction)}
+                {@const name = tr.t(REACTION_NAMES[r.reaction])}
+                <button
+                  type="button"
+                  class="de-list-button de-reaction"
+                  data-reaction={r.reaction}
+                  aria-pressed={r.mine}
+                  aria-label={tr.t('comments.reactions.button', { name, count: r.count })}
+                  disabled={!mayReply || busy}
+                  onclick={() => react(c, r.reaction, !r.mine)}
+                  ><span aria-hidden="true">{REACTION_SYMBOLS[r.reaction]}</span>{#if r.count > 0}<span
+                      class="de-reaction-count"
+                      aria-hidden="true">{r.count}</span
+                    >{/if}</button
+                >
+              {/each}
+            </div>
+            {#each reactionStates(c.reactions, self).filter((r) => r.count > 0) as r (r.reaction)}
+              <p class="de-hint" data-reaction-people={r.reaction}>
+                {tr.t('comments.reactions.people', {
+                  name: tr.t(REACTION_NAMES[r.reaction]),
+                  people: reactionPeople(r, mentionName) ?? '',
+                })}
+              </p>
+            {/each}
           {/if}
         {/if}
       </li>
