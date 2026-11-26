@@ -81,6 +81,10 @@ export const PATH_PARAMS: Readonly<Record<string, Prop>> = {
   rid: req(nodeId(), 'Region identifier.'),
   tid: req(uuid7(), 'Thread identifier.'),
   cid: req(text({ minLength: 1 }), 'Comment identifier.', { gaps: ['G59'] }),
+  reaction: req(
+    enm(['thumbsUp', 'heart', 'laugh', 'celebrate', 'eyes', 'done']),
+    'A reaction to a comment, one of a fixed set (ADR 0424).',
+  ),
   aid: req(uuid7(), 'Asset identifier.'),
   jid: req(uuid7(), 'Job identifier.'),
   pid: req(text({ minLength: 1 }), 'Participant identifier.', { gaps: ['G59'] }),
@@ -635,6 +639,22 @@ export const REST_SHAPES: readonly NamedShape[] = [
     ),
   ),
   named(
+    'ReactionCount',
+    obj(
+      {
+        reaction: req(enm(['thumbsUp', 'heart', 'laugh', 'celebrate', 'eyes', 'done'])),
+        users: req(
+          arr(text(), { minItems: 1 }),
+          'The people who reacted, `user:<id>`, in the order they reacted.',
+        ),
+      },
+      {
+        doc: 'One reaction of a comment with the people who made it (ADR 0424).',
+        spec: '05 §6.2; 13 §5',
+      },
+    ),
+  ),
+  named(
     'Comment',
     obj(
       {
@@ -647,6 +667,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
           'The entity tag of this version, the `If-Match` of an edit or delete; a comment inside a thread has no header of its own.',
         ),
         body: req(arr(ref('CommentBodyPart'), { minItems: 1 })),
+        reactions: opt(
+          arr(ref('ReactionCount')),
+          'Present when the service announces the feature `reactions`; a reaction nobody holds is left out (ADR 0424).',
+        ),
       },
       {
         doc: 'A comment of a thread (ADR 0417). Its entity tag is the `If-Match` of an edit.',
@@ -1854,6 +1878,34 @@ export const OPERATIONS: readonly OperationDef[] = [
     ifMatch: 'optional',
     success: ok(),
     decisions: ['D15'],
+    owner: PRO,
+  }),
+  op({
+    operationId: 'addReaction',
+    method: 'POST',
+    path: '/comments/{cid}/reactions/{reaction}',
+    summary:
+      'Adds the caller to a reaction of a comment; adding it again changes nothing. It makes no commit (13 §5; ADR 0424).',
+    spec: '05 §6.2; 13 §5',
+    security: BOTH,
+    feature: 'reactions',
+    requires: 'comment in the scopes of the target',
+    ifMatch: 'optional',
+    success: ok(ref('Comment'), { etag: true }),
+    owner: PRO,
+  }),
+  op({
+    operationId: 'removeReaction',
+    method: 'DELETE',
+    path: '/comments/{cid}/reactions/{reaction}',
+    summary:
+      'Takes the caller out of a reaction of a comment; removing one that is not held changes nothing (ADR 0424).',
+    spec: '05 §6.2; 13 §5',
+    security: BOTH,
+    feature: 'reactions',
+    requires: 'comment in the scopes of the target',
+    ifMatch: 'optional',
+    success: ok(ref('Comment'), { etag: true }),
     owner: PRO,
   }),
   op({

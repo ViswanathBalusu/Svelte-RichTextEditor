@@ -86,6 +86,7 @@ const PROSE_NOTIFICATIONS = [
   'comment.created',
   'comment.updated',
   'comment.deleted',
+  'comment.reacted',
   'version.created',
   'version.restored',
   'export.progress',
@@ -179,6 +180,8 @@ const PROSE_ROUTES = [
   'POST /threads/{tid}/comments',
   'PATCH /comments/{cid}',
   'DELETE /comments/{cid}',
+  'POST /comments/{cid}/reactions/{reaction}',
+  'DELETE /comments/{cid}/reactions/{reaction}',
   'POST /documents/{id}/assets',
   'POST /assets/{aid}/complete',
   'POST /documents/{id}/assets/resolve',
@@ -451,6 +454,7 @@ describe('the DEP definition', () => {
       'G71',
       'G73',
       'G78',
+      'G81',
       'G97',
     ]);
   });

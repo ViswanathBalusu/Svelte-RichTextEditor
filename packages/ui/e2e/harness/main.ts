@@ -16,7 +16,9 @@ import type {
   ClassificationLabel,
   CommentAnchor,
   DocumentStats,
+  DictionaryEntryView,
   ParagraphFormatView,
+  ReactionName,
   EditorMode,
   ExportJobView,
   ExportTarget,
@@ -1095,7 +1097,19 @@ const harness = {
   setDirection: (dir: 'ltr' | 'rtl') => need().core.direction?.set(dir),
   /** As the core does when `document.updated` brings a new label (UX-085). */
   setClassification: (label: ClassificationLabel | null) => need().core.classification?.set(label),
-  /** As the core does when its proofing state changes (UX-041). */
+  /** The custom dictionaries the fake port holds, and whether the person is an administrator (UX-042). */
+  setDictionary: (entries: DictionaryEntryView[], admin = false) => {
+    const d = need().core.dictionary;
+    d.entries.splice(0, d.entries.length, ...entries);
+    d.admin = admin;
+  },
+  /** What the dictionary section asked the port to do (UX-042). */
+  dictionaryCalls: () => [...need().core.dictionary.calls],
+  /** The words now on the fake port, as the section lists them (UX-042). */
+  dictionaryEntries: () =>
+    need().core.dictionary.entries.map((e) => ({
+      ...e,
+    })) /** As the core does when its proofing state changes (UX-041). */,
   setProofing: (status: ProofingStatus) => need().core.proofing?.set(status),
   /** What the shell asked the proofing port to do, in order (UX-041, UX-042). */
   proofingCalls: (): string[] => [...need().core.proofingCalls],
@@ -1189,6 +1203,15 @@ const harness = {
   /** Another client replies (comment.created): the pane is told and shows it without a reload. */
   remoteReply: (id: string, author: string, text: string) =>
     need().core.threads!.remoteReply(id, author, text),
+  /** The link of a comment can be asked for, as when the element has a host listener (UX-034). */
+  offerLinks: () => need().core.threads!.offerLinks(),
+  /** The host gave an address, and it was copied or was not (UX-034). */
+  answerLink: (ok: boolean) => need().core.threads!.answerLink(ok),
+  /** Reactions are offered, as when the backend announces the feature (UX-033). */
+  offerReactions: () => need().core.threads!.offerReactions(),
+  /** Another client reacts to a comment (comment.reacted; UX-033). */
+  remoteReact: (id: string, commentId: string, reaction: ReactionName, user: string, on: boolean) =>
+    need().core.threads!.remoteReact(id, commentId, reaction, user, on),
   /** Another client assigns the thread, or clears it with null (thread.updated; UX-032 criterion 2). */
   remoteAssign: (id: string, assignee: string | null) =>
     need().core.threads!.remoteAssign(id, assignee),

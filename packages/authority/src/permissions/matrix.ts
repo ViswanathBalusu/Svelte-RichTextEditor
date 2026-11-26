@@ -282,6 +282,14 @@ export const UNMATRIXED_ROUTES: readonly RouteClassification[] = [
   open('GET /threads/{tid}', 'reading a thread: no row'),
   open('PATCH /comments/{cid}', 'editing a comment: no row'),
   open('DELETE /comments/{cid}', 'deleting a comment: no row (row 5 names threads)'),
+  open(
+    'POST /comments/{cid}/reactions/{reaction}',
+    'a reaction: no row; needs comment, as a reply does (UX-033)',
+  ),
+  open(
+    'DELETE /comments/{cid}/reactions/{reaction}',
+    'removing a reaction: no row; as above (UX-033)',
+  ),
   open('POST /documents/{id}/assets/resolve', 'resolving asset URLs: no row'),
   open('DELETE /exports/{jid}', 'deleting an export: no row'),
   open('GET /imports/{jid}', 'reading an import job: no row'),

@@ -620,7 +620,6 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       changesContent: true,
       capability: 'character-and-paragraph-formatting',
       needs: 'setParagraphFormat',
-      contextMenu: ['text'],
       run: () => host.openDialog('paragraph'),
     },
     // The column widths and the row height of the caret's table as fields (FE-104 criterion 1): the

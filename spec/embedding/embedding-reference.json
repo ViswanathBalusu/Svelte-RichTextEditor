@@ -231,6 +231,22 @@
       "summary": "Inserts a CDM fragment at the selection through the same guards as typing (PRO-084). Nothing changes unless the result is `ok`; the result says why when it is not."
     },
     {
+      "name": "copyCommentLink",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "copyCommentLink(address: string): Promise<boolean>",
+      "summary": "Copies the address the host built for a comment to the clipboard (UX-034). The host calls it from its `de-comment-link-request` listener, in the user's gesture, so the browser allows the copy; the shell says whether it worked. Resolves false when nothing was copied."
+    },
+    {
+      "name": "openComment",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "openComment(marker: string): Promise<'open' | 'unavailable' | 'not-loaded'>",
+      "summary": "Shows the thread of the comment a marker names, as the host passes it back when someone follows the address it built (UX-034). A document that is still loading is waited for. A comment that is deleted, or that the user may not view, gives `unavailable`, with a message and nothing else shown."
+    },
+    {
       "name": "print",
       "kind": "method",
       "static": false,
@@ -296,6 +312,11 @@
       "name": "de-share-request",
       "detail": "{ docId: string }",
       "summary": "The owner asked for sharing, which the host owns (PRO-089; 13 §5). Identifiers only: the host opens its own dialog, and the editor shows none of its own. Nothing listens and nothing breaks when the host has no listener."
+    },
+    {
+      "name": "de-comment-link-request",
+      "detail": "{ docId: string; thread: string; comment: string; marker: string }",
+      "summary": "The user asked for the link to a comment (UX-034; owner decision 88). `marker` is the opaque identifier of the comment: the host builds the address from its own page address, answers with `copyCommentLink(address)` and, when someone follows the address, passes `marker` to `openComment`. Identifiers only, never the text of the comment."
     },
     {
       "name": "de-access-request",

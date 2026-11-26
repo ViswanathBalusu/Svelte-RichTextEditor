@@ -318,13 +318,16 @@ export type CoreQueryName1b =
  * - `setTableSize`: `{ columnWidths?, rowHeight? }` in twips for the caret's table: the width of
  *   every column and the height of the caret's row, or null for the natural height (FE-104);
  * - `moveBlockUp`, `moveBlockDown`: none; the blocks at the selection change places with the block
- *   above or below (FE-104).
+ *   above or below (FE-104);
+ * - `setTrackedForEveryone`: `{ on }`; switches `settings.trackChanges` between `everyone` and `off`,
+ *   for a user with `manage` only (UX-038; owner decision 118).
  */
 export type CoreCommandName =
   | 'setParagraphFormat'
   | 'setTableSize'
   | 'moveBlockUp'
   | 'moveBlockDown'
+  | 'setTrackedForEveryone'
   | 'copyFormat'
   | 'pasteFormat'
   | 'paragraphStyle'
@@ -457,6 +460,23 @@ export interface ProofingFindingView {
 }
 
 /** The proofing state the status bar and the menus read (UX-041, UX-042). */
+/** Whose list a dictionary word is on: the person's own, or the tenant's shared one (decision 34). */
+export type DictionaryScope = 'user' | 'tenant';
+
+export interface DictionaryEntryView {
+  readonly word: string;
+  readonly scope: DictionaryScope;
+  /** False for a shared word that only an administrator removes. */
+  readonly removable: boolean;
+}
+
+export interface DictionaryService {
+  /** The words for a language; null when the port cannot list them or the request failed. */
+  words(lang: string): Promise<readonly DictionaryEntryView[] | null>;
+  /** Adds a word; false when the port refused (a shared word needs an administrator) or failed. */
+  add(word: string, lang: string, scope: DictionaryScope): Promise<boolean>;
+  remove(word: string, lang: string, scope: DictionaryScope): Promise<boolean>;
+}
 export interface ProofingStatus {
   /** A proofing port is attached. Without one no proofing control is shown. */
   readonly available: boolean;
@@ -1031,6 +1051,11 @@ export interface CoreApi {
   ignoreFinding?(id: string, everywhere?: boolean): boolean;
   /** Adds the finding's text to the port's custom dictionary. */
   addFindingToDictionary?(id: string): Promise<boolean>;
+  /**
+   * The custom dictionaries (UX-042; owner decision 34): the person's own and the tenant's shared
+   * one. Offered, with its controls, only while `proofing` says the port supports dictionaries.
+   */
+  readonly dictionary?: DictionaryService;
   /**
    * The finding with this identifier, while it is shown; null otherwise. The editing surface marks a
    * finding's text with `data-de-finding`, and a context click on the mark asks for that finding
@@ -2011,6 +2036,17 @@ export interface CommentView {
   readonly body: readonly CommentBodyPart[];
   /** True once the author has edited the comment. */
   readonly edited: boolean;
+  /** The reactions to the comment, in the order of `REACTIONS`, none that nobody holds (UX-033). */
+  readonly reactions?: readonly ReactionView[];
+}
+
+/** The reactions a comment takes, in the order the service lists them (UX-033; ADR 0424). */
+export type ReactionName = 'thumbsUp' | 'heart' | 'laugh' | 'celebrate' | 'eyes' | 'done';
+
+/** One reaction of a comment with the people who made it, as principals (`user:<sub>`). */
+export interface ReactionView {
+  readonly reaction: ReactionName;
+  readonly users: readonly string[];
 }
 
 /**
@@ -2102,6 +2138,23 @@ export interface ThreadsService {
   ): Promise<ThreadWrite>;
   /** Deletes a comment. */
   deleteComment?(id: string, commentId: string, etag: string): Promise<ThreadWrite>;
+  /**
+   * Asks the host for the address of a comment (UX-034; owner decision 88): the element raises
+   * `de-comment-link-request` with the identifiers and a marker, and the host builds the address
+   * from its own page address. False when the element can ask nobody. Absent: no control is offered.
+   */
+  requestLink?(id: string, commentId: string): boolean;
+  /**
+   * What became of the last address the host gave: it was copied (`ok`) or it could not be. `n`
+   * counts the answers, so the same outcome twice is two changes. Null before the first.
+   */
+  readonly linkCopied?: ReadView<{ readonly n: number; readonly ok: boolean } | null>;
+  /**
+   * Adds the user to a reaction of a comment (`on`), or takes them out of it (UX-033). Absent
+   * unless the backend announces the feature `reactions`: then no reaction control is offered.
+   * It makes no commit and needs no tag; a user may react again to the same reaction safely.
+   */
+  react?(id: string, commentId: string, reaction: ReactionName, on: boolean): Promise<ThreadWrite>;
   /** Deletes a whole thread. */
   deleteThread?(
     id: string,

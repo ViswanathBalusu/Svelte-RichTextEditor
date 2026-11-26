@@ -31,7 +31,7 @@ export type Restriction = "no-export" | "no-copy" | "no-print";
 export type ScopeId = string;
 
 /** A feature name. Protocol and CDM features share one namespace; experimental names start with `x-` (05 §1). */
-export type FeatureName = "presence" | "regions" | "suggest-enforced" | "history" | "comments" | "assets" | "exports" | "leases" | "fields" | "rules" | "workflow" | "sign" | "seal" | "read-restrictions" | "test-hooks" | "extensions" | "preserve" | (string & {});
+export type FeatureName = "presence" | "regions" | "suggest-enforced" | "history" | "comments" | "reactions" | "assets" | "exports" | "leases" | "fields" | "rules" | "workflow" | "sign" | "seal" | "read-restrictions" | "test-hooks" | "extensions" | "preserve" | (string & {});
 
 /** A code of the error registry (05 §5.8). */
 export type ErrorCode = "bad_message" | "unknown_type" | "unauthenticated" | "token_expired" | "revoked" | "forbidden" | "unsupported_version" | "unsupported_engine" | "unsupported_cdm" | "unsupported_feature" | "not_found" | "already_open" | "channel_limit" | "stale_base" | "rebase_failed" | "permission_denied" | "read_only" | "invalid_op" | "conflict" | "field_invalid" | "busy" | "too_large" | "rate_limited" | "quota_exceeded" | "slow_consumer" | "precondition_failed" | "validation_failed" | "pending_suggestions" | "workflow_active" | "idempotency_mismatch" | "unavailable" | "internal";
@@ -367,7 +367,7 @@ export interface Content {
 export type CdmEnvelope = ModelCdmEnvelope;
 
 /** Notification type: an open vocabulary; a client ignores types it does not know (05 §1 rule 3). */
-export type NotificationType = "thread.created" | "thread.updated" | "thread.resolved" | "thread.reopened" | "thread.deleted" | "comment.created" | "comment.updated" | "comment.deleted" | "version.created" | "version.restored" | "export.progress" | "export.completed" | "export.failed" | "export.cancelled" | "import.completed" | "import.failed" | "asset.ready" | "asset.failed" | "document.updated" | (string & {});
+export type NotificationType = "thread.created" | "thread.updated" | "thread.resolved" | "thread.reopened" | "thread.deleted" | "comment.created" | "comment.updated" | "comment.deleted" | "comment.reacted" | "version.created" | "version.restored" | "export.progress" | "export.completed" | "export.failed" | "export.cancelled" | "import.completed" | "import.failed" | "asset.ready" | "asset.failed" | "document.updated" | (string & {});
 
 /** Any webhook body: a CloudEvents 1.0 event in structured JSON mode. Requests are signed as described by Standard Webhooks: headers `webhook-id`, `webhook-timestamp`, `webhook-signature`, HMAC-SHA256, five-minute tolerance. */
 export interface WebhookDelivery {
@@ -696,6 +696,13 @@ export interface UpdateThreadRequest {
   assignee?: string | null;
 }
 
+/** One reaction of a comment with the people who made it (ADR 0424). */
+export interface ReactionCount {
+  reaction: "thumbsUp" | "heart" | "laugh" | "celebrate" | "eyes" | "done";
+  /** The people who reacted, `user:<id>`, in the order they reacted. */
+  users: string[];
+}
+
 /** A comment of a thread (ADR 0417). Its entity tag is the `If-Match` of an edit. */
 export interface Comment {
   id: string;
@@ -707,6 +714,8 @@ export interface Comment {
   /** The entity tag of this version, the `If-Match` of an edit or delete; a comment inside a thread has no header of its own. */
   etag: string;
   body: CommentBodyPart[];
+  /** Present when the service announces the feature `reactions`; a reaction nobody holds is left out (ADR 0424). */
+  reactions?: ReactionCount[];
 }
 
 export interface CreateAssetRequest {
@@ -2101,6 +2110,24 @@ export interface Operations {
     query: Record<string, never>;
     body: never;
     response: void;
+  };
+  /** POST /comments/{cid}/reactions/{reaction}: Adds the caller to a reaction of a comment; adding it again changes nothing. It makes no commit (13 §5; ADR 0424). (05 §6.2; 13 §5) */
+  addReaction: {
+    method: "POST";
+    path: "/comments/{cid}/reactions/{reaction}";
+    params: { cid: string; reaction: "thumbsUp" | "heart" | "laugh" | "celebrate" | "eyes" | "done" };
+    query: Record<string, never>;
+    body: never;
+    response: Comment;
+  };
+  /** DELETE /comments/{cid}/reactions/{reaction}: Takes the caller out of a reaction of a comment; removing one that is not held changes nothing (ADR 0424). (05 §6.2; 13 §5) */
+  removeReaction: {
+    method: "DELETE";
+    path: "/comments/{cid}/reactions/{reaction}";
+    params: { cid: string; reaction: "thumbsUp" | "heart" | "laugh" | "celebrate" | "eyes" | "done" };
+    query: Record<string, never>;
+    body: never;
+    response: Comment;
   };
   /** POST /documents/{id}/assets: Returns an asset identifier and a size-bound pre-signed upload into a quarantine area. (05 §6.2; 06 §4.4) */
   createAsset: {

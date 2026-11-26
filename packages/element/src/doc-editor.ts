@@ -1238,6 +1238,38 @@ export class DocEditorElement extends Base {
   }
 
   /**
+   * Copies the address the host built for a comment to the clipboard (UX-034). The host calls it
+   * from its `de-comment-link-request` listener, in the user's gesture, so the browser allows the
+   * copy; the shell says whether it worked. Resolves false when nothing was copied.
+   */
+  async copyCommentLink(address: string): Promise<boolean> {
+    try {
+      await navigator.clipboard.writeText(address);
+    } catch {
+      this.#mounted?.linkResult(false);
+      return false;
+    }
+    this.#mounted?.linkResult(true);
+    return true;
+  }
+
+  /**
+   * Shows the thread of the comment a marker names, as the host passes it back when someone follows
+   * the address it built (UX-034). A document that is still loading is waited for. A comment that
+   * is deleted, or that the user may not view, gives `unavailable`, with a message and nothing
+   * else shown.
+   */
+  async openComment(marker: string): Promise<'open' | 'unavailable' | 'not-loaded'> {
+    // The document may still be loading, and its threads are listed once it is shown: ask until
+    // the thread is there or about five seconds have passed.
+    let outcome: 'open' | 'unavailable' | 'not-loaded' = 'not-loaded';
+    for (let i = 0; i < 100 && outcome !== 'open'; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 50));
+      outcome = (await this.#mounted?.openLinkedComment(marker)) ?? 'not-loaded';
+    }
+    return outcome;
+  }
+  /**
    * Prints the typeset PDF of the loaded document (02 §9.8; FE-073). When the access lists
    * `no-print`, nothing is requested and nothing is printed, and the outcome says why (FE-055; UX-040
    * criterion 3). Otherwise the export job runs and its PDF is printed through a hidden frame.
@@ -1337,6 +1369,12 @@ export class DocEditorElement extends Base {
       threads: {
         port: backend.comments,
         docId,
+        reactions: backend.features.has('reactions'),
+        // The host builds the address of a comment from its own page address (UX-034; decision 88).
+        onLinkRequest: ({ thread, comment }) => {
+          if (this.#session?.docId === docId)
+            this.#emit('de-comment-link-request', { docId, thread, comment, marker: comment });
+        },
         self: () => {
           const user = backend.auth.session?.user.id;
           return user === undefined ? null : `user:${user}`;

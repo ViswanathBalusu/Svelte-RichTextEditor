@@ -213,6 +213,13 @@ export const OPERATIONS = [
     text: 'Delete the document.',
   },
   {
+    id: 'settings.track_changes_on',
+    needs: 'manage',
+    where: 'commit',
+    spec: '07 §5.2; owner decision 118',
+    text: 'Switch `settings.trackChanges` from `off` to `everyone`.',
+  },
+  {
     id: 'settings.track_changes_off',
     needs: 'manage',
     where: 'commit',

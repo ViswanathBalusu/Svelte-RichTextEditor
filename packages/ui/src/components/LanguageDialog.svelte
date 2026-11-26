@@ -8,7 +8,9 @@
   import '../i18n/late/dialogs.ts';
   import { useShell } from '../context.ts';
   import { languageName } from '../shell/status.ts';
+  import { live } from '../live.ts';
   import Dialog from './Dialog.svelte';
+  import DictionarySection from './DictionarySection.svelte';
 
   interface Props {
     /** The tag at the selection, or null for the document's default. */
@@ -22,6 +24,10 @@
   const shell = useShell()!;
   const tr = $derived(shell.strings.current);
   const id = `${shell.idPrefix}-language`;
+
+  // The custom dictionaries of the language (UX-042), only while the proofing port supports them.
+  const proofing = shell.core.proofing ? live(shell.core.proofing) : null;
+  const documentLang = shell.core.language ? live(shell.core.language) : null;
 
   // svelte-ignore state_referenced_locally
   let tag = $state(initial ?? '');
@@ -81,4 +87,7 @@
       >
     </div>
   </form>
+  {#if shell.core.dictionary && proofing?.current.dictionary && (parsed ?? initial ?? documentLang?.current)}
+    <DictionarySection lang={(parsed ?? initial ?? documentLang?.current)!} />
+  {/if}
 </Dialog>

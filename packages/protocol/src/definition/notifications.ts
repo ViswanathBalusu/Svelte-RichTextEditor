@@ -38,6 +38,7 @@ export const NOTIFICATIONS: readonly NotificationDef[] = [
   n('comment.created', '/comments/{cid}'),
   n('comment.updated', '/comments/{cid}'),
   n('comment.deleted', '/comments/{cid}'),
+  n('comment.reacted', '/comments/{cid}'),
   n('version.created', '/documents/{id}/versions'),
   n('version.restored', '/documents/{id}/versions'),
   n('export.progress', '/exports/{jid}'),

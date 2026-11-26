@@ -7,18 +7,17 @@
   import '../i18n/late/dialogs.ts';
   import { useShell } from '../context.ts';
   import type { ParagraphFormatView, TabStopView } from '../core-api.ts';
+  import type { StringKey } from '../i18n/en-GB.ts';
   import { dialogFields, dialogPatch, type DialogField } from '../shell/paragraph-dialog.ts';
   import { MAX_TABS } from '../shell/ruler.ts';
   import Dialog from './Dialog.svelte';
 
   interface Props {
     format: ParagraphFormatView;
-    /** Runs the patch; true when the core took it. */
-    onApply: (patch: Record<string, unknown>) => boolean;
     onClose: () => void;
   }
 
-  let { format, onApply, onClose }: Props = $props();
+  let { format, onClose }: Props = $props();
 
   const shell = useShell()!;
   const tr = $derived(shell.strings.current);
@@ -28,6 +27,20 @@
   let fields = $state(dialogFields(format));
   let invalid = $state<readonly DialogField[]>([]);
 
+  const ALIGN_NAMES: Record<TabStopView['align'], StringKey> = {
+    left: 'dialog.paragraph.align.left',
+    center: 'dialog.paragraph.align.center',
+    right: 'dialog.paragraph.align.right',
+    decimal: 'dialog.paragraph.align.decimal',
+  };
+  const LEADER_NAMES: Record<TabStopView['leader'], StringKey> = {
+    none: 'dialog.paragraph.leader.none',
+    dot: 'dialog.paragraph.leader.dot',
+    hyphen: 'dialog.paragraph.leader.hyphen',
+    underscore: 'dialog.paragraph.leader.underscore',
+    middleDot: 'dialog.paragraph.leader.middleDot',
+    heavy: 'dialog.paragraph.leader.heavy',
+  };
   const ALIGNS: readonly TabStopView['align'][] = ['left', 'center', 'right', 'decimal'];
   const LEADERS: readonly TabStopView['leader'][] = [
     'none',
@@ -65,7 +78,9 @@
       onClose();
       return;
     }
-    if (onApply(result.patch)) onClose();
+    const done = shell.core.runNamed?.('setParagraphFormat', result.patch) ?? false;
+    shell.announceText(tr.t(done ? 'announce.paragraph.set' : 'announce.paragraph.failed'));
+    if (done) onClose();
   }
 
   const bad = (field: DialogField): boolean => invalid.includes(field);
@@ -113,7 +128,7 @@
             bind:value={row.align}
           >
             {#each ALIGNS as align (align)}
-              <option value={align}>{tr.t(`dialog.paragraph.align.${align}`)}</option>
+              <option value={align}>{tr.t(ALIGN_NAMES[align])}</option>
             {/each}
           </select>
           <select
@@ -122,7 +137,7 @@
             bind:value={row.leader}
           >
             {#each LEADERS as leader (leader)}
-              <option value={leader}>{tr.t(`dialog.paragraph.leader.${leader}`)}</option>
+              <option value={leader}>{tr.t(LEADER_NAMES[leader])}</option>
             {/each}
           </select>
           <button

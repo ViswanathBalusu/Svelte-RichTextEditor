@@ -248,7 +248,15 @@
 
   /** Follows a link to a comment by its identifier; resolves to what the pane showed. */
   export async function openLinkedComment(commentId: string): Promise<'open' | 'unavailable'> {
-    const found = core.threads?.list().find((t) => t.id === commentId);
+    // The marker the host passes back is a comment's identifier (owner decision 88; UX-034); the
+    // identifier of a thread, whose first comment it names, is taken as well.
+    const found = core.threads
+      ?.list()
+      .find(
+        (t) =>
+          t.id === commentId ||
+          (core.threads?.detail?.(t.id)?.comments.some((c) => c.id === commentId) ?? false),
+      );
     const outcome = resolveCommentLink(
       found
         ? {
@@ -693,10 +701,6 @@
 
   // The element that holds the text, which the ruler lines up with (UX-102).
   let bodyHostEl = $state<HTMLElement | null>(null);
-  function paragraphChanged(done: boolean): void {
-    announce(done ? 'announce.paragraph.set' : 'announce.paragraph.failed');
-  }
-
   function applyLanguage(lang: string | null): void {
     dialog = null;
     const done = core.runNamed?.('setLanguage', { lang }) ?? false;
@@ -1611,7 +1615,6 @@
         body={bodyHostEl}
         {zoom}
         onDialog={() => (dialog = 'paragraph')}
-        onChanged={paragraphChanged}
       />
     {/await}
   {/if}
@@ -1778,15 +1781,7 @@
         }}
       />
     {:else if dialog === 'paragraph' && core.paragraphFormat?.get()}
-      <ParagraphDialog
-        format={core.paragraphFormat.get()!}
-        onApply={(patch) => {
-          const done = core.runNamed?.('setParagraphFormat', patch) ?? false;
-          paragraphChanged(done);
-          return done;
-        }}
-        onClose={() => (dialog = null)}
-      />
+      <ParagraphDialog format={core.paragraphFormat.get()!} onClose={() => (dialog = null)} />
     {:else if dialog === 'tableSize' && core.tableSize?.get()}
       <TableSizeDialog
         view={core.tableSize.get()!}
