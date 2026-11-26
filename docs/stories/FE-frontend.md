@@ -2465,6 +2465,8 @@ As an author, I want a thousand-page document to scroll and edit smoothly, so th
 
 **Notes (lane w1, 2026-11-26):** Nothing new ticked. Criteria 4 and 5 are targets that need a measurement on the reference machine: a 1,000-page scroll (fe-092-scale.universal.test.ts shows at most 4 pages mounted, but no time) and a 100-page memory figure (a page cannot read total browser memory). The page view is mounted (FE-101), but this machine is not the reference, and the budgets are FE-102 (open).
 
+Machine check (lane w1, 2026-11-26): this machine matches reference-1 of ADR 0037 section 1, so criteria 4 and 5 (1,000-page scroll and 100-page memory) can be measured here with packages/perf and the reference harness. No run was made in this lane, so both stay unticked; the earlier remark that this is not the reference machine is wrong.
+
 ### FE-093 Provide an interactive overlay layer
 
 | Type | Phase | Size | Priority | Persona |
