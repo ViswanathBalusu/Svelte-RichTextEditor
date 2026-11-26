@@ -10,6 +10,8 @@ const HISTORY = 'history resources of phase 2 (PRO-119)';
 const LEASES = 'leases of phase 2 (PRO-122)';
 
 export const PENDING: Readonly<Record<string, string>> = {
+  'operation GET /tenant-fonts/{sha256}':
+    'the kit adds no font file: a tenant font needs the asset worker font check, and the route is tested in services/document-service/test/control-plane/be-048-tenant-fonts.test.ts (BE-048)',
   'message sync.check': `sync.check is optional and follows a checkpoint (04 §13): ${FAULTS}`,
   'message wf.changed': WORKFLOW,
   'field error.retryAfterMs': `only rate-limited errors carry it: ${FAULTS}`,

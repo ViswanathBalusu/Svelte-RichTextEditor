@@ -42,8 +42,21 @@ export function isBareIdentifierOperation(o: {
   readonly path: string;
   readonly security: readonly string[];
 }): boolean {
-  return o.path.includes('{') && !o.path.startsWith('/documents/') && o.security.includes('user');
+  return (
+    o.path.includes('{') &&
+    !o.path.startsWith('/documents/') &&
+    !TENANT_RESOURCES.has(o.path.split('/')[1] ?? '') &&
+    o.security.includes('user')
+  );
 }
+
+/**
+ * Resources of the tenant, not of a document: the tenant's fonts (BE-048). Any user or service of
+ * the tenant may read one by its hash, whichever document the token names, so the rule of a bare
+ * identifier (the token must cover the resource's document) does not apply; a tenant's resource
+ * of another tenant is `not_found`, which the font route's own tests show.
+ */
+export const TENANT_RESOURCES: ReadonlySet<string> = new Set(['tenant-fonts']);
 
 /** Every bare-identifier route of the protocol definition, with its feature and its scenario. */
 export function bareRoutes(): BareRoute[] {
