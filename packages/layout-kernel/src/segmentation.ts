@@ -40,12 +40,14 @@ export interface KernelSegmenter {
    * Every line-break opportunity of `text` (UAX #14), ascending. The end of a non-empty text is the
    * last one (mandatory). An empty text has none.
    */
-  lineBreaks(text: string | Uint16Array): LineBreakOpportunity[];
+  lineBreaks(text: string | Uint16Array, language?: string): LineBreakOpportunity[];
   /**
    * The offsets before the end of the text at which a line may break: the input of
    * `KernelShaper.breakParagraph`, and the answer the layout engine's `BreakOpportunities` gives
-   * (`opportunities(text, language?)` has that shape). `language` is accepted and not used: no
-   * language tailoring exists yet (WASM-016).
+   * (`opportunities(text, language?)` has that shape). `language` is the run's BCP 47 tag
+   * (WASM-016): Chinese (`zh`) breaks around its curly quotes, Korean (`ko`) breaks at spaces only,
+   * and Japanese (`ja`) takes the strict rules, which are the default. Any other tag, and none,
+   * gives the default rules.
    */
   opportunities(text: string, language?: string): number[];
   /**
@@ -83,6 +85,7 @@ export function previousBoundary(boundaries: readonly number[], offset: number):
 /** The glue calls that segmentation needs. */
 export interface SegmentationGlue {
   line_break_opportunities(text: Uint16Array): Uint32Array;
+  line_break_opportunities_for(text: Uint16Array, language: string): Uint32Array;
   grapheme_cluster_boundaries(text: Uint16Array): Uint32Array;
   segment_unicode_versions(): Uint32Array;
 }
@@ -97,8 +100,12 @@ function units(text: string | Uint16Array): Uint16Array {
 /** Wraps the module's segmentation calls. */
 export function segmenterOver(glue: SegmentationGlue): KernelSegmenter {
   const [a = 0, b = 0, c = 0, d = 0, e = 0, f = 0] = glue.segment_unicode_versions();
-  const lineBreaks = (text: string | Uint16Array): LineBreakOpportunity[] => {
-    const flat = glue.line_break_opportunities(units(text));
+  const flatBreaks = (text: string | Uint16Array, language: string | undefined): Uint32Array =>
+    language === undefined || language === ''
+      ? glue.line_break_opportunities(units(text))
+      : glue.line_break_opportunities_for(units(text), language);
+  const lineBreaks = (text: string | Uint16Array, language?: string): LineBreakOpportunity[] => {
+    const flat = flatBreaks(text, language);
     const out: LineBreakOpportunity[] = [];
     for (let i = 0; i + 1 < flat.length; i += 2)
       out.push({ offset: flat[i] ?? 0, mandatory: flat[i + 1] === 1 });
@@ -107,8 +114,8 @@ export function segmenterOver(glue: SegmentationGlue): KernelSegmenter {
   return {
     unicode: { lineBreak: `${a}.${b}.${c}`, grapheme: `${d}.${e}.${f}` },
     lineBreaks,
-    opportunities: (text) => {
-      const flat = glue.line_break_opportunities(units(text));
+    opportunities: (text, language) => {
+      const flat = flatBreaks(text, language);
       const out: number[] = [];
       for (let i = 0; i + 1 < flat.length; i += 2) {
         const offset = flat[i] ?? 0;
