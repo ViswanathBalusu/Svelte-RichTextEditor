@@ -577,6 +577,8 @@ export interface RegionEditors {
   readonly principals: readonly string[];
   /** The holder of a lease: while it holds, only they may edit (07 §10). */
   readonly leasedTo?: string;
+  /** When that lease expires (RFC 3339; PRM-048); present when `leasedTo` is. */
+  readonly leaseExpiresAt?: string;
 }
 
 /**
@@ -1076,6 +1078,12 @@ export interface CoreApi {
   extensionApi?(options: ExtensionApiOptions): ExtensionDocumentApi;
   /** Region grants (PRM-035), when the backend announces `regions`. */
   readonly grants?: GrantsService;
+  /**
+   * Sets a region's state (`PUT /documents/{id}/regions/{rid}/state`, PRM-048 criterion 4), when the
+   * backend offers it. It needs `manage`; the server decides, and a refusal rejects with an error
+   * whose `code` says why. Absent: the permissions pane has no state control.
+   */
+  setRegionState?(region: string, state: RegionSummary['state']): Promise<void>;
   /**
    * Check-out of regions (PRM-043), when the backend announces `leases`. Absent: the permissions
    * pane shows no check-out control.
