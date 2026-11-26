@@ -38,9 +38,7 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
   it('leaves out only the routes of the document itself, those for the service credential alone and the tenant resources', () => {
     const left = DEP1.operations
       .filter((o) => o.path.includes('{') && !isBareIdentifierOperation(o))
-      .filter((o) => !o.path.startsWith('/documents/{id}'))
-      // The tenant's own resources (BE-048) are scoped by the tenant, not by a document.
-      .filter((o) => !TENANT_RESOURCES.includes(o.path.split('/')[1] ?? ''));
+      .filter((o) => !o.path.startsWith('/documents/{id}'));
     expect(left.map((o) => o.path.split('/')[1])).toEqual([
       'tenant-fonts',
       'tenant-fonts',
@@ -54,7 +52,7 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
       'bulk-sends',
       'templates',
     ]);
-    for (const o of left.filter((x) => !TENANT_RESOURCES.has(x.path.split('/')[1] ?? '')))
+    for (const o of left.filter((x) => !TENANT_RESOURCES.includes(x.path.split('/')[1] ?? '')))
       expect(o.security).toEqual(['service']);
   });
 
