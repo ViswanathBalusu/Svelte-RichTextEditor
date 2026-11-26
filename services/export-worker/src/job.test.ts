@@ -468,7 +468,8 @@ describe('the export job handler (EXP-001)', () => {
     const hidden = await h.run({ hiddenRegions: ['rPriceBBBBBBBBB1'] });
     expect(hidden.state).toBe('completed');
     expect(codes(hidden)).not.toContain('view_unsupported');
-    const margin = await h.run({ options: { comments: 'margin' } });
+    // Margin comments are honoured since EXP-084; an option still without a writer is refused.
+    const margin = await h.run({ options: { certificate: true } });
     expect(margin.error?.code).toBe('validation_failed');
     expect(codes(margin)).toContain('option_unsupported');
     const docx = await h.run({ target: 'docx' });
