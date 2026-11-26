@@ -17,7 +17,12 @@ import { EDIT, FakeCore, VIEW } from './support/fake-core.ts';
 const translate = sourceTranslator();
 
 function setup(options: ConstructorParameters<typeof FakeCore>[0] = {}) {
-  const core = new FakeCore({ extended: true, ...options });
+  // The backend announces `fields` (FRW-065 criterion 3), as every field command needs it.
+  const core = new FakeCore({
+    extended: true,
+    ...options,
+    features: ['fields', ...(options.features ?? [])],
+  });
   const registry = createCommandRegistry(core, { scheduler: immediateScheduler() });
   return { core, registry };
 }

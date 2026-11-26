@@ -37,6 +37,8 @@ export interface CommandEntry {
   readonly changesContent: boolean;
   /** A backend feature that must be announced for the command to be offered at all. */
   readonly feature?: string;
+  /** Further backend features that must all be announced as well (a signature field needs `fields` and `sign`). */
+  readonly also?: readonly string[];
   /** The parity-profile row (`spec/parity`) the command delivers (UX-001). */
   readonly capability: string;
   /** Other names `exec` and `state` accept (the spike S1 names). */

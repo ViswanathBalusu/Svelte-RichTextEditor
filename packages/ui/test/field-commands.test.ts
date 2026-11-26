@@ -21,8 +21,15 @@ const PHASE_1B = ['text', 'number', 'date', 'checkbox', 'choice'];
 const SIGNING = ['signature', 'initials', 'dateSigned'];
 const ALL = FIELD_KINDS.map((k) => `insert.field.${k.kind}`);
 
-function setup(features: readonly string[] = []): { core: FakeCore; registry: CommandRegistry } {
-  const core = new FakeCore({ extended: true, features });
+/** The backend announces `fields` unless `announceFields` is false (FRW-065 criterion 3). */
+function setup(
+  features: readonly string[] = [],
+  announceFields = true,
+): { core: FakeCore; registry: CommandRegistry } {
+  const core = new FakeCore({
+    extended: true,
+    features: announceFields ? ['fields', ...features] : features,
+  });
   const registry = createCommandRegistry(core, { scheduler: immediateScheduler() });
   return { core, registry };
 }
@@ -37,7 +44,7 @@ function palette(registry: CommandRegistry): string[] {
 
 /** A core that would put a field anywhere: the shell's own rules are all that stop it. */
 function permissiveCore(features: readonly string[] = []): FakeCore {
-  const core = new FakeCore({ extended: true, features });
+  const core = new FakeCore({ extended: true, features: ['fields', ...features] });
   const query = core.query.bind(core);
   Object.assign(core, {
     query: (name: string) => (name === 'canInsertField' ? true : query(name)),
@@ -85,10 +92,25 @@ describe('the palette lists exactly the kinds of the release (FRW-072, criterion
 
   it('follows the announced features when they change, without a new registry', () => {
     const { core, registry } = setup();
-    core.features?.set(['sign', 'rules']);
+    core.features?.set(['fields', 'sign', 'rules']);
     expect(palette(registry)).toHaveLength(9);
-    core.features?.set([]);
+    core.features?.set(['fields']);
     expect(palette(registry)).toEqual(PHASE_1B);
+    core.features?.set(['sign', 'rules']);
+    expect(palette(registry)).toEqual([]);
+  });
+
+  it('offers no field command when `fields` is not announced, whatever else is (FRW-065 criterion 3)', () => {
+    const { registry } = setup(['sign', 'rules', 'workflow', 'comments'], false);
+    expect(palette(registry)).toEqual([]);
+    for (const id of ALL)
+      expect(registry.state(id), id).toMatchObject({
+        offered: false,
+        enabled: false,
+        reasonKey: 'reason.unannounced',
+      });
+    // A signing kind needs `sign` as well, and the formula `rules`.
+    expect(palette(setup(['rules']).registry)).toEqual([...PHASE_1B, 'formula']);
   });
 
   it('inserts the kind chosen, through the core’s named command', () => {
@@ -110,7 +132,7 @@ describe('the palette lists exactly the kinds of the release (FRW-072, criterion
   });
 
   it('is absent when the core cannot insert fields', () => {
-    const core = new FakeCore({ extended: true, features: ['sign', 'rules'] });
+    const core = new FakeCore({ extended: true, features: ['fields', 'sign', 'rules'] });
     Object.assign(core, {
       queryNames: core.queryNames?.filter((n) => n !== 'canInsertField'),
       commandNames: core.commandNames?.filter((n) => n !== 'insertField'),
@@ -196,7 +218,7 @@ describe('at the field limit (FRW-072, criterion 4)', () => {
   });
 
   it('states the limit in the same words when the core calls its reason `limit`', () => {
-    const core = new FakeCore({ extended: true });
+    const core = new FakeCore({ extended: true, features: ['fields'] });
     Object.assign(core, {
       query: (name: string) => (name === 'canInsertField' ? false : undefined),
       queryReason: (name: string) => (name === 'canInsertField' ? 'limit' : null),

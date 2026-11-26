@@ -19,11 +19,11 @@
  * Criterion 4: the salts of the stored evidence are in no commit of the log and in no table but the
  * evidence table.
  *
- * Not shown: no control commit carries an evidence hash yet (FRW-041 criterion 2; the signing and the
- * completion write commits without it, ADR 0397), so "only salted hashes of evidence appear in the
- * chain" has nothing to read, and a salt that never reaches the chain is shown against the commits
- * that exist. The search index is fed from checkpoints (BE-054), which are not built, so no search
- * entry holds anything here; PostgreSQL's tables are scanned, and the index table is among them.
+ * The chain (lane w8, 2026-11-26): the control commits that follow the signings and the completions
+ * carry only the origin and a salted hash, and a verifier recomputes each hash from a stored row and
+ * its salt (FRW-041 criterion 2). The search entries: the text the indexer would take from the workflow
+ * document holds no canary, and with the indexer on a search for each canary finds nothing in the
+ * tenant (the workflow document's own content cannot be replaced to make a checkpoint of it: 409).
  * Runs in memory and on PostgreSQL in the shared container when it answers.
  */
 import { createHash } from 'node:crypto';
@@ -33,7 +33,11 @@ import { DEFAULT_CAPTURE_SETTINGS, type CaptureSettings } from '@docedit/authori
 import { MemoryEventSink } from '../../../services/document-service/src/control-plane/events.ts';
 import { createPool } from '../../../services/document-service/src/storage/db.ts';
 import { MemoryConsentTextStore } from '../../../services/document-service/src/workflow/consent-service.ts';
-import { MemoryEvidenceLedger } from '../../../services/document-service/src/workflow/evidence-ledger.ts';
+import { extractSearchText } from '../../../services/document-service/src/control-plane/search-index.ts';
+import {
+  MemoryEvidenceLedger,
+  recomputeCommitment,
+} from '../../../services/document-service/src/workflow/evidence-ledger.ts';
 import { PgCaptureSettingsStore } from '../../../services/document-service/src/workflow/capture-settings-pg.ts';
 import { unsandboxed } from '../../../services/asset-worker/src/index.ts';
 import {
@@ -125,7 +129,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       beforeAll(async () => {
         h = await startHarness(storage, {
           host: '0.0.0.0',
-          env: { DOCEDIT_JOB_IDLE_MS: '20' },
+          env: { DOCEDIT_JOB_IDLE_MS: '20', DOCEDIT_SEARCH_INDEX: '1' },
           events,
           assetWorker: { sandbox: unsandboxed(), allowUnsandboxed: true },
           parts: {
@@ -328,6 +332,77 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // Criterion 4: no salt, as hex, is in a commit.
         for (const s of salts) expect(logText).not.toContain(s);
 
+        // Criterion 1, the chain: the control commits that follow the signings and the completions
+        // carry only the origin and a 64-digit hash (FRW-041 criterion 2), and each hash is the
+        // salted hash of one stored row: a verifier with the row and its salt recomputes it. Nothing
+        // else of the evidence is in them (the scan above covers every commit as text).
+        const anchored = commits.filter((c) => c.evidence !== undefined);
+        expect(anchored.length).toBeGreaterThanOrEqual(4);
+        expect(new Set(anchored.map((a) => a.evidence!.origin))).toEqual(
+          new Set(['sign', 'rules']),
+        );
+        for (const a of anchored) {
+          expect(a.kind).toBe('control');
+          expect(a.steps).toEqual([]);
+          expect(Object.keys(a.evidence!).sort()).toEqual(['evidenceHash', 'origin']);
+          expect(a.evidence!.evidenceHash).toMatch(/^[0-9a-f]{64}$/);
+          const row = rows.find((r) => r.hash === a.evidence!.evidenceHash);
+          expect(row, `a stored row for ${a.evidence!.evidenceHash}`).toBeDefined();
+          expect(await recomputeCommitment(row!)).toBe(a.evidence!.evidenceHash);
+        }
+
+        // Criterion 1, the search entries. The index takes its text from a checkpoint of the
+        // document's content and from nothing else (BE-054). Two checks. (a) What would be indexed
+        // from the workflow document as it stands after both signers (its content, read through the
+        // API) holds no canary. (b) The indexer is on and works for the tenant: a document of the
+        // tenant is checkpointed and found by a word of its text (the control), and a search for each
+        // canary finds nothing in the tenant. The workflow document's own content cannot be replaced
+        // to make a checkpoint of it (the service answers 409 while a workflow holds it), so (a)
+        // stands in for its entry.
+        const after = await h.call('GET', `/v1/documents/${doc}/content`, { token: h.a.apiKey });
+        expect(after.status, after.text).toBe(200);
+        const indexed = extractSearchText(after.json.doc as never).join('\n');
+        expect(indexed.length).toBeGreaterThan(0);
+        for (const c of canaries) expect(indexed, `indexable text holds ${c}`).not.toContain(c);
+
+        const word = `sec044word${RUN}`;
+        const sibling = await h.createDocument(h.a, document());
+        const sibContent = structuredClone(document()) as Record<string, unknown>;
+        const swap = (n: unknown): boolean => {
+          if (n === null || typeof n !== 'object') return false;
+          const o = n as Record<string, unknown>;
+          if (o['type'] === 'text' && o['text'] === 'Hello') {
+            o['text'] = `the ${word} signed`;
+            return true;
+          }
+          return Object.values(o).some(swap);
+        };
+        expect(swap(sibContent['doc'])).toBe(true);
+        const sibGot = await h.call('GET', `/v1/documents/${sibling}/content`, {
+          token: h.a.apiKey,
+        });
+        const sibPut = await h.call('PUT', `/v1/documents/${sibling}/content`, {
+          token: h.a.apiKey,
+          body: sibContent,
+          headers: { 'If-Match': sibGot.headers.get('etag')! },
+        });
+        expect(sibPut.status, sibPut.text).toBe(204);
+        const find = (q: string) =>
+          h.call('GET', `/v1/search?q=${encodeURIComponent(q)}&limit=10`, { token: h.a.apiKey });
+        let hits = 0;
+        for (let i = 0; i < 200 && hits === 0; i++) {
+          const r = await find(word);
+          expect(r.status, r.text).toBe(200);
+          hits = JSON.stringify(r.json).includes(sibling) ? 1 : 0;
+          if (hits === 0) await sleep(100);
+        }
+        expect(hits, 'the indexer made a checkpoint searchable').toBe(1);
+        for (const c of [ON.ip, ON.ua, ON.amr, OFF.ip, OFF.ua, OFF.amr, CONSENT_TEXT]) {
+          const r = await find(c);
+          expect(r.status, r.text).toBe(200);
+          expect(JSON.stringify(r.json), `search for ${c}`).not.toContain(doc);
+          expect(JSON.stringify(r.json), `search for ${c}`).not.toContain(sibling);
+        }
         const keys = await h.parts.objects.list('');
         expect(keys.length).toBeGreaterThan(0);
         for (const key of keys) {
