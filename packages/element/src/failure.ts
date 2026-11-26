@@ -23,6 +23,8 @@ import { EN, format, type FailureStrings } from './strings.ts';
 export interface FailureInfo {
   code: ErrorCode;
   retryAfterMs: number | null;
+  /** The kind of quota a quota_exceeded refusal named (owner decision 110), when it named one. */
+  quota?: string | null;
 }
 
 export type FailureKind = 'no-access' | 'update' | 'wait' | 'quota' | 'other';
@@ -63,6 +65,7 @@ export function failureView(
   code: ErrorCode,
   retryAfterMs: number | null,
   strings: FailureStrings = EN.failure,
+  quota: string | null = null,
 ): FailureView {
   const kind = failureKind(code);
   const seconds = retryAfterMs === null ? null : Math.max(1, Math.ceil(retryAfterMs / 1000));
@@ -93,17 +96,23 @@ export function failureView(
           seconds === null ? strings.waitMessageUnknown : format(strings.waitMessage, { seconds }),
         action: { ...retry, enabledAfterMs: retryAfterMs ?? 0 },
       };
-    case 'quota':
+    case 'quota': {
+      const named = quota === null ? undefined : strings.quotaKinds[quota];
       return {
         code,
         kind,
         title: strings.quotaTitle,
         message:
-          seconds === null
-            ? strings.quotaMessageUnknown
-            : format(strings.quotaMessage, { seconds }),
+          named === undefined
+            ? seconds === null
+              ? strings.quotaMessageUnknown
+              : format(strings.quotaMessage, { seconds })
+            : seconds === null
+              ? format(strings.quotaKindMessageUnknown, { kind: named })
+              : format(strings.quotaKindMessage, { kind: named, seconds }),
         action: { ...retry, enabledAfterMs: retryAfterMs ?? 0 },
       };
+    }
     default:
       return {
         code,

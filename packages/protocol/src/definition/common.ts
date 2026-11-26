@@ -297,6 +297,24 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
     ),
   ),
   named(
+    'QuotaKind',
+    enm(
+      [
+        'connections',
+        'openDocuments',
+        'commitRate',
+        'roomCpuBudget',
+        'storage',
+        'exportConcurrency',
+        'exportMinutes',
+      ],
+      {
+        doc: 'The kind of quota a refusal names: the dimensions of the tenant quotas (06 §12; owner decision 110).',
+        spec: '06 §12; 05 §5.8',
+      },
+    ),
+  ),
+  named(
     'RejectAction',
     enm(['rebase', 'drop', 'reload', 'retry'], {
       doc: 'What the client does next (04 §8).',
@@ -326,6 +344,10 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
         ),
         rule: opt(text(), 'The rule or constraint that failed (12 §5.3).', { gaps: ['G35'] }),
         retryAfterMs: opt(ms(), 'How long to wait before retrying.'),
+        quota: opt(
+          ref('QuotaKind'),
+          'For `quota_exceeded` and a spent room CPU budget: the kind of quota reached (owner decision 110).',
+        ),
       },
       {
         doc: 'The payload of `sync.reject` (05 §5.3; 04 §8). A commit whose base is older than a snapshot commit gets `stale_base` with action `rebase` (04 §3.2).',
@@ -517,6 +539,10 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
         message: req(text()),
         retryable: req(bool()),
         retryAfterMs: opt(ms(), undefined, { gaps: ['G23'], decisions: ['D06'] }),
+        quota: opt(
+          ref('QuotaKind'),
+          'For `quota_exceeded` and a spent room CPU budget: the kind of quota reached (owner decision 110).',
+        ),
         fatal: req(bool(), 'A fatal error is followed by the matching close code (05 §5.7).', {
           gaps: ['G24'],
         }),
@@ -685,6 +711,10 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
         retryAfterMs: opt(
           ms(),
           'For `rate_limited` of the access code (FRW-039): how long to wait before retrying; `Retry-After` carries the same wait in whole seconds.',
+        ),
+        quota: opt(
+          ref('QuotaKind'),
+          'For `quota_exceeded`: the kind of quota reached (owner decision 110).',
         ),
       },
       {

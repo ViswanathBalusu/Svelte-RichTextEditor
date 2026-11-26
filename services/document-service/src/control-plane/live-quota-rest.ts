@@ -6,6 +6,7 @@
  */
 import type { LiveQuotas, QuotaSource } from './live-quotas.ts';
 import type { QuotaDimension } from './quotas.ts';
+import type { UsageRecorder } from './usage.ts';
 import { ApiError } from './problems.ts';
 
 /** Answers with the refusal a spent quota gives, or returns when the request is admitted. */
@@ -23,7 +24,7 @@ export async function admitRestCommit(
     cpu.ok
       ? 'the commit-rate quota of the tenant is reached'
       : 'the room CPU budget of the tenant is spent',
-    { retryAfterS: Math.max(1, Math.ceil(adm.retryAfterMs / 1000)) },
+    { retryAfterS: Math.max(1, Math.ceil(adm.retryAfterMs / 1000)), quota: adm.quota },
   );
 }
 
@@ -53,13 +54,22 @@ export async function admitStorage(
   tenant: string,
   adding: number,
   stored: (tenant: string) => Promise<number>,
+  usage?: UsageRecorder,
 ): Promise<void> {
   await source?.load?.(tenant);
   const limit = quotaOf(source, tenant, 'storage');
-  if (limit === null) return;
-  if ((await stored(tenant)) + adding <= limit) return;
+  if (limit === null) {
+    if (usage) usage.level(tenant, 'storage', (await stored(tenant)) + adding);
+    return;
+  }
+  const after = (await stored(tenant)) + adding;
+  if (after <= limit) {
+    usage?.level(tenant, 'storage', after);
+    return;
+  }
   throw new ApiError('quota_exceeded', 'the tenant has reached its storage quota', {
     retryAfterS: COUNT_QUOTA_RETRY_AFTER_S,
+    quota: 'storage',
   });
 }
 
@@ -72,12 +82,21 @@ export async function admitExportConcurrency(
   source: QuotaSource | undefined,
   tenant: string,
   active: (tenant: string) => Promise<number>,
+  usage?: UsageRecorder,
 ): Promise<void> {
   await source?.load?.(tenant);
   const limit = quotaOf(source, tenant, 'exportConcurrency');
-  if (limit === null) return;
-  if ((await active(tenant)) < limit) return;
+  if (limit === null) {
+    if (usage) usage.peak(tenant, 'exportConcurrency', (await active(tenant)) + 1);
+    return;
+  }
+  const running = await active(tenant);
+  if (running < limit) {
+    usage?.peak(tenant, 'exportConcurrency', running + 1);
+    return;
+  }
   throw new ApiError('quota_exceeded', 'the tenant has reached its export concurrency quota', {
     retryAfterS: COUNT_QUOTA_RETRY_AFTER_S,
+    quota: 'exportConcurrency',
   });
 }

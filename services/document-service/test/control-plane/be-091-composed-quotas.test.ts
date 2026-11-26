@@ -90,6 +90,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(refused.t).toBe('error');
         expect(refused.d?.code).toBe('quota_exceeded');
         expect(refused.d?.retryAfterMs).toBeGreaterThan(0);
+        // UX-078 criterion 3 (owner decision 110): the refusal names the kind of quota.
+        expect(refused.d?.quota).toBe('connections');
 
         await putQuotas(h, { connections: 2 });
         expect((await (await connect(h)).hello(token)).t).toBe('welcome');
@@ -121,6 +123,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const refused = await three.open(1, docB);
         expect(refused.t).toBe('error');
         expect(refused.d?.code).toBe('quota_exceeded');
+        expect(refused.d?.quota).toBe('openDocuments');
         expect(refused.d?.retryAfterMs).toBeGreaterThan(0);
         expect(
           checkProblem({
@@ -159,6 +162,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(refused.t).toBe('sync.reject');
         expect(refused.d?.code).toBe('rate_limited');
         expect(refused.d?.action).toBe('retry');
+        expect(refused.d?.quota).toBe('roomCpuBudget');
         expect(refused.d?.retryAfterMs).toBeGreaterThan(0);
         expect(
           checkProblem({
@@ -189,6 +193,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         });
         expect(refused.status, refused.text).toBe(429);
         expect(refused.json.code).toBe('quota_exceeded');
+        expect(refused.json.quota).toBe('commitRate');
         const retry = Number(refused.headers.get('retry-after'));
         expect(Number.isInteger(retry) && retry >= 1).toBe(true);
         expect(

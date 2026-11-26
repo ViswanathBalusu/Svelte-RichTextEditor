@@ -142,7 +142,7 @@ Direction: C is client, S is server.
 | `auth.revoked` | S to C | `reason` | Followed by close code 4401 |
 | `ping`, `pong` | both | none | |
 | `goaway` | S to C | `reconnectInMs`, `reason` | The whole connection is draining. It is never used for a single channel |
-| `error` | both | `code`, `message`, `retryable`, `retryAfterMs`, `fatal` | With `re` when it answers a message. A fatal error is followed by the matching close code |
+| `error` | both | `code`, `message`, `retryable`, `retryAfterMs`, optional `quota`, `fatal` | With `re` when it answers a message. A fatal error is followed by the matching close code |
 | `chunk` | both | `of`, `i`, `n`, `part` | Section 4 |
 
 There is no session resumption: a new connection is a new session.
@@ -169,7 +169,7 @@ Semantics are defined in [04 Sync engine](04-sync-engine.md).
 |---|---|---|
 | `sync.submit` | C to S | `id`, `base`, `steps`, optional `origin` |
 | `sync.ack` | S to C | `id` (the commit), `seq`, `serverTime`, `rebased`, and `steps` when `rebased` is true. `re` is the envelope `id` of the submit. An acknowledgement rebuilt for a duplicate always carries `steps` |
-| `sync.reject` | S to C | `id`, `code`, `message`, `action` (`rebase`, `drop`, `reload`, `retry`), `head`, optional `scopes`, optional `rule`, optional `retryAfterMs` |
+| `sync.reject` | S to C | `id`, `code`, `message`, `action` (`rebase`, `drop`, `reload`, `retry`), `head`, optional `scopes`, optional `rule`, optional `retryAfterMs`, optional `quota` (the kind of quota, with `quota_exceeded` or a spent room CPU budget) |
 | `sync.commit` | S to C | `commits`: array in ascending `seq` of `{ seq, kind, id, steps, control, author: { user, session, agent }, serverTime, origin }`. `kind` is `steps` or `control`; `session` is null for server-authored commits |
 | `sync.caughtUp` | S to C | `seq` |
 | `sync.reset` | S to C | `seq`, `reason` (`import`, `restore`, `migration`, `repair`). A snapshot commit was stored; the client reloads content at `seq` |
@@ -253,7 +253,7 @@ One registry covers every surface. REST problems use the same codes in their `co
 | `conflict`, `field_invalid` | sync, REST | no | 12 |
 | `busy` | sync | yes | Resubmit after the pending answer |
 | `too_large` | all | no | Split or report |
-| `rate_limited`, `quota_exceeded` | all | yes, after `retryAfterMs` or `Retry-After` | Back off; tell the user for quotas |
+| `rate_limited`, `quota_exceeded` | all | yes, after `retryAfterMs` or `Retry-After` | Back off; tell the user for quotas, naming the kind of quota: `quota` (`connections`, `openDocuments`, `commitRate`, `roomCpuBudget`, `storage`, `exportConcurrency`, `exportMinutes`) on the socket `error`, on `sync.reject` and in the REST problem (owner decision 110) |
 | `slow_consumer` | channel close | yes | Resume |
 | `precondition_failed`, `validation_failed`, `pending_suggestions`, `workflow_active`, `idempotency_mismatch` | REST | no | Fix the request |
 | `unavailable`, `internal` | all | yes | Back off |

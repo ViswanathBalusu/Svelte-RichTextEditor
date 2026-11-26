@@ -4,6 +4,7 @@
  * (decision D61), so a handler can only fail with a code the protocol defines.
  */
 import { DEP1, type ErrorCode } from '@docedit/protocol';
+import type { QuotaDimension } from './quotas.ts';
 
 /** The codes a REST problem may carry: the registry's codes with the REST surface. */
 export type RestCode = Extract<
@@ -64,6 +65,8 @@ export interface ApiErrorOptions {
    * as `Retry-After`.
    */
   retryAfterMs?: number;
+  /** For quota_exceeded: the kind of quota reached (owner decision 110). */
+  quota?: QuotaDimension;
   /**
    * For the codes answered with 401: the `WWW-Authenticate` challenge. Default
    * `Bearer error="invalid_token"`; a request without credentials gets a bare `Bearer` (RFC 6750
@@ -84,6 +87,7 @@ export class ApiError extends Error {
   readonly violations: readonly BodyViolation[] | undefined;
   readonly retryAfterS: number | undefined;
   readonly retryAfterMs: number | undefined;
+  readonly quota: QuotaDimension | undefined;
   readonly challenge: string | undefined;
 
   constructor(code: RestCode, detail: string, opts: ApiErrorOptions = {}) {
@@ -97,6 +101,7 @@ export class ApiError extends Error {
         ? undefined
         : Math.max(1, Math.ceil(opts.retryAfterMs / 1000)));
     this.retryAfterMs = opts.retryAfterMs;
+    this.quota = opts.quota;
     this.challenge = opts.challenge;
   }
 }
@@ -131,5 +136,6 @@ export function problemOf(e: ApiError, requestId: string): Record<string, unknow
     requestId,
     ...(e.violations?.length ? { violations: e.violations } : {}),
     ...(e.retryAfterMs !== undefined ? { retryAfterMs: e.retryAfterMs } : {}),
+    ...(e.quota !== undefined ? { quota: e.quota } : {}),
   };
 }

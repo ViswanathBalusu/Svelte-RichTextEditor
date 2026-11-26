@@ -116,6 +116,9 @@ export interface Ack {
   steps?: Step[];
 }
 
+/** The kind of quota a refusal names: the dimensions of the tenant quotas (06 §12; owner decision 110). */
+export type QuotaKind = "connections" | "openDocuments" | "commitRate" | "roomCpuBudget" | "storage" | "exportConcurrency" | "exportMinutes";
+
 /** What the client does next (04 §8). */
 export type RejectAction = "rebase" | "drop" | "reload" | "retry";
 
@@ -136,6 +139,8 @@ export interface SyncReject {
   rule?: string;
   /** How long to wait before retrying. */
   retryAfterMs?: number;
+  /** For `quota_exceeded` and a spent room CPU budget: the kind of quota reached (owner decision 110). */
+  quota?: QuotaKind;
 }
 
 /** Server attribution of a commit (04 G6). */
@@ -245,6 +250,8 @@ export interface ErrorPayload {
   message: string;
   retryable: boolean;
   retryAfterMs?: number;
+  /** For `quota_exceeded` and a spent room CPU budget: the kind of quota reached (owner decision 110). */
+  quota?: QuotaKind;
   /** A fatal error is followed by the matching close code (05 §5.7). */
   fatal: boolean;
   /** The server's versions, in the error before close 4406. */
@@ -329,6 +336,8 @@ export interface ProblemDetails {
   }>;
   /** For `rate_limited` of the access code (FRW-039): how long to wait before retrying; `Retry-After` carries the same wait in whole seconds. */
   retryAfterMs?: number;
+  /** For `quota_exceeded`: the kind of quota reached (owner decision 110). */
+  quota?: QuotaKind;
 }
 
 /** The discovery document at `{endpoint}/.well-known/dep` (05 §2). Every member listed is required; it is the same for every tenant of the endpoint and needs no token (D66). */

@@ -11567,6 +11567,21 @@
           "control"
         ]
       },
+      "QuotaKind": {
+        "title": "QuotaKind",
+        "description": "The kind of quota a refusal names: the dimensions of the tenant quotas (06 §12; owner decision 110).",
+        "$comment": "06 §12; 05 §5.8",
+        "type": "string",
+        "enum": [
+          "connections",
+          "openDocuments",
+          "commitRate",
+          "roomCpuBudget",
+          "storage",
+          "exportConcurrency",
+          "exportMinutes"
+        ]
+      },
       "Author": {
         "title": "Author",
         "description": "Server attribution of a commit (04 G6).",
@@ -11811,6 +11826,14 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "quota": {
+            "description": "For `quota_exceeded`: the kind of quota reached (owner decision 110).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuotaKind"
+              }
+            ]
           }
         },
         "required": [

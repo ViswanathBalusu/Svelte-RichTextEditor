@@ -450,6 +450,7 @@ export class Session {
           action: 'retry',
           head: c.room.head,
           retryAfterMs: adm.retryAfterMs,
+          quota: adm.quota,
         },
       });
       return true;
@@ -463,6 +464,7 @@ export class Session {
         message,
         retryable: true,
         retryAfterMs: adm.retryAfterMs,
+        quota: adm.quota,
         fatal: false,
       },
     });
@@ -541,6 +543,7 @@ export class Session {
             message,
             retryable: true,
             retryAfterMs: admitted.retryAfterMs,
+            quota: admitted.quota,
             fatal: true,
           },
         },
@@ -800,6 +803,7 @@ export class Session {
           message: 'the tenant has reached its open-documents quota',
           retryable: true,
           retryAfterMs: docAdmitted.retryAfterMs,
+          quota: docAdmitted.quota,
           fatal: false,
         },
       });

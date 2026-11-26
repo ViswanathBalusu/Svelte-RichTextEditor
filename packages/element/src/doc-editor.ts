@@ -704,7 +704,7 @@ export class DocEditorElement extends Base {
     this.#clearFailure();
     this.#failure = mountFailure(
       this.#root as unknown as Parameters<typeof mountFailure>[0],
-      failureView(info.code, info.retryAfterMs),
+      failureView(info.code, info.retryAfterMs, undefined, info.quota ?? null),
       (action) => {
         if (action === 'reload-page') location.reload();
         else this.load();

@@ -37,6 +37,8 @@ export class SyncRejectError extends Error implements SyncReject {
   readonly scopes?: W.ScopeId[];
   readonly rule?: string;
   readonly retryAfterMs?: number;
+  /** The kind of quota a quota_exceeded refusal reached (owner decision 110). */
+  readonly quota?: W.QuotaKind;
 
   constructor(reject: SyncReject) {
     super(reject.message);
@@ -48,6 +50,7 @@ export class SyncRejectError extends Error implements SyncReject {
     if (reject.scopes !== undefined) this.scopes = reject.scopes;
     if (reject.rule !== undefined) this.rule = reject.rule;
     if (reject.retryAfterMs !== undefined) this.retryAfterMs = reject.retryAfterMs;
+    if (reject.quota !== undefined) this.quota = reject.quota;
   }
 
   /** The wire payload. */
@@ -62,6 +65,7 @@ export class SyncRejectError extends Error implements SyncReject {
     if (this.scopes !== undefined) out.scopes = this.scopes;
     if (this.rule !== undefined) out.rule = this.rule;
     if (this.retryAfterMs !== undefined) out.retryAfterMs = this.retryAfterMs;
+    if (this.quota !== undefined) out.quota = this.quota;
     return out;
   }
 }

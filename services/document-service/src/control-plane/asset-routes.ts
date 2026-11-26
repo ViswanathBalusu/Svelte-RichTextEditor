@@ -96,7 +96,13 @@ export function assetRoutes(k: Kit): Record<string, Handler> {
           : {}),
       });
     // BE-092 criterion 1: an upload that would take the tenant past its storage quota is refused.
-    await admitStorage(d.quotaSource, ctx.caller.tenant, body.size, (t) => reg.storedBytes(t));
+    await admitStorage(
+      d.quotaSource,
+      ctx.caller.tenant,
+      body.size,
+      (t) => reg.storedBytes(t),
+      d.usagePeaks,
+    );
     const now = d.now();
     const lifetime = d.uploadSeconds ?? 900;
     const id = uuid7(now);

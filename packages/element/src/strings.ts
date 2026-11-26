@@ -37,6 +37,11 @@ export interface FailureStrings {
   quotaTitle: string;
   quotaMessage: string;
   quotaMessageUnknown: string;
+  /** The quota message when the refusal names the kind of quota; {kind} is a phrase of quotaKinds. */
+  quotaKindMessage: string;
+  quotaKindMessageUnknown: string;
+  /** The words for each kind of quota the service names (06 §12; owner decision 110). */
+  quotaKinds: Readonly<Record<string, string>>;
   otherTitle: string;
   otherMessage: string;
   /** The action that asks for the document again. */
@@ -78,6 +83,19 @@ export const EN: Strings = {
       'The quota of this workspace is used up. You can try again in {seconds} seconds, or ask the administrator to raise it.',
     quotaMessageUnknown:
       'The quota of this workspace is used up. Ask the administrator to raise it.',
+    quotaKindMessage:
+      'The {kind} quota of this workspace is used up. You can try again in {seconds} seconds, or ask the administrator to raise it.',
+    quotaKindMessageUnknown:
+      'The {kind} quota of this workspace is used up. Ask the administrator to raise it.',
+    quotaKinds: {
+      connections: 'connections',
+      openDocuments: 'open documents',
+      commitRate: 'saves per minute',
+      roomCpuBudget: 'editing processing time',
+      storage: 'storage',
+      exportConcurrency: 'simultaneous exports',
+      exportMinutes: 'export minutes',
+    },
     otherTitle: 'The document could not be opened',
     otherMessage: 'Something went wrong while opening the document.',
     retry: 'Try again',
