@@ -116,10 +116,37 @@ const body = (doc: string) => ({
   rev: 0,
   timeZone: 'UTC',
   participants: [{ id: 'p1', roles: ['tenant'], kind: 'filler', order: 1, sub: 'sub-p1' }],
+  // The certificate of completion is part of the final PDF (FRW-050), so its facts are in the job.
+  finalisation: { certificate: true },
 });
 
 const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 const RETAIN_MS = 365 * 24 * 3600 * 1000;
+
+/** Whether `pdftotext` (poppler) can be started: the command reads the certificate's text with it. */
+function pdftotextAvailable(): boolean {
+  return spawnSync('pdftotext', ['-v'], { windowsHide: true }).error === undefined;
+}
+
+/**
+ * The lines of the certificate pages that the relying party's command reads, from the job's facts.
+ * The hash is broken over two lines, as a typeset page may break it (the stand-in page is 200 points wide).
+ */
+function certificateLines(facts: unknown): string[] | undefined {
+  const f = facts as
+    | { documentId: string; workflowId: string; completedSeq: number; chainHeadHash: string }
+    | undefined;
+  if (f === undefined) return undefined;
+  return [
+    'Certificate of completion',
+    `Document: ${f.documentId}`,
+    `Workflow: ${f.workflowId}`,
+    `Completed at sequence number ${f.completedSeq}`,
+    'Chain head at completion (SHA-256):',
+    f.chainHeadHash.slice(0, 32),
+    f.chainHeadHash.slice(32),
+  ];
+}
 
 /** What the verification command prints, in the parts this test reads. */
 interface Report {
@@ -127,6 +154,13 @@ interface Report {
   anchorMatches: boolean | null;
   evidence: { evidenceInChain: string[]; failedEvidence: string[] };
   seal: { ok: boolean; signatures: unknown[] };
+  certificate: {
+    status: string;
+    completedSeq: number | null;
+    chainHead: string | null;
+    bundleHead: string | null;
+    problems: string[];
+  };
 }
 
 for (const storage of ['memory', 'postgres'] as Storage[]) {
@@ -146,7 +180,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     const sealed = new MemorySealedPdfStore();
     const anchors = new MemoryAnchorStore();
     const clients: DepClient[] = [];
-    const input = classicPdf();
+    /** The stand-in compile's PDF of each document: the certificate pages are drawn from the job's facts. */
+    const compiled = new Map<string, Uint8Array>();
     const jobs: Array<{ id: string; payload: Record<string, unknown> }> = [];
     const logged: LogFields[] = [];
     const sleeps: number[] = [];
@@ -201,6 +236,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           export: async (job, ctx) => {
             await ctx.report('compiling', 50);
             jobs.push({ id: job.id, payload: job.payload });
+            const input = classicPdf(certificateLines(job.payload['certificate']));
+            compiled.set(String(job.payload['doc']), input);
             await h.parts.objects.put(
               objectKeys.exportFile(job.tenant, job.id, 'output.pdf'),
               input,
@@ -305,6 +342,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const stored = await sealed.read(w.ref.tenant, w.doc, w.workflowId);
         expect(stored).not.toBeNull();
         const pdf = stored!.bytes;
+        const input = compiled.get(w.doc)!;
         expect(Buffer.from(pdf.subarray(0, input.length)).equals(Buffer.from(input))).toBe(true);
         const reports = verifyWithOpenssl(pdf, pki);
         expect(reports).toHaveLength(1);
@@ -452,6 +490,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         await waitFor('finalised', async () => (await stateOf(w.ref)) === 'finalised');
         const pdf = (await sealed.read(w.ref.tenant, w.doc, w.workflowId))!.bytes;
         const text = Buffer.from(pdf).toString('latin1');
+        const input = compiled.get(w.doc)!;
         // The compile's bytes are the first bytes; the stamp follows, inside the rectangle of the layout.
         expect(Buffer.from(pdf.subarray(0, input.length)).equals(Buffer.from(input))).toBe(true);
         expect(text.match(/\/Subtype \/Stamp/g)).toHaveLength(1);
@@ -731,7 +770,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       },
       300_000,
     );
-    it.skipIf(skip !== null)(
+    it.skipIf(skip !== null || !pdftotextAvailable())(
       'a third party with only the bundle, the sealed PDF, the anchor file and the root verifies them with the command (FRW-055 criterion 2)',
       async () => {
         authority.current = new HttpTimestampAuthority(tsa.url);
@@ -747,7 +786,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const dir = mkdtempSync(join(tmpdir(), 'frw055-'));
         try {
           const root = resolve(import.meta.dirname, '../../..', '..');
-          const run = (bundleText: string, pdfBytes: Uint8Array) => {
+          const run = (bundleText: string, pdfBytes: Uint8Array, extra: string[] = []) => {
             writeFileSync(join(dir, 'bundle.json'), bundleText);
             writeFileSync(join(dir, 'sealed.pdf'), pdfBytes);
             writeFileSync(join(dir, 'anchor.json'), JSON.stringify(anchor));
@@ -761,6 +800,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
                 pki.rootPem,
                 '--anchor',
                 join(dir, 'anchor.json'),
+                ...extra,
               ],
               { cwd: root, encoding: 'utf8', windowsHide: true },
             );
@@ -770,6 +810,65 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           expect(good.code, JSON.stringify(good.report)).toBe(0);
           expect(good.report.status).toBe('intact');
           expect(good.report.anchorMatches).toBe(true);
+          // The certificate pages of the sealed PDF name the bundle's chain head at completion.
+          const parsed = JSON.parse(bundle.text) as {
+            log: { commits: Array<{ hash: string; meta: { seq: number } }> };
+          };
+          const job = jobs.find((j) => j.payload['doc'] === w.doc)!;
+          const atCompletion = parsed.log.commits.find((c) => c.meta.seq === job.payload['seq']);
+          expect(good.report.certificate).toMatchObject({
+            status: 'matches',
+            completedSeq: job.payload['seq'],
+            chainHead: atCompletion!.hash,
+            bundleHead: atCompletion!.hash,
+            problems: [],
+          });
+
+          // The certificate is left out on request, and then the report says so.
+          const left = run(bundle.text, pdf, ['--skip-certificate']);
+          expect(left.code).toBe(0);
+          expect(left.report.certificate.status).toBe('skipped');
+
+          // The sealed PDF of another workflow: its certificate is not this bundle's, and the
+          // command fails and says which fact differs (the seal itself is valid).
+          const other = await complete();
+          await waitFor('finalised', async () => (await stateOf(other.ref)) === 'finalised');
+          const otherPdf = (await sealed.read(other.ref.tenant, other.doc, other.workflowId))!
+            .bytes;
+          const wrong = run(bundle.text, otherPdf);
+          expect(wrong.code).toBe(1);
+          expect(wrong.report.seal.ok).toBe(true);
+          expect(wrong.report.certificate.status).toBe('differs');
+          expect(wrong.report.certificate.problems).toEqual(
+            expect.arrayContaining([
+              "the certificate's chain head is not the bundle's hash at " +
+                String(wrong.report.certificate.completedSeq),
+              'the certificate names another document',
+              'the certificate names another workflow',
+            ]),
+          );
+
+          // A PDF with no certificate pages: absent, and the command fails.
+          const plain = run(bundle.text, classicPdf());
+          expect(plain.code).toBe(1);
+          expect(plain.report.certificate.status).toBe('absent');
+
+          // No tool to read the text: the command stops, and says what to do (exit 3).
+          const noTool = spawnSync(
+            process.execPath,
+            [
+              'services/signing-service/scripts/verify-final.ts',
+              join(dir, 'bundle.json'),
+              join(dir, 'sealed.pdf'),
+              '--root',
+              pki.rootPem,
+              '--pdftotext',
+              join(dir, 'no-such-tool'),
+            ],
+            { cwd: root, encoding: 'utf8', windowsHide: true },
+          );
+          expect(noTool.status).toBe(3);
+          expect(noTool.stdout).toContain('--skip-certificate');
           expect(good.report.evidence.evidenceInChain.length).toBeGreaterThan(0);
           expect(good.report.seal.signatures.length).toBeGreaterThan(0);
 
