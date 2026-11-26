@@ -2411,6 +2411,8 @@ As an author, I want each line drawn exactly where the engine put it, so that wh
 
 **Notes (lane w1, 2026-11-26):** Nothing new ticked. Criterion 3 (sharp at any zoom) has no browser run, and the assistive-technology reading is FE-099 (open). Criterion 4 stays open: decisions 26 and 29 say nothing on kerning, and no owner decision or ADR settles the measurer pin, so that choice is still open (see the Fix paragraph above).
 
+Machine check (lane w1, 2026-11-26): this machine matches reference-1 of ADR 0037 section 1, which does not change criterion 4, whose open question is the measurer pin (a spec or owner decision, not a measurement). Criterion 3 (sharp at any zoom) is a browser run that could be made here; none was made in this lane.
+
 ### FE-091 Justify with computed word spacing
 
 | Type | Phase | Size | Priority | Persona |
