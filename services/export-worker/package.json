@@ -15,6 +15,7 @@
   "dependencies": {
     "@docedit/authority": "workspace:*",
     "@docedit/document-service": "workspace:*",
+    "@docedit/export-docx": "workspace:*",
     "@docedit/export-latex": "workspace:*",
     "@docedit/model": "workspace:*"
   }

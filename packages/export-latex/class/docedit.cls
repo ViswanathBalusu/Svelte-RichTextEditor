@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-26 v0.2.19 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-26 v0.2.20 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -217,10 +217,12 @@
   \directlua{docedit.fallback("#1", "\DE@renderer")}%
   \def\DE@fallbackopt{, RawFeature={fallback=docedit}}}
 % \DEdeffamily{n}{line height x1000}{regular}{bold}{italic}{bold italic}
+% The family's directory is the image's, or tenant-fonts/ of the job when its file is there (EXP-048).
 \newcommand*\DEdeffamily[6]{%
+  \edef\DE@famfontpath{\directlua{docedit.fontpath_of("#3")}}%
   \edef\DE@tmp{%
     \noexpand\newfontfamily\expandafter\noexpand\csname DE@fam@#1\endcsname{#3}[%
-      Path=\DE@fontpath, BoldFont=#4, ItalicFont=#5, BoldItalicFont=#6,
+      Path=\DE@famfontpath, BoldFont=#4, ItalicFont=#5, BoldItalicFont=#6,
       Ligatures=TeXOff, Renderer=\DE@renderer\DE@fallbackopt]}%
   \DE@tmp
   \expandafter\chardef\csname DE@lh@#1\endcsname=#2\relax}

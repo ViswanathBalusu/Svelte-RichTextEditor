@@ -26,6 +26,8 @@ import {
   htmlText,
   readCertificateFacts,
   markdownText,
+  mathGateReason,
+  settleSuggestions,
   tar,
   texArchive,
   type CertificateFacts,
@@ -43,6 +45,7 @@ import {
   type JobRecord,
 } from '@docedit/document-service';
 import { project, type HiddenSet } from '@docedit/authority';
+import { writeDocx } from '@docedit/export-docx';
 import type { CdmEnvelope } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { buildBundle, classFiles } from './bundle-io.ts';
@@ -50,6 +53,7 @@ import { imageDigest as readImageDigest, imageId as readImageId } from './contai
 import { chainHeadOf, contentAt, documentLang, type ContentStores } from './content.ts';
 import { diagnostic, LOG_LIMITS, parseLog, type ParsedLog } from './diagnostics.ts';
 import type { FontFileCheck } from './font-files.ts';
+import { tenantFonts as loadTenantFonts, type TenantFontSource } from './tenant-fonts.ts';
 import { buildLayout, parseRawLayout, validateLayout, type LayoutJson } from './layout.ts';
 import {
   compileBoth,
@@ -106,7 +110,7 @@ export type ExportAttemptState = 'completed' | 'failed' | 'aborted';
 export interface ExportMetrics {
   /** How the attempt ended. */
   state: ExportAttemptState;
-  /** The job's target: `pdf`, `tex`, `cdm`, `html` or `md` (or the refused value, cut to 20 characters). */
+  /** The job's target: `pdf`, `tex`, `docx`, `cdm`, `html` or `md` (or the refused value, cut to 20 characters). */
   target: string;
   /** From the job's creation to the start of this attempt, ms. */
   queueWaitMs: number;
@@ -143,6 +147,12 @@ export interface ExportHandlerDeps {
    * reports a problem the job fails before conversion, and no other font is used. Absent: not checked.
    */
   checkFontFiles?: (manifest: FontManifest) => Promise<FontFileCheck>;
+  /**
+   * The fonts tenants added (tenant-fonts.ts; EXP-048). A job asks for its own tenant only, so a
+   * font of another tenant is neither in its manifest nor among the files it compiles with. Absent:
+   * the job has the image's fonts only.
+   */
+  tenantFonts?: TenantFontSource;
   /** The compile; the sandbox by default. Tests replace it. */
   compile?: (
     files: Readonly<Record<string, string | Uint8Array>>,
@@ -205,6 +215,20 @@ export const HTML_ARCHIVE_FILE = 'output.tar';
 
 /** The file of the `md` target under the job's prefix (EXP-088). */
 export const MD_OUTPUT_FILE = 'output.md';
+
+/** The file of the `docx` target under the job's prefix (EXP-090). */
+export const DOCX_OUTPUT_FILE = 'output.docx';
+const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/** A picture as the DOCX writer's asset source gives it (`Asset` of `@docedit/export-docx`). */
+interface DocxAsset {
+  readonly id: string;
+  readonly bytes: Uint8Array;
+  readonly contentType: string;
+  readonly sha256: string;
+  readonly role: 'image';
+  readonly serverOnly: false;
+}
 
 /** The file of the `tex` target under the job's prefix: the bundle as one archive (EXP-085). */
 export const TEX_OUTPUT_FILE = 'source.tar';
@@ -462,11 +486,12 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       payload.target !== 'cdm' &&
       payload.target !== 'tex' &&
       payload.target !== 'html' &&
-      payload.target !== 'md'
+      payload.target !== 'md' &&
+      payload.target !== 'docx'
     )
       throw new JobFailure(
         'validation_failed',
-        `this worker exports pdf, tex, cdm, html and md, not ${payload.target.slice(0, 20)}`,
+        `this worker exports pdf, tex, docx, cdm, html and md, not ${payload.target.slice(0, 20)}`,
       );
     // The control plane keys cached results by the class version (EXP-006): a worker with another
     // class leaves the job to one that has it.
@@ -690,6 +715,122 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       return mdOut as unknown as Record<string, unknown>;
     }
 
+    // The DOCX target (09 §11; EXP-090): the direct writer of `@docedit/export-docx` reads the
+    // projected envelope and writes the package; no TeX, no font file and no sandbox are used. The
+    // writer's warnings, one for each construct it approximates or leaves out, are the job's
+    // warnings (criterion 5). Suggestions are settled here with the same rule and the same
+    // permission as the other targets, so a requester who may not accept a deletion does not get it
+    // accepted; with `markup` the writer writes them as tracked changes. A document imported from
+    // Word is written from the CDM like any other: the preservation layer needs the original
+    // package, which the job does not read (EXP-118; see the story's Notes).
+    if (payload.target === 'docx') {
+      const docxContent = await contentAt(
+        deps.stores,
+        { tenant, doc: payload.doc },
+        payload.incarnation,
+        payload.seq,
+      );
+      stopIfCancelled(ctx);
+      const docxEnvelope = projectedEnvelope(docxContent.envelope, payload);
+      const docxPlan = planJob(payload.options, documentLang(docxEnvelope));
+      if (!docxPlan.ok)
+        throw failed(
+          'validation_failed',
+          'an export option cannot be honoured',
+          docxPlan.diagnostics,
+        );
+      const docxChainHead = await chainHeadOf(
+        deps.stores,
+        { tenant, doc: payload.doc },
+        payload.seq,
+      );
+      const docxFonts = await deps.fonts();
+      const settledDiagnostics: Diagnostic[] = [];
+      const settledDoc =
+        docxPlan.plan.suggestions === 'markup'
+          ? docxEnvelope.doc
+          : (settleSuggestions(
+              docxEnvelope.doc as never,
+              docxPlan.plan.suggestions,
+              settledDiagnostics,
+              payload.suggestionAccess ?? undefined,
+            ) as unknown as CdmEnvelope['doc']);
+      // The pictures, as the html target reads them: by hash, checked against it. A picture whose
+      // bytes are missing or do not match is left out, and the writer names it in its warnings.
+      const pictures = new Map<string, DocxAsset>();
+      const pictureProblems: Diagnostic[] = [];
+      if (deps.assetBytes) {
+        for (const [id, a] of Object.entries(payload.assets)) {
+          if (HTML_PICTURES[a.mediaType] === undefined) continue;
+          const bytes = await deps.assetBytes(tenant, a.sha256);
+          if (bytes === null || sha256(bytes) !== a.sha256) {
+            pictureProblems.push({
+              severity: 'warning',
+              code: 'image_asset_missing',
+              blockId: null,
+              message: `the bytes of a picture (asset ${id.slice(0, 40).replace(/[^A-Za-z0-9_-]/g, '')}) are not in the store or do not match their hash; it is left out`,
+            });
+            continue;
+          }
+          pictures.set(id, {
+            id,
+            bytes,
+            contentType: a.mediaType,
+            sha256: a.sha256,
+            role: 'image',
+            serverOnly: false,
+          });
+        }
+        stopIfCancelled(ctx);
+      }
+      let written;
+      try {
+        written = await writeDocx(
+          { ...docxEnvelope, doc: settledDoc } as unknown as Parameters<typeof writeDocx>[0],
+          { get: (id) => pictures.get(id) },
+          {
+            suggestions: 'markup',
+            instant: new Date(job.createdAt).toISOString(),
+            timeZone: docxPlan.plan.timeZone,
+            ...(docxContent.title !== null ? { title: docxContent.title } : {}),
+            classification: docxContent.classification,
+            defaultFont: docxFonts.defaultFamily,
+            // The math gate of EXP-049, the same one the PDF's converter uses (EXP-096).
+            mathGate: (latex, display) => mathGateReason(latex, display),
+          },
+        );
+      } catch (e) {
+        throw failed('unsupported_feature', 'the DOCX writer cannot write this document', [
+          diagnostic('docx_writer_failed', null, e instanceof Error ? e.message : String(e)),
+        ]);
+      }
+      const docxDiagnostics: Diagnostic[] = [
+        ...docxPlan.plan.diagnostics,
+        ...settledDiagnostics,
+        ...pictureProblems,
+        ...written.warnings.map((w) => diagnostic('docx_approximation', null, w)),
+      ];
+      stopIfCancelled(ctx);
+      await ctx.report('converting', 50);
+      await deps.outputs.putExport(
+        tenant,
+        job.id,
+        DOCX_OUTPUT_FILE,
+        written.bytes,
+        DOCX_CONTENT_TYPE,
+      );
+      const docxOut: ExportOutputs = {
+        output: DOCX_OUTPUT_FILE,
+        pages: null,
+        layout: null,
+        converged: null,
+        log: null,
+        diagnostics: dedupe(docxDiagnostics),
+        chainHead: docxChainHead,
+      };
+      return docxOut as unknown as Record<string, unknown>;
+    }
+
     const t0 = now();
     const {
       envelope: fullEnvelope,
@@ -714,9 +855,9 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
 
     const t1 = now();
     const digest = await readDigest(image);
-    const fonts = await deps.fonts();
+    const imageFonts = await deps.fonts();
     if (deps.checkFontFiles) {
-      const check = await deps.checkFontFiles(fonts);
+      const check = await deps.checkFontFiles(imageFonts);
       if (!check.ok)
         throw failed(
           'unavailable',
@@ -724,6 +865,12 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
           check.problems.map((p) => diagnostic(p.code, null, `${p.family}, ${p.face}: ${p.file}`)),
         );
     }
+    // The tenant's own fonts join the manifest of this job, and their files go with the compile.
+    const tenantSet = deps.tenantFonts
+      ? await loadTenantFonts(deps.tenantFonts, tenant, imageFonts)
+      : null;
+    const fonts = tenantSet ? tenantSet.manifest : imageFonts;
+    const tenantFontFiles = tenantSet ? tenantSet.files : {};
     // The manifest names the chain head of the exported state (HIS-034 criterion 3).
     const pdfChainHead = await chainHeadOf(deps.stores, { tenant, doc: payload.doc }, payload.seq);
     // The bundle is written with the class pinned when the handler started, the same bytes
@@ -760,7 +907,11 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       pinned.classFiles,
     );
     m.convertMs = now() - t1;
-    const diagnostics: Diagnostic[] = [...plan.diagnostics, ...bundle.diagnostics];
+    const diagnostics: Diagnostic[] = [
+      ...plan.diagnostics,
+      ...(tenantSet ? tenantSet.diagnostics : []),
+      ...bundle.diagnostics,
+    ];
     // Counted from the converter's own list, one per occurrence, before `dedupe` joins the equal
     // diagnostics of two pictures in one block (09 §13; EXP-113 criterion 2).
     const imagesWithoutAlt = bundleAltTextReport(bundle).count;
@@ -856,7 +1007,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     let allPasses: CompileResult['passes'];
     if (payload.sealing) {
       const [first, second] = await compileBoth(
-        { ...bundle.files, ...assets },
+        { ...bundle.files, ...assets, ...tenantFontFiles },
         compileOptions,
         compile,
       );
@@ -865,7 +1016,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       wallMs = first.wallMs + second.wallMs;
       allPasses = [...first.passes, ...second.passes];
     } else {
-      r = await compile({ ...bundle.files, ...assets }, compileOptions);
+      r = await compile({ ...bundle.files, ...assets, ...tenantFontFiles }, compileOptions);
       wallMs = r.wallMs;
       allPasses = r.passes;
     }

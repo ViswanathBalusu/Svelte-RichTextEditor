@@ -716,6 +716,9 @@ importers:
       '@docedit/document-service':
         specifier: workspace:*
         version: link:../document-service
+      '@docedit/export-docx':
+        specifier: workspace:*
+        version: link:../../packages/export-docx
       '@docedit/export-latex':
         specifier: workspace:*
         version: link:../../packages/export-latex

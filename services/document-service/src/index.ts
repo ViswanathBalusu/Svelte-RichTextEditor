@@ -94,6 +94,8 @@ export {
   type ObjectStore,
 } from './objects/store.ts';
 export { S3ObjectStore, type S3Settings } from './objects/s3.ts';
+export { PgTenantFontStore } from './control-plane/tenant-fonts-pg.ts';
+export { MemoryTenantFontStore, type TenantFontRow } from './control-plane/tenant-fonts.ts';
 export { ObjectCheckpointStore, ObjectAssetStore } from './objects/checkpoints.ts';
 export { ADAPTER_INTERFACES } from './adapters.ts';
 export type { AssetStore, Queue, TokenVerifier } from './adapters.ts';

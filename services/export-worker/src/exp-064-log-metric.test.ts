@@ -157,7 +157,7 @@ describe('EXP-064 criterion 6: the log size of every job that ends', () => {
 
   it('records a zero log size for a job that fails before any compile runs', async () => {
     const h = harness(failingCompile('unused'));
-    const job = await h.run({ target: 'docx' });
+    const job = await h.run({ target: 'rtf' });
     expect(job.state).toBe('failed');
     expect(h.metrics).toHaveLength(1);
     expect(h.metrics[0]!.logBytes).toBe(0);

@@ -33,8 +33,11 @@ function header(name: string, size: number, mtime: number): Uint8Array {
   return h;
 }
 
-/** Names a bundle may hold: plain names, and assets named by hash in `assets/` (09 §2). */
-const NAME = /^(assets\/)?[A-Za-z0-9_-][A-Za-z0-9_.-]*$/;
+/**
+ * Names a bundle may hold: plain names, assets named by hash in `assets/` (09 §2), and a tenant's
+ * font files named by hash in `tenant-fonts/` (EXP-048).
+ */
+const NAME = /^(assets\/|tenant-fonts\/)?[A-Za-z0-9_-][A-Za-z0-9_.-]*$/;
 
 /** A tar archive of the given files, in the given order, with a fixed modification time. */
 export function writeTar(

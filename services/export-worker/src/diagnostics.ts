@@ -35,6 +35,10 @@ export const CODES = {
     message: 'A font file does not hash to the name the manifest gives it.',
   },
   overfull_line: { severity: 'warning', message: 'A line is wider than its column.' },
+  tenant_font_unavailable: {
+    severity: 'warning',
+    message: 'A font the tenant added is not used in this export.',
+  },
   field_too_wide: {
     severity: 'warning',
     message: 'The value of a form field is wider than the field.',
@@ -97,6 +101,14 @@ export const CODES = {
   seal_pin_mismatch: {
     severity: 'error',
     message: 'The bundle is not the state the sealing export is pinned to; nothing was compiled.',
+  },
+  docx_approximation: {
+    severity: 'warning',
+    message: 'The DOCX writer approximated or left out a construct of the document.',
+  },
+  docx_writer_failed: {
+    severity: 'error',
+    message: 'The DOCX writer could not write the document.',
   },
   seal_pair_differs: {
     severity: 'error',

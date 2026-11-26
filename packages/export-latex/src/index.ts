@@ -37,6 +37,7 @@ export type {
   SuggestionAccess,
   Tagging,
 } from './bundle.ts';
+export { settleSuggestions } from './suggestions.ts';
 export { mathGate, mathGateReason, scanMath, MATH_LIMITS, DIMENSION_BOUNDS } from './math/gate.ts';
 export type { GateResult } from './math/gate.ts';
 export { ALLOW_LIST } from './math/allow-list.ts';
@@ -85,3 +86,11 @@ export type { AltTextReport } from './alt-report.ts';
 
 /** File names of the house class inside `class/`, in the order the bundle lists them. */
 export const CLASS_FILES = ['docedit.cls', 'docedit.lua'] as const;
+
+export {
+  DIAGNOSTIC_CODES,
+  DIAGNOSTIC_CODE_PATTERNS,
+  type DiagnosticCode,
+  type DiagnosticCodeInfo,
+  type PlainCode,
+} from './diagnostic-codes.ts';

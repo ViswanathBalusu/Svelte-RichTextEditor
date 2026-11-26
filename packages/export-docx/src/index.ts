@@ -13,6 +13,8 @@ export type {
   ImportReportItem,
   TreeStat,
 } from './import.ts';
+export { writeDocx, MATH_PLACEHOLDER } from './writer.ts';
+export type { WriteOptions, WriteResult } from './writer.ts';
 export { exportDocx, ExportError, relativeTarget } from './export.ts';
 export type { AssetSource, ExportResult, ExportOptions, PartOutcome } from './export.ts';
 export {
