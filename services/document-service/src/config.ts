@@ -191,6 +191,12 @@ export interface SealingSettings {
   delaysMs: number[];
   /** How long the stored sealed bytes are retained, days from the seal. */
   retentionDays: number;
+  /**
+   * The renewal of time-stamps before they expire (FRW-056; BE-052). Null unless both
+   * `DOCEDIT_SEAL_RENEW_LEAD_DAYS` and `DOCEDIT_SEAL_RENEW_CLAIM_MS` are set: the spec gives no
+   * figures, so there is no default and nothing is scheduled without them.
+   */
+  renewal: { leadMs: number; claimMs: number } | null;
 }
 
 /** The settings of the webhook dispatcher and its egress proxy (server.ts composes them). */
@@ -357,6 +363,15 @@ function sealingSettings(env: NodeJS.ProcessEnv): SealingSettings | null {
     attempts: num('DOCEDIT_SEAL_ATTEMPTS', 1),
     delaysMs: delays,
     retentionDays: num('DOCEDIT_SEAL_RETENTION_DAYS', 1),
+    renewal: (() => {
+      const lead = env['DOCEDIT_SEAL_RENEW_LEAD_DAYS'];
+      const claim = env['DOCEDIT_SEAL_RENEW_CLAIM_MS'];
+      if ((lead ?? '') === '' && (claim ?? '') === '') return null;
+      return {
+        leadMs: num('DOCEDIT_SEAL_RENEW_LEAD_DAYS', 1) * 24 * 60 * 60 * 1000,
+        claimMs: num('DOCEDIT_SEAL_RENEW_CLAIM_MS', 1),
+      };
+    })(),
   };
 }
 

@@ -68,6 +68,10 @@ describe.skipIf(unavailable !== null)('schema (PostgreSQL)', () => {
         'retired_regions',
         'search_entries',
         'search_tokens',
+        // Tenant fonts (0099, BE-048), tenant settings (0100, BE-051), the secret store (0101, BE-057).
+        'tenant_fonts',
+        'tenant_settings',
+        'secret_store',
         // The control plane (migrations 0004 to 0006, packet A2).
         'tenants',
         'tenant_keys',
@@ -280,11 +284,11 @@ describe.skipIf(unavailable !== null)('schema (PostgreSQL)', () => {
     // 11 tables of the storage layer, 7 of the control plane (0004 to 0006, packet A2), 3 of the
     // control plane's phase 1b (0040 to 0042, packet C), 5 of phase 1b packet A (0030 to 0033) and
     // 14 of migrations 0050 to 0070, 3 of migrations 0074 and 0075 (commit_tombstones, document_keys
-    // and tenant_document_keys), 2 of migration 0086 (search_entries and search_tokens), 1 of 0076 (workflow_reminders), 1 of 0077 (workflow_access_codes), 1 of 0092 (home_regions), 1 of 0093 (document_templates), 1 of 0094 (history_visibility_settings), 1 of 0096 (doc_sessions), 1 of 0097 (commit_cold_segments), 2 of 0098 (head_anchors and anchored_heads); the 64 hash partitions of each log table (0002) and the 5
+    // and tenant_document_keys), 2 of migration 0086 (search_entries and search_tokens), 1 of 0076 (workflow_reminders), 1 of 0077 (workflow_access_codes), 1 of 0092 (home_regions), 1 of 0093 (document_templates), 1 of 0094 (history_visibility_settings), 1 of 0096 (doc_sessions), 1 of 0097 (commit_cold_segments), 2 of 0098 (head_anchors and anchored_heads), 3 of 0099 to 0101 (tenant_fonts, tenant_settings and secret_store); the 64 hash partitions of each log table (0002) and the 5
     // monthly partitions of audit_events that migration 0031 creates (the month before, this
     // month and the coming three).
     expect(rows.length).toBe(
-      11 + 7 + 3 + 5 + 14 + 3 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 2 + 2 * 64 + 5,
+      11 + 7 + 3 + 5 + 14 + 3 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 2 + 3 + 2 * 64 + 5,
     );
     // A table in TENANT_EXEMPT holds no tenant data (node_leases, 0033: a lease names a node). It
     // must really have no tenant_id, so that the exemption cannot hide a tenant table. Whether the

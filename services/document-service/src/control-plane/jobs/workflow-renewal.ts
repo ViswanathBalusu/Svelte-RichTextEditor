@@ -21,7 +21,8 @@ import {
   type RenewalState,
 } from '@docedit/authority';
 import { JobFailure, type JobHandler } from './runner.ts';
-import type { JobRecord } from './queue.ts';
+import type { JobRecord, NewJob } from './queue.ts';
+import type { ScheduledTask } from '../scheduler.ts';
 
 export const RENEWAL_KIND = 'workflow.renewal';
 
@@ -39,6 +40,65 @@ export function renewalJobId(doc: string, expiryMs: number): string {
  */
 export type RenewalClaim =
   { readonly claimed: true } | { readonly claimed: false; readonly heldUntilMs: number | null };
+
+/** The chains of a tenant whose newest time-stamp expires soon (BE-052: what the scheduler scans). */
+export interface RenewalDueSource {
+  /**
+   * The documents whose newest time-stamp expires after `fromMs` and no later than `toMs`, oldest
+   * expiry first, at most `limit`. A chain that has already expired is not listed: its renewal job
+   * ends in `expired` with an alert, and listing it every run would crowd out the others.
+   */
+  listDue(
+    tenant: string,
+    fromMs: number,
+    toMs: number,
+    limit: number,
+  ): Promise<readonly { readonly doc: string; readonly expiresAtMs: number }[]>;
+}
+
+/** The queue's side of the scheduling task: one job for one expiry (`ifAbsent`). */
+export interface RenewalEnqueuer {
+  enqueue(tenant: string, job: NewJob): Promise<unknown>;
+}
+
+/** Documents scanned for one tenant in one run; the next run takes the rest. */
+const SCAN_LIMIT = 500;
+
+/**
+ * The scheduled task that finds the sealed documents whose newest time-stamp expires within the
+ * lead time and enqueues one `workflow.renewal` job for each expiry (FRW-056 criterion 2; BE-052
+ * criterion 2). The job is keyed by document and expiry and enqueued only if absent, so any number
+ * of scans, on any number of instances, make one job for one expiry. The renewal itself, and its
+ * retries and alert, are `renewalHandler`.
+ */
+export function renewalScheduleTask(opts: {
+  source: RenewalDueSource;
+  queue: RenewalEnqueuer;
+  /** The lead time before the expiry at which renewal starts: the setting of `renewalHandler`. */
+  leadMs: number;
+  /** How often the scan runs, ms. */
+  everyMs?: number;
+}): ScheduledTask {
+  if (!Number.isSafeInteger(opts.leadMs) || opts.leadMs <= 0)
+    throw new RangeError('leadMs must be a positive safe integer of milliseconds');
+  return {
+    name: 'workflow.renewal.schedule',
+    everyMs: opts.everyMs ?? 60 * 60 * 1000,
+    forTenant: async (tenant, now) => {
+      const due = await opts.source.listDue(tenant, now, now + opts.leadMs, SCAN_LIMIT);
+      for (const d of due)
+        await opts.queue.enqueue(tenant, {
+          id: renewalJobId(d.doc, d.expiresAtMs),
+          kind: RENEWAL_KIND,
+          doc: d.doc,
+          payload: { expiry: d.expiresAtMs },
+          createdBy: 'system',
+          ifAbsent: true,
+        });
+      return due.length;
+    },
+  };
+}
 
 /** The newest expiry of a sealed document's time-stamp chain, kept by the workflow service. */
 export interface RenewalStore {

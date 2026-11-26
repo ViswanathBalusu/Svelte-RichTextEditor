@@ -71,6 +71,20 @@ export const objectKeys = {
     if (!SAFE_SEGMENT.test(tag)) throw new RangeError('a set-aside tag is one safe segment');
     return `${objectKeys.prefix(tenant)}docs/${doc}/aside/${tag}/${seqText(seq)}.cdm.json.zst`;
   },
+  /** The prefix of a document's cold segments (HIS-029). */
+  segments(tenant: string, doc: string): string {
+    assertUuid(doc, 'document');
+    return `${objectKeys.prefix(tenant)}docs/${doc}/segments/`;
+  },
+  /**
+   * Where a cold segment goes when it is set aside (BE-078: a log rewound by a database recovery),
+   * beside the checkpoints of the same `tag`, outside the segments prefix so that no read finds it.
+   */
+  segmentAside(tenant: string, doc: string, fromSeq: number, toSeq: number, tag: string): string {
+    assertUuid(doc, 'document');
+    if (!SAFE_SEGMENT.test(tag)) throw new RangeError('a set-aside tag is one safe segment');
+    return `${objectKeys.prefix(tenant)}docs/${doc}/aside/${tag}/segments/${seqText(fromSeq)}-${seqText(toSeq)}.payloads.zst`;
+  },
   segment(tenant: string, doc: string, fromSeq: number, toSeq: number): string {
     assertUuid(doc, 'document');
     if (toSeq < fromSeq) throw new RangeError('a segment ends at or after its start');
