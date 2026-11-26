@@ -16,24 +16,12 @@ import {
   type LogVerifier,
 } from './tlog.ts';
 
-export const LOG_RECEIPT_FORMAT = 'docedit-log-receipt/1';
+import { LOG_RECEIPT_FORMAT, type PublicLogReceipt } from '@docedit/history';
+
+export { LOG_RECEIPT_FORMAT };
 
 /** What a log gives back for an entry: where it stands and a signed checkpoint that covers it. */
-export interface LogReceipt {
-  format: typeof LOG_RECEIPT_FORMAT;
-  /** The log's identifier: the origin line of its checkpoints. */
-  logId: string;
-  /** The entry's position in the log. */
-  index: number;
-  /** The size of the tree the proof and the checkpoint are for. */
-  size: number;
-  /** The leaf hash of the entry, lower-case hexadecimal. */
-  leafHash: string;
-  /** The inclusion proof of the leaf in the tree of `size`, lower-case hexadecimal hashes. */
-  proof: string[];
-  /** The signed checkpoint, a signed note. */
-  checkpoint: string;
-}
+export type LogReceipt = PublicLogReceipt;
 
 export interface TransparencyLog {
   /** The log's identifier, as in `LogReceipt.logId`. */

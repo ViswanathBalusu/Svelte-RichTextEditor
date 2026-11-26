@@ -218,6 +218,8 @@ export {
   type PathStep,
 } from './head-anchor.ts';
 export {
+  LOG_RECEIPT_FORMAT,
+  PUBLIC_ANCHOR_FORMAT,
   PUBLIC_ROOT_FORMAT,
   PUBLIC_ROOT_MEMBERS,
   PUBLIC_SALT_BYTES,
@@ -227,6 +229,8 @@ export {
   publicLeaf,
   publicRootProof,
   verifyPublicRootProof,
+  type PublicAnchorEvidence,
+  type PublicLogReceipt,
   type PublicRoot,
   type PublicRootEntry,
   type PublicRootProof,

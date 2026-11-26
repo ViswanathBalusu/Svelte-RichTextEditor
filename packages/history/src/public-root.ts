@@ -227,3 +227,45 @@ export function parsePublicEntry(text: string): HistoryResult<{ entry: PublicRoo
     return refuse('validation_failed', 'the entry is not in its canonical form');
   return { ok: true, entry };
 }
+
+/** The format name of the receipt a transparency log gives for an entry. */
+export const LOG_RECEIPT_FORMAT = 'docedit-log-receipt/1';
+
+/** What a log gives back for an entry: where it stands and a signed checkpoint that covers it. */
+export interface PublicLogReceipt {
+  format: typeof LOG_RECEIPT_FORMAT;
+  /** The log's identifier: the origin line of its checkpoints. */
+  logId: string;
+  /** The entry's position in the log. */
+  index: number;
+  /** The size of the tree the proof and the checkpoint are for. */
+  size: number;
+  /** The leaf hash of the entry (RFC 6962), lower-case hexadecimal. */
+  leafHash: string;
+  /** The inclusion proof of the leaf in the tree of `size`, lower-case hexadecimal hashes. */
+  proof: string[];
+  /** The signed checkpoint, a signed note. */
+  checkpoint: string;
+}
+
+/** The format name of one piece of public anchor evidence. */
+export const PUBLIC_ANCHOR_FORMAT = 'docedit-public-anchor/1';
+
+/**
+ * What a relying party is given to check one head against the public log (SEC-067): the public
+ * entry, the log's receipt for it (null while the root is not yet in the log), and the head with the
+ * tenant's salt and the inclusion path. The salt is handed over with the proof (ADR 0409 decision 2);
+ * it is a value of the tenant and is never part of the public entry.
+ */
+export interface PublicAnchorEvidence {
+  format: typeof PUBLIC_ANCHOR_FORMAT;
+  doc: string;
+  /** The public entry text the root was sent as. */
+  entry: string;
+  receipt: PublicLogReceipt | null;
+  saltVersion: number;
+  /** The salt, lower-case hexadecimal. */
+  salt: string;
+  head: SaltedHead;
+  path: PathStep[];
+}
