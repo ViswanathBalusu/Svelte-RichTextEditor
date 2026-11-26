@@ -140,7 +140,14 @@ equires; returns the job. */
     // corpus completes and reports.
     expect(skipped, 'files the job refused').toEqual([]);
     expect(done, 'files imported through the job').toBe(names.length);
-    console.log('EXP-116 corpus through the job: ' + done + ' of ' + names.length + ', negative overhead: ' + negative);
+    console.log(
+      'EXP-116 corpus through the job: ' +
+        done +
+        ' of ' +
+        names.length +
+        ', negative overhead: ' +
+        negative,
+    );
   }, 300_000);
 
   it('fails the job, and stores nothing, when the document lacks a feature the import needs', async () => {
