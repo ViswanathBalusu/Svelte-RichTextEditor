@@ -990,6 +990,18 @@ export class DocumentCore implements DocumentApi {
   readonly #schema: Schema;
   #state: EditorState;
   #sync: SyncState;
+  /**
+   * Which blocks the confirmed commits changed (EXP-065 criterion 3; `blockChangedSince`): `marks`
+   * holds, for a block identifier, the confirmed `seq` at which the document last differed in or
+   * around it; `floor` is the first `seq` this core followed, and anything older cannot be told.
+   */
+  #blockChanges: {
+    incarnation: string;
+    seq: number;
+    floor: number;
+    doc: PMNode;
+    marks: Map<string, number>;
+  } | null = null;
   /** The confirmed document `regionTitles` was last computed from. */
   #titledDoc: PMNode | null = null;
   /**
@@ -1856,8 +1868,86 @@ export class DocumentCore implements DocumentApi {
     return 'blocks';
   }
 
+  /**
+   * Records which blocks a step of the confirmed document touched (EXP-065 criterion 3). A jump of
+   * several commits is credited to its last `seq`, so a block may be reported as changed a little
+   * early, never late. A new incarnation, or a `seq` that goes back, starts the record again.
+   */
+  #trackBlockChanges(): void {
+    const s = this.#sync;
+    if (s.incarnation === '') return;
+    const t = this.#blockChanges;
+    if (!t || t.incarnation !== s.incarnation || s.seq < t.seq) {
+      this.#blockChanges = {
+        incarnation: s.incarnation,
+        seq: s.seq,
+        floor: s.seq,
+        doc: s.confirmed,
+        marks: new Map(),
+      };
+      return;
+    }
+    if (s.confirmed === t.doc) {
+      t.seq = s.seq;
+      return;
+    }
+    // The same `seq` with another document is the load finishing, not a commit.
+    if (s.seq === t.seq) {
+      t.doc = s.confirmed;
+      return;
+    }
+    const before = t.doc;
+    const after = s.confirmed;
+    const start = before.content.findDiffStart(after.content);
+    if (start !== null && start !== undefined) {
+      const end = before.content.findDiffEnd(after.content);
+      const mark = (doc: PMNode, from: number, to: number): void => {
+        const size = doc.content.size;
+        const a = Math.max(0, Math.min(from, size));
+        const b = Math.max(a, Math.min(to, size));
+        const note = (n: PMNode): void => {
+          const id = n.attrs['id'];
+          if (typeof id === 'string') t.marks.set(id, s.seq);
+        };
+        doc.nodesBetween(a, b, (n) => {
+          note(n);
+          return true;
+        });
+        const $a = doc.resolve(a);
+        for (let d = $a.depth; d > 0; d--) note($a.node(d));
+      };
+      mark(after, start, end ? end.b : start);
+      mark(before, start, end ? end.a : start);
+    }
+    t.doc = after;
+    t.seq = s.seq;
+  }
+
+  /**
+   * Whether a block has changed in the confirmed document after the commit `seq` (EXP-065
+   * criterion 3; ui `CoreApi.blockChangedSince`). Null when this core cannot tell: the block is not
+   * in the document, the reader may not view it (ADR 0019), or `seq` is older than the first commit
+   * this core followed. The unconfirmed work of this reader is not counted until it is confirmed.
+   */
+  blockChangedSince(id: string, seq: number): boolean | null {
+    const t = this.#blockChanges;
+    if (!t || seq < t.floor) return null;
+    const doc = this.#state.doc;
+    let at = -1;
+    doc.descendants((node, pos) => {
+      if (at >= 0) return false;
+      const type = node.type.name;
+      if (type === 'defs' || type === 'story' || type === 'footnote') return false;
+      if (node.isBlock && node.attrs['id'] === id) at = pos;
+      return at < 0;
+    });
+    if (at < 0 || !this.#canView(this.#scopeIn(doc, at))) return null;
+    return (t.marks.get(id) ?? -1) > seq;
+  }
+
   #publishSync(): void {
     const s = this.#sync;
+    this.#trackBlockChanges();
     this.confirmedSeq.set(s.seq);
     if (s.confirmed !== this.#titledDoc) {
       this.#titledDoc = s.confirmed;

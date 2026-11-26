@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { FontManifest } from '@docedit/export-latex';
+import { serverFonts, type FontManifest } from '@docedit/export-latex';
 
 export interface FontFileProblem {
   /** `font_file_missing`: no file of that name; `font_file_mismatch`: the bytes hash to another value. */
@@ -32,10 +32,14 @@ interface Face {
   sha256: string;
 }
 
-/** Every face the manifest names, each file once, in manifest order. */
+/**
+ * Every face the manifest names, each file once, in manifest order. A family that is not permitted
+ * for server-side use is left out (EXP-048; owner decision 62): its files are neither required nor
+ * mounted.
+ */
 export function manifestFaces(manifest: FontManifest): Face[] {
   const out: Face[] = [];
-  for (const f of manifest.families) {
+  for (const f of serverFonts(manifest).fonts.families) {
     const faces: [string, { file: string; sha256: string }][] = [
       ['regular', f.regular],
       ['bold', f.bold],

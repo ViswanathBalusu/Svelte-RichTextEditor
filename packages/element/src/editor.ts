@@ -481,6 +481,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       focus: () => core.focus(),
       // The checker, the outline and the export diagnostics move to a block through this (UX-067 criterion 1).
       selectBlock: (id) => core.selectBlock(id),
+      // The export diagnostics tell a block that changed after the job's `seq` (EXP-065 criterion 3).
+      blockChangedSince: (id, seq) => core.blockChangedSince(id, seq),
       // The document as this reader holds it: the accessibility checker reads it (UX-066), so a
       // picture without alternative text is listed (FE-132 criterion 5).
       getContent: () => core.getContent(),

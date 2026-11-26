@@ -24,6 +24,7 @@ import {
 import { dimen, EMPTY, int, join, lit, tex, type Tex } from './emit.ts';
 import { gap, newFlow, type ContentWriter, type Flow } from './flow.ts';
 import { suggestionHides } from './suggestions.ts';
+import { planRowSplit } from './table-measure.ts';
 
 const t = lit;
 
@@ -337,12 +338,54 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
   };
 
   const rowBlocks: Array<[number, number]> = [];
+  /**
+   * A body row that the editor's layout measures taller than a page body is set as continuation
+   * rows (EXP-039; owner decision 114): cut at block boundaries, header rows repeating as for any
+   * row. Only a row of single-row cells is cut: a row span cannot be divided between rows.
+   */
+  const splitOf = (r: number): J[][][] | null => {
+    const measure = ctx.options.tableMeasure;
+    if (!measure || boxed || r < headerRows) return null;
+    const cells = placed[r] ?? [];
+    if (cells.some((p) => p.covered || p.cell === null || p.rowspan > 1)) return null;
+    const rowNode = rows[r]!;
+    const plan = planRowSplit(
+      measure,
+      id,
+      idOf(rowNode),
+      cells.map((p) => ({ cellId: idOf(p.cell!), blocks: p.cell!.content ?? [] })),
+      (b: J) => idOf(b),
+    );
+    if (!plan) return null;
+    const label = `row ${r + 1} of table ${id ?? '(no id)'}`;
+    if (plan.parts.length > 1)
+      diag(
+        ctx,
+        'warning',
+        'row_split',
+        id,
+        `${label} is taller than a page and is set as ${plan.parts.length} continuation rows, cut between blocks (09 §3.2; 03 §10)`,
+      );
+    for (const u of plan.unsplittable) {
+      const block = cells[u.cell]?.cell?.content?.[u.index];
+      diag(
+        ctx,
+        'warning',
+        'block_taller_than_page',
+        block ? idOf(block) : id,
+        `block ${block ? (idOf(block) ?? '(no id)') : '(none)'} in ${label} is taller than a page and cannot be split (09 §3.2)`,
+      );
+    }
+    return plan.parts.length > 1 ? plan.parts.map((p) => p.map((c) => [...c])) : null;
+  };
   const emitRow = (r: number, repeated: boolean): void => {
     const first = ctx.blocks.length;
-    emitRowCells(r, repeated);
+    const parts = repeated ? null : splitOf(r);
+    if (parts) for (const part of parts) emitRowCells(r, false, part);
+    else emitRowCells(r, repeated);
     if (!repeated) rowBlocks[r] = [first, ctx.blocks.length];
   };
-  const emitRowCells = (r: number, repeated: boolean): void => {
+  const emitRowCells = (r: number, repeated: boolean, part?: readonly (readonly J[])[]): void => {
     const row = rows[r]!;
     const rowId = idOf(row);
     void rowId;
@@ -407,7 +450,11 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
           if (exactH !== null) line(ctx, tex`\vbox to ${dimen(exactH, { min: 0, max: 31680 })}{%`);
           content(
             newFlow('cell', style, id),
-            repeated ? (p.cell!.content ?? []).map(stripIds) : p.cell!.content,
+            repeated
+              ? (p.cell!.content ?? []).map(stripIds)
+              : part
+                ? [...(part[i] ?? [])]
+                : p.cell!.content,
           );
           if (exactH !== null) line(ctx, t('\\vss}%'));
           if (bottom > 0) line(ctx, tex`\DEcellpad{${dimen(bottom, { min: 0, max: 31680 })}}%`);

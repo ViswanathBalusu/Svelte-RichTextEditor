@@ -29,6 +29,7 @@ export * from './page-keys.ts';
 export * from './page-heights.ts';
 export * from './layout-json.ts';
 export * from './reconcile.ts';
+export * from './table-measure.ts';
 export * from './readonly-view.ts';
 export * from './font-epoch.ts';
 export * from './font-arrivals.ts';
