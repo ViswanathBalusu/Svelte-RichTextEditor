@@ -137,6 +137,14 @@ export const objectKeys = {
   headAnchorLeaves(tenant: string, to: string): string {
     return `${objectKeys.prefix(tenant)}anchors/heads/${anchorTime(to)}.leaves.json`;
   },
+  /** A tenant's salted public root for a period (SEC-065; ADR 0409), named by the period's `to`. */
+  publicRoot(tenant: string, to: string): string {
+    return `${objectKeys.prefix(tenant)}anchors/public/${anchorTime(to)}.json`;
+  },
+  /** The heads behind that root, for the tenant only, so that a proof can be built later. */
+  publicRootHeads(tenant: string, to: string): string {
+    return `${objectKeys.prefix(tenant)}anchors/public/${anchorTime(to)}.heads.json`;
+  },
 };
 
 /** A record's `to` as one safe key segment: `2026-11-21T01:00:00.000Z` is `20261121T010000.000Z`. */

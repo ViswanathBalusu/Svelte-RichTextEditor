@@ -1590,11 +1590,15 @@ As a relying party, I want each tenant's chain heads folded into one root that r
 
 **Acceptance criteria**
 
-- [ ] Given a tenant with documents whose chains have heads, when a period ends, then the service builds a Merkle tree whose leaves are the hash of the head, its sequence number and the tenant's salt, and records the root, the period and the leaf count.
-- [ ] Given a document that did not change in the period, when the tree is built, then its latest head is still a leaf, so a later check of any head finds a root that covers it.
-- [ ] Given a leaf, when an inclusion proof is asked for with the salt, then the proof verifies against the root; given a wrong salt, a changed head or another sequence number, then it does not.
-- [ ] Given the same inputs, when the tree is built twice, then the root is the same (a property test over random heads and orderings).
-- [ ] Given the salt, when it is created, stored and rotated, then it is held under the tenant's key rules (SEC-062) and is never written to a log, a webhook or the public entry.
+- [x] Given a tenant with documents whose chains have heads, when a period ends, then the service builds a Merkle tree whose leaves are the hash of the head, its sequence number and the tenant's salt, and records the root, the period and the leaf count.
+- [x] Given a document that did not change in the period, when the tree is built, then its latest head is still a leaf, so a later check of any head finds a root that covers it.
+- [x] Given a leaf, when an inclusion proof is asked for with the salt, then the proof verifies against the root; given a wrong salt, a changed head or another sequence number, then it does not.
+- [x] Given the same inputs, when the tree is built twice, then the root is the same (a property test over random heads and orderings).
+- [x] Given the salt, when it is created, stored and rotated, then it is held under the tenant's key rules (SEC-062) and is never written to a log, a webhook or the public entry.
+
+**Evidence (lane w8, 2026-11-26):** Pure rules in `packages/history/src/public-root.ts` (leaf `SHA-256(0x02 ‖ salt ‖ seq ‖ head)`, leaves sorted by hash, the node rule of head-anchor.ts, proof, verification, the public entry text with no identifier members), tested in `packages/history/test/public-root.test.ts` (7 tests, with fast-check properties: same root in any order and over repeated builds, every head's proof verifies, a wrong salt, a changed head and another sequence number do not verify and cannot be proved; criteria 3 and 4). The service in `services/document-service/src/control-plane/public-root.ts` (`PublicRoots.run`, `PublicRoots.proof`, `TenantSalts`), tested in `services/document-service/src/control-plane/public-root.test.ts` (10 tests, memory stores and `MemoryKeyService`): a run records the root, the period (`from`, `to`) and the leaf count (criterion 1); a document that did not change keeps its latest head as a leaf and its proof verifies against the later root (criterion 2); the salt is 32 random bytes wrapped with the tenant's `unwrap` key (`tenant-salt-<tenant>`), stored only wrapped, rotated by version with old versions kept, unrecoverable after the key is destroyed, and its hex and base64 forms appear in no file, audit event, stored record or public entry (criterion 5). Run with `pnpm exec vitest run --project node` on both files; type-check of both packages clean.
+
+**Notes:** The salt is held under the tenant's key rules as `KeyService` wrap and unwrap (SEC-062, accepted by decision 205); the two-person recovery rule is the key service's own procedure and is not built here. The heads source (`PublicRootHeads`), the salt rows and the root rows are interfaces with memory implementations; the PostgreSQL implementations and the scheduled task that calls `PublicRoots.run` once per period are wired in SEC-066, which also fixes the period default, so this story builds and tests the rules and the service logic only. `node` and `levelsOf` in `head-anchor.ts` are now exported (additive) so that the two trees share one node rule.
 
 ### SEC-066 Submit roots to a public transparency log and keep the receipts
 

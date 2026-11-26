@@ -72,7 +72,7 @@ export async function anchorLeaf(head: AnchoredHead): Promise<HistoryResult<{ le
   return { ok: true, leaf: toHex(await sha256(bytes)) };
 }
 
-async function node(left: string, right: string): Promise<string> {
+export async function node(left: string, right: string): Promise<string> {
   const bytes = new Uint8Array(1 + 32 + 32);
   bytes[0] = 0x01;
   bytes.set(fromHex(left), 1);
@@ -93,7 +93,7 @@ export interface AnchorTree {
 }
 
 /** The levels of a tree from its leaves up to the root (the last level holds the root alone). */
-async function levelsOf(leaves: readonly string[]): Promise<string[][]> {
+export async function levelsOf(leaves: readonly string[]): Promise<string[][]> {
   const levels: string[][] = [[...leaves]];
   while (levels[levels.length - 1]!.length > 1) {
     const below = levels[levels.length - 1]!;
