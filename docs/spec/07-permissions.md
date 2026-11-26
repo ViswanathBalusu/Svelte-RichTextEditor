@@ -169,7 +169,7 @@ An approval is bound to what was approved: the state record holds the `seq` and 
 | Read an asset | `view` on a document the asset is attached to; the uploader may also read their own ready upload for that document before a commit references it |
 | Named version | `edit` somewhere in the document |
 | Restore a region | `edit` in that region; not approved; not leased to someone else |
-| Restore a document, grants, region state or policy, break a lease, workflow actions, delete | `manage` |
+| Restore a document, grants, region state or policy, break a lease, workflow actions, fetch the evidence bundle (audited), delete | `manage` |
 | Acquire a lease | `edit` in that region |
 | Export | `view`, unless restricted with `no-export`; raw compile logs need `edit` |
 | Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds | Service credential |

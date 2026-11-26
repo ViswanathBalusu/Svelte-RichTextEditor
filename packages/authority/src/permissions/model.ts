@@ -199,6 +199,13 @@ export const OPERATIONS = [
     text: 'Send, correct, resume, void or remind a workflow.',
   },
   {
+    id: 'workflow.evidence',
+    needs: 'manage',
+    where: 'control',
+    spec: '07 §12; 12 §8.2',
+    text: 'Fetch the evidence bundle of a workflow; every retrieval is audited.',
+  },
+  {
     id: 'document.restore',
     needs: 'manage',
     where: 'control',

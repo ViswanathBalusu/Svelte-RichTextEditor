@@ -134,7 +134,7 @@ export const MATRIX: readonly MatrixRow[] = [
     row: 10,
     id: 'manage',
     operation:
-      'Restore a document, grants, region state or policy, break a lease, workflow actions, delete',
+      'Restore a document, grants, region state or policy, break a lease, workflow actions, fetch the evidence bundle (audited), delete',
     requirement: {
       kind: 'manage',
       operations: [
@@ -144,6 +144,7 @@ export const MATRIX: readonly MatrixRow[] = [
         'region.policy',
         'lease.break',
         'workflow.action',
+        'workflow.evidence',
         'document.delete',
       ],
     },
@@ -160,6 +161,7 @@ export const MATRIX: readonly MatrixRow[] = [
       'POST /documents/{id}/workflow/participants/{pid}/access-code',
       'POST /documents/{id}/workflow/remind',
       'POST /documents/{id}/workflow/void',
+      'GET /documents/{id}/workflow/evidence',
       'DELETE /documents/{id}',
     ],
     messages: [],
@@ -298,12 +300,14 @@ export const UNMATRIXED_ROUTES: readonly RouteClassification[] = [
   fields('PATCH /documents/{id}/field-values', '12 §9 prefill: a server-authored commit'),
   fields('GET /documents/{id}/workflow', '12 §6'),
   fields('POST /documents/{id}/workflow/participants/{pid}/consent', '12 §7, §8.1'),
-  fields('GET /documents/{id}/workflow/participants/{pid}/consent', '12 §8.1 step 1: the text to accept'),
+  fields(
+    'GET /documents/{id}/workflow/participants/{pid}/consent',
+    '12 §8.1 step 1: the text to accept',
+  ),
   fields('POST /documents/{id}/workflow/participants/{pid}/verify', '12 §7'),
   fields('POST /documents/{id}/workflow/participants/{pid}/complete', '12 §8.1'),
   fields('POST /documents/{id}/workflow/participants/{pid}/decline', '12 §6.2'),
   fields('POST /documents/{id}/fields/{fid}/sign', '12 §8.1: P7 conditions, then origin `sign`'),
-  fields('GET /documents/{id}/workflow/evidence', '12 §7'),
   fields('GET /documents/{id}/workflow/final', '12 §8.2'),
 ];
 

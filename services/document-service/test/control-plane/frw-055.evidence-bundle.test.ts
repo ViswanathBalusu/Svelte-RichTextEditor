@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MATRIX } from '@docedit/authority';
 import { verifyWorkflowEvidenceBundle, type WorkflowEvidenceBundle } from '@docedit/history';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DepClient } from '../data-plane/client.ts';
@@ -171,6 +172,38 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         });
         expect(denied.status).toBe(403);
         expect(await retrievals(w.doc)).toHaveLength(1);
+      },
+    );
+
+    it.skipIf(skip !== null)(
+      'is fetched with the credential the authorisation matrix assigns, and every retrieval is audited (criterion 6)',
+      async () => {
+        // The matrix (07 §12, row 10) assigns `manage` to this route, in the operation `workflow.evidence`.
+        const row = MATRIX.find((r) => r.routes.includes('GET /documents/{id}/workflow/evidence'));
+        expect(row?.id).toBe('manage');
+        expect(row?.requirement).toMatchObject({ kind: 'manage' });
+        expect((row!.requirement as { operations: readonly string[] }).operations).toContain(
+          'workflow.evidence',
+        );
+
+        const w = await completed();
+        const path = `/v1/documents/${w.doc}/workflow/evidence`;
+        // Lesser roles on the document get nothing, and nothing is audited for them.
+        for (const role of ['editor', 'viewer'] as const) {
+          const tok = h.userToken({ [w.doc]: role }, { sub: `sub-${role}-055` });
+          const r = await h.call('GET', path, { token: tok });
+          expect(r.status, `${role}: ${r.text}`).toBe(403);
+          expect(r.text).not.toContain('"evidence"');
+        }
+        expect(await retrievals(w.doc)).toHaveLength(0);
+        // `manage` gets it, twice, and each retrieval is its own audit entry with the actor.
+        for (let i = 1; i <= 2; i++) {
+          const r = await h.call('GET', path, { token: w.owner });
+          expect(r.status, r.text).toBe(200);
+          const entries = await retrievals(w.doc);
+          expect(entries).toHaveLength(i);
+          expect(entries.at(-1)!.actor).toBeTruthy();
+        }
       },
     );
 
