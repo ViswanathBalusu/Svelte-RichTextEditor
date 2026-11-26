@@ -1,6 +1,7 @@
 <!-- Retention of the tenant and of one document, and legal holds (UX-080; 08 §11). -->
 <script lang="ts">
   import type { Hold, RetentionPolicy, RetentionView } from './api.ts';
+  import ConfirmButton from './ConfirmButton.svelte';
   import { attempt, type Ctx } from './ctx.ts';
 
   let { ctx }: { ctx: Ctx } = $props();
@@ -84,6 +85,15 @@
       nextCursor = page.nextCursor;
     });
   }
+  async function release(h: Hold): Promise<void> {
+    await attempt(ctx, async () => {
+      await ctx.client.releaseHold(h.document, h.id);
+      ctx.say('Legal hold released.');
+      const page = await ctx.client.listHolds();
+      holds = page.items;
+      nextCursor = page.nextCursor;
+    });
+  }
   async function more(): Promise<void> {
     await attempt(ctx, async () => {
       if (nextCursor === null) return;
@@ -161,7 +171,7 @@
     <thead>
       <tr>
         <th scope="col">Document</th><th scope="col">Reason</th><th scope="col">Placed by</th>
-        <th scope="col">Placed at</th>
+        <th scope="col">Placed at</th><th scope="col">Release</th>
       </tr>
     </thead>
     <tbody>
@@ -171,6 +181,12 @@
           <td>{h.reason}</td>
           <td>{h.placedBy}</td>
           <td>{h.placedAt}</td>
+          <td>
+            <ConfirmButton
+              label={`Release the hold on ${h.document}`}
+              onconfirm={() => release(h)}
+            />
+          </td>
         </tr>
       {/each}
     </tbody>
@@ -190,4 +206,6 @@
     <button type="submit" class="primary">Place hold</button>
   </fieldset>
 </form>
-<p class="hint">The published API has no route to release a hold.</p>
+<p class="hint">
+  Releasing the last hold on a document lets its normal retention schedule resume. It is audited.
+</p>

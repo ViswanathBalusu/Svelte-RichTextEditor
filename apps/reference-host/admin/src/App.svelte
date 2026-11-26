@@ -13,11 +13,20 @@
   import OriginsSection from './OriginsSection.svelte';
   import QuotasSection from './QuotasSection.svelte';
   import RetentionSection from './RetentionSection.svelte';
+  import TenantsSection from './TenantsSection.svelte';
   import WebhooksSection from './WebhooksSection.svelte';
 
-  type SectionId = 'quotas' | 'origins' | 'keys' | 'retention' | 'webhooks' | 'fonts' | 'audit';
+  type SectionId =
+    | 'tenants'
+    | 'quotas'
+    | 'origins'
+    | 'keys'
+    | 'retention'
+    | 'webhooks'
+    | 'fonts'
+    | 'audit';
   const SECTIONS: { id: SectionId; label: string }[] = [
-    { id: 'quotas', label: 'Quotas' },
+    { id: 'quotas', label: 'Quotas and usage' },
     { id: 'origins', label: 'Origins' },
     { id: 'keys', label: 'Token keys' },
     { id: 'retention', label: 'Retention and holds' },
@@ -28,6 +37,7 @@
 
   let endpoint = $state('');
   let credential = $state('');
+  let operatorCredential = $state('');
   let actor = $state('');
   let ctx = $state<Ctx | null>(null);
   let refused = $state<string | null>(null);
@@ -36,6 +46,11 @@
   let status = $state('');
   let problem = $state('');
   let content = $state<HTMLElement | null>(null);
+  const sections = $derived(
+    ctx !== null && ctx.client.hasOperator
+      ? [{ id: 'tenants' as SectionId, label: 'Tenants' }, ...SECTIONS]
+      : SECTIONS,
+  );
 
   async function connect(): Promise<void> {
     problem = '';
@@ -47,6 +62,9 @@
       const client = new AdminClient({
         endpoint: endpoint.trim(),
         credential: credential.trim(),
+        ...(operatorCredential.trim() === ''
+          ? {}
+          : { operatorCredential: operatorCredential.trim() }),
         ...(actor.trim() === '' ? {} : { actor: actor.trim() }),
       });
       const access = await client.checkAccess();
@@ -69,6 +87,8 @@
         },
       };
       credential = '';
+      operatorCredential = '';
+      if (client.hasOperator) section = 'tenants';
     } finally {
       connecting = false;
     }
@@ -104,6 +124,10 @@
         Service credential
         <input type="password" autocomplete="off" bind:value={credential} required />
       </label>
+      <label>
+        Operator credential (optional; only to manage the tenants of the service)
+        <input type="password" autocomplete="off" bind:value={operatorCredential} />
+      </label>
       <label>Your name for the audit trail (optional) <input bind:value={actor} autocomplete="off" /></label>
       <button type="submit" class="primary" disabled={connecting}>Open the console</button>
     </form>
@@ -113,7 +137,7 @@
   {:else}
     <nav aria-label="Administration sections">
       <ul>
-        {#each SECTIONS as s (s.id)}
+        {#each sections as s (s.id)}
           <li>
             <button
               type="button"
@@ -127,7 +151,8 @@
     <p class="msg" role="status">{status}</p>
     <p class="msg error" role="alert">{problem}</p>
     <div id="content" tabindex="-1" bind:this={content}>
-      {#if section === 'quotas'}<QuotasSection {ctx} />
+      {#if section === 'tenants' && ctx.client.hasOperator}<TenantsSection {ctx} />
+      {:else if section === 'quotas'}<QuotasSection {ctx} />
       {:else if section === 'origins'}<OriginsSection {ctx} />
       {:else if section === 'keys'}<KeysSection {ctx} />
       {:else if section === 'retention'}<RetentionSection {ctx} />

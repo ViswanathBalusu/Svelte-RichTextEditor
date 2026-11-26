@@ -12,15 +12,21 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
 import { describe, expect, it } from 'vitest';
 import { AdminApiError, AdminClient, parseQuota } from '../admin/src/api.ts';
-import { createAdminMock, MOCK_BASE, SERVICE_CREDENTIAL } from './admin-mock.ts';
+import {
+  createAdminMock,
+  MOCK_BASE,
+  OPERATOR_CREDENTIAL,
+  SERVICE_CREDENTIAL,
+} from './admin-mock.ts';
 
 const adminDir = fileURLToPath(new URL('../admin', import.meta.url));
 
-function clientFor(credential = SERVICE_CREDENTIAL) {
+function clientFor(credential = SERVICE_CREDENTIAL, operatorCredential?: string) {
   const mock = createAdminMock();
   const client = new AdminClient({
     endpoint: MOCK_BASE,
     credential,
+    ...(operatorCredential !== undefined ? { operatorCredential } : {}),
     fetch: mock.fetch,
     actor: 'admin@example.test',
   });
@@ -108,14 +114,109 @@ describe('UX-089 console against a mock of the published API only', () => {
     expect(new Set(mock.matched).size).toBeGreaterThanOrEqual(23);
   });
 
+  it('covers tenants, usage, fonts and the release of a hold, with the published routes only (criterion 2)', async () => {
+    const { mock, client } = clientFor(SERVICE_CREDENTIAL, OPERATOR_CREDENTIAL);
+    expect(client.hasOperator).toBe(true);
+
+    // Usage: this month, and a month that is named; a month that is not YYYY-MM is refused.
+    const now = await client.getUsage();
+    expect(now).toMatchObject({ month: '2026-11', connections: 12, storage: 1_048_576 });
+    expect((await client.getUsage('2026-10')).month).toBe('2026-10');
+    await expect(client.getUsage('October')).rejects.toMatchObject({ code: 'validation_failed' });
+
+    // Tenants: list, register, rename, suspend and resume, each change on the version that was read.
+    const first = (await client.listTenants()).items;
+    expect(first.map((t) => t.name)).toEqual(['Example tenant']);
+    const made = await client.createTenant('  Second tenant ');
+    expect(made).toMatchObject({ name: 'Second tenant', state: 'active' });
+    const read = await client.getTenant(made.id);
+    expect(read.etag).toBe('"t1"');
+    const renamed = await client.updateTenant(made.id, { name: 'Renamed' }, read.etag!);
+    expect(renamed.value.name).toBe('Renamed');
+    await expect(
+      client.updateTenant(made.id, { state: 'suspended' }, read.etag!),
+    ).rejects.toMatchObject({ status: 412 });
+    const suspended = await client.updateTenant(made.id, { state: 'suspended' }, renamed.etag!);
+    expect(suspended.value.state).toBe('suspended');
+    const resumed = await client.updateTenant(made.id, { state: 'active' }, suspended.etag!);
+    expect(resumed.value.state).toBe('active');
+    expect((await client.listTenants()).items).toHaveLength(2);
+
+    // Fonts: added with a licence declaration, then removed by the hash; a hold is released.
+    const font = await client.addFont({
+      filename: 'a.ttf',
+      mime: 'font/ttf',
+      content: btoa('not really a font'),
+      licence: 'OFL-1.1',
+      serverUse: true,
+    });
+    expect(font).toMatchObject({ licence: 'OFL-1.1', serverUse: true });
+    await client.removeFont(font.sha256);
+    await expect(client.removeFont(font.sha256)).rejects.toMatchObject({ code: 'not_found' });
+    const doc = '0190a000-0000-7000-8000-000000000002';
+    const hold = await client.placeHold(doc, 'Case 7');
+    await client.releaseHold(doc, hold.id);
+    expect((await client.listHolds()).items).toEqual([]);
+
+    // All of it is on the trail, and none of it left the published contract.
+    const kinds = new Set((await client.queryAudit()).items.map((e) => e.kind));
+    for (const k of [
+      'tenant.created',
+      'tenant.updated',
+      'font.added',
+      'font.removed',
+      'hold.released',
+    ])
+      expect(kinds, k).toContain(k);
+    expect(mock.unpublished).toEqual([]);
+    for (const op of [
+      'GET /usage',
+      'GET /tenants',
+      'POST /tenants',
+      'GET /tenants/{tenantId}',
+      'PATCH /tenants/{tenantId}',
+      'POST /tenant-fonts',
+      'DELETE /tenant-fonts/{sha256}',
+      'DELETE /documents/{id}/holds/{holdId}',
+    ])
+      expect(mock.matched, op).toContain(op);
+  });
+
+  it('keeps the operator credential apart from the tenant one (criterion 5)', async () => {
+    // Without an operator credential the tenant functions make no request at all.
+    const none = clientFor();
+    expect(none.client.hasOperator).toBe(false);
+    await expect(none.client.listTenants()).rejects.toMatchObject({ code: 'no_operator' });
+    expect(none.mock.matched).toEqual([]);
+    // The tenant's service credential is not an operator credential, and the other way round.
+    const wrong = clientFor(SERVICE_CREDENTIAL, SERVICE_CREDENTIAL);
+    await expect(wrong.client.listTenants()).rejects.toMatchObject({ status: 403 });
+    const swapped = clientFor(OPERATOR_CREDENTIAL, OPERATOR_CREDENTIAL);
+    expect((await swapped.client.checkAccess()).ok).toBe(false);
+    // Each credential goes in the header of its own routes only.
+    const both = clientFor(SERVICE_CREDENTIAL, OPERATOR_CREDENTIAL);
+    await both.client.getQuotas();
+    await both.client.listTenants();
+    expect(both.mock.credentials).toEqual([
+      `Bearer ${SERVICE_CREDENTIAL}`,
+      `Bearer ${OPERATOR_CREDENTIAL}`,
+    ]);
+  });
+
   it('shows that the mock would catch a private endpoint', async () => {
     const mock = createAdminMock();
-    const res = await mock.fetch(`${MOCK_BASE}/internal/state`, {
+    const res = await mock.fetch(`${MOCK_BASE}/admin/tenants`, {
       headers: { Authorization: `Bearer ${SERVICE_CREDENTIAL}` },
     });
     expect(res.status).toBe(404);
     expect((await mock.fetch(`${MOCK_BASE}/admin/usage`, { method: 'POST' })).status).toBe(404);
-    expect(mock.unpublished).toEqual(['GET /v1/internal/state', 'POST /v1/admin/usage']);
+    expect(mock.unpublished).toEqual(['GET /v1/admin/tenants', 'POST /v1/admin/usage']);
+    // `/tenants` and `/usage` are routes of the published contract since UX-076, so they are answered.
+    const tenants = await mock.fetch(`${MOCK_BASE}/tenants`, {
+      headers: { Authorization: `Bearer ${OPERATOR_CREDENTIAL}` },
+    });
+    expect(tenants.status).toBe(200);
+    expect(mock.matched).toContain('GET /tenants');
   });
 
   it('sends the credential as a bearer header, never in a URL, and `If-Match` on updates', async () => {

@@ -265,6 +265,8 @@ const OTHER_ROUTES = [
   // FRW-063 (12 §9): bulk sends, service credential only.
   'POST /bulk-sends',
   'GET /bulk-sends/{bid}',
+  'POST /bundle-exports',
+  'GET /bundle-exports/{bid}',
   // FRW-042 (12 §7): the tenant's evidence capture setting, service credential only.
   'GET /workflow/capture-settings',
   'PUT /workflow/capture-settings',
@@ -365,6 +367,8 @@ describe('the DEP definition', () => {
         'GET /templates/{tid}',
         'POST /bulk-sends',
         'GET /bulk-sends/{bid}',
+        'POST /bundle-exports',
+        'GET /bundle-exports/{bid}',
         'GET /workflow/capture-settings',
         'PUT /workflow/capture-settings',
         'GET /quotas',
