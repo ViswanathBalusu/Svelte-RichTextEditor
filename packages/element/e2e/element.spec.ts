@@ -1188,10 +1188,13 @@ test.describe('FE-007 save state', () => {
     });
     expect(during).toEqual({ connection: 'online', sync: 'saving' });
     await expect.poll(() => statusOf(page, 'one')).toEqual({ connection: 'online', sync: 'saved' });
-    const raised = (await events(page, 'de-status'))
-      .filter((e) => e.element === 'one')
-      .map((e) => e.detail);
-    expect(raised.at(-1)).toEqual({ connection: 'online', sync: 'saved' });
+    // The event follows the state a little later (WebKit read the list once between the two).
+    await expect
+      .poll(
+        async () =>
+          (await events(page, 'de-status')).filter((e) => e.element === 'one').at(-1)?.detail,
+      )
+      .toEqual({ connection: 'online', sync: 'saved' });
     expect(await statusOf(page, 'two')).toEqual({ connection: 'online', sync: 'readonly' });
     expect(
       (await events(page, 'de-status')).filter((e) => e.element === 'two').map((e) => e.detail),
