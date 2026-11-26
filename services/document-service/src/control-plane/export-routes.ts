@@ -5,7 +5,8 @@
 import { formatTimestamp, uuid7 } from '@docedit/model';
 import type { CreateExportRequest, ExportJob } from '@docedit/protocol';
 import { objectKeys } from '../objects/store.ts';
-import { hasSuggestions } from './content.ts';
+import type { Access } from '@docedit/authority';
+import { hasSuggestions, suggestionOwners } from './content.ts';
 import {
   EXPORT_KIND,
   EXPORT_PRIORITIES,
@@ -18,7 +19,7 @@ import {
   type ExportOutputs,
   type ExportPolicy,
 } from './exports.ts';
-import { readerConnectionOn, refuseSeqBelowGate } from './gate.ts';
+import { accessOf, readerConnectionOn, refuseSeqBelowGate, regionInfosOfJson } from './gate.ts';
 import { checkIfMatch } from './http.ts';
 import { MAX_START_GAP_MS, type JobRecord } from './jobs/queue.ts';
 import { withQueueProof } from './job-proof.ts';
@@ -35,6 +36,14 @@ export const EXPORT_POLICY_DEFAULTS: ExportPolicy = {
   classVersion: 'unknown',
   tenantConcurrency: null,
 };
+
+/** The scopes where an access holds `edit`, as the exporter names them (`body`, `region:<id>`). */
+function editScopesOf(a: Access): string[] {
+  const out: string[] = [];
+  if (a.body.has('edit')) out.push('body');
+  for (const [id, caps] of a.regions) if (caps.has('edit')) out.push(`region:${id}`);
+  return out.sort();
+}
 
 export function exportRoutes(k: Kit): Record<string, Handler> {
   const { d, rest, refOf, liveDocument } = k;
@@ -168,17 +177,29 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       seq === head.seq ? headDoc : await d.content.rebuild(ref, head.incarnation, seq);
     // The requester's class is that of their reads: a participant named by `wfp` exports with the
     // roles the workflow gives them (FRW-038).
-    const view = readerView(
-      d.views,
-      identity && role && !full ? await readerConnectionOn(d, ctx.caller, doc) : null,
-      content.doc,
-      perms,
-    );
+    const readerConn =
+      identity && role && !full ? await readerConnectionOn(d, ctx.caller, doc) : null;
+    const view = readerView(d.views, readerConn, content.doc, perms);
     if (options['suggestions'] === undefined && hasSuggestions(projectContent(view, content.doc)))
       throw new ApiError(
         'pending_suggestions',
         'the content has unresolved suggestions; set options.suggestions',
       );
+    // `accept` changes the content, so a whole-block deletion is honoured only for a requester who
+    // may edit there (09 §10; EXP-081; owner decision 111). The worker gets the owners of the
+    // suggestion identifiers and the requester's `edit` scopes, and the key names both.
+    const suggestionAccess =
+      options['suggestions'] === 'accept'
+        ? {
+            owners: suggestionOwners(content.doc),
+            edit:
+              readerConn === null
+                ? ('all' as const)
+                : editScopesOf(
+                    accessOf(readerConn, regionInfosOfJson(content.doc), perms, d.now()),
+                  ),
+          }
+        : null;
     const kind = options['profile'] === 'preview' ? PREVIEW_KIND : EXPORT_KIND;
     const cacheKey = exportRequestKey({
       tenant: ctx.caller.tenant,
@@ -191,6 +212,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       full: full || ctx.caller.kind === 'service',
       classVersion: policy.classVersion,
       classification: record.label ?? null,
+      suggestionAccess,
     });
     const now = d.now();
     const payload = {
@@ -204,6 +226,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       full: full || ctx.caller.kind === 'service',
       profile: kind === PREVIEW_KIND ? 'preview' : 'final',
       classVersion: policy.classVersion,
+      ...(suggestionAccess ? { suggestionAccess } : {}),
       ...exportView(view),
     };
     const accepted = (job: JobRecord) =>

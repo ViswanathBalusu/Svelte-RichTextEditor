@@ -91,6 +91,20 @@ export type Renderer = 'node' | 'harf';
 export type LayoutLevel = 'off' | 'block' | 'line';
 export type Suggestions = 'accept' | 'reject' | 'markup';
 
+/**
+ * What the exporter needs to check a suggestion against the permission rules (09 §10; owner decision
+ * 111; docs/adr/0370-w2-exp-081-unverifiable-suggestion-marks.md): the owner of each suggestion
+ * identifier and the scopes where the requester holds dit. Accepting a suggestion changes the
+ * content, so it needs dit there (07 §5.2 P1); the suggester's own grant does not count (P4).
+ */
+export interface SuggestionAccess {
+  /** Suggestion identifier to the user (or import label) that owns it. */
+  readonly owners: Readonly<Record<string, string>>;
+  /** Scopes (ody, 
+egion:<id>) where the requester has dit, or ll for a service credential. */
+  readonly edit: 'all' | readonly string[];
+}
+
 export interface ConvertOptions {
   fonts: FontManifest;
   /** The class files, read by the caller: `docedit.cls` and `docedit.lua` (09 §2). */
@@ -146,6 +160,12 @@ export interface ConvertOptions {
    * diagnostic `pending_suggestions`, and the bundle shows the text as if all were rejected.
    */
   suggestions?: Suggestions;
+  /**
+   * The owners of the suggestion identifiers and the requester's grants (owner decision 111). With
+   * it, a whole-block deletion is honoured under ccept only if it passes (EXP-081). Absent: the
+   * converter cannot check and honours the deletion, as before; the service always supplies it.
+   */
+  suggestionAccess?: SuggestionAccess;
   /**
    * The document's classification label (EXP-089; owner decision 51): printed as text in the
    * header and the footer of every page. Absent or empty: no marking. The label joins the

@@ -189,4 +189,26 @@ describe('EXP-088 md job through the export worker (criteria 1 and 3)', () => {
     expect(accepted.job.state, JSON.stringify(accepted.job.error)).toBe('completed');
     expect(text(accepted)).toContain('Proposed.');
   });
+
+  it('honours a whole-block deletion under accept only when the payload says it may (EXP-081)', async () => {
+    const envelope = structuredClone(demoDocument().envelope);
+    const body = (envelope.doc as Node).content!.find((c) => c.type === 'body')!;
+    const first = body.content!.find((c) => c.type === 'paragraph')!;
+    first.attrs = {
+      ...(first.attrs as object),
+      suggest: [{ type: 'del', attrs: { id: 'sDel081w20000001', user: 'alice' } }],
+    };
+    const options = { suggestions: 'accept' };
+    const word = (first.content as Array<{ text?: string }>)[0]!.text!;
+    const owners = { sDel081w20000001: 'alice' };
+    const may = await runJob({ options, suggestionAccess: { owners, edit: ['body'] } }, envelope);
+    expect(may.job.state, JSON.stringify(may.job.error)).toBe('completed');
+    expect(text(may)).not.toContain(word);
+    const mayNot = await runJob({ options, suggestionAccess: { owners, edit: [] } }, envelope);
+    expect(mayNot.job.state, JSON.stringify(mayNot.job.error)).toBe('completed');
+    expect(text(mayNot)).toContain(word);
+    expect(codesOf(mayNot)).toContain('suggestion_not_permitted');
+    const bad = await runJob({ options, suggestionAccess: { owners: [], edit: 5 } }, envelope);
+    expect(bad.job.state).toBe('failed');
+  });
 });

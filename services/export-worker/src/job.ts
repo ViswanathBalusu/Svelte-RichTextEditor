@@ -30,6 +30,7 @@ import {
   type CertificateFacts,
   type Diagnostic,
   type FontManifest,
+  type SuggestionAccess,
 } from '@docedit/export-latex';
 import {
   checkQueueProof,
@@ -209,6 +210,26 @@ interface Payload {
   sealing: SealingPin | null;
   /** The facts of the certificate of completion (FRW-050), written by the control plane; or null. */
   certificate: CertificateFacts | null;
+  /** The owners of the suggestion identifiers and the requester's grants (EXP-081); or null. */
+  suggestionAccess: SuggestionAccess | null;
+}
+
+/** The access of a payload, or invalid when it is not the shape the control plane writes. */
+function readSuggestionAccess(v: unknown): SuggestionAccess | null | 'invalid' {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'object' || Array.isArray(v)) return 'invalid';
+  const o = v as Record<string, unknown>;
+  const owners = o['owners'];
+  const edit = o['edit'];
+  if (typeof owners !== 'object' || owners === null || Array.isArray(owners)) return 'invalid';
+  const map: Record<string, string> = Object.create(null) as Record<string, string>;
+  for (const [k, u] of Object.entries(owners)) {
+    if (typeof u !== 'string') return 'invalid';
+    map[k] = u;
+  }
+  if (edit !== 'all' && !(Array.isArray(edit) && edit.every((s) => typeof s === 'string')))
+    return 'invalid';
+  return { owners: map, edit: edit as 'all' | string[] };
 }
 
 function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
@@ -262,9 +283,16 @@ function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
       'internal',
       'the certificate facts of the job are not the shape the control plane writes',
     );
+  const suggestionAccess = readSuggestionAccess(p['suggestionAccess']);
+  if (suggestionAccess === 'invalid')
+    throw new JobFailure(
+      'internal',
+      'the suggestion access of the job is not the shape the control plane writes',
+    );
   return {
     sealing,
     certificate,
+    suggestionAccess,
     doc: p['doc'],
     target: p['target'],
     seq: p['seq'],
@@ -433,6 +461,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       );
       const html = htmlText(htmlEnvelope, {
         suggestions: htmlPlan.plan.suggestions,
+        ...(payload.suggestionAccess ? { suggestionAccess: payload.suggestionAccess } : {}),
         ...(htmlContent.title !== null ? { title: htmlContent.title } : {}),
         // The classification marking (EXP-089): before and after the content, when there is a label.
         classification: htmlContent.classification,
@@ -487,6 +516,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       const mdChainHead = await chainHeadOf(deps.stores, { tenant, doc: payload.doc }, payload.seq);
       const md = markdownText(mdEnvelope, {
         suggestions: mdPlan.plan.suggestions,
+        ...(payload.suggestionAccess ? { suggestionAccess: payload.suggestionAccess } : {}),
         // The classification marking (EXP-089): a line before and a line after the content.
         classification: mdContent.classification,
       });
@@ -572,6 +602,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         date: formatJobDate(job.createdAt, plan),
         fields: plan.fields,
         ...(plan.suggestions ? { suggestions: plan.suggestions } : {}),
+        ...(payload.suggestionAccess ? { suggestionAccess: payload.suggestionAccess } : {}),
         // The certificate of completion (FRW-050): facts the control plane wrote, never a client's.
         ...(payload.certificate ? { certificate: payload.certificate } : {}),
       },

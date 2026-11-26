@@ -32,6 +32,7 @@ export type {
   Renderer,
   SourceMap,
   Suggestions,
+  SuggestionAccess,
   Tagging,
 } from './bundle.ts';
 export { mathGate, mathGateReason, scanMath, MATH_LIMITS, DIMENSION_BOUNDS } from './math/gate.ts';

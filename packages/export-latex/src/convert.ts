@@ -206,7 +206,12 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
         message: `the document requires "${feature}", which this converter cannot read (03 §2)`,
       });
   }
-  const doc = settleSuggestions(envelope.doc as unknown as J, o.suggestions, diagnostics);
+  const doc = settleSuggestions(
+    envelope.doc as unknown as J,
+    o.suggestions,
+    diagnostics,
+    options.suggestionAccess,
+  );
   const table = styleTable(doc as unknown as TreeNode);
   const labels = computeLabels(doc as unknown as TreeNode, {
     table,

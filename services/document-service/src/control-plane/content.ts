@@ -177,6 +177,42 @@ export function hasSuggestions(node: unknown): boolean {
   return false;
 }
 
+/**
+ * The owner of each suggestion identifier in the content (EXP-081; owner decision 111): the `user`
+ * of its marks and of the entries of a block's `suggest` attribute. The authority checks every
+ * mark against the connection that commits it (07 §5.2 P4), so the mark names the owner. An
+ * identifier used by two different users (invariant I2 broken) has no owner here, and so cannot be
+ * verified.
+ */
+export function suggestionOwners(node: unknown): Record<string, string> {
+  const owners = new Map<string, string | null>();
+  const note = (m: unknown): void => {
+    const e = m as { type?: unknown; attrs?: { id?: unknown; user?: unknown } } | null;
+    if (!e || !SUGGESTION_MARKS.has(String(e.type))) return;
+    const id = e.attrs?.id;
+    const user = e.attrs?.user;
+    if (typeof id !== 'string' || typeof user !== 'string' || user === '') return;
+    const seen = owners.get(id);
+    owners.set(id, seen === undefined || seen === user ? user : null);
+  };
+  const stack: unknown[] = [node];
+  while (stack.length) {
+    const n = stack.pop() as {
+      marks?: unknown[];
+      attrs?: { suggest?: unknown };
+      content?: unknown[];
+    } | null;
+    if (!n || typeof n !== 'object') continue;
+    for (const m of n.marks ?? []) note(m);
+    const suggest = n.attrs?.suggest;
+    if (Array.isArray(suggest)) for (const m of suggest) note(m);
+    if (Array.isArray(n.content)) stack.push(...n.content);
+  }
+  const out: Record<string, string> = Object.create(null) as Record<string, string>;
+  for (const [id, user] of owners) if (user !== null) out[id] = user;
+  return out;
+}
+
 export class ContentReader {
   readonly #o: ContentReaderOptions;
   readonly #rebuilt: Lru<Rebuilt>;
