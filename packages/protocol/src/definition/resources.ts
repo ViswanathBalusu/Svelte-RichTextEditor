@@ -533,9 +533,9 @@ export const REST_SHAPES: readonly NamedShape[] = [
   named(
     'ReadMarker',
     obj(
-      { seq: req(seq()) },
+      { seq: req(seq()), commentSeq: opt(seq()) },
       {
-        doc: "The caller's last seen `seq`; it only moves forward (08 §10).",
+        doc: "The caller's last seen `seq`; it only moves forward (08 §10). `commentSeq` is the last comment sequence number the caller has seen (a comment has a sequence number of its own in its document; owner decision 73); it moves forward on its own and is answered only when the request names it.",
         spec: '05 §6.2; 08 §10',
         gaps: ['G70'],
       },

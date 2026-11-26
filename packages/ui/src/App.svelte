@@ -51,7 +51,11 @@
   import { createCatchUpController } from './shell/catch-up.ts';
   import { MARKUP_VIEWS, type MarkupView } from './shell/markup-views.ts';
   import type { FilterRegistry } from './extensions/filters.ts';
-  import type { StatusItemRegistry } from './extensions/contributions.ts';
+  import {
+  StatusItemRegistry,
+  contributePanel,
+  type StatusItem,
+} from './extensions/contributions.ts';
   import {
     afterPaint,
     connectHooks,
@@ -98,7 +102,7 @@
   import { reviewOffers } from './shell/review-rules.ts';
   import { START_TRACK, stepMode, type ModeTrack } from './shell/suggest-mode.ts';
   import { NoticeTracker, type Notice } from './shell/notices.ts';
-  import { PaneRegistry, type PaneComponent } from './shell/panes.ts';
+  import { PaneRegistry, loadDomPane, type PaneComponent } from './shell/panes.ts';
   import { regionLabelDefaults, regionLabels, scopeAnnouncement } from './shell/regions.ts';
   import { DEFAULT_SETTINGS, type ShellSettings } from './shell/settings.ts';
   import { provideSuspension } from './shell/suspension.ts';
@@ -235,6 +239,8 @@
 
   // The pane host (UX-019): one registry for built-in and contributed panes, one open at a time.
   const paneRegistry = untrack(() => props.paneRegistry ?? new PaneRegistry());
+  // The status-bar items of the host's extensions (UX-052): the host's own registry, or this shell's.
+  const statusRegistry = untrack(() => props.statusItems ?? new StatusItemRegistry());
 
   /** Opens a pane by identifier, as a command of an extension would; false when not offered. */
   export function openPaneById(id: string): Promise<boolean> {
@@ -842,6 +848,16 @@
     readonly document: ExtensionDocumentApi | null;
     /** Runs `dispose` when the extension is removed, as its commands are (UX-060: a sandbox frame). */
     onRemove(dispose: () => void): void;
+    /**
+     * Adds a side panel (UX-052). `mount` draws the panel's elements into the container when the
+     * panel is opened, and may return the function that removes them. The panel is removed with the
+     * extension. Open it with `openPanel`.
+     */
+    registerPanel(panel: { id: string; label: string; mount: (container: HTMLElement) => (() => void) | void }): void;
+    /** Opens a panel by its identifier; false when it is not offered. */
+    openPanel(id: string): Promise<boolean>;
+    /** Adds a status-bar item with a text alternative (UX-052). Removed with the extension. */
+    addStatusItem(item: StatusItem): void;
   }
   const extensionHost = untrack(
     () =>
@@ -871,6 +887,29 @@
             },
             onRemove(dispose) {
               track(dispose);
+            },
+            registerPanel(panel) {
+              track(
+                contributePanel(paneRegistry, {
+                  id: panel.id,
+                  label: panel.label,
+                  load: loadDomPane,
+                  props: {
+                    mount: panel.mount,
+                    onError: (error: unknown) =>
+                      props.onExtensionError?.({
+                        extension: id,
+                        reason: 'handler-failed',
+                        message: `panel ${panel.id}: ${error instanceof Error ? error.message : String(error)}`,
+                        fatal: false,
+                      }),
+                  },
+                }),
+              );
+            },
+            openPanel: (panelId) => openPane(panelId),
+            addStatusItem(item) {
+              track(statusRegistry.add(item));
             },
           };
         },
@@ -1749,7 +1788,7 @@
     {zoom}
     onAccessRequest={props.onAccessRequest ? requestAccess : undefined}
     {accessRequested}
-    statusItems={props.statusItems}
+    statusItems={statusRegistry}
   />
   {#if menu}
     <ContextMenu

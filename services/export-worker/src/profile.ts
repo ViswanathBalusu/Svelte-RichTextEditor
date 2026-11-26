@@ -27,6 +27,8 @@ export interface JobPlan {
   timeZone: string;
   /** `fields` of 09 §9.1. */
   fields: 'flatten' | 'blank';
+  /** `comments` of 09 section 10: `margin` prints the open threads of the job in the margin (EXP-084). */
+  comments: 'none' | 'margin';
   /** How suggestions print (09 §10); absent: the document must have none. */
   suggestions: 'accept' | 'reject' | 'markup' | null;
   /** Warnings about choices made for the request. */
@@ -80,7 +82,7 @@ export function planJob(
   options: unknown,
   documentLang: string | null,
   /** What the job's payload carries besides the options (written by the control plane only). */
-  carried: { certificateFacts?: boolean } = {},
+  carried: { certificateFacts?: boolean; marginComments?: boolean } = {},
 ): PlanResult {
   const o = (
     options && typeof options === 'object' && !Array.isArray(options) ? options : {}
@@ -120,8 +122,10 @@ export function planJob(
   const fields = o['fields'] ?? 'flatten';
   if (fields !== 'flatten' && fields !== 'blank') invalid('fields');
   const comments = o['comments'] ?? 'none';
-  if (comments === 'margin') unsupported('comments', 'comments in the margin come with EXP-084');
-  else if (comments !== 'none') invalid('comments');
+  // The margin is a page's: the PDF and the LaTeX bundle have one, an HTML or Markdown file has not.
+  if (comments === 'margin' && carried.marginComments !== true)
+    unsupported('comments', 'comments in the margin are written for pdf and tex only');
+  else if (comments !== 'none' && comments !== 'margin') invalid('comments');
   const suggestions = o['suggestions'];
   // `markup` is the converter's markup mode (EXP-083; export-latex suggestions.ts).
   if (
@@ -160,6 +164,7 @@ export function planJob(
       locale: locale as string,
       timeZone: timeZone as string,
       fields: fields === 'blank' ? 'blank' : 'flatten',
+      comments: comments === 'margin' ? 'margin' : 'none',
       suggestions:
         suggestions === 'accept' || suggestions === 'reject' || suggestions === 'markup'
           ? suggestions

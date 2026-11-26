@@ -272,13 +272,14 @@ describe('the configuration that makes the shape (FE-002)', () => {
     );
     expect(loaded.length).toBeGreaterThanOrEqual(16);
     expect(new Set(loaded).size).toBe(loaded.length);
-    // Every pane component in the folder is reached that way, except the sandbox pane, which a
-    // host passes to an extension itself and the element's build does not hold.
+    // Every pane component in the folder is reached that way, except the two that hold an
+    // extension's own content, which the extension's registration loads (loadSandboxPane,
+    // loadDomPane): the sandbox pane (UX-060) and the pane of a tier 1 extension's panel (UX-052).
     const files = readdirSync(resolve(packages, 'ui/src/panes'))
       .filter((f) => f.endsWith('.svelte'))
       .map((f) => f.replace(/\.svelte$/, ''))
       .sort();
-    expect([...loaded, 'SandboxPane'].sort()).toEqual(files);
+    expect([...loaded, 'ExtensionDomPane', 'SandboxPane'].sort()).toEqual(files);
     // No pane component is imported statically by the shell or the element.
     const statics = /import\s+\w+\s+from\s+'[^']*\/panes\/\w+\.svelte'/;
     for (const file of ['ui/src/App.svelte', 'ui/src/shell/panes.ts', 'element/src/editor.ts'])

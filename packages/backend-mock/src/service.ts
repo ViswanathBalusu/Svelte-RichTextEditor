@@ -148,6 +148,11 @@ export class MockService implements BackendHost {
     this.must(docId).setState(state);
   }
 
+  /** `PATCH /documents/{id}` with a classification label (or `null` to clear it); open rooms get `document.updated`. */
+  setClassification(docId: string, label: string | null): void {
+    this.must(docId).setClassification(label);
+  }
+
   /** `POST /sessions/revoke`: tokens issued before now are refused and the user's channels close. */
   revokeSessions(sub: string): void {
     this.watermarks.set(sub, this.serial);

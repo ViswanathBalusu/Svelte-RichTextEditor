@@ -115,7 +115,12 @@ export class MockBackend implements Backend {
     };
     this.sync = {
       loadContent: (docId, seq) => this.loadContent(docId, seq),
+<<<<<<< HEAD
+      open: (docId, opts) => this.open(docId, opts.resume, opts.features),
+=======
+      document: async (docId) => this.doc(docId).resource(),
       open: (docId, opts) => this.open(docId, opts.resume),
+>>>>>>> stories/w5
     };
     this.permissions = {
       current: (docId) => {
@@ -374,7 +379,11 @@ export class MockBackend implements Backend {
     return this.doc(docId).content(seq);
   }
 
-  private async open(docId: string, resume: Resume | undefined): Promise<SyncChannel> {
+  private async open(
+    docId: string,
+    resume: Resume | undefined,
+    features: readonly string[] | undefined,
+  ): Promise<SyncChannel> {
     const role = this.role(docId);
     const d = this.doc(docId);
     const existing = this.channels.get(docId);
@@ -393,6 +402,8 @@ export class MockBackend implements Backend {
       groups: this.token!.grp,
       participantRoles: this.token!.fill?.roles ?? [],
       participantActive: this.token!.fill?.active ?? false,
+      // The CDM features the client announced (03 §11.1): the room counts the channel when a commit adds one.
+      ...(features ? { features } : {}),
     };
     const channel = d.open(conn, this.current!.user, resume, {
       access: (a) => this.portDelivery.push(`access:${docId}`, a),

@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-26 v0.2.17 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-26 v0.2.18 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -784,6 +784,21 @@
 \gdef\DE@classif{}
 \def\DE@classmark#1{\ifx\DE@classif\empty\else
   \rlap{\lower#1\hbox to\textwidth{\hss\SuspendTagging{docedit}\small\DE@classif\ResumeTagging{docedit}\hss}}\fi}
+% Margin comments (EXP-084; owner decision 52). \DEmargin{notes} puts a note in the right margin
+% beside the line it follows, in small type, as wide as the margin allows (at least 10mm). The
+% text is written through the text emitter. \DEnote{author}{text} is one message and \DEquote{text}
+% the words the comment is about. A note in a table cell, a header or a heading argument would be
+% lost by \marginpar, so the converter writes none there; it lists such comments at the end.
+\newcommand\DEnote[2]{{\bfseries #1:} #2\par}
+\newcommand\DEquote[1]{{\itshape #1}\par}
+\newcommand\DEmargin[1]{%
+  \setlength\marginparsep{1.5mm}%
+  \DE@tmpd=\dimexpr\paperwidth-\textwidth-\oddsidemargin-1in-\hoffset-\marginparsep-2mm\relax
+  \ifdim\DE@tmpd<10mm \DE@tmpd=10mm\fi
+  \marginparwidth=\DE@tmpd
+  \marginpar{\DE@noattrs\raggedright\fontsize{6.5pt}{7.5pt}\selectfont #1}}
+\newcommand\DEunplacedhead{\par\bigskip\noindent{\bfseries Comments not shown in the margin}\par\smallskip}
+\newcommand\DEunplaced[1]{\par\noindent\begingroup\small #1\endgroup\smallskip}
 \def\DE@ps#1#2{\csname DE@ps@#1@#2\endcsname}
 \def\DE@story#1{\ifnum#1>0 \csname DE@story@#1\endcsname\fi}
 % The story a page shows (ADR 0032 §6): the first page of a section shows the first-page story

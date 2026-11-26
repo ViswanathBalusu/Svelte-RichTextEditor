@@ -638,9 +638,10 @@ export interface ForkRequest {
   atSeq: number;
 }
 
-/** The caller's last seen `seq`; it only moves forward (08 §10). */
+/** The caller's last seen `seq`; it only moves forward (08 §10). `commentSeq` is the last comment sequence number the caller has seen (a comment has a sequence number of its own in its document; owner decision 73); it moves forward on its own and is answered only when the request names it. */
 export interface ReadMarker {
   seq: number;
+  commentSeq?: number;
 }
 
 /** Where a client should open its channel (06 §2.1). A hint only: it grants nothing. */

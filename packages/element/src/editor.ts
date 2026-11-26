@@ -24,7 +24,9 @@ import {
   type PrincipalInfo,
   type SearchPrincipals,
   type SyncChannel,
+  type SyncPort,
 } from '@docedit/protocol';
+import { classificationView, type NoticeSource } from './classification-shell.ts';
 import {
   App,
   PeopleDirectory,
@@ -106,6 +108,12 @@ export interface MountOptions {
    * `regions` read the shell offers the permissions pane; with its grants reads, the grant controls.
    */
   permissions?: PermissionsPort | null;
+  /**
+   * The session's metadata read and notices, when the backend has the read (UX-085 criterion 2).
+   * With them the status bar shows the document's classification label and follows
+   * `document.updated`; without them the core has no `classification` view and the bar shows none.
+   */
+  classification?: { document: NonNullable<SyncPort['document']>; notices: NoticeSource };
   /**
    * The export dialog's jobs (UX-101), when the backend has the exports port. Without it the shell
    * offers no export command.
@@ -393,6 +401,9 @@ const CONNECTION: Readonly<Record<ConnectionState, Connection>> = {
   offline: 'offline',
 };
 
+/** The most ranges one extension holds at once (UX-053). Proposed default; the spec gives no number. */
+const EXTENSION_MAX_RANGES = 64;
+
 export function mountEditor(options: MountOptions): MountedEditor {
   const { root, content, config, viewerUrl } = options;
   // The core refuses a document this build cannot read (03 §2): UnsupportedDocumentError carries
@@ -506,6 +517,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The document as this reader holds it: the accessibility checker reads it (UX-066), so a
       // picture without alternative text is listed (FE-132 criterion 5).
       getContent: () => core.getContent(),
+      // The range-based document API of the host's extensions (UX-053; UX-050 criterion 6).
+      extensionApi: (opts) => core.extensionApi(opts),
       // The cross-reference dialog's list (FE-134 criterion 2).
       referenceTargets: () => core.referenceTargets(),
       // The navigation pane's search (UX-020 criterion 3): the core's find over the body this reader
@@ -836,6 +849,17 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
       // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
       permissions: core.permissions,
+      // The classification label of the status bar (UX-085 criterion 2): the document resource,
+      // read again at every `document.updated`.
+      ...(options.classification
+        ? {
+            classification: classificationView(
+              options.classification.document,
+              options.docId,
+              options.classification.notices,
+            ),
+          }
+        : {}),
       // The lock indicators of the regions the user cannot edit (PRM-026): the core shades them from
       // the access and draws the shell's words, which hold the names of the host's directory.
       setRegionLabels: (labels, defaults) => core.setRegionLabels(labels, defaults),
@@ -898,7 +922,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
   const strings = new Strings({
     overrides: options.strings() ?? {},
     onUnknown: (keys) =>
-      console.warn(`doc-editor: unknown string keys ignored: ${keys.join(', ')}`),
+      console.warn(
+        `doc-editor: string keys the editor does not know (kept for extensions): ${keys.join(', ')}`,
+      ),
   });
   // The one command registry (13 §4; UX-005): the shell's toolbars and menus read it, and so do the
   // host's `exec` and `queryCommand`, so the host's buttons agree with the built-in ones.
@@ -924,6 +950,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(options.onForkRequest ? { onForkRequest: options.onForkRequest } : {}),
       ...(options.onAccessRequest ? { onAccessRequest: options.onAccessRequest } : {}),
       onExtensionError: options.onExtensionError,
+      // The range-based document API of the host's extensions (UX-053). The cap is the element's own
+      // default, not a spec figure (ADR 0136, proposed).
+      documentApi: { maxRanges: EXTENSION_MAX_RANGES },
     },
   });
   // Run the mount effects now, so the body view exists when `de-ready` is seen.

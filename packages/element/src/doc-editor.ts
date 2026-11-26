@@ -367,7 +367,15 @@ export class DocEditorElement extends Base {
 
   set extensions(value: readonly HostExtension[]) {
     this.#extensions = Array.isArray(value) ? Object.freeze([...value]) : [];
-    this.#mounted?.setExtensions(this.#extensions);
+    const mounted = this.#mounted;
+    if (!mounted) return;
+    // An extension set after mount is given the document API, which loads on demand (FND-008).
+    const list = this.#extensions;
+    const apply = (): void => {
+      if (this.#mounted === mounted && this.#extensions === list) mounted.setExtensions(list);
+    };
+    if (list.length === 0) apply();
+    else void loadParts(['extension']).then(apply, apply);
   }
 
   /**
@@ -1022,7 +1030,12 @@ export class DocEditorElement extends Base {
     const workflow = this.#workflowSource(docId);
     // A document with rules, or a host with a workflow, needs the rules language before anything is
     // drawn. A document without either never loads it (FND-008; engine parts.ts).
-    await loadParts(partsFor({ doc: content.doc, workflow: workflow.workflow !== undefined }));
+    // The host's extensions are given the document API, which is a part of its own (UX-050).
+    const needed = new Set(
+      partsFor({ doc: content.doc, workflow: workflow.workflow !== undefined }),
+    );
+    if (this.#extensions.length > 0) needed.add('extension');
+    await loadParts([...needed]);
     const mounted = mountEditor({
       root: this.#root,
       content,
@@ -1053,6 +1066,8 @@ export class DocEditorElement extends Base {
       // The session's backend is connected before the editor is mounted (session.ts).
       permissions:
         this.#session?.docId === docId ? (this.#session.backend?.permissions ?? null) : null,
+      // The status bar's classification label: the metadata read and the session's notices (UX-085).
+      ...this.#classificationSource(docId),
       settings,
       mode: modeFrom(this.getAttribute('mode')),
       // The share command asks the host (PRO-089). Only the session that is current raises it.
@@ -1401,6 +1416,21 @@ export class DocEditorElement extends Base {
         this.#session === session && session?.backend?.workflow
           ? { port: session.backend.workflow, docId: session.docId }
           : null,
+    };
+  }
+
+  /**
+   * The metadata read and the session's notices for the status bar's classification label (UX-085),
+   * when the session's backend can read the document resource; otherwise nothing.
+   */
+  #classificationSource(docId: string): {
+    classification?: NonNullable<EditorChunk.MountOptions['classification']>;
+  } {
+    const session = this.#session;
+    const sync = session?.docId === docId ? session.backend?.sync : undefined;
+    if (!session || !sync?.document) return {};
+    return {
+      classification: { document: sync.document.bind(sync), notices: session.notifications },
     };
   }
 

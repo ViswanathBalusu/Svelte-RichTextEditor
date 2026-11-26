@@ -20,6 +20,7 @@ import type { Bundle, BundleManifest, ConvertOptions, Diagnostic, SourceMap } fr
 import { bundleHashInput, canonicalJson } from './bundle-hash.ts';
 import { block, closeLists, flowBlocks, newFlow } from './blocks.ts';
 import { appendCertificate } from './certificate.ts';
+import { blockIds, planComments, unplacedComments } from './comments.ts';
 import { settleSuggestions } from './suggestions.ts';
 import { computeCitations } from './citations.ts';
 import {
@@ -55,7 +56,7 @@ import { serverFonts } from './server-fonts.ts';
 import { styleMacro, substituteKey } from './props.ts';
 
 /** The house class version (EXP-015): raised with every change to docedit.cls or docedit.lua. */
-export const CLASS_VERSION = '0.2.17';
+export const CLASS_VERSION = '0.2.18';
 
 /** A TeX Live image digest (EXP-073): `sha256:` and 64 lowercase hex digits. */
 export const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
@@ -181,6 +182,7 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
     profile: options.profile ?? 'final',
     fields: options.fields ?? 'flatten',
     suggestions: options.suggestions ?? null,
+    comments: options.comments ?? 'none',
   } as const;
   const imageDigest = options.imageDigest ?? null;
   if (imageDigest !== null && !IMAGE_DIGEST_PATTERN.test(imageDigest))
@@ -206,7 +208,12 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
         message: `the document requires "${feature}", which this converter cannot read (03 §2)`,
       });
   }
-  const doc = settleSuggestions(envelope.doc as unknown as J, o.suggestions, diagnostics);
+  const doc = settleSuggestions(
+    envelope.doc as unknown as J,
+    o.suggestions,
+    diagnostics,
+    options.suggestionAccess,
+  );
   const table = styleTable(doc as unknown as TreeNode);
   const labels = computeLabels(doc as unknown as TreeNode, {
     table,
@@ -261,7 +268,9 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
     citations: { byNode: new Map(), entries: [] },
     markedStyles: new Map(),
     state: { columns: 1, setup: 0 },
+    comments: { byBlock: new Map(), placed: new Set() },
   };
+  planComments(ctx);
   for (const p of labels.problems) diag(ctx, 'warning', p.code, null, p.message);
   // The preflight is the one check of the document's own text and pictures (EXP-003, EXP-026, EXP-113).
   // A table in a multi-column section, a header or a footer is reported once, by the table writer
@@ -352,6 +361,7 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
   const flow = newFlow('body', null, null);
   for (const node of body?.content ?? []) block(ctx, flow, node);
   closeLists(ctx, flow, () => false);
+  for (const l of unplacedComments(ctx, blockIds(doc))) line(ctx, l);
   line(ctx, t('\\DEendsections'));
   const bodyOut = ctx.out;
   // Table of contents entries take the TOC1 to TOC9 styles when the document has them.
@@ -526,6 +536,7 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
       layout: o.layout,
       fields: o.fields,
       suggestions: o.suggestions ?? 'none',
+      ...(o.comments === 'margin' ? { comments: 'margin' } : {}),
       title: options.title ?? 'Document',
       timeZone: options.timeZone ?? '',
       instant: options.instant ?? '',

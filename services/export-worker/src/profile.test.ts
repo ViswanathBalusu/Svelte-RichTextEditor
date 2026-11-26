@@ -47,7 +47,9 @@ describe('profiles (EXP-061, EXP-062)', () => {
   });
 
   it('refuses options it cannot honour and values outside the schema', () => {
+    // The margin is a page's: margin comments are for pdf and tex (EXP-084), not html or md.
     expect(refused({ comments: 'margin' })).toEqual(['option_unsupported']);
+    expect(refused({ comments: 'side' })).toEqual(['option_invalid']);
     // Suggestion markup is honoured since EXP-083 (export-latex suggestions.ts).
     expect(refused({ suggestions: 'markup' })).toEqual([]);
     expect(refused({ suggestions: 'inline' })).toEqual(['option_invalid']);

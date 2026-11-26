@@ -2515,11 +2515,16 @@
     },
     "ReadMarker": {
       "title": "ReadMarker",
-      "description": "The caller's last seen `seq`; it only moves forward (08 §10).",
+      "description": "The caller's last seen `seq`; it only moves forward (08 §10). `commentSeq` is the last comment sequence number the caller has seen (a comment has a sequence number of its own in its document; owner decision 73); it moves forward on its own and is answered only when the request names it.",
       "$comment": "05 §6.2; 08 §10; gaps: G70",
       "type": "object",
       "properties": {
         "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "commentSeq": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991

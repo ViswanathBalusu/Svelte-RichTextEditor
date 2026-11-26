@@ -28,6 +28,7 @@ import {
   type CommentsPort,
   type Content,
   type Discovery,
+  type DocumentResource,
   type ErrorCode,
   type ExportsPort,
   type FieldsPort,
@@ -286,7 +287,16 @@ export class DepBackend implements Backend {
     );
     this.sync = {
       loadContent: (docId, seq) => this.loadContent(docId, seq),
+<<<<<<< HEAD
+      open: (docId, o) => this.open(docId, o.resume, o.features),
+=======
+      // The metadata read (PRO-048): the answer is checked against its shape and unknown fields stay.
+      document: (docId) =>
+        this.tagged<DocumentResource>('GET', `/documents/${enc(docId)}`, {
+          shape: 'DocumentResource',
+        }),
       open: (docId, o) => this.open(docId, o.resume),
+>>>>>>> stories/w5
     };
     const base: PermissionsPort = {
       current: (docId) => this.accesses.get(docId) ?? null,
@@ -763,7 +773,11 @@ export class DepBackend implements Backend {
     else this.views.set(docId, { incarnation, view, from: seq, to: seq });
   }
 
-  private async open(docId: string, resume: Resume | undefined): Promise<SyncChannel> {
+  private async open(
+    docId: string,
+    resume: Resume | undefined,
+    features?: readonly string[],
+  ): Promise<SyncChannel> {
     if (this.phase !== 'online' || !this.conn) throw new PortError('unavailable', 'not connected');
     const existing = this.channels.get(docId);
     if (existing && !existing.isClosed)
@@ -785,9 +799,25 @@ export class DepBackend implements Backend {
     this.byCh.set(n, ch);
     const opened = ch.whenOpen();
     ch.apply(
-      machine.open(n, [...this.negotiated], resume && this.withView(docId, resume), this.p.now()),
+      machine.open(
+        n,
+        this.announced(features),
+        resume && this.withView(docId, resume),
+        this.p.now(),
+      ),
     );
     return opened;
+  }
+
+  /**
+   * The features sent in `ch.open` (D120): the negotiated ones, and the CDM features the caller reads
+   * that the server announced. The server keeps them for the channel's life.
+   */
+  private announced(read: readonly string[] | undefined): string[] {
+    const out = new Set(this.negotiated);
+    const offered = new Set(this.welcome?.features ?? []);
+    for (const f of read ?? []) if (offered.has(f)) out.add(f);
+    return [...out];
   }
 
   /** Fills `resume.view` from the content read or channel the resume point came from (D81). */
