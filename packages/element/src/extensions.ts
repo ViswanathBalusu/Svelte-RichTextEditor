@@ -42,6 +42,24 @@ export interface HostExtensionApi {
   readonly document: ExtensionDocumentApi | null;
   /** Runs `dispose` when the extension is removed. */
   onRemove(dispose: () => void): void;
+  /**
+   * Adds a side panel (UX-052). `mount` draws the panel's elements into `container` when the panel
+   * is opened and may return the function that removes them; a throw from it is reported as a
+   * `de-error` with `fatal: false`. The panel is held to the accessibility requirements of the
+   * built-in panes and can read the public `--de-` properties. Removed with the extension.
+   */
+  registerPanel(panel: {
+    id: string;
+    label: string;
+    mount: (container: HTMLElement) => (() => void) | void;
+  }): void;
+  /** Opens a panel by its identifier; resolves false when it is not offered. */
+  openPanel(id: string): Promise<boolean>;
+  /**
+   * Adds a status-bar item at the `start` or `end` of the bar (UX-052). `label` is the text
+   * alternative a screen reader announces. Removed with the extension.
+   */
+  addStatusItem(item: { id: string; position: 'start' | 'end'; text: string; label: string }): void;
 }
 
 /** One element of the `extensions` array. */

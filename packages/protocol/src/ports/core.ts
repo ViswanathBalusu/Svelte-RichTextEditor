@@ -103,8 +103,16 @@ export interface SyncPort {
    * Opens a document channel (`ch.open`). Without `resume` the server answers `catchUp: "reload"`,
    * and the caller fetches the content at `opened.head`. Rejects with a PortError carrying the
    * `ch.rejected` code.
+   *
+   * `features` are the CDM features the caller's editor reads (03 section 11.1; D120). A backend
+   * announces them in `ch.open`, limited to what the server announced, and the room adds a feature to
+   * `requires` only when every attached channel announced it. Without it a backend sends the
+   * features it was constructed with.
    */
-  open(docId: string, opts: { resume?: Resume }): Promise<SyncChannel>;
+  open(
+    docId: string,
+    opts: { resume?: Resume; features?: readonly string[] },
+  ): Promise<SyncChannel>;
 }
 
 /**

@@ -240,6 +240,8 @@ export class MockDocument implements ChannelHost {
       epoch: 1,
       incarnation: this.incarnation,
       now: () => this.hooks.now(),
+      // The mock keeps the stored commits as the room builds them, so it can keep requires (03 §11.1).
+      requiresGrowth: true,
       ...(this.hooks.mathGate ? { mathGate: this.hooks.mathGate } : {}),
     });
   }
