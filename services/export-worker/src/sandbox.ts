@@ -38,6 +38,9 @@ export const LOG_LINE_UNWRAPPED = 1_048_576;
 /** The image built from services/export-worker/Containerfile (scripts/build-image.ts). */
 export const IMAGE = process.env['DOCEDIT_EXPORT_IMAGE'] ?? 'localhost/docedit-export-worker:s4';
 
+/** The size of the tmpfs biber unpacks itself into; its files are 121 MiB (du, biber 2.22, 2026-11-26). */
+export const BIBER_UNPACK_MIB = 192;
+
 export interface SandboxOptions {
   image?: string;
   minPasses?: number;
@@ -64,6 +67,12 @@ export interface Pass {
   ms: number;
 }
 
+/** One run of biber in the sandbox (EXP-121): its exit code and its wall time. */
+export interface BiberRun {
+  rc: number;
+  ms: number;
+}
+
 export interface CompileResult {
   ok: boolean;
   exitCode: number | null;
@@ -72,9 +81,13 @@ export interface CompileResult {
   /** The job was cancelled and its container killed. */
   cancelled: boolean;
   passes: Pass[];
+  /** The runs of biber, in order; empty when the document has no citations (EXP-121). */
+  biber?: BiberRun[];
   converged: boolean;
   pdf: Uint8Array | null;
   log: string;
+  /** Biber's log (main.blg); empty when biber did not run. Worker output: hostile text. */
+  biberLog?: string;
   layoutRaw: string | null;
   stderr: string;
   /** Time from starting `podman run` to its exit, container start-up included. */
@@ -88,7 +101,7 @@ export interface CompileResult {
   passTimeoutSeconds: number;
 }
 
-const OUTPUTS = new Set(['main.pdf', 'main.log', 'main.layout', 'timings.txt']);
+const OUTPUTS = new Set(['main.pdf', 'main.log', 'main.layout', 'main.blg', 'timings.txt']);
 
 function resolveLimits(opts: SandboxOptions): { l: Limits; passTimeout: number } {
   const l: Limits = { ...LIMITS, ...opts.limits };
@@ -116,6 +129,10 @@ export function sandboxArgs(name: string, opts: SandboxOptions = {}): string[] {
     '--read-only',
     '--read-only-tmpfs=false',
     `--tmpfs=/work:rw,size=${l.workMiB}m,mode=1777,nosuid,nodev,noexec`,
+    // Biber unpacks itself on every run into a directory that allows execution (EXP-121). This one
+    // tmpfs is the only place a job's container can execute from; /work stays noexec, and only
+    // biber writes here (09 section 9.3).
+    `--tmpfs=/opt/docedit/par:rw,size=${BIBER_UNPACK_MIB}m,mode=1777,nosuid,nodev,exec`,
     '--cap-drop=ALL',
     '--security-opt=no-new-privileges',
     '--user=10001:10001',
@@ -167,16 +184,19 @@ export async function runInSandbox(
   return { ...r, name };
 }
 
-function parseTimings(text: string): { passes: Pass[]; converged: boolean } {
+function parseTimings(text: string): { passes: Pass[]; biber: BiberRun[]; converged: boolean } {
   const passes: Pass[] = [];
+  const biber: BiberRun[] = [];
   let converged = false;
   // The file is worker output and hostile: only these line shapes count, and only a few of them.
   for (const line of text.split('\n').slice(0, 64)) {
     const m = /^(\d{1,3}) (\d{1,3}) (\d{1,9})$/.exec(line.trim());
+    const b = /^biber (\d{1,3}) (\d{1,9})$/.exec(line.trim());
     if (m) passes.push({ pass: Number(m[1]), rc: Number(m[2]), ms: Number(m[3]) });
+    else if (b) biber.push({ rc: Number(b[1]), ms: Number(b[2]) });
     else if (line.trim() === 'converged 1') converged = true;
   }
-  return { passes, converged };
+  return { passes, biber, converged };
 }
 
 export async function compileInSandbox(
@@ -212,9 +232,11 @@ export async function compileInSandbox(
     outputOverflow: r.stdoutOverflow,
     cancelled: r.aborted,
     passes: timings.passes,
+    biber: timings.biber,
     converged: timings.converged,
     pdf,
     log: dec.decode(out.get('main.log') ?? new Uint8Array()),
+    biberLog: dec.decode(out.get('main.blg') ?? new Uint8Array()),
     layoutRaw: out.has('main.layout') ? dec.decode(out.get('main.layout')!) : null,
     stderr: r.stderr,
     wallMs: r.wallMs,

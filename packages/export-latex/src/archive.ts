@@ -15,6 +15,17 @@ export const CLASS_LICENCE = 'Apache-2.0';
 
 export function archiveReadme(bundle: Bundle): string {
   const m = bundle.manifest;
+  const hasBib = Object.hasOwn(bundle.files, 'references.bib');
+  const bibNotice = hasBib
+    ? [
+        'The document has citations. references.bib is generated from its sources, and biblatex reads it',
+        'through biber (EXP-121). Run biber after the first LuaLaTeX pass, with no network and in the',
+        'same directory, and again whenever main.bcf changes; the service does the same:',
+        '  lualatex ... main.tex && biber main && lualatex ... main.tex',
+        'The number of passes depends on the citation style; with citation-order numbering biber runs twice.',
+        '',
+      ]
+    : [];
   const fonts = m.fonts
     .flatMap((f) => f.files.map((x) => `  ${x.file}  ${f.family} (${f.role}), ${f.licence}`))
     .join('\n');
@@ -40,6 +51,7 @@ export function archiveReadme(bundle: Bundle): string {
     '  DOCEDIT_FONT_PATH=/path/to/fonts/ SOURCE_DATE_EPOCH=0 FORCE_SOURCE_DATE=1 \\',
     '    lualatex --no-shell-escape --interaction=nonstopmode --halt-on-error main.tex',
     '',
+    ...bibNotice,
     'Licences. The class and Lua files (docedit.cls, docedit.lua) are licensed under Apache-2.0,',
     'copyright 2026 the project authors; the licence text is LICENCE.txt. licences.json is the',
     'licence manifest of the TeX Live packages the class relies on: each package it loads by name,',

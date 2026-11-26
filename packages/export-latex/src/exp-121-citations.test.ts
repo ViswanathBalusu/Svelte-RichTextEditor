@@ -1,11 +1,27 @@
 /**
- * EXP-121 citations and the bibliography in the LaTeX converter (Node.js only). The converter writes
- * the citation texts and the bibliography itself (citations.ts, the default of owner decision 10), so
- * the bundle has no `.bib` file and biber does not run. Criteria that need a `.bib` file or biber stay
- * open in the story. Nothing here compiles.
+ * EXP-121 citations and the bibliography on the converter's text route (Node.js only):
+ * ibliography: 'text', in which the converter writes the citation texts and the bibliography
+ * itself (citations.ts), so the bundle has no .bib file and biber does not run. This is the route
+ * before owner decision 16, kept as an option; the default route is biblatex
+ * (xp-121-biblatex.test.ts). Nothing here compiles.
  */
 import { describe, expect, it } from 'vitest';
-import { blockLines, codes, decodeStrings, doc, nid, para, run } from '../test/docs.ts';
+import type { Bundle, ConvertOptions } from './bundle.ts';
+import {
+  blockLines,
+  codes,
+  decodeStrings,
+  doc,
+  nid,
+  para,
+  run as convertWith,
+} from '../test/docs.ts';
+
+/** The text route of the converter (the default is biblatex since owner decision 16). */
+const run = (
+  envelope: Parameters<typeof convertWith>[0],
+  options: Partial<ConvertOptions> = {},
+): Promise<Bundle> => convertWith(envelope, { bibliography: 'text', ...options });
 
 const SMITH = {
   type: 'source_def',

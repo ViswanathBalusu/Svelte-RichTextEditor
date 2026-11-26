@@ -1,9 +1,10 @@
 /**
- * Citations and the bibliography (03 §4.7; EXP-121). Following the default of owner decision 10
- * (docs/owner-decisions-pending.md), the converter writes the citation texts and the bibliography
- * itself, in the two house styles of `settings.citationStyle` (`numeric`, `authorYear`), so biber
- * and `.bib` input never enter the sandbox. Every string still reaches TeX through the `text`
- * emitter, and URLs through `url`.
+ * Citations and the bibliography as text (03 §4.7; EXP-121). This is the converter's own route, kept
+ * for `bibliography: 'text'` and for the text of a citation whose sources are all missing; the
+ * default route is biblatex with a generated `.bib` file and biber (owner decision 16; `bibtex.ts`).
+ * It writes the citation texts and the bibliography itself, in the two house styles of
+ * `settings.citationStyle` (`numeric`, `authorYear`). Every string still reaches TeX through the
+ * `text` emitter, and URLs through `url`.
  *
  * The rules (ADR 0046, proposed):
  * - numeric: sources are numbered in the order they are first cited; a citation prints
@@ -112,7 +113,7 @@ function authorLabel(src: J | undefined): string {
   return `${names[0]} et al.`;
 }
 
-function locatorText(item: Item): string {
+export function locatorText(item: Item): string {
   if (!item.locator) return '';
   const label = item.label ?? 'page';
   const abbr = Object.hasOwn(LOCATOR_ABBREVIATIONS, label)

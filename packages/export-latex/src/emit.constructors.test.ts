@@ -57,6 +57,9 @@ const EIGHT = [
   'generatedId',
 ] as const;
 
+/** The two emitters of the .bib file (EXP-121; SR-M20), after the eight. */
+const BIB = ['bibField', 'bibKey'] as const;
+
 /** Forms of an emitter: the same rule, for another place the value goes. */
 const FORMS = [
   'textChunks', // text, with the offsets the layout report needs
@@ -64,6 +67,7 @@ const FORMS = [
   'int', // generatedId
   'letters', // generatedId
   'assetFile', // generatedId: a name from a content hash
+  'bibVerbatim', // bibField, for a DOI or a URL
 ];
 
 /** Composition of values that are already `Tex`: nothing user-controlled enters here. */
@@ -73,14 +77,14 @@ const COMPOSITION = ['tex', 'lit', 'join', 'markedLines', 'EMPTY'];
 const CHECKED = ['fontFile', 'gatedMath'];
 
 describe('EXP-045 criterion 1: the constructors of TeX are a fixed, reviewed list', () => {
-  it('names the eight emitters of 09 §4, and each is an export of emit.ts', () => {
-    expect([...EMITTERS].sort()).toEqual([...EIGHT].sort());
+  it('names the eight emitters of 09 §4 and the two of the .bib file, and each is an export of emit.ts', () => {
+    expect([...EMITTERS].sort()).toEqual([...EIGHT, ...BIB].sort());
     const exported = texExports();
-    for (const name of EIGHT) expect(exported, name).toContain(name);
+    for (const name of [...EIGHT, ...BIB]) expect(exported, name).toContain(name);
   });
 
   it('has no export that makes or returns Tex beyond the emitters, their forms, the composition helpers and the two checked constructors', () => {
-    const expected = [...EIGHT, ...FORMS, ...COMPOSITION, ...CHECKED].sort();
+    const expected = [...EIGHT, ...BIB, ...FORMS, ...COMPOSITION, ...CHECKED].sort();
     expect(texExports()).toEqual(expected);
   });
 

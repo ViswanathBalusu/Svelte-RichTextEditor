@@ -54,6 +54,13 @@ RUN set -eu; \
 COPY compile.sh /opt/docedit/compile.sh
 RUN chmod 0555 /opt/docedit/compile.sh
 
+# biber (EXP-121) is a PAR executable that unpacks itself on each run into PAR_GLOBAL_TMPDIR, which
+# must be writable and must allow execution. The image is read-only and /work does not allow
+# execution, so the sandbox mounts a small tmpfs here that does (services/export-worker/src/sandbox.ts);
+# nothing but biber writes to it. A directory pre-unpacked in the image does not work: PAR will not
+# use a read-only directory.
+RUN mkdir /opt/docedit/par
+ENV PAR_GLOBAL_TMPDIR=/opt/docedit/par
 USER 10001:10001
 WORKDIR /work
 ENTRYPOINT ["/opt/docedit/compile.sh"]

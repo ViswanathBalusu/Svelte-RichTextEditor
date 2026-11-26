@@ -7,6 +7,7 @@
  */
 import { resolveLabelRun, resolveParagraph, type GapSide } from '@docedit/model';
 import { assetRef } from './assets.ts';
+import { NOCITE_ALL, styleRow } from './bibtex.ts';
 import {
   attr,
   diag,
@@ -365,6 +366,31 @@ function bibliography(ctx: Ctx, flow: Flow, node: J): void {
     }
     const style = ctx.table.styles.has('Bibliography') ? 'Bibliography' : null;
     const f = paragraphFormat(ctx, { style, indentLeft: 720, indentFirstLine: -720 }, null, id);
+    const bib = ctx.citations.biblatex;
+    if (bib) {
+      // The biblatex route (EXP-121): each entry is a paragraph of the class (`\DEbibentry`), so the
+      // block keeps its number and its format; biber orders the entries and the style prints them.
+      const label = styleRow(bib.style).label;
+      const mark =
+        label === 'number'
+          ? lit('[\\printfield{labelnumber}]\\addspace ')
+          : label === 'alpha'
+            ? lit('[\\printfield{labelalpha}\\printfield{extraalpha}]\\addspace ')
+            : EMPTY;
+      // biblatex prints the entry after the item code, so the paragraph of `\DEbibentry` cannot wrap
+      // it; the environment sets what `\DE@par` sets (the block, the format) once for all entries,
+      // and each item starts a paragraph in the class's way.
+      // \par cannot be read into the short arguments of \defbibenvironment, so a copy of it is used.
+      line(ctx, lit('\\makeatletter\\let\\DEbibpar\\par'));
+      line(
+        ctx,
+        tex`\defbibenvironment{DEbib}{\DEbibpar\begingroup\DE@attr@block=${int(n)}\relax\DE@attr@area=1\relax\DE@defaults ${f.tex}\DE@apply}{\DEbibpar\endgroup}{\DEbibpar\prevdepth=-1000pt\relax\indent ${mark}}`,
+      );
+      line(ctx, lit('\\makeatother'));
+      if (bib.include === 'all') line(ctx, NOCITE_ALL);
+      line(ctx, lit('\\printbibliography[heading=none,env=DEbib]'));
+      return;
+    }
     for (const e of ctx.citations.entries) {
       const parts = e.parts.map((p) => {
         let body = text(p.text);

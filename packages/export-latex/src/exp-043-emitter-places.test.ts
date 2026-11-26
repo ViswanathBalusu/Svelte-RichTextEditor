@@ -31,39 +31,12 @@ interface Place {
   parts?: (p: string) => DocParts;
 }
 
-const cite = (source: string): J => ({
-  type: 'citation',
-  attrs: { items: [{ source }], mode: 'normal' },
-});
-const source = (attrs: J): J => ({
-  type: 'source_def',
-  attrs: {
-    id: 's1',
-    kind: 'book',
-    title: 'T',
-    authors: [{ family: 'A', given: 'B' }],
-    issued: '2020',
-    ...attrs,
-  },
-});
-const cited = (): J[] => [
-  para('See.', {}, [cite('s1')]),
-  { type: 'bibliography', attrs: { id: nid('b') } },
-];
 const linked = (attrs: J): J[] => [
   para('', {}, [{ type: 'text', text: 'Link.', marks: [{ type: 'link', attrs }] }]),
 ];
 
 /** One document per attribute of the table that names `pdfString`, `kvValue` or `url`. */
 const PLACES: Record<string, Place> = {
-  'source_def.doi': {
-    body: cited,
-    parts: (p) => ({ sources: [source({ doi: `10.1000/${p}` })] }),
-  },
-  'source_def.url': {
-    body: cited,
-    parts: (p) => ({ sources: [source({ url: `https://example.org/${p}` })] }),
-  },
   'figure.alt': {
     body: (p) => [
       { type: 'figure', attrs: { id: nid('f'), asset: 'pic1', width: 1440, height: 1440, alt: p } },

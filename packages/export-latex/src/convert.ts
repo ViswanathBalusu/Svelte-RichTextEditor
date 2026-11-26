@@ -23,6 +23,7 @@ import { appendCertificate } from './certificate.ts';
 import { blockIds, planComments, unplacedComments } from './comments.ts';
 import { settleSuggestions } from './suggestions.ts';
 import { computeCitations } from './citations.ts';
+import { bibFile, biblatexPreamble, isCitationStyle } from './bibtex.ts';
 import {
   attr,
   diag,
@@ -265,7 +266,7 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
     setups: [],
     projection: false,
     captionHolders: new Map(),
-    citations: { byNode: new Map(), entries: [] },
+    citations: { byNode: new Map(), entries: [], biblatex: null },
     markedStyles: new Map(),
     state: { columns: 1, setup: 0 },
     comments: { byBlock: new Map(), placed: new Set() },
@@ -338,9 +339,32 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
   const include = str(attr(bibliography, 'include')) === 'all' ? 'all' : 'cited';
   const cites = computeCitations({ diagnostics, table, doc }, citations, sources, include);
   (ctx as { projection: boolean }).projection = projection;
+  // The biblatex route (EXP-121; owner decision 16) is used when the document has sources that are
+  // cited or listed; a document without them gets no package, no `.bib` file and no biber run.
+  const settingsStyle = str(
+    (defs?.content ?? []).find((d) => d.type === 'settings')?.attrs?.['citationStyle'],
+  );
+  if (options.citationStyle !== undefined && !isCitationStyle(options.citationStyle))
+    diag(
+      ctx,
+      'warning',
+      'citation_style_unknown',
+      null,
+      'the requested citation style is not one of the styles of this converter; the style of the document is used',
+    );
+  const citationStyle = isCitationStyle(options.citationStyle)
+    ? options.citationStyle
+    : isCitationStyle(settingsStyle)
+      ? settingsStyle
+      : 'authorYear';
+  const bib =
+    (options.bibliography ?? 'biblatex') === 'biblatex' && cites.entries.length > 0
+      ? bibFile(sources)
+      : null;
   (ctx as { citations: Ctx['citations'] }).citations = {
     byNode: cites.byNode,
     entries: cites.entries,
+    biblatex: bib ? { keys: bib.keys, style: citationStyle, include } : null,
   };
 
   // Body first, so that styles, tab lists, languages and setups are known for the preamble.
@@ -437,6 +461,7 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
   for (const [, k] of ctx.markedStyles) line(ctx, tex`\DEdefmark{${int(k)}}`);
   for (const [, k] of ctx.captionLists) line(ctx, tex`\DEdeflist{${int(k)}}`);
   line(ctx, tex`\hypersetup{pdftitle=${kvValue(options.title ?? 'Document')}}`);
+  if (bib) for (const l of biblatexPreamble(citationStyle)) line(ctx, l);
   const preamble = ctx.out;
 
   // Assemble main.tex: preamble, stories, then the document.
@@ -478,6 +503,7 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
     'main.tex': ctx.out.lines.join('\n') + '\n',
     'styles.tex': join([...styleHead, ...ctx.styleLines], t('\n')) + '\n',
     'map.json': JSON.stringify(map) + '\n',
+    ...(bib ? { 'references.bib': bib.text } : {}),
   };
   for (const [name, value] of Object.entries(options.classFiles)) files[name] = value;
   const assets: Record<string, Uint8Array> = {};
@@ -542,6 +568,7 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
       instant: options.instant ?? '',
       ...(options.classification ? { classification: options.classification } : {}),
       ...(options.certificate ? { certificate: 'on' } : {}),
+      ...(bib ? { bibliography: 'biblatex', citationStyle } : {}),
     },
     redactions: ctx.redactions,
     files: sortedHashes,

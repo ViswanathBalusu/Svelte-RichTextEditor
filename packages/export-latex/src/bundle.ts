@@ -212,6 +212,22 @@ export interface ConvertOptions {
    * Absent: no certificate. The option joins the options in `manifest.json`.
    */
   certificate?: CertificateFacts;
+  /**
+   * How citations and the bibliography are typeset (EXP-121; owner decision 16). iblatex (the
+   * default) writes 
+eferences.bib and biblatex commands, and the compile runs biber; 	ext has
+   * the converter write the citation texts and the bibliography itself, with no .bib file and no
+   * biber. A document without sources and citations uses neither.
+   */
+  bibliography?: 'biblatex' | 'text';
+  /**
+   * The citation style of a iblatex job (owner decision 126; docs/adr/0433): one of
+   * uthorYear, 
+umeric, lphabetic, uthorTitle, 
+umericComp. Absent: the document's
+   * settings.citationStyle, and uthorYear when that is absent.
+   */
+  citationStyle?: string;
   /** Neutral notices, in the job's language. Defaults are in English. */
   notices?: Readonly<{ hiddenRegion?: string; redactedValue?: string }>;
 }

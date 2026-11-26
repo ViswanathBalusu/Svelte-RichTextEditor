@@ -126,6 +126,16 @@ export interface CitationTexts {
   /** The text of each citation node, by node. */
   readonly byNode: ReadonlyMap<J, string>;
   readonly entries: readonly BibEntry[];
+  /**
+   * The biblatex route (EXP-121): the entry key of each source in 
+eferences.bib, by source
+   * identifier, and the style of the job. Null on the text route.
+   */
+  readonly biblatex: {
+    readonly keys: ReadonlyMap<string, Tex>;
+    readonly style: string;
+    readonly include: 'cited' | 'all';
+  } | null;
 }
 
 export interface BibEntry {

@@ -12,6 +12,7 @@ import {
 } from '@docedit/model';
 import { fieldWidth } from '@docedit/model/definition';
 import { assetRef } from './assets.ts';
+import { citeTex } from './bibtex.ts';
 import { heightForWidth, imagePixelSize } from './signature-picture.ts';
 import {
   attr,
@@ -314,6 +315,14 @@ export function inlineTex(ctx: Ctx, nodes: readonly J[] | undefined, st: InlineS
         out.push(atom(st, fieldTex(ctx, n, st)));
         break;
       case 'citation': {
+        // The biblatex route (EXP-121): a command with the key of each source; biber and the
+        // style decide the text. A citation whose sources are all missing keeps the text route's mark.
+        const bib = ctx.citations.biblatex;
+        const cmd = bib ? citeTex(n, bib.keys) : null;
+        if (cmd) {
+          out.push(atom(st, cmd));
+          break;
+        }
         const value = ctx.citations.byNode.get(n) ?? '[?]';
         const fam = familyOf(ctx, st.para.run.fontFamily, st.blockId);
         checkGlyphs(ctx, value, fam, st.para.run.bold, st.para.run.italic, st.blockId);
