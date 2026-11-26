@@ -500,6 +500,8 @@ export interface RegionEditors {
   principals: string[];
   /** The holder of a lease on the region; while it holds, only they may edit (07 §10). */
   leasedTo?: string;
+  /** When the lease in `leasedTo` expires (07 §10; PRM-048); present exactly when `leasedTo` is. */
+  leaseExpiresAt?: string;
 }
 
 /** An entry of the derived region list, computed from the content at the head (05 §6.2). */

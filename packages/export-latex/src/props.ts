@@ -61,9 +61,16 @@ const TAB_LEADER: Readonly<Record<string, Tex>> = {
 /** Descent share of the line height when the manifest does not give it: Noto, 293 of 1362. */
 const DEFAULT_DESCENT = 215;
 
+/**
+ * The key of a substitute line in the family map (FE-062): the name without case and extra spaces,
+ * as Word and the editor compare family names, behind a prefix no family name has.
+ */
+export const substituteKey = (family: string): string =>
+  `\u0000${family.trim().replace(/\s+/g, ' ').toLowerCase()}`;
+
 export function familyOf(ctx: Ctx, name: string | null, blockId: string | null): FamilyInfo {
   if (name === null) return ctx.defaultFamily;
-  const f = ctx.families.get(name);
+  const f = ctx.families.get(name) ?? ctx.families.get(substituteKey(name));
   if (f) return f;
   diag(
     ctx,

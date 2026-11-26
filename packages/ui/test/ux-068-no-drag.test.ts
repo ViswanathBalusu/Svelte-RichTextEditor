@@ -17,6 +17,8 @@ const SRC = fileURLToPath(new URL('../src', import.meta.url));
 const REVIEWED: Readonly<Record<string, string>> = {
   // Drawing a signature takes a pointer. It is one of three modes of the adoption step; typing the name
   // is the default mode and needs no pointer, and uploading an image needs none either (FRW-045).
+  'components/Ruler.svelte':
+    'arrow keys, Page Up and Down, Home, End and Delete on every marker, and the paragraph dialog (UX-102)',
   'components/SignatureDialog.svelte': 'the typed mode, which is the default',
 };
 

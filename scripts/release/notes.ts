@@ -200,7 +200,7 @@ export function renderReleaseNotes(n: NotesInput): string {
       ? `| Conformance kit | ${c.kit.name} ${c.kit.version}, tests protocol ${c.protocol?.version ?? 'unknown'} | |`
       : '| Conformance kit | not part of this release | |',
     '',
-    'The versioning rules are those of 05 §1: a minor protocol version only adds, receivers ignore what they do not know, and features are announced in discovery. The window during which CDM versions n and n-1 are both supported is not yet published (03 §11.3 gives no number; CDM-050).',
+    'The versioning rules are those of 05 §1: a minor protocol version only adds, receivers ignore what they do not know, and features are announced in discovery. CDM versions n and n-1 are supported side by side (owner decision 75). Version n-1 stays in the window until version n+1 is released, and the notes of that release say so; no duration in time is set (03 §11.3 gives none; docs/adr/0424-w6-CDM-050-support-window.md, proposed). No second CDM version has shipped, so the window has not begun.',
     '',
     '## Artefacts',
     '',

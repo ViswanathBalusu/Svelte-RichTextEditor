@@ -16,6 +16,7 @@ import type {
   ClassificationLabel,
   CommentAnchor,
   DocumentStats,
+  ParagraphFormatView,
   EditorMode,
   ExportJobView,
   ExportTarget,
@@ -168,11 +169,15 @@ export interface MountOptions {
   /** A view with that many pages is shown (UX-021); absent: the web view, which has no pages. */
   pages?: number;
   language?: string | null;
+  /** The indents and tab stops at the selection (UX-102); absent: no ruler. */
+  paragraphFormat?: ParagraphFormatView | null;
   exportTargets?: ExportTarget[] | null;
   projected?: boolean;
   grants?: RegionGrant[] | null;
   /** The core has a leases service (PRM-043); `holder` is the user this session takes leases as. */
   leases?: { holder: string } | null;
+  /** The core can set a region's state (PRM-048 criterion 4). */
+  regionStates?: boolean;
   fill?: FillSummary | null;
   /** The core takes an access code (FRW-039): the outcomes it answers with, in order; the last repeats. */
   accessCode?: AccessCodeOutcome[];
@@ -610,10 +615,12 @@ function mountShell(options: MountOptions = {}): void {
     ...(options.regions ? { regions: options.regions } : {}),
     ...(options.stats ? { stats: options.stats } : {}),
     ...(options.language !== undefined ? { language: options.language } : {}),
+    ...(options.paragraphFormat !== undefined ? { paragraphFormat: options.paragraphFormat } : {}),
     ...(options.exportTargets !== undefined ? { exportTargets: options.exportTargets } : {}),
     ...(options.projected ? { projected: true } : {}),
     ...(options.grants !== undefined ? { grants: options.grants } : {}),
     ...(options.leases ? { leases: options.leases } : {}),
+    ...(options.regionStates ? { regionStates: true } : {}),
     ...(options.fill !== undefined ? { fill: options.fill } : {}),
     ...(options.carets ? { carets: options.carets } : {}),
     ...(options.direction ? { direction: options.direction } : {}),
@@ -1074,6 +1081,10 @@ const harness = {
   setStyles: (styles: StyleSummary[]) => need().core.styles?.set(styles),
   setRegions: (regions: RegionSummary[]) => need().core.regions?.set(regions),
   setStats: (stats: DocumentStats) => need().core.stats?.set(stats),
+  /** The indents and tab stops the fake core holds (UX-102). */
+  paragraphFormat: () => need().core.paragraphFormat?.get() ?? null,
+  /** Another paragraph under the caret (UX-102). */
+  setParagraphFormat: (next: ParagraphFormatView | null) => need().core.paragraphFormat?.set(next),
   /** As a view with pages does (UX-021): another page shown, a new layout, or no pages (null). */
   setPages: (next: { count?: number; current?: number; revision?: number } | null) =>
     pagesHandle?.set(next),
@@ -1124,6 +1135,8 @@ const harness = {
   grantSaves: () => need().core.grants?.saves ?? [],
   /** What the check-out control asked the leases service to do (PRM-043). */
   leaseCalls: () => [...(need().core.leases?.calls ?? [])],
+    /** The region states the pane set (PRM-048 criterion 4). */
+    stateCalls: () => [...need().core.stateCalls],
   /** Makes the next check-out fail as a service would refuse it (PRM-043). */
   refuseNextLease: (code: 'conflict' | 'forbidden') => void (need().core.leases!.refuseNext = code),
   /** The comment threads port (UX-028, UX-031): what was asked for, and what the core reports. */
