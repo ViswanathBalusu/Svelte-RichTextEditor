@@ -111,6 +111,7 @@ function serviceRoutes(doc: string): Array<[string, string, unknown]> {
     ['POST', `/webhooks/${uuid7()}/ping`, undefined],
     ['POST', `/webhooks/${uuid7()}/deliveries/${uuid7()}/replay`, undefined],
     ['POST', '/tokens', { sub: 'x', docs: { [doc]: 'viewer' } }],
+    ['POST', '/agents', { name: 'x' }],
     ['POST', '/sessions/revoke', { sub: 'x' }],
   ];
 }
@@ -384,6 +385,7 @@ export const AUTHZ: ProfileDef = {
           'POST /webhooks/{id}/ping',
           'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
           'POST /tokens',
+          'POST /agents',
           'POST /sessions/revoke',
         ],
         errors: ['forbidden'],

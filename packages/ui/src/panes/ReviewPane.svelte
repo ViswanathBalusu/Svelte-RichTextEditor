@@ -166,14 +166,26 @@
     return tr.t(accept ? 'review.pane.acceptAll' : 'review.pane.rejectAll');
   }
 
+  /** The words that name the model and the person it acted for, or '' for a person's own suggestion. */
+  function assistantLine(id: string, author: string): string {
+    const assistant = byId.get(id)?.assistant;
+    if (assistant === undefined || assistant === null) return '';
+    const who = authorName(author);
+    return assistant.name === null
+      ? tr.t('review.pane.assistant.unnamed.for', { author: who })
+      : tr.t('review.pane.assistant.for', { model: assistant.name, author: who });
+  }
+
   function rowName(row: (typeof rows)[number]): string {
     const when = row.accessibleName.committedAt;
-    return tr.t(when === '' ? 'review.pane.row.name' : 'review.pane.row.nameAt', {
+    const base = tr.t(when === '' ? 'review.pane.row.name' : 'review.pane.row.nameAt', {
       kind: tr.t(KIND_KEY[row.accessibleName.kind]),
       author: authorName(row.accessibleName.author),
       excerpt: row.excerpt ?? tr.t('review.pane.noText'),
       time: when === '' ? '' : tr.date(new Date(when), { dateStyle: 'medium', timeStyle: 'short' }),
     });
+    const by = assistantLine(row.id, row.accessibleName.author);
+    return by === '' ? base : `${base} (${by})`;
   }
 </script>
 
@@ -245,6 +257,11 @@
           <div class="de-review-head" role="group" tabindex="0" aria-label={rowName(row)}>
             <span class="de-review-kind">{tr.t(KIND_KEY[row.kind])}</span>
             <span class="de-review-author">{authorName(row.author)}</span>
+            {#if item?.assistant}
+              <span class="de-review-assistant" data-assistant={item.assistant.agent}
+                >{assistantLine(row.id, row.author)}</span
+              >
+            {/if}
             {#if row.committedAt !== ''}
               <time datetime={row.committedAt}
                 >{tr.date(new Date(row.committedAt), { dateStyle: 'medium', timeStyle: 'short' })}</time
