@@ -228,6 +228,7 @@ const OTHER_ROUTES = [
   'POST /documents/{id}/workflow/remind',
   'POST /documents/{id}/workflow/void',
   'POST /documents/{id}/workflow/participants/{pid}/consent',
+  'GET /documents/{id}/workflow/participants/{pid}/consent',
   'POST /documents/{id}/workflow/participants/{pid}/access-code',
   'POST /documents/{id}/workflow/participants/{pid}/verify',
   'POST /documents/{id}/workflow/participants/{pid}/complete',

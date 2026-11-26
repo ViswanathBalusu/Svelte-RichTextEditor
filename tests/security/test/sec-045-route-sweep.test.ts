@@ -144,6 +144,7 @@ const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   registerAccessCode: 'has no such participant',
   // FRW-044: the handler exists, but this scenario composes no consent texts.
   participantConsent: 'this server keeps no consent texts',
+  getParticipantConsent: 'this server keeps no consent texts',
   // FRW-047: the handler exists; B's workflow has no participant in this scenario.
   participantComplete: 'has no such participant',
   signField: 'this server does not offer signing',

@@ -799,6 +799,20 @@
   margin-block-start: var(--_de-space-2);
 }
 
+/* The consent text of the signing ceremony (FRW-044): read in full, scrolled inside its own region. */
+.de-consent-text {
+  max-block-size: 50vh;
+  overflow-y: auto;
+  padding: var(--_de-space-2);
+  border: 1px solid var(--_de-border-strong);
+  border-radius: 4px;
+  white-space: pre-line;
+}
+
+.de-consent-text p {
+  margin-block: 0 var(--_de-space-2);
+}
+
 .de-badge {
   padding-inline: 0.4em;
   border: 1px solid var(--_de-border-strong);

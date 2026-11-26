@@ -10,8 +10,15 @@
 -->
 <script lang="ts">
   import '../i18n/late/dialogs.ts';
-  import { untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { useShell } from '../context.ts';
+  import {
+    declineProblem,
+    LOADING,
+    paragraphsOf,
+    stageOf,
+    type ConsentStage,
+  } from '../shell/consent-step.ts';
   import type {
     SignatureAdoption,
     SignatureKind,
@@ -75,6 +82,88 @@
   );
   // The field is signed with the adoption of its own kind.
   const signable = $derived(adopted[request.kind] !== null && kind === request.kind && !changing);
+
+  // --- The consent step (FRW-044) ------------------------------------------------------------
+  // It comes before any signing action: while the text has not been accepted, the adoption and the
+  // signing are not offered at all. Without a consent service the step is not shown.
+  const consent = untrack(() => service.consent);
+  let stage = $state.raw<ConsentStage>(consent ? LOADING : { kind: 'proceed' });
+  let declining = $state(false);
+  let declined = $state(false);
+  let reason = $state('');
+
+  async function loadConsent(): Promise<void> {
+    if (!consent) return;
+    stage = LOADING;
+    try {
+      stage = stageOf(await consent.load());
+    } catch {
+      stage = { kind: 'unavailable' };
+    }
+  }
+  onMount(() => {
+    void loadConsent();
+  });
+
+  // The controls of a new stage appear after the dialog opened, so focus follows them: the text when it
+  // is shown, the first control of the adoption after the acceptance, the close button after a decline.
+  let root = $state<HTMLElement | undefined>();
+  $effect(() => {
+    void stage.kind;
+    void declined;
+    if (!root) return;
+    void tick().then(() => root?.querySelector<HTMLElement>('[data-autofocus]')?.focus());
+  });
+
+  async function accept(): Promise<void> {
+    if (busy || !consent) return;
+    busy = true;
+    problem = null;
+    announcement = tr.t('consent.accepting');
+    try {
+      const outcome = await consent.accept();
+      if (outcome.ok) {
+        stage = { kind: 'proceed' };
+        shell.announce('announce.consent.accepted');
+      } else {
+        problem = tr.t(
+          outcome.reason === 'forbidden' ? 'consent.result.forbidden' : 'consent.result.failed',
+        );
+        announcement = problem;
+      }
+    } catch {
+      problem = tr.t('consent.result.failed');
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function decline(): Promise<void> {
+    if (busy || !consent) return;
+    const missingReason = declineProblem(reason);
+    if (missingReason !== null) {
+      problem = tr.text(missingReason);
+      return;
+    }
+    busy = true;
+    problem = null;
+    try {
+      const outcome = await consent.decline(reason.trim());
+      if (outcome.ok) {
+        declined = true;
+        shell.announce('announce.consent.declined');
+      } else {
+        problem = tr.t(
+          outcome.reason === 'reason_required' ? 'consent.decline.problem' : 'consent.result.failed',
+        );
+        announcement = problem;
+      }
+    } catch {
+      problem = tr.t('consent.result.failed');
+    } finally {
+      busy = false;
+    }
+  }
 
   function modeLabel(m: SignatureMode): string {
     return tr.text(`signature.mode.${m}`);
@@ -253,8 +342,118 @@
   }
 </script>
 
-<Dialog name="sign" title={tr.t(`dialog.sign.title.${kind}`)} {onClose}>
-  <div class="de-form de-sign">
+<Dialog
+  name="sign"
+  title={stage.kind === 'proceed' ? tr.t(`dialog.sign.title.${kind}`) : tr.t('consent.title')}
+  {onClose}
+>
+  <div class="de-form de-sign" bind:this={root}>
+    {#if declined}
+      <p data-declined role="status">{tr.t('consent.declined')}</p>
+      <div class="de-dialog-actions">
+        <button type="button" class="de-button" data-autofocus onclick={() => onClose()}
+          >{tr.t('dialog.close')}</button
+        >
+      </div>
+    {:else if stage.kind === 'loading'}
+      <p role="status" data-consent-loading>{tr.t('consent.loading')}</p>
+      <div class="de-dialog-actions">
+        <button type="button" class="de-button" data-autofocus onclick={() => onClose()}
+          >{tr.t('dialog.cancel')}</button
+        >
+      </div>
+    {:else if stage.kind === 'unavailable'}
+      <p class="de-error" role="alert" data-consent-unavailable>{tr.t('consent.result.failed')}</p>
+      <div class="de-dialog-actions">
+        <button
+          type="button"
+          class="de-button de-button-primary"
+          data-autofocus
+          data-consent-retry
+          onclick={loadConsent}>{tr.t('consent.retry')}</button
+        >
+        <button type="button" class="de-button" onclick={() => onClose()}
+          >{tr.t('dialog.cancel')}</button
+        >
+      </div>
+    {:else if stage.kind === 'required'}
+      <p class="de-hint" id={`${id}-consent-intro`}>{tr.t('consent.intro')}</p>
+      <!-- The text is in a focusable region: it is read in full with a keyboard or a screen reader,
+           and scrolls inside itself (a scrollable region must be focusable). Nothing here is
+           pre-selected. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <div
+        class="de-consent-text"
+        role="region"
+        tabindex="0"
+        aria-label={tr.t('consent.region')}
+        aria-describedby={`${id}-consent-intro`}
+        data-consent-text
+        data-text-id={stage.consent.textId}
+        data-text-version={stage.consent.version}
+        data-autofocus
+      >
+        {#each paragraphsOf(stage.consent.text) as paragraph, i (i)}
+          <p>{paragraph}</p>
+        {/each}
+      </div>
+      {#if declining}
+        <label for={`${id}-decline-reason`}>{tr.t('consent.decline.label')}</label>
+        <textarea
+          id={`${id}-decline-reason`}
+          class="de-input"
+          rows="3"
+          data-decline-reason
+          bind:value={reason}
+        ></textarea>
+        {#if problem}
+          <p class="de-error" role="alert" data-problem>{problem}</p>
+        {/if}
+        <div class="de-dialog-actions">
+          <button
+            type="button"
+            class="de-button de-button-primary"
+            data-decline-confirm
+            disabled={busy}
+            onclick={decline}>{tr.t('consent.decline.confirm')}</button
+          >
+          <button
+            type="button"
+            class="de-button"
+            data-decline-back
+            onclick={() => {
+              declining = false;
+              problem = null;
+            }}>{tr.t('consent.decline.back')}</button
+          >
+        </div>
+      {:else}
+        {#if problem}
+          <p class="de-error" role="alert" data-problem>{problem}</p>
+        {/if}
+        <div class="de-dialog-actions">
+          <button
+            type="button"
+            class="de-button de-button-primary"
+            data-accept
+            disabled={busy}
+            onclick={accept}>{tr.t('consent.accept')}</button
+          >
+          <button
+            type="button"
+            class="de-button"
+            data-decline
+            onclick={() => {
+              declining = true;
+              problem = null;
+            }}>{tr.t('consent.decline')}</button
+          >
+          <button type="button" class="de-button" onclick={() => onClose()}
+            >{tr.t('dialog.cancel')}</button
+          >
+        </div>
+      {/if}
+    {:else}
     <p class="de-hint" id={`${id}-intro`}>{tr.t('signature.intro')}</p>
     <p class="de-hint" data-sign-field>
       {tr.t('signature.field', { label: request.label })}{request.role ? ` (${request.role})` : ''}
@@ -359,6 +558,7 @@
         >{tr.t('dialog.cancel')}</button
       >
     </div>
+    {/if}
     <div class="de-visually-hidden" role="status" data-sign-live>{announcement}</div>
   </div>
 </Dialog>

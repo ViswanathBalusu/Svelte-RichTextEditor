@@ -443,6 +443,11 @@
       "note": "12 §7, §8.1"
     },
     {
+      "route": "GET /documents/{id}/workflow/participants/{pid}/consent",
+      "class": "fields",
+      "note": "12 §8.1 step 1: the text to accept"
+    },
+    {
       "route": "POST /documents/{id}/workflow/participants/{pid}/verify",
       "class": "fields",
       "note": "12 §7"

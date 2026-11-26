@@ -298,6 +298,7 @@ export const UNMATRIXED_ROUTES: readonly RouteClassification[] = [
   fields('PATCH /documents/{id}/field-values', '12 §9 prefill: a server-authored commit'),
   fields('GET /documents/{id}/workflow', '12 §6'),
   fields('POST /documents/{id}/workflow/participants/{pid}/consent', '12 §7, §8.1'),
+  fields('GET /documents/{id}/workflow/participants/{pid}/consent', '12 §8.1 step 1: the text to accept'),
   fields('POST /documents/{id}/workflow/participants/{pid}/verify', '12 §7'),
   fields('POST /documents/{id}/workflow/participants/{pid}/complete', '12 §8.1'),
   fields('POST /documents/{id}/workflow/participants/{pid}/decline', '12 §6.2'),

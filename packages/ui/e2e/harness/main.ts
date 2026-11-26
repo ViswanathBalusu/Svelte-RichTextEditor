@@ -72,6 +72,11 @@ import {
   type SigningHarnessLog,
   type SigningHarnessMode,
 } from './frw-045-signing-port.ts';
+import {
+  consentService,
+  type ConsentHarnessLog,
+  type ConsentHarnessMode,
+} from './frw-044-consent-port.ts';
 
 const violations: string[] = [];
 document.addEventListener('securitypolicyviolation', (e) => {
@@ -88,6 +93,8 @@ let pagesHandle: ReturnType<typeof fakePages> | null = null;
 /** What the adoption and signing step asked of its service (FRW-045, FRW-046). */
 const signingLog: SigningHarnessLog = { adopts: [], signs: [], dismissed: 0 };
 let signingHandle: ReturnType<typeof signingService> | null = null;
+/** What the consent step asked of its service (FRW-044). */
+const consentLog: ConsentHarnessLog = { loads: 0, accepts: 0, declines: [] };
 const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
@@ -136,6 +143,8 @@ export interface MountOptions {
   send?: SendHarnessMode;
   /** The adoption and signing step's service of FRW-045 and FRW-046: see harness/frw-045-signing-port.ts; absent: none. */
   signing?: SigningHarnessMode;
+  /** The consent step before signing (FRW-044), with signing: see harness/frw-044-consent-port.ts; absent: no step. */
+  consent?: ConsentHarnessMode;
   /** The field properties service of FRW-073: one field, `tenant.name`, that this person may change. */
   fieldProperties?: boolean;
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
@@ -692,6 +701,12 @@ function mountShell(options: MountOptions = {}): void {
     signingLog.signs.length = 0;
     signingLog.dismissed = 0;
     signingHandle = signingService(options.signing, signingLog);
+    if (options.consent) {
+      consentLog.loads = 0;
+      consentLog.accepts = 0;
+      consentLog.declines.length = 0;
+      Object.assign(signingHandle, { consent: consentService(options.consent, consentLog) });
+    }
     Object.assign(core, { signing: signingHandle });
   }
   if (options.accessCode) {
@@ -1125,6 +1140,7 @@ const harness = {
   setSendState: (next: string | null) => sendHandle?.setState(next),
   /** What the adoption and signing step asked of its service (FRW-045), and a field the participant activates (FRW-046). */
   signingLog: () => JSON.parse(JSON.stringify(signingLog)) as SigningHarnessLog,
+  consentLog: () => JSON.parse(JSON.stringify(consentLog)) as ConsentHarnessLog,
   activateSignature: (field: {
     id: string;
     key: string;

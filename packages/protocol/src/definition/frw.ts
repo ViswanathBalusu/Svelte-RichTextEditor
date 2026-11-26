@@ -342,6 +342,20 @@ function frwExtension(): DepExtension {
       owner: FRW,
     },
     {
+      operationId: 'getParticipantConsent',
+      method: 'GET',
+      path: '/documents/{id}/workflow/participants/{pid}/consent',
+      summary:
+        'The consent text the workflow names, for the participant it is bound to, with the time of their acceptance of it or null (12 §8.1 step 1; FRW-044). The method is assumed (ADR 0427, proposed).',
+      spec: '12 §8.1, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      success: { status: '200', body: ref('WorkflowConsentText') },
+      codes: ['conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    {
       operationId: 'getWorkflowCaptureSettings',
       method: 'GET',
       path: '/workflow/capture-settings',

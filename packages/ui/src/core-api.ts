@@ -1535,8 +1535,43 @@ export interface SignRequest {
   readonly role: string | null;
 }
 
+/** The consent text the workflow names, as the service holds it, and the acceptance on record (FRW-044). */
+export interface ConsentView {
+  readonly textId: string;
+  readonly version: number;
+  /** The text in full: the service's, never the client's. */
+  readonly text: string;
+  /** The server time of the acceptance on record for this text, or null. */
+  readonly acceptedAt: string | null;
+}
+
+export type ConsentLoadOutcome =
+  | { readonly ok: true; readonly consent: ConsentView }
+  /** `none`: this participant has no consent text to accept (the workflow names none, or the kind accepts none). */
+  | { readonly ok: false; readonly reason: 'none' | 'failed' };
+
+export type ConsentAcceptOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'failed' | 'forbidden' };
+
+export type ConsentDeclineOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'reason_required' | 'failed' };
+
+/** The first step of the ceremony: the consent text, its acceptance and the way out (FRW-044; FRW-033). */
+export interface ConsentService {
+  /** Reads the text and whether it was accepted (`GET .../consent`). */
+  load(): Promise<ConsentLoadOutcome>;
+  /** Records the acceptance (`POST .../consent`); the service holds the text and takes the hash and time. */
+  accept(): Promise<ConsentAcceptOutcome>;
+  /** Declines instead (`POST .../decline`); a reason is required (FRW-033). */
+  decline(reason: string): Promise<ConsentDeclineOutcome>;
+}
+
 /** The signing ceremony's adoption and sign steps over the backend (FRW-045, FRW-046). */
 export interface SigningService {
+  /** The consent step that comes before any signing action. Absent: the step is not shown. */
+  readonly consent?: ConsentService;
   /** The field the participant activated, until the step is closed. */
   readonly request: ReadView<SignRequest | null>;
   /** The adoption made earlier for this kind and kept for the rest of the visit; null when none. */

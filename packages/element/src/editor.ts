@@ -425,7 +425,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The participants of the workflow and their order (FRW-026): the roles pane lists and edits them.
   const participants = options.workflow ? participantsService(core, options.workflow) : null;
   // The adoption and signing step (FRW-045, FRW-046): a signature field the participant activated.
-  const signing = options.signing ? signingService(core, options.signing) : null;
+  // The consent step reads the participant's identifier from the workflow status, reported by the server.
+  const signing = options.signing
+    ? signingService(
+        core,
+        options.signing,
+        () => fillActions?.status.get()?.participant?.id ?? null,
+      )
+    : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
   const workflowCompleteListeners = new Set<() => void>();
   const fillActions = options.workflow

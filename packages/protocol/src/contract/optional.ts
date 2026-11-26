@@ -43,7 +43,7 @@ const MEMBERS = {
   fonts: ['manifest'],
   leases: ['acquire', 'heartbeat', 'release'],
   fields: ['fields', 'values', 'prefill', 'sign'],
-  workflow: ['get', 'put', 'act', 'participant', 'evidence', 'final', 'onChange'],
+  workflow: ['get', 'put', 'act', 'participant', 'consent', 'evidence', 'final', 'onChange'],
   proofing: ['check', 'addWord'],
   assistant: ['request'],
 } as const satisfies { readonly [K in OptionalPortName]: readonly (keyof PortOf<K>)[] };

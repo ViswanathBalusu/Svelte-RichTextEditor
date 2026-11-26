@@ -1801,6 +1801,21 @@
       "owner": "FRW"
     },
     {
+      "operationId": "getParticipantConsent",
+      "method": "GET",
+      "path": "/documents/{id}/workflow/participants/{pid}/consent",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "12 §8.1, §10",
+      "owner": "FRW"
+    },
+    {
       "operationId": "getWorkflowCaptureSettings",
       "method": "GET",
       "path": "/workflow/capture-settings",

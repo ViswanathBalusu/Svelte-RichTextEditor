@@ -30,6 +30,7 @@ export const LATE_KEY_HEADS: readonly string[] = [
   'checker',
   'comment',
   'comments',
+  'consent',
   'dialog',
   'export',
   'field',
