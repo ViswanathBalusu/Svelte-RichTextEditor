@@ -763,6 +763,7 @@ export const AUTHZ: ProfileDef = {
           'manage',
           'export',
           'service',
+          'operator',
           'thread.create',
           'thread.update',
           'version.create',

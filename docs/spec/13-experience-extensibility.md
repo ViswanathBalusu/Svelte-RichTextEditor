@@ -110,7 +110,7 @@ The CDM reserves `extension_block` and `extension_inline`. Each carries an exten
 
 | Capability | Where |
 |---|---|
-| Audit | `GET /audit` with filters, and a streaming export for security tools |
+| Audit | `GET /audit` with filters, and a feed for security tools that polls `GET /audit` at a stated cadence (owner decision 59; no streaming route). The feed client is `AuditFeed` in `@docedit/protocol/client`: it asks for a window that starts before the newest event it has, delivers each event once by its identifier, and keeps a position a consumer saves to resume. Proposed settings: a poll every 5 s, a window of 60 s (`docs/adr/0432-w3-UX-082-audit-feed.md`) |
 | Retention and legal hold | Policy per tenant and per document; hold API |
 | Discovery export | A bundle of content, history, comments and evidence for a document or a tenant |
 | Classification label | A field on the document resource, shown in the status bar, applied as a marking at export |

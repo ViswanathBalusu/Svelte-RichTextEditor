@@ -16,10 +16,19 @@ export interface ListRoute {
   readonly required: readonly string[];
 }
 
-/** Every list route the protocol definition has, in its order. */
+/**
+ * Every list route the protocol definition has, in its order, that a service credential or a user
+ * token may read. A route for the operator credential alone (`GET /tenants`, decision 68) is left
+ * out: the kit holds no operator credential, and row 14 of the matrix has its own scenario.
+ */
 export function listRoutes(): ListRoute[] {
   return DEP1.operations
-    .filter((o) => o.method === 'GET' && o.success.list === true)
+    .filter(
+      (o) =>
+        o.method === 'GET' &&
+        o.success.list === true &&
+        !(o.security.length > 0 && o.security.every((c) => c === 'operator')),
+    )
     .map((o) => ({
       operationId: o.operationId,
       path: o.path,

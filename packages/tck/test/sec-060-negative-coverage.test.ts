@@ -161,7 +161,7 @@ describe('SEC-060 every authorisation row and every error code has a negative te
   });
 
   it('knows the matrix and the registry it checks', () => {
-    expect(e.rowIds.length).toBe(13);
+    expect(e.rowIds.length).toBe(14);
     expect(e.codes.length).toBeGreaterThanOrEqual(32);
   });
 

@@ -16,7 +16,7 @@
  * that this story does not build.
  */
 import type { QuotaDimension } from './quotas.ts';
-import { monthOf } from './exp-009-compile-budget.ts';
+import { monthOf } from './month.ts';
 
 /** The dimensions whose figure is a peak or a level recorded by the node. */
 export type RecordedDimension = Exclude<QuotaDimension, 'exportMinutes'>;
