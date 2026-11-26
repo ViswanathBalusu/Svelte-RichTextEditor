@@ -382,15 +382,26 @@ report("mib_written", written)
     const out = new TextDecoder().decode(r.stdout);
     findings['mounts'] = out.trim().split('\n');
     expect(out).toContain('secrets=absent');
-    expect(out).not.toMatch(/\/run\/secrets|\/mnt\/|\/home\/|\.sock/);
+    expect(out).not.toMatch(/\/run\/secrets|\/mnt\/|\.sock/);
     // Every mount is the image's overlay, a tmpfs, or a kernel file system of the container. The
-    // only other sources are the runtime's own: /dev/null and an empty directory over the masked
-    // paths of /proc and /sys, and the container's hostname and .containerenv files.
+    // only other sources are the runtime's own: the standard device nodes (a rootless runtime binds
+    // them from the host: /null, /zero, /full, /tty, /random, /urandom), an empty directory over the
+    // masked paths of /proc and /sys, and the container's hostname and .containerenv files. The
+    // storage directory sits under /containers/storage on a rootful runtime and under
+    // /containers on a rootless one.
+    //
+    // No mount point or root may name a host path. The super options of the overlay are the
+    // runtime's own storage (a rootless runtime keeps it under the user's home, as the hosted
+    // runner does), so the home directory is checked on mount points and roots only.
     for (const line of out.split('\n').filter((l) => /^\d+ \d+ /.test(l))) {
       const [left, right] = line.split(' - ');
-      const root = left!.split(' ')[3]!;
+      const fields = left!.split(' ');
+      const root = fields[3]!;
+      const mountPoint = fields[4]!;
       const fsType = right?.split(' ')[0] ?? '';
-      if (fsType === 'devtmpfs') expect(root, line).toBe('/null');
+      expect(`${root} ${mountPoint}`, line).not.toMatch(/\/home\//);
+      if (fsType === 'devtmpfs')
+        expect(root, line).toMatch(/^\/(null|zero|full|tty|random|urandom)$/);
       else
         expect(
           ['overlay', 'tmpfs', 'proc', 'sysfs', 'devpts', 'mqueue', 'cgroup2', 'shm'],
@@ -398,7 +409,7 @@ report("mib_written", written)
         ).toContain(fsType);
       if (fsType === 'tmpfs' && root !== '/')
         expect(root, line).toMatch(
-          /^(\/crun\/\.empty-directory|\/containers\/storage\/overlay-containers\/[0-9a-f]{64}\/userdata\/(hostname|\.containerenv))$/,
+          /^(\/crun\/\.empty-directory|\/containers\/(storage\/)?overlay-containers\/[0-9a-f]{64}\/userdata\/(hostname|\.containerenv))$/,
         );
     }
   });
