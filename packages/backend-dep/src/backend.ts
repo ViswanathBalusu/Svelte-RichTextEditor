@@ -70,6 +70,7 @@ import {
 import { DepChannel, type ChannelHost } from './channel.ts';
 import { Connection } from './connection.ts';
 import { createFilePorts, type FilePorts } from './files.ts';
+import { createImportFlow, type ImportFlow } from './import-flow.ts';
 import { createReviewPorts, type ReviewPorts } from './review.ts';
 import { Timers, platform, type Platform } from './platform.ts';
 import { RestClient } from './rest.ts';
@@ -267,6 +268,7 @@ export class DepBackend implements Backend {
   private readonly fieldsPort: FieldsPort;
   private readonly files: FilePorts;
   private readonly review: ReviewPorts;
+  private readonly importFlow: ImportFlow;
 
   constructor(options: DepBackendOptions) {
     this.opts = options;
@@ -287,16 +289,12 @@ export class DepBackend implements Backend {
     );
     this.sync = {
       loadContent: (docId, seq) => this.loadContent(docId, seq),
-<<<<<<< HEAD
-      open: (docId, o) => this.open(docId, o.resume, o.features),
-=======
       // The metadata read (PRO-048): the answer is checked against its shape and unknown fields stay.
       document: (docId) =>
         this.tagged<DocumentResource>('GET', `/documents/${enc(docId)}`, {
           shape: 'DocumentResource',
         }),
-      open: (docId, o) => this.open(docId, o.resume),
->>>>>>> stories/w5
+      open: (docId, o) => this.open(docId, o.resume, o.features),
     };
     const base: PermissionsPort = {
       current: (docId) => this.accesses.get(docId) ?? null,
@@ -374,6 +372,11 @@ export class DepBackend implements Backend {
         now: () => this.p.now(),
       },
     });
+    this.importFlow = createImportFlow({
+      imports: this.review.imports,
+      assets: this.files.assets,
+      clock: { set: (fn, ms) => this.timers.set(fn, ms), clear: (key) => this.timers.clear(key) },
+    });
   }
 
   // --- Backend ---------------------------------------------------------------------------------
@@ -407,7 +410,8 @@ export class DepBackend implements Backend {
     else delete this.workflow;
     if (this.negotiated.has('fields')) this.fields = this.fieldsPort;
     else delete this.fields;
-    if (this.opts.proxyImports === true) this.imports = this.review.imports;
+    if (this.opts.proxyImports === true)
+      this.imports = { ...this.review.imports, importFile: this.importFlow.importFile };
     else delete this.imports;
   }
 
@@ -451,6 +455,7 @@ export class DepBackend implements Backend {
     this.accesses.clear();
     this.failRequests('the backend was closed');
     this.files.abort('the backend was closed');
+    this.importFlow.abort('the backend was closed');
     const conn = this.conn ?? this.pendingConn;
     this.conn = null;
     this.pendingConn = null;
