@@ -33,8 +33,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation GET /documents/{id}/activity': `activity (08 §10): ${HISTORY}`,
   'operation GET /imports/{jid}':
     'imports take a service credential and arrive with EXP (G79; D16)',
-  'operation GET /tenant-fonts/{sha256}':
-    'a font file of the tenant is served and tested in the document service (BE-048); the kit has no scenario until the font manifest has a feature (G75)',
   'operation GET /fonts': 'the font manifest has no shape and no feature yet (G75; G06)',
   'operation GET /documents/{id}/workflow': WORKFLOW,
   'operation PUT /documents/{id}/workflow': WORKFLOW,
@@ -57,6 +55,8 @@ export const PENDING: Readonly<Record<string, string>> = {
   'error slow_consumer': `a client that stops reading: ${FAULTS}`,
   'error workflow_active': WORKFLOW,
   'error internal': FAULTS,
+  'event comment.reacted':
+    'the notice follows the reaction routes; the kit scenario of the reactions profile covers the routes and refusals only (UX-033; ADR 0424)',
   'event import.completed': 'imports arrive with EXP (G79; D16)',
   'event import.failed': 'imports arrive with EXP (G79; D16)',
 };

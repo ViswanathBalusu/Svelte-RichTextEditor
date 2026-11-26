@@ -198,29 +198,33 @@ describe.skipIf(!ready)(
       ['enumLookup (alignment)', (s) => ({ title: 't', body: aligned([s]) })],
       ['color (cell shading)', (s) => ({ title: 't', body: [shaded([s])] })],
     ];
-    it.each(SLOTS)('a string of 3,000 characters in %s compiles with a clean trace', async (_name, make) => {
-      const known = await compileTraced('t', [
-        ...figures(['known']),
-        ...links(['https://example.org/known']),
-        ...aligned(KNOWN_ALIGN),
-        shaded(KNOWN_COLOUR),
-        para('X'),
-      ]);
-      const one = make(LONG);
-      const long = await compileTraced(one.title, one.body);
-      if (!known.compile.ok || !known.compile.pdf)
-        throw new Error(`the baseline compile failed:
+    it.each(SLOTS)(
+      'a string of 3,000 characters in %s compiles with a clean trace',
+      async (_name, make) => {
+        const known = await compileTraced('t', [
+          ...figures(['known']),
+          ...links(['https://example.org/known']),
+          ...aligned(KNOWN_ALIGN),
+          shaded(KNOWN_COLOUR),
+          para('X'),
+        ]);
+        const one = make(LONG);
+        const long = await compileTraced(one.title, one.body);
+        if (!known.compile.ok || !known.compile.pdf)
+          throw new Error(`the baseline compile failed:
 ${known.compile.log.slice(-1500)}`);
-      if (!long.compile.ok || !long.compile.pdf)
-        throw new Error(
-          `the long-input compile failed (${keep('sec-033-long', long)}):
+        if (!long.compile.ok || !long.compile.pdf)
+          throw new Error(
+            `the long-input compile failed (${keep('sec-033-long', long)}):
 ${firstError(long.compile.log)}`,
-        );
-      const allowed = controlNames(known.compile.log);
-      expect(allowed.size).toBeGreaterThan(0);
-      const extra = [...controlNames(long.compile.log)].filter((n) => !allowed.has(n));
-      expect(extra).toEqual([]);
-      expect(dangerousIn(extra)).toEqual([]);
-    }, 900_000);
+          );
+        const allowed = controlNames(known.compile.log);
+        expect(allowed.size).toBeGreaterThan(0);
+        const extra = [...controlNames(long.compile.log)].filter((n) => !allowed.has(n));
+        expect(extra).toEqual([]);
+        expect(dangerousIn(extra)).toEqual([]);
+      },
+      900_000,
+    );
   },
 );

@@ -7,6 +7,7 @@ import type { ProfileDef } from '../scenario.ts';
 import { AUTHORITY_SERVICE } from './authority-service.ts';
 import { AUTHZ } from './authz.ts';
 import { COMMENTS } from './comments.ts';
+import { REACTIONS } from './reactions.ts';
 import { CORE_CHANNELS } from './core-channels.ts';
 import { CORE_RELAY_PROFILE } from './core-relay.ts';
 import { CORE_REST } from './core-rest.ts';
@@ -56,6 +57,7 @@ export const PROFILES: readonly ProfileDef[] = [
   PERM_SUGGEST,
   HISTORY,
   COMMENTS,
+  REACTIONS,
   WEBHOOKS_PROFILE,
 
   LEASES,

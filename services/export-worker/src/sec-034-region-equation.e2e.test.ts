@@ -254,9 +254,10 @@ describe.skipIf(!ready.ok || !pdftotextAvailable())(
         const inkC = inkInside(controlImg, c);
         expect(inkC, `ink under "${t}" in the control`).toBeGreaterThan(0);
         expect(inkA, `ink under "${t}"`).toBeGreaterThan(0);
-        expect(Math.abs(inkA - inkC), `ink under "${t}": ${inkA} against ${inkC}`).toBeLessThanOrEqual(
-          Math.max(3, Math.round(inkC * 0.1)),
-        );
+        expect(
+          Math.abs(inkA - inkC),
+          `ink under "${t}": ${inkA} against ${inkC}`,
+        ).toBeLessThanOrEqual(Math.max(3, Math.round(inkC * 0.1)));
       }
       expect(compared, 'price words found once on both pages').toBeGreaterThanOrEqual(8);
     });

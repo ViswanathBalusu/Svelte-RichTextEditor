@@ -247,6 +247,18 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/element/test/ux-021-pages.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when FE-065 and UX-007 closed (2026-11-26): the web view, the page view and the switch
+  // between them in the element in a browser, and the layout switch of the shell.
+  [
+    'views',
+    [
+      { path: 'packages/element/e2e/fe-065-view-switch.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-065-web-label.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-065-view-print-fallback.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-101-page-view.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-007-layout-switch.spec.ts', kind: 'playwright' },
+    ],
+  ],
   // Shipped when UX-102 closed (2026-11-25): the ruler and the paragraph dialog in the shell and in
   // the element, and the arithmetic of the markers and of the dialog's patch in Node.js.
   [
