@@ -409,6 +409,16 @@
       "note": "deleting a comment: no row (row 5 names threads)"
     },
     {
+      "route": "POST /comments/{cid}/reactions/{reaction}",
+      "class": "open",
+      "note": "a reaction: no row; needs comment, as a reply does (UX-033)"
+    },
+    {
+      "route": "DELETE /comments/{cid}/reactions/{reaction}",
+      "class": "open",
+      "note": "removing a reaction: no row; as above (UX-033)"
+    },
+    {
       "route": "POST /documents/{id}/assets/resolve",
       "class": "open",
       "note": "resolving asset URLs: no row"

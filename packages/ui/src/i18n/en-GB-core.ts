@@ -680,6 +680,13 @@ export const EN_GB_CORE = {
   'ruler.marker.left': 'Left indent',
   'ruler.marker.firstLine': 'First-line indent',
   'ruler.marker.right': 'Right indent',
+  // The names of the reactions to a comment (UX-033), built from the reaction at run time.
+  'comments.reaction.thumbsUp': 'Thumbs up',
+  'comments.reaction.heart': 'Heart',
+  'comments.reaction.laugh': 'Laugh',
+  'comments.reaction.celebrate': 'Celebrate',
+  'comments.reaction.eyes': 'Looking',
+  'comments.reaction.done': 'Done',
   'announce.crossRef.inserted': 'Cross-reference inserted.',
   'announce.crossRef.failed': 'The cross-reference could not be inserted here.',
   'announce.altText.set': 'Alternative text set.',

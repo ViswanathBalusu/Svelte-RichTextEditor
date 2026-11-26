@@ -17,6 +17,7 @@ import type {
   CommentAnchor,
   DocumentStats,
   ParagraphFormatView,
+  ReactionName,
   EditorMode,
   ExportJobView,
   ExportTarget,
@@ -1184,6 +1185,11 @@ const harness = {
   /** Another client replies (comment.created): the pane is told and shows it without a reload. */
   remoteReply: (id: string, author: string, text: string) =>
     need().core.threads!.remoteReply(id, author, text),
+  /** Reactions are offered, as when the backend announces the feature (UX-033). */
+  offerReactions: () => need().core.threads!.offerReactions(),
+  /** Another client reacts to a comment (comment.reacted; UX-033). */
+  remoteReact: (id: string, commentId: string, reaction: ReactionName, user: string, on: boolean) =>
+    need().core.threads!.remoteReact(id, commentId, reaction, user, on),
   /** Another client assigns the thread, or clears it with null (thread.updated; UX-032 criterion 2). */
   remoteAssign: (id: string, assignee: string | null) =>
     need().core.threads!.remoteAssign(id, assignee),

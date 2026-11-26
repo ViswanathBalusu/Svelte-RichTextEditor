@@ -54,6 +54,14 @@ export const FEATURES: readonly FeatureDef[] = [
     owner: 'PRO',
   },
   {
+    name: 'reactions',
+    doc: 'Reactions to comments: one of a fixed set of named reactions, kept outside the commit log (13 §5; ADR 0424).',
+    spec: '05 §6.2; 13 §5',
+    relayForbidden: false,
+    port: 'comments',
+    owner: 'PRO',
+  },
+  {
     name: 'assets',
     doc: 'Asset upload through quarantine and signed URLs (05 §6.2).',
     spec: '05 §2, §6.2',

@@ -1833,3 +1833,41 @@ uler): the indents and tab stops of the paragraph at the caret. */
   gap: var(--_de-space-2);
   margin-block-end: var(--_de-space-2);
 }
+
+/* Reactions to a comment (UX-033): small toggle buttons, a count beside the picture. */
+.de-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--_de-space-1);
+  margin-block: var(--_de-space-1);
+}
+
+.de-reaction {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  min-block-size: max(1.6em, 24px);
+  min-inline-size: 24px;
+  padding-inline: 0.5em;
+  color: inherit;
+  background: var(--_de-control-background);
+  border: 1px solid var(--_de-border-strong);
+  border-radius: var(--_de-radius);
+  cursor: pointer;
+}
+
+.de-reaction[aria-pressed='true'] {
+  background: var(--_de-control-active);
+  border-color: var(--_de-control-active-border);
+}
+
+.de-reaction:disabled {
+  color: var(--_de-control-disabled-text);
+  cursor: default;
+}
+
+.de-reaction:focus-visible {
+  outline: 2px solid var(--_de-focus);
+  outline-offset: 1px;
+}

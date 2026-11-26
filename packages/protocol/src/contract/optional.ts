@@ -36,6 +36,8 @@ const MEMBERS = {
     'reply',
     'updateComment',
     'deleteComment',
+    'addReaction',
+    'removeReaction',
   ],
   assets: ['create', 'complete', 'resolve', 'upload'],
   exports: ['request', 'get', 'cancel'],

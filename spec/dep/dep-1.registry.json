@@ -885,6 +885,38 @@
       "owner": "PRO"
     },
     {
+      "operationId": "addReaction",
+      "method": "POST",
+      "path": "/comments/{cid}/reactions/{reaction}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "reactions",
+      "requires": "comment in the scopes of the target",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 13 §5",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "removeReaction",
+      "method": "DELETE",
+      "path": "/comments/{cid}/reactions/{reaction}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "reactions",
+      "requires": "comment in the scopes of the target",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 13 §5",
+      "owner": "PRO"
+    },
+    {
       "operationId": "createAsset",
       "method": "POST",
       "path": "/documents/{id}/assets",
@@ -2219,6 +2251,13 @@
       "owner": "PRO"
     },
     {
+      "name": "reactions",
+      "relayForbidden": false,
+      "port": "comments",
+      "spec": "05 §6.2; 13 §5",
+      "owner": "PRO"
+    },
+    {
       "name": "assets",
       "relayForbidden": false,
       "port": "assets",
@@ -2334,6 +2373,11 @@
     },
     {
       "type": "comment.deleted",
+      "resource": "/comments/{cid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "comment.reacted",
       "resource": "/comments/{cid}",
       "spec": "05 §5.6"
     },

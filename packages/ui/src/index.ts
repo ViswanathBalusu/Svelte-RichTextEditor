@@ -57,6 +57,8 @@ export type {
   CommentAnchor,
   CommentBodyPart,
   CommentView,
+  ReactionName,
+  ReactionView,
   ThreadDetail,
   ThreadOutcome,
   ThreadRequest,

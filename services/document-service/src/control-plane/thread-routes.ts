@@ -116,8 +116,19 @@ function commentBody(c: StoredComment) {
     editedAt: c.editedAt === null ? null : formatTimestamp(c.editedAt),
     etag: commentTag(c),
     body: c.body,
+    ...(c.reactions && REACTIONS.some((r) => (c.reactions![r]?.length ?? 0) > 0)
+      ? {
+          reactions: REACTIONS.filter((r) => (c.reactions![r]?.length ?? 0) > 0).map((r) => ({
+            reaction: r,
+            users: c.reactions![r]!.map((u) => `user:${u}`),
+          })),
+        }
+      : {}),
   };
 }
+
+/** The reactions to a comment, in the order the wire gives them (UX-033; ADR 0424). */
+const REACTIONS: readonly string[] = ['thumbsUp', 'heart', 'laugh', 'celebrate', 'eyes', 'done'];
 
 /**
  * The parts of a `CommentInput` (ADR 0417): `{ body: [{ type: 'text', text } | { type: 'mention',
@@ -665,7 +676,40 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     return { status: 204, headers: { 'Cache-Control': 'no-store' } };
   };
 
+  /**
+   * `POST` and `DELETE /comments/{cid}/reactions/{reaction}`: the caller takes or leaves a reaction
+   * (UX-033; ADR 0424). Idempotent, needs `comment` as a reply does, makes no commit, and does not
+   * change the comment's tag. Connected clients are told with `comment.reacted`.
+   */
+  const react =
+    (on: boolean): Handler =>
+    async (ctx): Promise<Reply> => {
+      const reaction = ctx.params['reaction']!;
+      if (!REACTIONS.includes(reaction))
+        throw new ApiError('validation_failed', 'not a known reaction');
+      const { t, c } = await readComment(ctx, ctx.params['cid']!);
+      await mustSee(ctx, t, 'comment');
+      const conn = connectionOn(ctx.caller, t.docId);
+      if (!conn) throw new ApiError('forbidden', 'a reaction has a person; a user makes it');
+      await decide(ctx, t, 'reply');
+      const held = c.reactions?.[reaction]?.includes(conn.sub) ?? false;
+      const updated = await store().react(ctx.caller.tenant, c.id, reaction, conn.sub, on);
+      if (!updated) throw new ApiError('not_found', 'no such comment');
+      if (held !== on)
+        k.notify()?.(
+          { tenant: ctx.caller.tenant, doc: t.docId },
+          { type: 'comment.reacted', resource: `/comments/${c.id}`, data: { thread: t.id } },
+          { scopes: scopesOf(t) },
+        );
+      return json(200, commentBody(updated), {
+        ETag: commentTag(updated),
+        'Cache-Control': 'no-store',
+      });
+    };
+
   return {
+    addReaction: react(true),
+    removeReaction: react(false),
     listThreads,
     createThread,
     getThread,

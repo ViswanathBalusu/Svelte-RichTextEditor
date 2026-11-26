@@ -84,6 +84,10 @@ export interface CommentsPort {
   ): Promise<Tagged<W.Comment>>;
   /** `DELETE /comments/{cid}` (the author or `manage`). */
   deleteComment(commentId: string, opts?: { ifMatch?: string }): Promise<void>;
+  /** `POST /comments/{cid}/reactions/{reaction}`: adds the caller to a reaction; no commit. Feature `reactions`. */
+  addReaction(commentId: string, reaction: string): Promise<Tagged<W.Comment>>;
+  /** `DELETE /comments/{cid}/reactions/{reaction}`: takes the caller out of a reaction. Feature `reactions`. */
+  removeReaction(commentId: string, reaction: string): Promise<Tagged<W.Comment>>;
 }
 
 /** Bytes to upload: structurally a `Blob`, without depending on the DOM. */

@@ -16,6 +16,7 @@ import type {
   EditorMode,
   ExportJobView,
   ParagraphFormatView,
+  ReactionName,
   ExportOptions,
   ExportService,
   ExportTarget,
@@ -289,6 +290,57 @@ export class FakeThreads implements ThreadsService {
       ...d,
       comments: d.comments.filter((c) => c.id !== commentId),
     }));
+  }
+
+  /** Takes a reaction or leaves it (UX-033); present only after `offerReactions`. */
+  react?: NonNullable<ThreadsService['react']>;
+
+  /** Offers reactions, as a backend that announces the feature `reactions` does. */
+  offerReactions(): void {
+    this.react = async (id, commentId, reaction, on) => {
+      this.writes.push({ op: 'react', id, commentId, reaction, on });
+      const d = this.details.get(id);
+      if (!d) return { ok: false, code: 'not_found' };
+      return { ok: true, detail: this.#reacted(d, commentId, reaction, this.user, on) };
+    };
+  }
+
+  /** Another client reacts: the copy changes and the pane is told, as `comment.reacted` would. */
+  remoteReact(
+    id: string,
+    commentId: string,
+    reaction: ReactionName,
+    user: string,
+    on: boolean,
+  ): void {
+    this.#reacted(this.details.get(id)!, commentId, reaction, user, on);
+  }
+
+  #reacted(
+    d: ThreadDetail,
+    commentId: string,
+    reaction: ReactionName,
+    user: string,
+    on: boolean,
+  ): ThreadDetail {
+    return this.put({
+      ...d,
+      comments: d.comments.map((c) => {
+        if (c.id !== commentId) return c;
+        const held = new Map((c.reactions ?? []).map((r) => [r.reaction, r.users] as const));
+        const users = (held.get(reaction) ?? []).filter((u) => u !== user);
+        if (on) users.push(user);
+        if (users.length > 0) held.set(reaction, users);
+        else held.delete(reaction);
+        const order: ReactionName[] = ['thumbsUp', 'heart', 'laugh', 'celebrate', 'eyes', 'done'];
+        const reactions = order
+          .filter((r) => held.has(r))
+          .map((r) => ({ reaction: r, users: held.get(r)! }));
+        return reactions.length > 0
+          ? { ...c, reactions }
+          : { id: c.id, author: c.author, createdAt: c.createdAt, body: c.body, edited: c.edited };
+      }),
+    });
   }
 
   async deleteThread(id: string, etag: string): Promise<{ ok: boolean; code?: string }> {

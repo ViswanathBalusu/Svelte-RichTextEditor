@@ -220,6 +220,16 @@ export function createReviewPorts(host: ReviewPortsHost): ReviewPorts {
     deleteComment: async (commentId, opts) => {
       await call('DELETE', commentPath(commentId), conditional(opts?.ifMatch));
     },
+
+    addReaction: (commentId, reaction) =>
+      tagged('POST', `${commentPath(commentId)}/reactions/${enc(reaction)}`, {
+        shape: 'Comment',
+      }),
+
+    removeReaction: (commentId, reaction) =>
+      tagged('DELETE', `${commentPath(commentId)}/reactions/${enc(reaction)}`, {
+        shape: 'Comment',
+      }),
   };
 
   const leasePath = (docId: string, regionId: string): string =>

@@ -1912,6 +1912,17 @@ export interface CommentView {
   readonly body: readonly CommentBodyPart[];
   /** True once the author has edited the comment. */
   readonly edited: boolean;
+  /** The reactions to the comment, in the order of `REACTIONS`, none that nobody holds (UX-033). */
+  readonly reactions?: readonly ReactionView[];
+}
+
+/** The reactions a comment takes, in the order the service lists them (UX-033; ADR 0424). */
+export type ReactionName = 'thumbsUp' | 'heart' | 'laugh' | 'celebrate' | 'eyes' | 'done';
+
+/** One reaction of a comment with the people who made it, as principals (`user:<sub>`). */
+export interface ReactionView {
+  readonly reaction: ReactionName;
+  readonly users: readonly string[];
 }
 
 /**
@@ -2003,6 +2014,12 @@ export interface ThreadsService {
   ): Promise<ThreadWrite>;
   /** Deletes a comment. */
   deleteComment?(id: string, commentId: string, etag: string): Promise<ThreadWrite>;
+  /**
+   * Adds the user to a reaction of a comment (`on`), or takes them out of it (UX-033). Absent
+   * unless the backend announces the feature `reactions`: then no reaction control is offered.
+   * It makes no commit and needs no tag; a user may react again to the same reaction safely.
+   */
+  react?(id: string, commentId: string, reaction: ReactionName, on: boolean): Promise<ThreadWrite>;
   /** Deletes a whole thread. */
   deleteThread?(
     id: string,

@@ -1296,6 +1296,7 @@ export class DocEditorElement extends Base {
       threads: {
         port: backend.comments,
         docId,
+        reactions: backend.features.has('reactions'),
         self: () => {
           const user = backend.auth.session?.user.id;
           return user === undefined ? null : `user:${user}`;

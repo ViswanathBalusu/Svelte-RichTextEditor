@@ -109,6 +109,7 @@
         "suggest-enforced",
         "history",
         "comments",
+        "reactions",
         "assets",
         "exports",
         "leases",
@@ -1488,6 +1489,7 @@
         "comment.created",
         "comment.updated",
         "comment.deleted",
+        "comment.reacted",
         "version.created",
         "version.restored",
         "export.progress",
@@ -2730,6 +2732,37 @@
         }
       }
     },
+    "ReactionCount": {
+      "title": "ReactionCount",
+      "description": "One reaction of a comment with the people who made it (ADR 0424).",
+      "$comment": "05 §6.2; 13 §5",
+      "type": "object",
+      "properties": {
+        "reaction": {
+          "type": "string",
+          "enum": [
+            "thumbsUp",
+            "heart",
+            "laugh",
+            "celebrate",
+            "eyes",
+            "done"
+          ]
+        },
+        "users": {
+          "description": "The people who reacted, `user:<id>`, in the order they reacted.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "reaction",
+        "users"
+      ]
+    },
     "Comment": {
       "title": "Comment",
       "description": "A comment of a thread (ADR 0417). Its entity tag is the `If-Match` of an edit.",
@@ -2773,6 +2806,13 @@
             "$ref": "#/$defs/CommentBodyPart"
           },
           "minItems": 1
+        },
+        "reactions": {
+          "description": "Present when the service announces the feature `reactions`; a reaction nobody holds is left out (ADR 0424).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReactionCount"
+          }
         }
       },
       "required": [

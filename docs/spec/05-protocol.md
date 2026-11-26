@@ -216,7 +216,7 @@ The server adds identity; clients cannot claim to be someone else. `state` is va
 
 `event` (S to C) has `type`, `resource`, optional `rev` and optional small `data`. It means "this changed; fetch it over REST if you care". Thread events carry the thread's current range and the `seq` it refers to.
 
-Types: `thread.created`, `thread.updated`, `thread.resolved`, `thread.reopened`, `thread.deleted`, `comment.created`, `comment.updated`, `comment.deleted`, `version.created`, `version.restored`, `export.progress`, `export.completed`, `export.failed`, `export.cancelled`, `import.completed`, `import.failed`, `asset.ready`, `asset.failed`, `document.updated`.
+Types: `thread.created`, `thread.updated`, `thread.resolved`, `thread.reopened`, `thread.deleted`, `comment.created`, `comment.updated`, `comment.deleted`, `comment.reacted`, `version.created`, `version.restored`, `export.progress`, `export.completed`, `export.failed`, `export.cancelled`, `import.completed`, `import.failed`, `asset.ready`, `asset.failed`, `document.updated`.
 
 The same stems are used for webhooks (`dep.` prefix, section 7) and for DOM events (`de-` prefix, section 8).
 
@@ -317,6 +317,7 @@ Callers are end users (every request is checked against that user's permissions)
 | `/threads/{tid}` | GET, PATCH, DELETE | PATCH `state` (`open`, `resolved`), `assignee` |
 | `/threads/{tid}/comments` | POST | Body may contain mentions (13, section 5) |
 | `/comments/{cid}` | PATCH, DELETE | Author only, or `manage` |
+| `/comments/{cid}/reactions/{reaction}` | POST, DELETE | Feature `reactions`. Adds or removes the caller's reaction (one of `thumbsUp`, `heart`, `laugh`, `celebrate`, `eyes`, `done`); needs `comment` in the scopes of the target; makes no commit; raises `comment.reacted` (ADR 0424, proposed) |
 | `/documents/{id}/assets` | POST | Body: `filename`, `mime`, `size`. Returns an asset identifier and a size-bound pre-signed upload into a quarantine area |
 | `/assets/{aid}/complete` | POST | The asset worker validates, re-encodes, hashes and stores the asset, then raises `asset.ready` or `asset.failed` |
 | `/documents/{id}/assets/resolve` | POST | Body: asset identifiers used by the document, and the caller's own ready uploads for it that no commit references yet (decision 198). Returns short-lived signed URLs, because an `<img>` cannot send a bearer token |

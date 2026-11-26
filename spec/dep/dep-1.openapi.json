@@ -3369,6 +3369,194 @@
         ]
       }
     },
+    "/comments/{cid}/reactions/{reaction}": {
+      "post": {
+        "operationId": "addReaction",
+        "summary": "Adds the caller to a reaction of a comment; adding it again changes nothing. It makes no commit (13 §5; ADR 0424).",
+        "description": "Adds the caller to a reaction of a comment; adding it again changes nothing. It makes no commit (13 §5; ADR 0424). Requires: comment in the scopes of the target (07 §12). Only when the server announces the feature `reactions`. Specified in 05 §6.2; 13 §5.",
+        "tags": [
+          "comments"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Comment identifier.",
+              "$comment": "gaps: G59",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Comment identifier."
+          },
+          {
+            "name": "reaction",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "A reaction to a comment, one of a fixed set (ADR 0424).",
+              "type": "string",
+              "enum": [
+                "thumbsUp",
+                "heart",
+                "laugh",
+                "celebrate",
+                "eyes",
+                "done"
+              ]
+            },
+            "description": "A reaction to a comment, one of a fixed set (ADR 0424)."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchOptional"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §6.2; 13 §5",
+        "x-dep-owner": "PRO",
+        "x-dep-requires": "comment in the scopes of the target",
+        "x-dep-feature": "reactions"
+      },
+      "delete": {
+        "operationId": "removeReaction",
+        "summary": "Takes the caller out of a reaction of a comment; removing one that is not held changes nothing (ADR 0424).",
+        "description": "Takes the caller out of a reaction of a comment; removing one that is not held changes nothing (ADR 0424). Requires: comment in the scopes of the target (07 §12). Only when the server announces the feature `reactions`. Specified in 05 §6.2; 13 §5.",
+        "tags": [
+          "comments"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Comment identifier.",
+              "$comment": "gaps: G59",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Comment identifier."
+          },
+          {
+            "name": "reaction",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "A reaction to a comment, one of a fixed set (ADR 0424).",
+              "type": "string",
+              "enum": [
+                "thumbsUp",
+                "heart",
+                "laugh",
+                "celebrate",
+                "eyes",
+                "done"
+              ]
+            },
+            "description": "A reaction to a comment, one of a fixed set (ADR 0424)."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchOptional"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §6.2; 13 §5",
+        "x-dep-owner": "PRO",
+        "x-dep-requires": "comment in the scopes of the target",
+        "x-dep-feature": "reactions"
+      }
+    },
     "/documents/{id}/assets": {
       "post": {
         "operationId": "createAsset",
@@ -10335,6 +10523,7 @@
           "suggest-enforced",
           "history",
           "comments",
+          "reactions",
           "assets",
           "exports",
           "leases",
@@ -11995,6 +12184,37 @@
           }
         }
       },
+      "ReactionCount": {
+        "title": "ReactionCount",
+        "description": "One reaction of a comment with the people who made it (ADR 0424).",
+        "$comment": "05 §6.2; 13 §5",
+        "type": "object",
+        "properties": {
+          "reaction": {
+            "type": "string",
+            "enum": [
+              "thumbsUp",
+              "heart",
+              "laugh",
+              "celebrate",
+              "eyes",
+              "done"
+            ]
+          },
+          "users": {
+            "description": "The people who reacted, `user:<id>`, in the order they reacted.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "reaction",
+          "users"
+        ]
+      },
       "Comment": {
         "title": "Comment",
         "description": "A comment of a thread (ADR 0417). Its entity tag is the `If-Match` of an edit.",
@@ -12038,6 +12258,13 @@
               "$ref": "#/components/schemas/CommentBodyPart"
             },
             "minItems": 1
+          },
+          "reactions": {
+            "description": "Present when the service announces the feature `reactions`; a reaction nobody holds is left out (ADR 0424).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReactionCount"
+            }
           }
         },
         "required": [

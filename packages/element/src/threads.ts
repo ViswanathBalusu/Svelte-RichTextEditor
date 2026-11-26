@@ -19,6 +19,7 @@ import type {
   CommentAnchor,
   CommentBodyPart,
   CommentView,
+  ReactionName,
   ReadView,
   ThreadDetail,
   ThreadOutcome,
@@ -33,6 +34,9 @@ export interface ThreadsSource {
   readonly docId: string;
   /** The signed-in user's identifier, as the service names authors (`user:<id>`), or null. */
   readonly self: () => string | null;
+  /** Whether the backend announced the feature 
+eactions (UX-033); without it no reaction is offered. */
+  readonly reactions?: boolean;
 }
 
 /** A thread as the service last gave it. */
@@ -164,6 +168,9 @@ export function threadsService(core: ThreadsCore, source: ThreadsSource): Thread
     createdAt: c.createdAt,
     body: c.body.map((p) => ({ ...p })),
     edited: c.editedAt !== null,
+    ...(c.reactions && c.reactions.length > 0
+      ? { reactions: c.reactions.map((r) => ({ reaction: r.reaction, users: [...r.users] })) }
+      : {}),
   });
 
   const detailOf = (id: string): ThreadDetail | null => {
@@ -263,6 +270,24 @@ export function threadsService(core: ThreadsCore, source: ThreadsSource): Thread
         return failed(id, e);
       }
     },
+
+    // A reaction (UX-033): idempotent, no tag, no commit; the notice comment.reacted makes every
+    // client, this one included, read the thread again.
+    ...(source.reactions
+      ? {
+          async react(id: string, commentId: string, reaction: ReactionName, on: boolean) {
+            if (!commentOf(id, commentId)) return { ok: false as const, code: 'not_found' };
+            try {
+              await (on
+                ? port.addReaction(commentId, reaction)
+                : port.removeReaction(commentId, reaction));
+              return await written(id);
+            } catch (e) {
+              return failed(id, e);
+            }
+          },
+        }
+      : {}),
 
     async deleteThread(id, etag) {
       try {
