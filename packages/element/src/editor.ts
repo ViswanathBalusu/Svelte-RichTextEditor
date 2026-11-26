@@ -14,6 +14,7 @@ import {
   type ConnectionState,
   type EditMode,
   type EquationDrawer,
+  type SuggestionIntroduction,
 } from '@docedit/engine';
 import {
   PortError,
@@ -272,7 +273,7 @@ const CAPABILITIES: readonly Capability[] = [
 /** A suggestion of the core as the shell's review tools take it (UX-036): the capabilities typed. */
 function reviewItem(
   s: ReturnType<EditorCore['suggestionItems']>[number],
-  committedAt: string | null,
+  introduced: SuggestionIntroduction | null,
 ): ReviewItem {
   return {
     id: s.id,
@@ -285,7 +286,10 @@ function reviewItem(
     caps: s.caps.filter((c): c is Capability => (CAPABILITIES as readonly string[]).includes(c)),
     canResolve: s.canResolve,
     region: s.region,
-    committedAt,
+    committedAt: introduced?.time ?? null,
+    ...(introduced?.agent !== undefined
+      ? { assistant: { agent: introduced.agent, name: introduced.agentName ?? null } }
+      : {}),
   };
 }
 
@@ -333,12 +337,12 @@ export function settingsFrom(attrs: {
  * history port once for each suggestion. `moved` counts the answers, so that the review pane reads
  * its list again when one arrives. A suggestion the port cannot answer for has no time.
  */
-function suggestionTimeCache(ask: (id: string) => Promise<string | null>): {
-  get(id: string): string | null;
+function suggestionTimeCache(ask: (id: string) => Promise<SuggestionIntroduction | null>): {
+  get(id: string): SuggestionIntroduction | null;
   ask(ids: readonly string[]): void;
   readonly moved: ReadView<number>;
 } {
-  const times = new Map<string, string>();
+  const times = new Map<string, SuggestionIntroduction>();
   const asking = new Set<string>();
   const listeners = new Set<() => void>();
   let moves = 0;
@@ -348,10 +352,10 @@ function suggestionTimeCache(ask: (id: string) => Promise<string | null>): {
       for (const id of ids) {
         if (times.has(id) || asking.has(id)) continue;
         asking.add(id);
-        void ask(id).then((time) => {
+        void ask(id).then((answer) => {
           asking.delete(id);
-          if (time === null) return;
-          times.set(id, time);
+          if (answer === null) return;
+          times.set(id, answer);
           moves++;
           for (const listener of [...listeners]) listener();
         });
@@ -451,7 +455,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     : null;
   // The guided bar follows `wf.changed` through the same status (FRW-035 criterion 6).
   const fill = fillView(core, fillActions?.status);
-  const suggestionTimes = suggestionTimeCache((id) => core.suggestionTime(id));
+  const suggestionTimes = suggestionTimeCache((id) => core.suggestionIntroduction(id));
   // The pages of the view on screen, for the navigation pane's thumbnails (UX-021): the page view
   // gives them while it is shown, and the web view has none.
   const pages = pagesBridge();
@@ -589,6 +593,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'createStyle',
         'changeStyle',
         'deleteStyle',
+        'insertCitation',
       ],
       runNamed: (name, args) => {
         if (name === 'showReferences') return core.showReferences();
@@ -607,6 +612,26 @@ export function mountEditor(options: MountOptions): MountedEditor {
           const a = args as { asset?: unknown; alt?: unknown } | undefined;
           if (typeof a?.asset !== 'string' || typeof a.alt !== 'string') return false;
           return core.setImageAlt(a.asset, a.alt);
+        }
+        // The citation dialog (FE-140 criterion 1): `{ items, mode? }`; the core checks the sources and
+        // the user's right to change the text.
+        if (name === 'insertCitation') {
+          const a = args as { items?: unknown; mode?: unknown } | undefined;
+          if (!Array.isArray(a?.items)) return false;
+          const mode = a.mode;
+          if (
+            mode !== undefined &&
+            mode !== 'normal' &&
+            mode !== 'narrative' &&
+            mode !== 'suppressAuthor'
+          )
+            return false;
+          return core.run('insertCitation', {
+            citation: {
+              items: a.items as never,
+              ...(mode === undefined ? {} : { mode }),
+            },
+          });
         }
         if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
         // The ruler and the paragraph dialog (UX-102): the args are the patch of indents and tab

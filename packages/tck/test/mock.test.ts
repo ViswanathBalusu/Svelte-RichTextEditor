@@ -16,6 +16,8 @@ export const MOCK_KNOWN: Readonly<Record<string, string>> = {
   'authz.read.history': 'the mock serves content at any seq to any reader: no history gate (07 §8)',
   'authz.actor.opaque':
     'the mock reads no DEP-Actor header and so does not refuse a malformed one (05 §3.2; UX-096)',
+  'reactions.identifiers':
+    'the mock announces reactions but serves no thread or comment routes over DEP, so the kit has no comment to react to (UX-033)',
 };
 
 const skip = process.env['DOCEDIT_TCK_SKIP_TARGETS'] === '1';

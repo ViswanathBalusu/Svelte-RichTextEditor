@@ -33,7 +33,10 @@ import {
   verifyBundle,
   type LogBundle,
 } from '../../../packages/history/src/index.ts';
-import { HeadAnchoring, ObjectHeadAnchorFiles } from '../../../services/document-service/src/control-plane/head-anchoring.ts';
+import {
+  HeadAnchoring,
+  ObjectHeadAnchorFiles,
+} from '../../../services/document-service/src/control-plane/head-anchoring.ts';
 import { PgHeadAnchorStore } from '../../../services/document-service/src/control-plane/head-anchoring-pg.ts';
 import { S3ObjectStore } from '../../../services/document-service/src/objects/s3.ts';
 import { objectKeys } from '../../../services/document-service/src/objects/store.ts';
@@ -119,9 +122,7 @@ async function rewrite(b: LogBundle, from: number, to: number): Promise<LogBundl
     const c = out.commits[i]!;
     // Inside the rewritten range the payload is replaced; after it only the links change.
     const payload =
-      c.meta.seq <= to
-        ? { steps: [], retired: [], claimed: [], rewritten: c.meta.seq }
-        : c.payload;
+      c.meta.seq <= to ? { steps: [], retired: [], claimed: [], rewritten: c.meta.seq } : c.payload;
     const { hash: payloadHash, size } = await payloadDigest(payload);
     const meta = { ...c.meta, size };
     const hash = await chainHash(prev, meta, payloadHash);
@@ -258,11 +259,7 @@ describe.skipIf(skip !== null)(
         };
       }
 
-      const verifyWith = (
-        n: string,
-        rec: { anchor: string; leaves: string },
-        bundle: LogBundle,
-      ) =>
+      const verifyWith = (n: string, rec: { anchor: string; leaves: string }, bundle: LogBundle) =>
         runTool([
           file(`anchor-${n}.json`, rec.anchor),
           '--root',

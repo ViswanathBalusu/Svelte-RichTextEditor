@@ -58,13 +58,18 @@ function stores(): ContentStores {
 
 type Behaviour = (name: string) => Partial<CompileResult>;
 
-function fakeCompile(behaviour: Behaviour = () => ({})) {
+function fakeCompile(behaviour: Behaviour = () => ({}), delayMs = 0) {
   const names: Array<string | undefined> = [];
+  const flight = { running: 0, most: 0 };
   const compile = async (
     _files: Readonly<Record<string, string | Uint8Array>>,
     opts: SandboxOptions,
   ): Promise<CompileResult> => {
     names.push(opts.name);
+    flight.running += 1;
+    flight.most = Math.max(flight.most, flight.running);
+    if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    flight.running -= 1;
     const n = opts.maxPasses ?? 2;
     return {
       ok: true,
@@ -86,11 +91,11 @@ function fakeCompile(behaviour: Behaviour = () => ({})) {
       ...behaviour(opts.name ?? 'single'),
     };
   };
-  return { compile, names };
+  return { compile, names, flight };
 }
 
-async function runJob(sealing: unknown, behaviour?: Behaviour) {
-  const probe = fakeCompile(behaviour);
+async function runJob(sealing: unknown, behaviour?: Behaviour, delayMs = 0) {
+  const probe = fakeCompile(behaviour, delayMs);
   const stored = new Map<string, Uint8Array>();
   const handler = createExportHandler({
     stores: stores(),
@@ -134,7 +139,7 @@ async function runJob(sealing: unknown, behaviour?: Behaviour) {
   });
   await runner.runOnce();
   const done = (await queue.get(tenant, job.id)) as JobRecord;
-  return { job: done, stored, names: probe.names };
+  return { job: done, stored, names: probe.names, flight: probe.flight };
 }
 
 function codesOf(job: JobRecord): string[] {
@@ -157,6 +162,25 @@ describe('EXP-079 criterion 1: a sealing export is compiled twice in separate sa
     expect(sealed.job.state).toBe('completed');
     expect(sealed.names).toHaveLength(2);
     expect(new Set(sealed.names).size).toBe(2);
+  });
+});
+
+describe('EXP-079 criterion 7: both compiles count against the tenant budget (owner decision 63)', () => {
+  it('runs the pair one after the other, so that the queue records the time of both', async () => {
+    // The budget reads `workerMs` of the job record, the handler's wall time (EXP-009).
+    const compileMs = 120;
+    const plain = await runJob(undefined, undefined, compileMs);
+    const sealed = await runJob(PIN, undefined, compileMs);
+    expect(plain.job.state).toBe('completed');
+    expect(sealed.job.state).toBe('completed');
+    // Never two sandboxes at once: a pair at once would count about one compile.
+    expect(plain.flight.most).toBe(1);
+    expect(sealed.flight.most).toBe(1);
+    expect(sealed.names).toHaveLength(2);
+    expect(plain.job.workerMs ?? 0).toBeGreaterThanOrEqual(compileMs - 20);
+    // Timers may fire a little early, so the bound is a little under two compiles.
+    expect(sealed.job.workerMs ?? 0).toBeGreaterThanOrEqual(2 * compileMs - 30);
+    expect(sealed.job.workerMs ?? 0).toBeGreaterThan(plain.job.workerMs ?? 0);
   });
 });
 

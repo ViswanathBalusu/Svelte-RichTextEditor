@@ -53,6 +53,8 @@ describe('UX-102 criterion 1: the format of the paragraph the caret is in', () =
       defaultTabStop: 720,
       page: { width: 11906, marginLeft: 1440, marginRight: 1440 },
       editable: true,
+      // The options of the paragraph dialog are FE-129's (fe-129-paragraph-options-info.test.ts).
+      options: expect.any(Object),
     });
   });
 

@@ -521,10 +521,6 @@
         {
           "criterion": 1,
           "what": "expensive commits in volume from several channels while other rooms keep their acknowledgement latency"
-        },
-        {
-          "criterion": 3,
-          "what": "checkpoint serialisation, log replay, comparisons and conversions in worker threads during the attack"
         }
       ],
       "boundaries": ["element-to-service"],
@@ -538,7 +534,7 @@
       "builtBy": ["HIS-001", "HIS-002", "BE-081"],
       "provenBy": "SEC-029",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "history-tamper.test.ts",
         "sec-029-db-tamper.test.ts",
@@ -546,16 +542,6 @@
         "sec-029-anchors.s3.test.ts",
         "sec-029-control-commits.test.ts",
         "services/export-worker/src/sec-029-manifest-chain-head.pg.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 3,
-          "what": "each permission and workflow change as a control commit inside the chain"
-        },
-        {
-          "criterion": 5,
-          "what": "chain heads anchored in write-once storage, and what a rewrite before an anchor leaves undetected"
-        }
       ],
       "boundaries": ["element-to-service"],
       "specRows": ["Forging history"]
@@ -624,7 +610,7 @@
       "builtBy": ["EXP-042", "EXP-043", "EXP-044"],
       "provenBy": "SEC-033",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "latex-emitters.test.ts",
         "sec-033-contexts.test.ts",
@@ -632,12 +618,6 @@
         "sec-033-w3-context-list.test.ts",
         "packages/export-latex/src/sec-033-hostile-text.compile.test.ts",
         "services/export-worker/src/sec-033-unescaped.escape.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 1,
-          "what": "a fuzz target per emitter whose output is compiled and shown by the trace to run no unexpected control sequence"
-        }
       ],
       "boundaries": ["service-to-workers"],
       "specRows": ["typed emitters for every context in which a user's string can reach TeX"]
@@ -650,7 +630,7 @@
       "builtBy": ["EXP-049", "EXP-050"],
       "provenBy": "SEC-034",
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "math-gate.test.ts",
         "math-commit-gate.test.ts",
@@ -659,12 +639,6 @@
         "packages/authority/test/sec-034.math-gate-previous.test.ts",
         "packages/export-latex/src/sec-034-gate.compile.fuzz.test.ts",
         "services/export-worker/src/sec-034-region-equation.e2e.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 5,
-          "what": "the end-to-end case: the strongest accepted equation built to cover a price in another region, checked by extracted text and rendered pixels"
-        }
       ],
       "boundaries": ["service-to-workers"],
       "specRows": ["a strict gate on math that also stops content painted outside its box"]

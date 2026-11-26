@@ -141,6 +141,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `format.paragraph` | character-and-paragraph-formatting |
 | `table.size` | editing |
 | `insert.crossReference` | editing |
+| `insert.citation` | citations |
 | `insert.region` | regions-and-permissions |
 | `history.nameVersion` | version-history |
 | `workflow.send` | fields-and-forms |

@@ -78,3 +78,32 @@ describe('the published policy names (FE-125 criterion 4, FE-017)', () => {
     }
   });
 });
+
+// Criterion 5: a dependency update arrives as a pull request. The `e2e` job of the CI workflow runs
+// on every pull request and runs the whole Playwright suite of `packages/element` in each browser,
+// and no setting of that suite leaves the S2 specs out. This reads the configuration; it does not
+// stand in for a hosted run.
+describe('FE-125 criterion 5: CI wiring', () => {
+  const ci = readFileSync(resolve(ROOT, '.github/workflows/ci.yml'), 'utf8');
+  const config = readFileSync(resolve(ROOT, 'packages/element/playwright.config.ts'), 'utf8');
+
+  it('runs the element Playwright suite in the e2e job on every pull request', () => {
+    expect(ci).toMatch(/^on:\s*\n\s+pull_request:/m);
+    const job = /^ {2}e2e:\n([\s\S]*?)(?=^ {2}[a-z0-9-]+:\n)/m.exec(ci)?.[1] ?? '';
+    expect(job).toMatch(/suite: \[element, ui\]/);
+    expect(job).toMatch(
+      /playwright test -c packages\/\$\{\{ matrix\.suite \}\}\/playwright\.config\.ts/,
+    );
+    expect(job).not.toMatch(/^\s+if:.*pull_request/m);
+  });
+
+  it('keeps the S2 specs in that suite', () => {
+    expect(config).toMatch(/testDir: '\.\/e2e'/);
+    expect(config).not.toMatch(/testIgnore|testMatch/);
+    for (const spec of ['s2-features.spec.ts', 's2-svelte-host.spec.ts']) {
+      expect(
+        readFileSync(resolve(ROOT, 'packages/element/e2e', spec), 'utf8').length,
+      ).toBeGreaterThan(0);
+    }
+  });
+});

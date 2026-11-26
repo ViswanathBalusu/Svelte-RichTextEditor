@@ -249,6 +249,7 @@ export const MATRIX: readonly MatrixRow[] = [
       'POST /webhooks/{id}/ping',
       'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
       'POST /tokens',
+      'POST /agents',
       'POST /sessions/revoke',
     ],
     messages: [],

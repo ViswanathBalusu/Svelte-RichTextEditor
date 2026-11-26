@@ -85,6 +85,7 @@ export async function openIdbJournal(
                   seq: at.seq,
                   incarnation: at.incarnation,
                   ...(at.user === undefined ? {} : { user: at.user }),
+                  ...(at.view === undefined ? {} : { view: at.view }),
                 },
               }
             : {}),

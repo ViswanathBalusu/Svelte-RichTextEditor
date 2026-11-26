@@ -23,12 +23,7 @@ import { Transform } from 'prosemirror-transform';
 import { uuid7 } from '@docedit/model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { at, inside, loadDoc, stepsJson } from './support/cdm.ts';
-import {
-  documentWithRegions,
-  insertText,
-  startHarness,
-  type Harness,
-} from './support/harness.ts';
+import { documentWithRegions, insertText, startHarness, type Harness } from './support/harness.ts';
 import { MAX_FRAME, asCommit, baseOf, readCase, type Json } from './support/invariant-corpus.ts';
 import type { AttackInput, Attacker, AttackerReport } from './support/sec-028-attack-worker.ts';
 import { WireClient } from './support/wire.ts';
@@ -244,7 +239,11 @@ describe('SEC-028 criterion 3: heavy work leaves the main thread while expensive
           let base = content['seq'] as number;
           while (performance.now() < until) {
             const t0 = performance.now();
-            const r = await c.submit(1, { id: uuid7(), base, steps: [insertText(pos, 'v')] }, 30_000);
+            const r = await c.submit(
+              1,
+              { id: uuid7(), base, steps: [insertText(pos, 'v')] },
+              30_000,
+            );
             latencies.push(performance.now() - t0);
             expect(r.t, JSON.stringify(r.d)).toBe('sync.ack');
             base = (r.d as { seq: number }).seq;
@@ -258,9 +257,13 @@ describe('SEC-028 criterion 3: heavy work leaves the main thread while expensive
       // Replays (pinned reads, never cached) and comparisons of the long log.
       const reading = (async () => {
         for (let i = 0; performance.now() < until; i++) {
-          const r = await h.call('GET', `/v1/documents/${logged}/content?seq=${COMMITS - (i % 60)}`, {
-            token: h.a.apiKey,
-          });
+          const r = await h.call(
+            'GET',
+            `/v1/documents/${logged}/content?seq=${COMMITS - (i % 60)}`,
+            {
+              token: h.a.apiKey,
+            },
+          );
           expect(r.status, r.text).toBe(200);
           answers.replay++;
           const d = await h.call('GET', `/v1/documents/${logged}/diff?fromSeq=0&toSeq=${COMMITS}`, {
@@ -297,7 +300,11 @@ describe('SEC-028 criterion 3: heavy work leaves the main thread while expensive
           await c.open(1, big);
           let base = (await h.parts.logs.head(bigRef)).seq;
           while (performance.now() < until) {
-            const r = await c.submit(1, { id: uuid7(), base, steps: [insertText(bigPos, 'y')] }, 30_000);
+            const r = await c.submit(
+              1,
+              { id: uuid7(), base, steps: [insertText(bigPos, 'y')] },
+              30_000,
+            );
             expect(r.t, JSON.stringify(r.d)).toBe('sync.ack');
             base = (r.d as { seq: number }).seq;
             const deadline = Date.now() + 30_000;
@@ -329,7 +336,11 @@ describe('SEC-028 criterion 3: heavy work leaves the main thread while expensive
     const figures = {
       answers,
       tasksByKind: kinds,
-      victim: { commits: latencies.length, median: percentile(latencies, 50), p99: percentile(latencies, 99) },
+      victim: {
+        commits: latencies.length,
+        median: percentile(latencies, 50),
+        p99: percentile(latencies, 99),
+      },
       eventLoopDelayMs: { p99: loop.percentile(99) / 1e6, max: loop.max / 1e6 },
       rateLimited: reports.reduce((n, r) => n + (r.answers['rate_limited'] ?? 0), 0),
     };
@@ -344,9 +355,13 @@ describe('SEC-028 criterion 3: heavy work leaves the main thread while expensive
     for (const kind of ['materialise', 'compare', 'encode', 'checkpoint']) {
       const tasks = ran.filter((f) => f.kind === kind);
       expect(tasks.length, `${kind} tasks`).toBeGreaterThanOrEqual(2);
-      for (const f of tasks) if (f.thread !== null) expect(f.thread, `${kind} thread`).not.toBe(threadId);
+      for (const f of tasks)
+        if (f.thread !== null) expect(f.thread, `${kind} thread`).not.toBe(threadId);
     }
-    expect(ran.filter((f) => f.thread !== null).length, 'tasks that report their thread').toBeGreaterThan(0);
+    expect(
+      ran.filter((f) => f.thread !== null).length,
+      'tasks that report their thread',
+    ).toBeGreaterThan(0);
     expect(
       ran.some((f) => f.kind === 'checkpoint' && f.bytes !== null && f.bytes > LARGE_BYTES),
     ).toBe(true);
@@ -355,9 +370,10 @@ describe('SEC-028 criterion 3: heavy work leaves the main thread while expensive
     expect(plane.workers?.stats.inline ?? 0, 'tasks run inline on the main thread').toBe(0);
 
     // The event loop and the other room, against the harness's budget.
-    expect(figures.eventLoopDelayMs.p99, 'event-loop delay, 99th percentile, ms').toBeLessThanOrEqual(
-      HARNESS_BUDGET_MS,
-    );
+    expect(
+      figures.eventLoopDelayMs.p99,
+      'event-loop delay, 99th percentile, ms',
+    ).toBeLessThanOrEqual(HARNESS_BUDGET_MS);
     // The victim's acknowledgement latency is printed, not asserted: SEC-028 criterion 1 owns it.
   }, 300_000);
 });
