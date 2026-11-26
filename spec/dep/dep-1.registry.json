@@ -333,6 +333,20 @@
       "owner": "PRO"
     },
     {
+      "operationId": "createAgent",
+      "method": "POST",
+      "path": "/agents",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §3.2.1, §6.2",
+      "owner": "PRO"
+    },
+    {
       "operationId": "listDocuments",
       "method": "GET",
       "path": "/documents",

@@ -884,9 +884,12 @@ export class Room {
       return reject('invalid_op', 'a commit needs a UUID version 7 id');
     if (!Number.isSafeInteger(input.base) || input.base < 0)
       return reject('invalid_op', 'base must be a sequence number');
-    const origin = input.origin ?? 'input';
-    if (!(CLIENT_ORIGINS as readonly string[]).includes(origin))
-      return reject('invalid_op', `origin "${origin}" is not a client origin`);
+    const claimedOrigin = input.origin ?? 'input';
+    if (!(CLIENT_ORIGINS as readonly string[]).includes(claimedOrigin))
+      return reject('invalid_op', `origin "${claimedOrigin}" is not a client origin`);
+    // A commit on a verified agent connection is the assistant's whatever the client says (ADR 0234
+    // A1; UX-046 criterion 6). On a user connection `assistant` stays a client claim (04 §2).
+    const origin = ch.conn.agent !== undefined ? 'assistant' : claimedOrigin;
 
     // 1. Authorise and limit: the document state, P6, the size limits and admission control, all
     // before any deduplication, rebase or apply work.

@@ -15,6 +15,7 @@ export {
   UnsupportedDocumentError,
   capabilities,
   type CoreConfig,
+  type SuggestionIntroduction,
   type TransactionInfo,
 } from './core.ts';
 export { REMOTE } from './meta.ts';

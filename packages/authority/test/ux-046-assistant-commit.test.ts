@@ -11,7 +11,7 @@
 //   approved assistant result, are stored and shown as text nodes with no mark or attribute that
 //   feeds LaTeX. The export side is in packages/export-latex/src/assistant-text.escape.test.ts.
 import { Fragment, Slice, type Node } from 'prosemirror-model';
-import { ReplaceStep } from 'prosemirror-transform';
+import { RemoveMarkStep, ReplaceStep } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
 import { Room } from '../src/room/room.ts';
 import type { CommitInput, Effects, StoredCommit, ToClient } from '../src/room/types.ts';
@@ -155,6 +155,72 @@ describe("UX-046 criterion 5: a suggester's assistant writes obey P4 and the age
     });
     const runs = paragraphRuns(r.document, 'pLegal000000001B');
     expect(runs[0]).toEqual({ text: 'Suggested by the assistant.', marks: ['ins'] });
+  });
+
+  it('stores origin assistant for a verified agent connection whatever the client sends, and keeps a claim on a user connection', () => {
+    const r = room();
+    r.open('x-d3', agentForSuggester);
+    r.open('x-u', USERS.dave);
+    r.open('a1', USERS.alice);
+    const asAgent = flush(
+      r,
+      r.submit('x-d3', {
+        id: id(),
+        base: 0,
+        steps: insertion('pLegal000000001B', 'One. ', { user: 'dave', mark: suggestionId(3) }),
+        origin: 'input',
+      } as CommitInput),
+    );
+    expect(ackOf(asAgent, 'x-d3')).toBe(true);
+    expect(stored(asAgent, 'a1')[0]).toMatchObject({
+      origin: 'assistant',
+      agent: 'assistant:drafting',
+    });
+    // A user connection that claims ssistant has no agent: the claim stays a claim (04 section 2).
+    const asUser = flush(
+      r,
+      r.submit('x-u', {
+        id: id(),
+        base: 1,
+        steps: insertion('pLegal000000001B', 'Two. ', { user: 'dave', mark: suggestionId(4) }),
+        origin: 'assistant',
+      } as CommitInput),
+    );
+    const claimed = stored(asUser, 'a1')[0]!;
+    expect(claimed.agent).toBeUndefined();
+  });
+
+  it("an editor accepting the assistant's suggestion is stored as the editor's own action, with origin suggestion.accept and no agent", () => {
+    const r = room();
+    r.open('x-d5', agentForSuggester);
+    r.open('a1', USERS.alice);
+    const text = 'Accept me. ';
+    const made = flush(
+      r,
+      r.submit('x-d5', {
+        id: id(),
+        base: 0,
+        steps: insertion('pLegal000000001B', text, { user: 'dave', mark: suggestionId(5) }),
+        origin: 'assistant',
+      } as CommitInput),
+    );
+    expect(stored(made, 'a1')[0]).toMatchObject({ user: 'dave', agent: 'assistant:drafting' });
+    const pos = posInside(baseDoc(), 'pLegal000000001B', 0);
+    const mark = schema.marks['ins']!.create({ id: suggestionId(5), user: 'dave' });
+    const accept = stepsToJson([new RemoveMarkStep(pos, pos + text.length, mark)]);
+    const fx = flush(
+      r,
+      r.submit('a1', {
+        id: id(),
+        base: 1,
+        steps: accept,
+        origin: 'suggestion.accept',
+      } as CommitInput),
+    );
+    expect(rejectOf(fx, 'a1')).toBeNull();
+    const decided = stored(fx, 'x-d5').find((c) => c.origin === 'suggestion.accept');
+    expect(decided).toMatchObject({ user: 'alice', origin: 'suggestion.accept' });
+    expect(decided?.agent).toBeUndefined();
   });
 });
 

@@ -3,7 +3,7 @@
   "status": "draft",
   "subprotocol": "dep.v1",
   "generator": "packages/protocol/scripts/generate.ts",
-  "definitionHash": "433e007d7db33f03957d1d06e3213debbcba41614beaa77cdb80952cf64445eb",
+  "definitionHash": "10941717ec14c1097090a2a01a2f91efdfbb9fc6d38a16e73e9256329f7ca848",
   "cdm": {
     "min": 1,
     "max": 1,
@@ -13,7 +13,7 @@
   },
   "counts": {
     "messages": 28,
-    "operations": 105,
+    "operations": 106,
     "webhooks": 35,
     "notifications": 20,
     "errors": 32,
@@ -22,8 +22,8 @@
   },
   "files": {
     "spec/dep/dep-1.asyncapi.json": "5ee965a953079175a9cc28d43c45791aebda7770ce1d8ab45ecda32351171405",
-    "spec/dep/dep-1.openapi.json": "d9d98ef19d3ae84bb5c6cede57b3c50a071453fba95842bcdc9d1c27a0e019be",
-    "spec/dep/dep-1.schema.json": "3032bf1ebb008938a6d42a8ea3cb001dd613e63305152f7e7b6bae2d98cb9f52",
+    "spec/dep/dep-1.openapi.json": "231435e50346f48ad48688d12cdb4fb2fdb6f865c211235616f442b0a983111e",
+    "spec/dep/dep-1.schema.json": "fea05598b3c64d5437f5203a5df6c896344ee9a480f94ef8f51b9407193e69c2",
     "spec/dep/webhooks/dep.document.created.v1.schema.json": "1e16a104e436cdf8f6213fc1f051a4d9a1ec58a4c2c5eeb25829ed86ae672c54",
     "spec/dep/webhooks/dep.document.deleted.v1.schema.json": "890c2efa8c1731ef2208fbf3c86629fa2eabf2b1eef70dd74e6e8eb52a53e404",
     "spec/dep/webhooks/dep.document.state_changed.v1.schema.json": "9cc6359f41bf28afce274afe4a664fbdd0cb18ac1bc118a80341fb83f32954fb",
@@ -59,8 +59,8 @@
     "spec/dep/webhooks/dep.workflow.expired.v1.schema.json": "6e3ce533646bb1a9ba1f37ed5e221382d0921c1b1f1308f46f20ffc311fa0b8a",
     "spec/dep/webhooks/dep.workflow.completed.v1.schema.json": "ed324ab76a9225e8f652b3f1cfc201a31929cdf80777f1bdc4e44b60d34c4dca",
     "spec/dep/webhooks/dep.workflow.finalised.v1.schema.json": "9152416acc7809df32797943418c7a08be2f0169dd5f581a6c712d938774b333",
-    "spec/dep/dep-1.registry.json": "4e621afd3819ef20ac09b7d45c4f90cde18adf84f50404a95480af64c3efdc84",
+    "spec/dep/dep-1.registry.json": "b58a82b3bb6507e7afe0db46069073c1cb42db5075c88fa58626b41b270067a1",
     "spec/dep/dep-1.gaps.json": "6424fc273d6a000d0f5f27cbf86e021ecc437ff1db03b4d994d1169f1419a664",
-    "packages/protocol/src/generated/types.ts": "88468af49ac5651bb609e38e38fcc5d54d1ff7b979095fe0e7236bbb7184bf83"
+    "packages/protocol/src/generated/types.ts": "a3fb01452655c41a33be403410addda70602ee833250e6b9cf5ded75c7e5d187"
   }
 }

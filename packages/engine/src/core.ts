@@ -421,6 +421,16 @@ export interface CoreConfig {
 }
 
 /** A document the core cannot open (03 §2, §11.1): the codes are DEP's (05 §5.8). */
+/** What the history port answers of the commit that introduced a suggestion (UX-046 criterion 6). */
+export interface SuggestionIntroduction {
+  /** The server time of the commit, ISO 8601 UTC. */
+  readonly time: string;
+  /** The agent identifier, when the commit was made on an assistant's agent connection. */
+  readonly agent?: string;
+  /** The agent's registered display name, for example the model, while it is registered. */
+  readonly agentName?: string;
+}
+
 /** What a fill the service refused is told as (12 §4.2, §10). */
 function refusalText(code: string): string {
   switch (code) {
@@ -1070,7 +1080,7 @@ export class DocumentCore implements DocumentApi {
   #attachedAssets: AssetsPort | null = null;
   #attachedHistory: NonNullable<AttachOptions['history']> | null = null;
   #suggestionCard: SuggestionCardFormat | null = null;
-  readonly #suggestionTimes = new Map<string, Promise<string | null>>();
+  readonly #suggestionTimes = new Map<string, Promise<SuggestionIntroduction | null>>();
   /** The user suggestion marks name (FE-042): the configuration's, then the one `attach` gave. */
   #user: string | null;
   /** `settings.trackChanges` of the last definitions read, by the definitions node (FE-041). */
@@ -3202,17 +3212,34 @@ one or original. It is a
    * commit is below the reader's gate or the answer fails. A time does not change, so it is kept.
    */
   suggestionTime(id: string): Promise<string | null> {
+    return this.suggestionIntroduction(id).then((answer) => answer?.time ?? null);
+  }
+
+  /**
+   * What the history port says of the commit that introduced the suggestion `id`: its server time
+   * and, when the commit was made on an assistant's agent connection, the agent and its registered
+   * name (UX-046 criterion 6). Null as for `suggestionTime`. The answer does not change, so it is kept.
+   */
+  suggestionIntroduction(id: string): Promise<SuggestionIntroduction | null> {
     const known = this.#suggestionTimes.get(id);
     if (known !== undefined) return known;
     const port = this.#attachedHistory;
     if (port === null || this.#docId === '') return Promise.resolve(null);
     const asked = port
       .suggestionIntroduction(this.#docId, id)
-      .then((answer) => (typeof answer.time === 'string' ? answer.time : null))
+      .then((answer): SuggestionIntroduction | null =>
+        typeof answer.time === 'string'
+          ? {
+              time: answer.time,
+              ...(typeof answer.agent === 'string' ? { agent: answer.agent } : {}),
+              ...(typeof answer.agentName === 'string' ? { agentName: answer.agentName } : {}),
+            }
+          : null,
+      )
       .catch(() => null);
-    // A failed or empty answer is asked again the next time; only a time is kept.
-    void asked.then((time) => {
-      if (time === null) this.#suggestionTimes.delete(id);
+    // A failed or empty answer is asked again the next time; only an answer is kept.
+    void asked.then((answer) => {
+      if (answer === null) this.#suggestionTimes.delete(id);
     });
     this.#suggestionTimes.set(id, asked);
     return asked;

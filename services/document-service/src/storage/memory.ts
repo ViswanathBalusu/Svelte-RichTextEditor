@@ -338,6 +338,7 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
         session: c.session,
         time: c.time,
         origin: c.origin,
+        ...(c.agent !== undefined ? { agent: c.agent } : {}),
         scopes: [...c.scopes],
         revision: c.revision,
       }));

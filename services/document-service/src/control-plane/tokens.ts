@@ -30,6 +30,12 @@ import {
 } from './jwt.ts';
 import { ApiError } from './problems.ts';
 import { secretMatches, type TenantRegistry } from './tenants.ts';
+import {
+  agentMayActOn,
+  MemoryAgentRegistry,
+  type AgentRecord,
+  type AgentRegistry,
+} from './agents.ts';
 import type { UserDirectory } from './users.ts';
 
 /** 05 §3.1: `exp` at most 15 minutes after `iat`. */
@@ -40,6 +46,8 @@ export const SKEW_S = 60;
 export const MAX_DOCS = 20;
 /** The type header of a service JWT (05 §3.2). */
 export const SERVICE_JWT_TYPE = 'dep-svc+jwt';
+/** The type header of an agent token (05 §3.2.1; ADR 0234 A2). */
+export const AGENT_JWT_TYPE = 'dep-agent+jwt';
 /** The prefix of an API key: `dsk_<tenant>_<key id>_<secret>` (ADR 0036). */
 export const API_KEY_PREFIX = 'dsk_';
 
@@ -110,6 +118,8 @@ export interface TokenServiceOptions {
    * for a tenant (05 §3.1; 12 §13; owner decision 5a of 2026-11-15). Default `wfr` for every tenant.
    */
   fillRolesClaim?: (tenant: string) => string;
+  /** The agent registry (ADR 0234 A2). Default: an in-process registry. */
+  agents?: AgentRegistry;
 }
 
 /** The default name of the fill roles claim (05 §3.1). */
@@ -133,8 +143,11 @@ export class TokenService implements TokenVerifier {
   readonly #now: () => number;
   readonly #defaultLifetimeS: number;
   readonly #fillRolesClaim: (tenant: string) => string;
+  /** The assistant agents of the tenants (ADR 0234 A2). */
+  readonly agents: AgentRegistry;
 
   constructor(opts: TokenServiceOptions) {
+    this.agents = opts.agents ?? new MemoryAgentRegistry();
     this.#fillRolesClaim = opts.fillRolesClaim ?? (() => FILL_ROLES_CLAIM);
     this.#registry = opts.registry;
     this.#users = opts.users;
@@ -167,6 +180,8 @@ export class TokenService implements TokenVerifier {
     // A service credential is not a user token, whatever its claims say (05 §3.2).
     if (header['typ'] === SERVICE_JWT_TYPE)
       throw refuse('a service credential is not a user token');
+    // Only the type header makes an agent token; an `agt` claim in a user token is ignored (ADR 0234 A1).
+    const isAgentToken = header['typ'] === AGENT_JWT_TYPE;
     let alg: Algorithm;
     try {
       alg = headerAlgorithm(header);
@@ -197,6 +212,8 @@ export class TokenService implements TokenVerifier {
       }
     }
     if (!verified) throw refuse('no key registered for the tenant verifies the token');
+    // Agent tokens are minted by the service only, with its own key, never by a registered user key.
+    if (isAgentToken && !own) throw refuse('an agent token is signed with the service key');
 
     const claims = this.#checkTimes(payload);
     if (typeof payload['iss'] !== 'string' || !payload['iss']) throw refuse('iss is required');
@@ -220,18 +237,34 @@ export class TokenService implements TokenVerifier {
     // 05 §3.3: tokens issued before a watermark are refused; one for a single document drops it.
     if (user.revokedBefore !== null && claims.iat < user.revokedBefore)
       throw new ApiError('revoked', "the user's sessions were revoked after the token was issued");
-    const entries = Object.entries(docs).filter(
+    let entries = Object.entries(docs).filter(
       ([doc]) => claims.iat >= (user.documentRevocations.get(doc) ?? Number.NEGATIVE_INFINITY),
     );
     if (entries.length === 0)
       throw new ApiError('revoked', "access to the token's documents was revoked");
+    let agent: AgentRecord | undefined;
+    if (isAgentToken) {
+      const agt = payload['agt'];
+      const act = payload['act'];
+      if (typeof agt !== 'string' || agt.length === 0)
+        throw refuse('an agent token names its agent');
+      if (!isObject(act) || act['sub'] !== agt) throw refuse('act.sub must be the agent');
+      agent = await this.agents.get(tid, agt);
+      // A disabled or unknown agent loses access at once (05 §3.2.1).
+      if (agent === undefined || !agent.enabled) throw refuse('the agent is not registered');
+      const allowed = agent;
+      entries = entries.filter(([doc]) => agentMayActOn(allowed, doc));
+      if (entries.length === 0) throw refuse('the agent may not act on the documents of the token');
+    }
     const [doc, role] = entries[0]!;
     const identity: VerifiedIdentity = {
       tenant: tid,
       doc,
+      ...(agent !== undefined ? { agent: { id: agent.id, name: agent.name } } : {}),
       connection: {
         sub: user.surrogate,
         session: '',
+        ...(agent !== undefined ? { agent: agent.id } : {}),
         role,
         groups: (grp as string[] | undefined) ?? [],
         participantRoles: fillRoles,
@@ -353,6 +386,20 @@ export class TokenService implements TokenVerifier {
         throw new ApiError('validation_failed', 'a group identifier is 1 to 255 characters', {
           violations: [{ path: '/grp', rule: 'opaque identifiers' }],
         });
+    // An agent token (ADR 0234 A2): the agent must be registered, enabled and allowed on every document.
+    let agentId: string | undefined;
+    if (request.agent !== undefined) {
+      const agent = await this.agents.get(tenant, request.agent);
+      if (agent === undefined || !agent.enabled)
+        throw new ApiError('validation_failed', 'the agent is not registered', {
+          violations: [{ path: '/agent', rule: 'a registered agent' }],
+        });
+      if (!docs.every(([doc]) => agentMayActOn(agent, doc)))
+        throw new ApiError('validation_failed', 'the agent may not act on every document', {
+          violations: [{ path: '/docs', rule: 'documents the agent may act on' }],
+        });
+      agentId = agent.id;
+    }
     const iat = Math.floor(this.#now() / 1000);
     const lifetime = Math.min(request.expiresIn ?? this.#defaultLifetimeS, MAX_LIFETIME_S);
     const exp = iat + lifetime;
@@ -376,8 +423,16 @@ export class TokenService implements TokenVerifier {
         });
       claims[this.#fillRolesClaim(tenant)] = request.wfr;
     }
+    if (agentId !== undefined) {
+      claims['agt'] = agentId;
+      claims['act'] = { sub: agentId };
+    }
     const token = signJws(
-      { alg: this.#signing.alg, typ: 'JWT', kid: this.#signing.kid },
+      {
+        alg: this.#signing.alg,
+        typ: agentId !== undefined ? AGENT_JWT_TYPE : 'JWT',
+        kid: this.#signing.kid,
+      },
       claims,
       this.#signing.privateKey,
     );

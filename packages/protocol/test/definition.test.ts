@@ -144,6 +144,7 @@ const PROSE_WEBHOOKS = [
 // 05 §6.2: every resource and method of the table.
 const PROSE_ROUTES = [
   'POST /tokens',
+  'POST /agents',
   'GET /documents',
   'POST /documents',
   'GET /documents/{id}',
@@ -318,6 +319,7 @@ describe('the DEP definition', () => {
     expect(service.sort()).toEqual(
       [
         'POST /tokens',
+        'POST /agents',
         'GET /documents',
         'POST /documents',
         'PUT /documents/{id}/content',

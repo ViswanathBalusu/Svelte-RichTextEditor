@@ -2058,6 +2058,12 @@ export interface ReviewItem {
    * its commit (the suggestion-to-commit index of HIS-042 would give it).
    */
   readonly committedAt?: string | null;
+  /**
+   * Set when the commit that introduced it was made on an assistant's agent connection (UX-046
+   * criterion 6): the agent and its registered name, the model, or null when the name is gone. The
+   * person it acted for is `user`.
+   */
+  readonly assistant?: { readonly agent: string; readonly name: string | null } | null;
   /** The capabilities the user has in the suggestion's scope. */
   readonly caps: readonly Capability[];
   /** Whether the user may accept or reject it now (`edit` in its scope, document not locked). */
