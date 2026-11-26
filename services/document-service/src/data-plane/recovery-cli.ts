@@ -9,8 +9,9 @@
  *       that have moved to cold segments, HIS-029), and every recorded checkpoint against a
  *       replay; exit 1 naming the first broken `seq`.
  *   node src/data-plane/recovery-cli.ts incarnation [--dry-run]
- *       Lists the documents whose checkpoints reach past their head (dry run), or gives each a
- *       new incarnation and sets those checkpoints aside.
+ *       Lists the documents whose checkpoints or cold segments reach past their head (dry run), or
+ *       gives each a new incarnation and sets those checkpoints and segments aside. The segments
+ *       are found by listing the whole object store.
  *
  * Settings come from the environment as for the service (DOCEDIT_DATABASE_URL, DOCEDIT_S3_*).
  * Run as the schema owner (an operator role) for `incarnation`, which reads across tenants.
@@ -18,13 +19,14 @@
 import { configFromEnv } from '../config.ts';
 import { ObjectCheckpointStore } from '../objects/checkpoints.ts';
 import { S3ObjectStore } from '../objects/s3.ts';
+import { ObjectSegmentStore } from '../objects/segments.ts';
 import { ObjectColdPayloads } from '../storage/cold-payloads.ts';
 import { createPool } from '../storage/db.ts';
 import { PgGrantStore } from '../storage/grant-store.ts';
 import { PgLogStore } from '../storage/log-store.ts';
 import { PgAuditStore } from './pg/audit.ts';
 import { PgCheckpointIndex } from './pg/checkpoint-index.ts';
-import { affected, rebuild, runIncarnation, verifyCheckpoint } from './recovery.ts';
+import { affectedWithSegments, rebuild, runIncarnation, verifyCheckpoint } from './recovery.ts';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -51,6 +53,7 @@ const stores = {
   checkpoints: new ObjectCheckpointStore(objects),
   index: new PgCheckpointIndex(pool),
   audit: new PgAuditStore(pool),
+  segments: new ObjectSegmentStore(objects),
 };
 
 let code = 0;
@@ -83,16 +86,24 @@ try {
       }
     }
   } else if (command === 'incarnation') {
-    const list = await affected(pool);
+    const list = await affectedWithSegments(pool, stores);
     const dryRun = process.argv.includes('--dry-run');
     if (dryRun) {
-      for (const a of list)
-        console.log(`${a.tenant} ${a.doc}: head ${a.head}, checkpoint ${a.checkpoint}`);
+      for (const a of list) {
+        const parts = [`head ${a.head}`];
+        if (a.checkpoint !== null) parts.push(`checkpoint ${a.checkpoint}`);
+        if (a.segments)
+          parts.push(`segments ${a.segments.map((s) => `${s.from}-${s.to}`).join(', ')}`);
+        console.log(`${a.tenant} ${a.doc}: ${parts.join(', ')}`);
+      }
       console.log(`${list.length} documents would get a new incarnation; nothing was changed`);
     }
     for (const r of await runIncarnation(stores, list, { dryRun }))
       console.log(
-        `${r.ref.tenant} ${r.ref.doc}: incarnation ${r.after}, set aside ${r.setAside.join(', ') || 'none'}`,
+        `${r.ref.tenant} ${r.ref.doc}: incarnation ${r.after}, set aside ${r.setAside.join(', ') || 'none'}` +
+          (r.segmentsSetAside.length > 0
+            ? `, segments ${r.segmentsSetAside.map((s) => `${s.from}-${s.to}`).join(', ')}`
+            : ''),
       );
   } else {
     console.error('usage: recovery-cli.ts rebuild|verify|incarnation (see the file header)');
