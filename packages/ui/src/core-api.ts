@@ -271,10 +271,21 @@ export type CoreQueryName =
  *   document has room for another region (PRM-033);
  * - `hasNextEditableRegion`: a region after the caret, in document order, where the user has
  *   `edit` (PRM-027);
- * - `canInsertField`: a field may be inserted at the selection (FRW-072).
+ * - `canInsertField`: a field may be inserted at the selection (FRW-072);
+ * - `canSetTableSize`: the caret is in a table whose column widths and row height may be changed
+ *   (FE-104);
+ * - `canMoveBlockUp`, `canMoveBlockDown`: the blocks at the selection have a sibling above or below
+ *   to change places with, in a scope the user may change (FE-104).
  */
 export type CoreQueryName1b =
-  'canCopyFormat' | 'canPasteFormat' | 'canMarkRegion' | 'hasNextEditableRegion' | 'canInsertField';
+  | 'canCopyFormat'
+  | 'canPasteFormat'
+  | 'canMarkRegion'
+  | 'hasNextEditableRegion'
+  | 'canInsertField'
+  | 'canSetTableSize'
+  | 'canMoveBlockUp'
+  | 'canMoveBlockDown';
 
 /**
  * Named commands of phase 1b, run through `runNamed` and declared in `commandNames` (ADR 0052).
@@ -303,10 +314,17 @@ export type CoreQueryName1b =
  *   `page` as the format; inserts a `ref` field at the caret (FE-134 criterion 2);
  * - `setParagraphFormat`: a patch of `indentLeft`, `indentRight`, `indentFirstLine` (twips) and
  *   `tabs` (the whole list, or null for none) for the selected paragraphs; the ruler and the
- *   paragraph dialog both run it (UX-102 criterion 2; FE-129).
+ *   paragraph dialog both run it (UX-102 criterion 2; FE-129);
+ * - `setTableSize`: `{ columnWidths?, rowHeight? }` in twips for the caret's table: the width of
+ *   every column and the height of the caret's row, or null for the natural height (FE-104);
+ * - `moveBlockUp`, `moveBlockDown`: none; the blocks at the selection change places with the block
+ *   above or below (FE-104).
  */
 export type CoreCommandName =
   | 'setParagraphFormat'
+  | 'setTableSize'
+  | 'moveBlockUp'
+  | 'moveBlockDown'
   | 'copyFormat'
   | 'pasteFormat'
   | 'paragraphStyle'
@@ -498,6 +516,22 @@ export interface ParagraphFormatView {
     readonly marginRight: number;
   } | null;
   /** Whether the paragraphs may be changed now. */
+  readonly editable: boolean;
+}
+
+/**
+ * The table at the caret, for the table size dialog (FE-104; 03 §4.3). Lengths are twips, as the
+ * document stores them.
+ */
+export interface TableSizeView {
+  /** The width of every column. */
+  readonly columnWidths: readonly number[];
+  /** The height of the caret's row, or null for its natural height. */
+  readonly rowHeight: number | null;
+  /** The caret's row and column, zero based. */
+  readonly row: number;
+  readonly column: number;
+  /** Whether the sizes may be changed now. */
   readonly editable: boolean;
 }
 
@@ -1013,6 +1047,8 @@ export interface CoreApi {
    * paragraph. Absent: the shell offers no ruler and no paragraph dialog.
    */
   readonly paragraphFormat?: ReadView<ParagraphFormatView | null>;
+  /** The widths of the caret's table and its row height, for the table size dialog (FE-104); null outside a table. */
+  readonly tableSize?: ReadView<TableSizeView | null>;
   /** The document's default language (`settings.lang`), a BCP 47 tag; null when not set. */
   readonly language?: ReadView<string | null>;
   /**

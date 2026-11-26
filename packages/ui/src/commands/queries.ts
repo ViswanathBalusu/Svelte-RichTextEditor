@@ -31,6 +31,9 @@ export const CORE_QUERY_NAMES_1B: readonly CoreQueryName1b[] = [
   'canMarkRegion',
   'hasNextEditableRegion',
   'canInsertField',
+  'canSetTableSize',
+  'canMoveBlockUp',
+  'canMoveBlockDown',
 ];
 
 function fromViews(core: CoreApi, name: string): boolean | undefined {

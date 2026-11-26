@@ -129,6 +129,7 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'takeLayoutDirty'
       // UX-102: the paragraph format at the selection, for the ruler (a read view of the core).
       | 'paragraphFormat'
+      | 'tableSize'
       // FRW-046: a signature or initials field the participant may sign, and the request the shell takes.
       | 'fieldSignable'
       | 'requestSign'

@@ -561,6 +561,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'discardRecovered',
         'setLanguage',
         'setParagraphFormat',
+        'setTableSize',
+        'moveBlockUp',
+        'moveBlockDown',
         'paragraphStyle',
         'characterStyle',
         'tableStyle',
@@ -595,6 +598,25 @@ export function mountEditor(options: MountOptions): MountedEditor {
             paragraphFormat: args as Readonly<Record<string, unknown>>,
           });
         }
+        // The table size dialog (FE-104): `{ columnWidths?, rowHeight? }` in twips; the core checks
+        // every value and the user's right to change the table. The two move commands take no
+        // argument and change the place of the blocks at the selection.
+        if (name === 'setTableSize') {
+          if (args === null || typeof args !== 'object' || Array.isArray(args)) return false;
+          const a = args as { columnWidths?: unknown; rowHeight?: unknown };
+          const tableSize: { columnWidths?: number[]; rowHeight?: number | null } = {};
+          if (a.columnWidths !== undefined) {
+            if (!Array.isArray(a.columnWidths) || a.columnWidths.some((w) => typeof w !== 'number'))
+              return false;
+            tableSize.columnWidths = [...(a.columnWidths as number[])];
+          }
+          if (a.rowHeight !== undefined) {
+            if (a.rowHeight !== null && typeof a.rowHeight !== 'number') return false;
+            tableSize.rowHeight = a.rowHeight;
+          }
+          return core.run('setTableSize', { tableSize });
+        }
+        if (name === 'moveBlockUp' || name === 'moveBlockDown') return core.run(name);
         // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
         // puts it on the selection through the guards; neither takes an argument.
         if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
@@ -680,6 +702,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       language: core.language,
       // The indents and tab stops at the selection, for the ruler and the paragraph dialog (UX-102).
       paragraphFormat: core.paragraphFormat,
+      // The widths of the caret's table and its row height, for the table size dialog (FE-104).
+      tableSize: core.tableSize,
       // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
       // port `proofing.get().available` is false and the shell shows no proofing control.
       // The assistant pane, offered only while the backend's assistant port is attached (UX-045).
