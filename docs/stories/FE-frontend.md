@@ -2655,6 +2655,8 @@ As an author, I want to type, compose with an input method and paste in the page
 
 **Notes (lane w1, 2026-11-26):** Checked against `docs/owner-decisions-2026-11-15.md` (searched for the story, ADR 0380, input methods, find, EditContext): no decision there answers criteria 2, 3 or 4, and decisions 196 to 220 do not list S9 as open, so ADR 0380's recommended option is taken as accepted (the bridge as built follows it). Nothing new could be ticked and nothing was built. What remains needs things that are not on this machine: criterion 2 (the S1 matrix in the page view) needs real Japanese, Chinese and Korean input methods, dead keys and an Android and an iOS keyboard, and sub-editors in the page view, which the page view does not host; criterion 3 needs the operating system's input-method window seen by a person; criterion 4 needs the browser's own find bar in a headed browser, which Playwright cannot drive, and the bridge's copy of the current block may add a second match by design (ADR 0380 item 5 makes find the page's own command, not built).
 
+Machine check (lane w1, 2026-11-26): the machine question does not change this story. Criteria 2 to 4 need real input methods, a person at the operating system input window and the browser find bar, and the page view does not host sub-editors; none of these is on this machine. Criterion 5 is met as built (ADR 0380 item 3, accepted through decisions 196 to 220 by the bulk rule).
+
 ### FE-099 Read and edit the page view with a screen reader
 
 | Type | Phase | Size | Priority | Persona |
