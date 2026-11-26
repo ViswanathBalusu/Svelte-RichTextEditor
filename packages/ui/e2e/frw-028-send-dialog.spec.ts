@@ -56,7 +56,13 @@ test.describe('the pre-send checklist (FRW-028)', () => {
   test('a failed check has a link to the field, the roles, the rules or the suggestion', async ({
     page,
   }) => {
-    const h = await open(page, { send: 'fail', permissions: OWNER, extended: true });
+    // The rules pane is offered when `rules` is announced (FRW-065), which this check follows.
+    const h = await open(page, {
+      send: 'fail',
+      permissions: OWNER,
+      extended: true,
+      features: ['rules'],
+    });
     await h.exec('workflow.send');
     const dialog = page.locator(DIALOG);
     await expect(

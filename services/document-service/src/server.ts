@@ -587,6 +587,46 @@ function withTestHooks(
 }
 
 /**
+ * The features of the fields, rules and workflow epic that this composition implements and that are
+ * announced only then (12 §10; 05 §2; FRW-065 criterion 2). `rules` is the data plane's own (the
+ * room enforces the rules fixtures) and `fields` is the CDM feature the data plane announces; here
+ * are the three that depend on what the service is composed of:
+ *
+ * - `workflow`: the workflow resource (`parts.workflows`).
+ * - `sign`: the signing ceremony, which the sign route offers when it has the workflow store, the
+ *   evidence ledger, the consent texts, the asset registry and the outbox.
+ * - `seal`: the sealing of the final PDF, which needs the signing service (`sealing`) and the
+ *   write-once stores; a service without them leaves a completed workflow `completed`.
+ */
+function workflowFeatures(
+  parts: Partial<
+    Pick<
+      ServiceParts,
+      | 'workflows'
+      | 'evidence'
+      | 'consentTexts'
+      | 'assetRegistry'
+      | 'outbox'
+      | 'sealedPdfs'
+      | 'anchors'
+    >
+  >,
+  sealing: boolean,
+): string[] {
+  return [
+    ...(parts.workflows ? ['workflow'] : []),
+    ...(parts.workflows &&
+    parts.evidence &&
+    parts.consentTexts &&
+    parts.assetRegistry &&
+    parts.outbox
+      ? ['sign']
+      : []),
+    ...(sealing && parts.workflows && parts.sealedPdfs && parts.anchors ? ['seal'] : []),
+  ];
+}
+
+/**
  * The retention policies of `/retention` (UX-080) over a policy store, the parts' document store
  * and audit trail. A document is known when it exists in the tenant and is not deleted; an
  * identifier that is not a UUID names no document. A caller that replaces `documents` or `audit`
@@ -1185,7 +1225,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
             config.externalWorkers
               ? ['assets']
               : []),
-            ...(parts.workflows ? ['workflow'] : []),
+            ...workflowFeatures(parts, Boolean(opts.finalSealing ?? config.sealing)),
           ]),
         ],
       ),
@@ -1890,7 +1930,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         // `exports` only when a compile worker can serve the queue (ADR 0054; `exports.states`).
         ...(exportHandlers[EXPORT_KIND] || config.externalWorkers ? ['exports'] : []),
         ...(assetWorker || config.externalWorkers ? ['assets'] : []),
-        ...(parts.workflows ? ['workflow'] : []),
+        ...workflowFeatures(parts, Boolean(opts.finalSealing ?? config.sealing)),
       ]),
     ],
   );

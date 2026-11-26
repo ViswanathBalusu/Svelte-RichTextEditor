@@ -136,6 +136,8 @@ export interface MountOptions {
   status?: StatusSummary;
   presence?: PresencePeer[];
   features?: string[];
+  /** True: the backend announces neither `fields` nor `workflow` (FRW-065 criterion 3). */
+  withoutFieldPorts?: boolean;
   counts?: ShellCounts;
   /** `host`: the directory above; `failing`: every call rejects; `none`: no resolveUsers. */
   people?: 'host' | 'failing' | 'none';
@@ -610,9 +612,13 @@ function mountShell(options: MountOptions = {}): void {
     ...(options.access ? { access: options.access } : {}),
     ...(options.status ? { status: options.status } : {}),
     ...(options.presence ? { presence: options.presence } : {}),
-    ...(options.features || options.comments
-      ? { features: [...(options.features ?? []), ...(options.comments ? ['comments'] : [])] }
-      : {}),
+    // The backend of the harness announces the `fields` and `workflow` features unless a run says
+    // otherwise (`withoutFieldPorts`): the field and workflow controls need them (FRW-065).
+    features: [
+      ...(options.withoutFieldPorts ? [] : ['fields', 'workflow']),
+      ...(options.features ?? []),
+      ...(options.comments ? ['comments'] : []),
+    ],
     ...(options.comments ? { threads: true } : {}),
     ...(options.review ? { review: true } : {}),
     ...(options.counts ? { counts: options.counts } : {}),
