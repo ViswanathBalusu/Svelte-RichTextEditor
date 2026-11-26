@@ -2373,6 +2373,8 @@ As a maintainer, I want long documents paginated in time slices with estimated h
 
 **Notes (lane w1, 2026-11-26):** Nothing new ticked. Criterion 3 (keystroke latency while background pagination runs) is the FE-088 criterion 5 measurement on the reference machine, which this machine is not, so it stays open.
 
+Machine check (lane w1, 2026-11-26): this machine matches reference-1 of ADR 0037 section 1, so criterion 3 (keystroke latency during background pagination) can be measured here with packages/perf, as FE-088 criterion 5. No run was made in this lane, so it stays unticked.
+
 ### FE-090 Paint lines the browser cannot re-wrap
 
 | Type | Phase | Size | Priority | Persona |
