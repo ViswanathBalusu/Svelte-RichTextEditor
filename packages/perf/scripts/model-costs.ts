@@ -33,13 +33,15 @@ import {
   type JsonNode,
   type TreeNode,
 } from '@docedit/model';
-import { validate } from '@docedit/model/validate';
+import { cdmSchema } from '@docedit/model/prosemirror';
+import { CommitValidator, validate, type CommitContext } from '@docedit/model/validate';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { cpus, release, totalmem, type as osType } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getHeapStatistics } from 'node:v8';
+import { PerformanceObserver } from 'node:perf_hooks';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { summarise } from '../src/stats.ts';
 
@@ -98,6 +100,101 @@ interface WorkerResult {
   heapUsedAfterMB: number;
 }
 
+/**
+ * CDM-013 criterion 7: `CommitValidator.validate()` on a chain of single-paragraph commits. Each
+ * commit types a six-character word into a paragraph, and the result of one commit is the
+ * document before the next (so the validator keeps its indexes, as a room does). The word is a
+ * slice of the same paragraph, so no package other than the model's is needed. The document edit
+ * is not timed. The first call, which has no known-valid base and validates the whole document,
+ * is reported apart. Wall time only: `process.cpuUsage` ticks at 15.6 ms on Windows. Slow samples
+ * are matched with the garbage collections that V8 reported during the loop.
+ */
+async function commitValidation(
+  env: JsonEnvelope,
+  attachedAssets: ReadonlySet<string>,
+  commits: number,
+): Promise<unknown> {
+  const schema = cdmSchema();
+  let doc = schema.nodeFromJSON(env.doc);
+  const requires = (env as unknown as { requires: string[] }).requires;
+  const ctx: CommitContext = { attachedAssets };
+  const eligible = (n: typeof doc): boolean =>
+    n.type.name === 'paragraph' && n.firstChild?.isText === true && n.firstChild.text!.length >= 20;
+  const edit = (before: typeof doc, k: number): typeof doc => {
+    let seen = -1;
+    let at = -1;
+    before.descendants((n, pos) => {
+      if (at >= 0) return false;
+      if (eligible(n)) {
+        seen++;
+        if (seen === k) at = pos;
+      }
+      return at < 0;
+    });
+    if (at < 0) throw new Error('no paragraph to edit');
+    const word = before.slice(at + 1, at + 7);
+    return before.replace(at + 4, at + 4, word);
+  };
+  let count = 0;
+  doc.descendants((n) => {
+    if (eligible(n)) count++;
+    return true;
+  });
+  const cv = new CommitValidator();
+  const first = edit(doc, 0);
+  const f0 = performance.now();
+  const firstResult = cv.validate(doc, first, requires, ctx);
+  const firstMs = performance.now() - f0;
+  doc = first;
+  const warm = 100;
+  for (let i = 1; i <= warm; i++) {
+    const next = edit(doc, (i * 7919) % count);
+    cv.validate(doc, next, requires, ctx);
+    doc = next;
+  }
+  const gcs: { start: number; end: number }[] = [];
+  const obs = new PerformanceObserver((list) => {
+    for (const e of list.getEntries())
+      gcs.push({ start: e.startTime, end: e.startTime + e.duration });
+  });
+  obs.observe({ entryTypes: ['gc'] });
+  const wall: number[] = [];
+  const spans: { start: number; end: number }[] = [];
+  let invalid = 0;
+  const slowOnes: { ms: number; how: string; why: string | null }[] = [];
+  const base = { ...cv.stats };
+  for (let i = 0; i < commits; i++) {
+    const next = edit(doc, ((warm + i + 1) * 7919) % count);
+    const t0 = performance.now();
+    const r = cv.validate(doc, next, requires, ctx);
+    const t1 = performance.now();
+    if (!r.valid) invalid++;
+    wall.push(t1 - t0);
+    spans.push({ start: t0, end: t1 });
+    if (t1 - t0 >= 1) slowOnes.push({ ms: t1 - t0, how: r.how, why: r.why ?? null });
+    doc = next;
+  }
+  await new Promise((ok) => setTimeout(ok, 100));
+  obs.disconnect();
+  const slow = spans.filter((s) => s.end - s.start >= 1);
+  const slowWithGc = slow.filter((s) => gcs.some((g) => g.start < s.end && g.end > s.start));
+  const sorted = [...wall].sort((a, b) => a - b);
+  return {
+    commits,
+    eligibleParagraphs: count,
+    firstCommitFullMs: firstMs,
+    firstCommitHow: firstResult.how,
+    wallMs: { ...summarise(wall), p99: sorted[Math.ceil(0.99 * sorted.length) - 1] },
+    incremental: cv.stats.incremental - base.incremental,
+    full: cv.stats.full - base.full,
+    invalid,
+    samplesOverOneMs: slow.length,
+    slowSamples: slowOnes,
+    ofThemDuringAGarbageCollection: slowWithGc.length,
+    garbageCollectionsInLoop: gcs.length,
+  };
+}
+
 async function workerMain(): Promise<void> {
   const t0 = performance.now();
   const env = JSON.parse(workerData as string) as JsonEnvelope;
@@ -143,6 +240,10 @@ async function child(name: string): Promise<void> {
     }
     validation = { runs, wallMs: summarise(wall), cpuMs: summarise(cpu), violations };
   }
+  let commits: unknown = null;
+  if (loaded) {
+    commits = await commitValidation(env, loaded.attachedAssets, name === 'pages-100' ? 2000 : 500);
+  }
   let labels: unknown = null;
   if (loaded) {
     // One edit per sample, at a different paragraph each time; the clone is not timed.
@@ -187,6 +288,7 @@ async function child(name: string): Promise<void> {
       document: name,
       jsonBytes: encoder.encode(text).length,
       validate: validation,
+      commitValidation: commits,
       labels,
       canonical: { ...result, workerWallMs, peakRssBeforeMB: rssBefore, peakRssAfterMB: rssAfter },
     }),
