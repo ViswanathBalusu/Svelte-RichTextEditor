@@ -43,6 +43,13 @@ function findTable(el: XmlElement, start: number): XmlElement | null {
   return null;
 }
 
+/** Whether a cell continues the vertical merge of the cell above it (`w:vMerge` without `restart`). */
+function isContinuation(tc: XmlElement): boolean {
+  const tcPr = first(tc, 'tcPr');
+  const vm = tcPr && first(tcPr, 'vMerge');
+  return !!vm && wAttr(vm, 'val') !== 'restart';
+}
+
 /** The header rows of the source: the leading rows whose w:tblHeader is the plain empty element. */
 function sourceHeaderRows(tbl: XmlElement): number {
   let n = 0;
@@ -115,18 +122,23 @@ describe.each(files)('$name', (file) => {
         );
 
       rows.forEach((row, i) => {
-        const tcs = kids(trs[i]!, 'tc');
+        const all = kids(trs[i]!, 'tc');
         const cells = row.content ?? [];
+        // A continuation cell of a vertical merge is absorbed by the row span of the cell above.
+        const tcs = cells.length === all.length ? all : all.filter((tc) => !isContinuation(tc));
         if (cells.length !== tcs.length) {
           problems.push(`table ${id} row ${i}: ${cells.length} cells, ${tcs.length} in the source`);
           return;
         }
         let span = 0;
+        for (const tc of all) {
+          const gs = first(tc, 'tcPr') && first(first(tc, 'tcPr')!, 'gridSpan');
+          span += gs ? Number(wAttr(gs, 'val') ?? '1') : 1;
+        }
         tcs.forEach((tc, j) => {
           const tcPr = first(tc, 'tcPr');
           const gs = tcPr && first(tcPr, 'gridSpan');
           const want = gs ? Number(wAttr(gs, 'val') ?? '1') : 1;
-          span += want;
           const cell = cells[j]!;
           // A span of 1 is the absent default, so the cell has no colspan attribute then.
           if ((cell.attrs?.['colspan'] ?? 1) !== want)
