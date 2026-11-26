@@ -256,9 +256,9 @@ describe('the hash sent to the signing service is the stored PDF, and validation
       const request = mine[0]!;
       // The export job's own output, read back from the object store by its key.
       const jobId = (await jobIdOf(w.ref))!;
-      const output = await h.parts.objects.get(
+      const output = (await h.parts.objects.get(
         objectKeys.exportFile(h.tenant, jobId, 'output.pdf'),
-      );
+      ))!;
       expect(request.pdfSha256).toBe(sha256(output));
       // The pair of compiles, the hash sent and the bytes sent are one hash.
       expect(request.compileSha256).toEqual([request.pdfSha256, request.pdfSha256]);
