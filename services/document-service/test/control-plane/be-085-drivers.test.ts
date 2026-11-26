@@ -17,6 +17,9 @@ afterEach(async () => {
 
 const compile: JobHandler = async (job, ctx) => {
   await ctx.report('compiling', 50);
+  // The runner times a job with a millisecond clock and the meter skips a zero add, so a compile
+  // that finishes within one tick leaves no seconds sample. Let this one take measurable time.
+  await new Promise((resolve) => setTimeout(resolve, 10));
   await h!.service.assets.putExport(job.tenant, job.id, 'output.pdf', OUTPUT, 'application/pdf');
   return {
     output: 'output.pdf',
