@@ -43,7 +43,7 @@ import { endpointBackend } from './backend-source.ts';
 import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './config.ts';
 import type { HostExtension } from './extensions.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
-import { exportService } from './export-service.ts';
+import { exportService, hasHiddenRegion } from './export-service.ts';
 import { leasesFor } from './lease-shell.ts';
 import type { SigningSource } from './signing.ts';
 import type { WorkflowSendSource } from './workflow-send.ts';
@@ -1459,6 +1459,14 @@ export class DocEditorElement extends Base {
             ? { docId: session.docId, backend: session.backend, access: session.access }
             : null,
         onJob: (job) => this.#onExportJob(session, job),
+        // An export is made from this reader's projection (ADR 0019): it leaves out what a
+        // placeholder stands for, and the dialog says so (UX-104).
+        projected: () => {
+          const mounted = this.#mounted;
+          return (
+            this.#session === session && !!mounted && hasHiddenRegion(mounted.core.getContent())
+          );
+        },
         // The preflight shared with the converter (EXP-003), on the document this editor holds and
         // the font set the service publishes; its code loads with the first export.
         preflight: async (target, options) => {

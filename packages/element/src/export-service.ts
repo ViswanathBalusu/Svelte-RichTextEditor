@@ -93,6 +93,23 @@ export interface ExportServiceOptions {
     target: ExportTarget,
     options: ExportOptions,
   ) => Promise<readonly ExportDiagnostic[]>;
+  /**
+   * Whether the export will leave out parts hidden from this reader (ADR 0019; UX-104): true when
+   * the document the editor holds has a placeholder for a hidden region. Absent: the dialog says
+   * nothing.
+   */
+  projected?: () => boolean;
+}
+
+/** True when the body of a document holds a placeholder for a region hidden from the reader. */
+export function hasHiddenRegion(content: { readonly doc?: unknown }): boolean {
+  const doc = content.doc as
+    { readonly content?: readonly { readonly content?: readonly unknown[] }[] } | undefined;
+  const top = doc?.content;
+  const body = top?.[top.length - 1];
+  return (body?.content ?? []).some(
+    (node) => (node as { type?: unknown } | null)?.type === 'hidden_region',
+  );
 }
 
 /** The export service of one editor; the element builds it when the backend has an exports port. */
@@ -138,8 +155,11 @@ export function exportService(options: ExportServiceOptions): ExportService {
   };
 
   const check = options.preflight;
+  const projected = options.projected;
   return {
     targets: { get: targetsNow, subscribe: () => () => {} },
+    // The dialog says that hidden parts are left out when this is true (ADR 0019; UX-104).
+    ...(projected ? { projected: { get: projected, subscribe: () => () => {} } } : {}),
     // The dialog asks before it creates a job, and only when the element can run the check.
     ...(check
       ? { preflight: (target: ExportTarget, given?: ExportOptions) => check(target, given ?? {}) }

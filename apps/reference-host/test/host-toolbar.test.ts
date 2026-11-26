@@ -167,6 +167,21 @@ describe('the example host toolbar (UX-093 criterion 4)', () => {
     expect(el.queried).toEqual(ids);
   });
 
+  it('reads every state again at de-ready, because the element raises de-command-state only for a change', async () => {
+    const el = new FakeElement();
+    const container = new FakeContainer();
+    attachHostToolbar(el.asHost(), container as unknown as HTMLElement);
+    await vi.waitFor(() => expect(el.queried).toHaveLength(ids.length));
+    expect(buttonFor(container, 'format.bold').getAttribute('aria-disabled')).toBe('true');
+    el.queried.length = 0;
+    el.states.set('format.bold', { enabled: true, active: false });
+    el.fire('de-ready');
+    await vi.waitFor(() =>
+      expect(buttonFor(container, 'format.bold').getAttribute('aria-disabled')).toBe('false'),
+    );
+    expect(el.queried).toEqual(ids);
+  });
+
   it('removes its buttons and its listener when detached', async () => {
     const el = new FakeElement();
     const container = new FakeContainer();
