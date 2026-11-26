@@ -36,6 +36,13 @@ import { ApiError, type RestCode } from './problems.ts';
 
 export const IMPORT_KIND = 'import';
 
+/**
+ * The start of the note of the `import` version, which names the original file by the identifier of
+ * its asset (EXP-108 criterion 4): the identifier follows after a space. The wording is a choice of
+ * this lane, proposed, not specified; the `versions` table has no column for an asset.
+ */
+export const ORIGINAL_NOTE = 'Original Word file: asset';
+
 /** The content type of a Word file, as the asset worker records it. */
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -242,6 +249,9 @@ export async function attachAndStore(
       actor,
       id,
     );
+    // The original is attached from the import commit on, so that the retention sweep keeps it and
+    // a purge of the document removes it (EXP-108 criterion 3).
+    await registry.attach(ref.tenant, ref.doc, id, seq);
     return { seq, asset: id };
   } catch (e) {
     await registry.remove(ref.tenant, id).catch(() => false);
@@ -273,6 +283,8 @@ export function importJobHandler(o: ImportJobDeps): JobHandler {
     }
     await ctx.report('storing', 80);
     const seq = await storeImported(o, ref, imported, job.createdBy, job.id);
+    // The uploaded file is the original: it is attached from the import commit on (EXP-108).
+    await o.registry.attach(job.tenant, doc, assetId, seq);
     return {
       seq,
       asset: assetId,
@@ -317,7 +329,15 @@ export function importHooks(opts: {
         opts.versions
           ?.create(
             { tenant: job.tenant, doc: job.doc },
-            { seq, kind: 'import', createdBy: job.createdBy, createdAt: opts.now() },
+            {
+              seq,
+              kind: 'import',
+              ...(typeof outcome.result['asset'] === 'string'
+                ? { note: `${ORIGINAL_NOTE} ${outcome.result['asset']}` }
+                : {}),
+              createdBy: job.createdBy,
+              createdAt: opts.now(),
+            },
           )
           .then(
             (r) => {

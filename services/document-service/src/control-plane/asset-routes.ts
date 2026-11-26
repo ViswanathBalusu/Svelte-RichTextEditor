@@ -14,6 +14,7 @@ import {
   type AssetRegistry,
 } from './assets.ts';
 import { connectionOn, readerConnectionOn, regionInfosOfJson, requireRow } from './gate.ts';
+import { DOCX_CONTENT_TYPE } from './imports.ts';
 import { json, type Kit } from './kit.ts';
 import { admitStorage } from './live-quota-rest.ts';
 import { guard, hiddenFrom, type Ctx, type Handler } from './pipeline.ts';
@@ -200,7 +201,11 @@ export function assetRoutes(k: Kit): Record<string, Handler> {
       const mine = a.doc === doc && a.createdBy === ctx.caller.actor;
       if (a.state !== 'ready' || !a.sha256 || !a.objectKey || !a.contentType) continue;
       if (a.doc !== doc && !attached.has(a.id)) continue;
-      if (!visible.has(a.id) && !mine) continue;
+      // The original Word file of an import is no part of the content. A reader who sees the whole
+      // document may download it, as the preserved fragments are (SR-C1); a reader of a projection
+      // may not, because the file holds what the projection hides (EXP-108 criterion 2).
+      const original = view.full && a.doc === doc && a.contentType === DOCX_CONTENT_TYPE;
+      if (!visible.has(a.id) && !mine && !original) continue;
       const signed = d.uploads!.sign({
         tenant: a.tenant,
         sha256: a.sha256,
