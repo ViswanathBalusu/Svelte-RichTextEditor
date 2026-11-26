@@ -35,6 +35,10 @@ export const CODES = {
     message: 'A font file does not hash to the name the manifest gives it.',
   },
   overfull_line: { severity: 'warning', message: 'A line is wider than its column.' },
+  field_too_wide: {
+    severity: 'warning',
+    message: 'The value of a form field is wider than the field.',
+  },
   references_changed: {
     severity: 'warning',
     message: 'Page references changed in the last pass; page numbers may be stale.',
@@ -171,6 +175,13 @@ function blockOfNumber(map: SourceMap | null, n: number): string | null {
   return map.blocks[n] ?? null;
 }
 
+/** The identifier of a form field from its number in the class's report; null when none was issued. */
+function fieldOfNumber(map: SourceMap | null, n: number): string | null {
+  const ids = map?.fields;
+  if (!ids || !Number.isSafeInteger(n) || n < 1 || n >= ids.length) return null;
+  return ids[n] ?? null;
+}
+
 const OVERFULL =
   /^(Over|Under)full \\[hv]box \((?:badness \d+|(\d{1,6}(?:\.\d{1,6})?)pt too (?:wide|high))\)(?: in paragraph at lines (\d{1,9})--\d{1,9}| in alignment at lines (\d{1,9})--\d{1,9}| detected at line (\d{1,9})| has occurred while \\output is active)/;
 /**
@@ -180,6 +191,7 @@ const OVERFULL =
 const FILE_LINE = /^(\.\/[A-Za-z0-9_.-]{1,64}|\/[A-Za-z0-9_./-]{1,400}):(\d{1,9}): (.*)$/;
 const MISSING = /^Missing character: There is no .{1,8} \(U\+([0-9A-F]{4,6})\)/u;
 const CLASS_MISSING = /^docedit: missing U\+([0-9A-F]{4,6}) in block (\d{1,9})$/;
+const CLASS_FIELD_WIDE = /^docedit: field too wide (\d{1,9})$/;
 const RUNAWAY = /^Runaway (argument|definition|preamble|text)\?$/;
 
 /**
@@ -296,6 +308,10 @@ export function parseLog(
     }
     if ((m = CLASS_MISSING.exec(line))) {
       add(diagnostic('missing_glyph', blockOfNumber(map, Number(m[2])), `U+${m[1]}`));
+      continue;
+    }
+    if ((m = CLASS_FIELD_WIDE.exec(line))) {
+      add(diagnostic('field_too_wide', fieldOfNumber(map, Number(m[1]))));
       continue;
     }
     if (/^! /.test(line)) {
