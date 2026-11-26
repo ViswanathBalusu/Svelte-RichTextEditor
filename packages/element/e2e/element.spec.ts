@@ -13,6 +13,7 @@ import {
   mountEditor,
   openEmbed,
   openLib,
+  selectionSynced,
 } from './embed-helpers.ts';
 
 const editor = (name = 'one') => `doc-editor[data-test="${name}"]`;
@@ -659,6 +660,7 @@ test.describe('FE-021 shortcuts only from inside the editor; FE-025 order', () =
     await page
       .locator(`${editor()} .de-editing-surface p`, { hasText: 'Last paragraph.' })
       .dblclick({ position: { x: 5, y: 5 } });
+    await selectionSynced(page);
     await page.keyboard.press('ControlOrMeta+b');
     await expect.poll(() => boldOf(page)).toBe(before + 1);
     // The toolbar: focus on a button, the shell routes the shortcut to the same command.
@@ -695,6 +697,7 @@ test.describe('FE-021 shortcuts only from inside the editor; FE-025 order', () =
     await page
       .locator(`${editor('one')} .de-editing-surface p`, { hasText: 'Last paragraph.' })
       .dblclick({ position: { x: 5, y: 5 } });
+    await selectionSynced(page, 'one');
     await page.keyboard.press('ControlOrMeta+b');
     await expect.poll(() => boldOf(page, 'one')).toBe(one + 1);
     expect(await boldOf(page, 'two')).toBe(two);

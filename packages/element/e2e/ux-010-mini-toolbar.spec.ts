@@ -9,7 +9,7 @@
  *   pnpm exec playwright test -c packages/element/playwright.config.ts ux-010-mini-toolbar
  */
 import { expect, test, type Page } from '@playwright/test';
-import { mountEditor, openEmbed } from './embed-helpers.ts';
+import { mountEditor, openEmbed, selectionSynced } from './embed-helpers.ts';
 
 const editor = 'doc-editor[data-test="one"]';
 const surface = (page: Page) => page.locator(`${editor} .de-editing-surface`);
@@ -55,6 +55,8 @@ test.describe('UX-010: the mini toolbar in the product element', () => {
     await surface(page).locator('p', { hasText: 'Last paragraph.' }).click();
     await page.keyboard.press('Home');
     await page.keyboard.press('Shift+End');
+    // The mini toolbar follows the editor's selection, which the editor takes on selectionchange.
+    await selectionSynced(page, 'one');
     await expect(mini(page)).toBeVisible();
     await expect(mini(page).locator('[data-command-id="format.bold"]')).toBeVisible();
 
@@ -73,6 +75,7 @@ test.describe('UX-010: the mini toolbar in the product element', () => {
     await surface(page).locator('p').first().click();
     await page.keyboard.press('Home');
     await page.keyboard.press('Shift+End');
+    await selectionSynced(page, 'one');
     await expect(mini(page)).toBeVisible();
     await expect
       .poll(async () => Math.abs((await mini(page).boundingBox())!.y - box.y))

@@ -6,7 +6,7 @@
  * Run: `DOCEDIT_DEMO_PORT=<port> pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-134-cross-reference.spec.ts`.
  */
 import { type Page, expect, test } from '@playwright/test';
-import { openEmbed } from './embed-helpers.ts';
+import { openEmbed, selectionSynced } from './embed-helpers.ts';
 
 const NAME = 'fe-134';
 const HOST = `doc-editor[data-test="${NAME}"]`;
@@ -150,6 +150,7 @@ test('FE-134: a table and an equation are numbered, and the dialog inserts a ref
 
   // Criterion 1: a caption for the table the caret is in, and for the equation block.
   await page.locator(`${HOST} .de-editing-surface td p`).first().click();
+  await selectionSynced(page, NAME);
   expect(
     await withCore<boolean>(
       page,
@@ -166,6 +167,7 @@ test('FE-134: a table and an equation are numbered, and the dialog inserts a ref
   // Criterion 2: the dialog from the Insert tab.
   await page.locator(`${HOST} .de-editing-surface p`).last().click();
   await page.keyboard.press('End');
+  await selectionSynced(page, NAME);
   await page.locator(`${HOST}`).getByRole('tab', { name: 'Insert' }).click();
   await page.locator(`${HOST} [data-command-id="insert.crossReference"]`).first().click();
   await expect(dialog(page)).toBeVisible();
@@ -188,6 +190,7 @@ test('FE-134: a table and an equation are numbered, and the dialog inserts a ref
   // A second reference, to the table caption, with the default format.
   await page.locator(`${HOST} .de-editing-surface p`).last().click();
   await page.keyboard.press('End');
+  await selectionSynced(page, NAME);
   await page.locator(`${HOST} [data-command-id="insert.crossReference"]`).first().click();
   await dialog(page)
     .getByRole('radio', { name: /Table 1/ })

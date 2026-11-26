@@ -11,7 +11,7 @@
  * `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-050-copy-paste-keyboard.spec.ts`.
  */
 import { expect, test } from '@playwright/test';
-import { mountEditor, openEmbed } from './embed-helpers.ts';
+import { mountEditor, openEmbed, selectionSynced } from './embed-helpers.ts';
 
 const COPY_KEY = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
 const PASTE_KEY = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
@@ -47,13 +47,15 @@ test.describe('FE-050 criterion 4: copy and paste with the keyboard in the same 
     await page.keyboard.press('Home');
     await page.keyboard.press('Shift+End');
     // The editor has the selection a moment after the keys (selectionchange); a copy before that copies the caret.
-    await page.waitForTimeout(250);
+    await selectionSynced(page, name);
     await page.keyboard.press(COPY_KEY);
 
     // Caret at the end of the last paragraph, then paste with the keyboard.
     const last = paragraphs.last();
     await last.click();
     await page.keyboard.press('End');
+    // Enter splits at the editor's caret, which is the browser's only once the editor has taken it.
+    await selectionSynced(page, name);
     await page.keyboard.press('Enter');
     await page.keyboard.press(PASTE_KEY);
 
