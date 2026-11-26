@@ -24,19 +24,10 @@ const KEYS = ['b', 'i', 'u', 'z', 'y', 'Shift+z', 'a', 's'];
 
 test('SEC-009: editor shortcuts pressed with the focus in the host page do nothing in the editor', async ({
   page,
-  browserName,
 }) => {
-  // Found on 2026-11-15 (Windows 11): in Chromium, Edge and WebKit the browser's own undo is
-  // shared by the whole page, so Control+Z in the host field undoes the last typing in the editor's
-  // surface, and the editor takes that change of its DOM as an edit. The editor's keymap does not
-  // run, but the editor's text changes, so criterion 2 is not met there. The test is marked as an
-  // expected failure in those browsers until the editing core keeps its typing out of the page's
-  // undo history, or refuses a change of its surface that arrives while it has no focus. Firefox
-  // keeps an undo history for each field, and passes.
-  test.fail(
-    browserName !== 'firefox',
-    'the browser’s page-wide undo reaches the editor from a host field (SEC-009 criterion 2, open)',
-  );
+  // Fixed in lane w8 (2026-11-25): the browser keeps one undo history for the page, so Control+Z in
+  // the host field reached the typing in the editor's surface in Chromium, Edge and WebKit. The
+  // body view now cancels a history beforeinput while it has no focus (packages/engine/src/view/web.ts).
   await openEmbed(page);
   await mountEditor(page, { name: 'sec-009-focus', sub: 'ada', role: 'editor' });
   const surface = page.locator('doc-editor[data-test="sec-009-focus"] .de-editing-surface');
