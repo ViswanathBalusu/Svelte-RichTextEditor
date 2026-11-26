@@ -246,7 +246,7 @@ describe('EXP-038 criterion 4: the other table properties in the converter outpu
     expect(main).toContain('\\DEcellpad{3bp}%');
   });
 
-  it('shades the header rows from the table style, and warns that banded rows are not shaded', async () => {
+  it('shades the header rows from the table style, and every other body row when bandedRows is set', async () => {
     const style = {
       type: 'style_def',
       attrs: {
@@ -258,14 +258,42 @@ describe('EXP-038 criterion 4: the other table properties in the converter outpu
       },
     };
     const { main, codes: c } = await convert(
-      table([1440], [[['Head.', {}]], [['Body.', {}]]], { style: 'Banded', headerRows: 1 }),
+      table(
+        [1440],
+        [[['Head.', {}]], [['One.', {}]], [['Two.', {}]], [['Three.', {}]], [['Four.', {}]]],
+        { style: 'Banded', headerRows: 1 },
+      ),
       {
         styles: [style],
       },
     );
     expect(main).toContain('\\rowcolor[HTML]{DDEEFF}');
-    // banded rows have no colour in 03 §4.3 (ADR 0143, question 19)
-    expect(c).toContain('banded_rows');
+    // Owner decision 50: a fixed light grey on the first, third, ... body row; none on the header.
+    // (the header row is written twice: once in the first head and once in the repeated head).
+    expect([...main.matchAll(/\\rowcolor\[HTML\]\{([0-9A-F]{6})\}/g)].map((m) => m[1])).toEqual([
+      'DDEEFF',
+      'DDEEFF',
+      'F2F2F2',
+      'F2F2F2',
+    ]);
+    expect(c).not.toContain('banded_rows');
+  });
+
+  it('draws no band without bandedRows, and a cell shading replaces the band', async () => {
+    const plain = {
+      type: 'style_def',
+      attrs: { id: 'Plain', kind: 'table', name: 'Plain' },
+    };
+    const banded = {
+      type: 'style_def',
+      attrs: { id: 'Banded', kind: 'table', name: 'Banded', bandedRows: true },
+    };
+    const rows = [[['A.', { shading: { fill: '#FFCC00' } }]], [['B.', {}]], [['C.', {}]]];
+    const off = await convert(table([1440], rows, { style: 'Plain' }), { styles: [plain] });
+    expect(off.main).not.toContain('F2F2F2');
+    const on = await convert(table([1440], rows, { style: 'Banded' }), { styles: [banded] });
+    expect(on.main).toContain('FFCC00');
+    expect([...on.main.matchAll(/\\rowcolor\[HTML\]\{F2F2F2\}/g)]).toHaveLength(2);
   });
 });
 
