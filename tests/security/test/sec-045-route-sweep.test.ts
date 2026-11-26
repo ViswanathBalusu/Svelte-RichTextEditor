@@ -74,9 +74,22 @@ interface Operation {
 }
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
+/**
+ * A route for the operator credential alone (`/tenants`, decision 68) is not a route of a tenant:
+ * no tenant holds the credential, so there is no second tenant's token to refuse. Its refusal of a
+ * user token and a service credential is the row 14 scenario of the kit (`authz.operator`).
+ */
+const isOperatorOnly = (operation: Json): boolean => {
+  const security = operation['security'] as Array<Record<string, unknown>> | undefined;
+  return (
+    security !== undefined &&
+    security.length > 0 &&
+    security.every((s) => Object.keys(s).every((k) => k === 'operatorCredential'))
+  );
+};
 const operations: Operation[] = Object.entries(openapi['paths'] as Json).flatMap(
   ([template, item]) =>
-    METHODS.filter((m) => (item as Json)[m]).map((m) => ({
+    METHODS.filter((m) => (item as Json)[m] && !isOperatorOnly((item as Json)[m])).map((m) => ({
       operationId: (item as Json)[m]['operationId'] as string,
       method: m.toUpperCase(),
       template,
@@ -452,6 +465,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         '/v1/origins',
         '/v1/keys',
         '/v1/quotas',
+        '/v1/usage',
+        '/v1/sealing-keys',
         '/v1/templates',
         '/v1/history-visibility',
         '/v1/workflow/capture-settings',

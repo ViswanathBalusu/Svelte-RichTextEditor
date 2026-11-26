@@ -218,7 +218,15 @@ describe('every row of the authorisation matrix has a scenario or a reason (PRO-
     'restore.region': 'history (PRO-119)',
     'lease.acquire': 'leases (PRO-122)',
   };
-  const written = ['read.head', 'read.history', 'commit', 'manage', 'export', 'service'];
+  const written = [
+    'read.head',
+    'read.history',
+    'commit',
+    'manage',
+    'export',
+    'service',
+    'operator',
+  ];
 
   it('fails when a row is added to the matrix without a scenario', async () => {
     const { MATRIX } = await import('@docedit/authority');

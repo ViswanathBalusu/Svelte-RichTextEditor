@@ -19,14 +19,11 @@
  * - a job counts in the month it ended in, with all its attempts.
  */
 import type { QuotaSource } from './live-quotas.ts';
+import { monthOf } from './month.ts';
+
+export { monthOf };
 
 export const MS_PER_MINUTE = 60_000;
-
-/** The month a Unix time in milliseconds counts in, as `YYYY-MM` in UTC. */
-export function monthOf(now: number): string {
-  const d = new Date(now);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
 
 /** The UTC calendar month of `now`: its first millisecond, and the first of the month after. */
 export function monthBounds(now: number): { from: number; to: number } {
