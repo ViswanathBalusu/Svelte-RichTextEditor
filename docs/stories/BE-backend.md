@@ -166,6 +166,8 @@ As an operator, I want a Helm chart for production, so that I can deploy, upgrad
 
 Lane w5 (2026-11-17): no criterion ticked and no chart written. All four criteria ask for a real run: install on a cluster and see the service ready (1), render the chart (2), upgrade in place with migrations before traffic (3), and roll back one release (4). This machine has neither `helm` nor a Kubernetes cluster (`kubectl` and `minikube` are installed, but no cluster is running and there is no Helm client, so a chart cannot be rendered, linted or installed). Downloading Helm or its container image needs the owner's permission. A chart that was never rendered would be an untested artefact, so none was added. To unblock: a Helm 3 client and a cluster (for example `minikube start` with the images of the service loaded), then write `infra/helm/docedit/` with the migration as a pre-upgrade hook Job, the readiness probe on `/readyz` and the drain settings of BE-022, and run `helm lint`, `helm template`, `helm install`, `helm upgrade` and `helm rollback`. Secrets would be `secretKeyRef` or an `existingSecret` value only, so that criterion 2 can be tested on the rendered output.
 
+Lane w5, third round, 2026-11-26: re-checked; the owner decisions file has no entry for BE-006 or Helm. `helm` is still not installed (only `kubectl` and `minikube`), no cluster runs, and downloading a Helm client needs the owner's permission. Still blocked, nothing new ticked, no chart written.
+
 ### BE-007 Deploy the authority service as a container
 
 | Type | Phase | Size | Priority | Persona |
