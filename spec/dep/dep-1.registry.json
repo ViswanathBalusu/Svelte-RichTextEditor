@@ -1586,6 +1586,34 @@
       "owner": "UX"
     },
     {
+      "operationId": "createBundleExport",
+      "method": "POST",
+      "path": "/bundle-exports",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "202",
+      "spec": "13 §10; 08 §12",
+      "owner": "UX"
+    },
+    {
+      "operationId": "getBundleExport",
+      "method": "GET",
+      "path": "/bundle-exports/{bid}",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "13 §10; 08 §12",
+      "owner": "UX"
+    },
+    {
       "operationId": "erasePerson",
       "method": "POST",
       "path": "/users/erase",

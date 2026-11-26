@@ -21,6 +21,8 @@ Update of 2026-11-18: with the batch 5 merges of that day both configurations ar
 
 Update of 2026-11-26 (batch 9 integration, same method, `node scripts/check-parallel.ts` build step): host backend 306.6 kB, DEP client 330.3 kB, so the host-backend configuration is within the 320 kB budget and the DEP one is 10.3 kB over. The batch 8 integration note put the DEP client at 329.0 kB, so batch 9 added about 1.3 kB to it. The build still fails on the size check alone. The decision stays with the owner.
 
+Update of 2026-11-26 (batch 16 integration, same method): host backend 306.6 kB, DEP client 330.3 kB, unchanged from batch 9; batch 16 changed story notes only. The DEP configuration is still 10.3 kB over and the build still fails on the size check alone. The decision stays with the owner.
+
 So the DEP configuration was already over the budget at `ccd52bb` and is 15.4 kB over now. The host-backend configuration is within it. The growth since `ccd52bb` comes mostly from the engine and the shell: form field views and entries, the field and role editing, fill mode, and the panes' glue (`packages/engine/src/field-entries.ts`, `field-edit.ts`, `role-edit.ts`, `view/form-field-view.ts`).
 
 Batch 6 added 14.8 kB to the host-backend configuration (8.6 kB below the budget now) and 15.1 kB to the DEP one (30.5 kB over). The new code is in the engine and shell: the proofing controller, the extension document API, the image and equation node views and the equation editor glue. Nobody has measured how much each part costs; that would be the first step of option 2.

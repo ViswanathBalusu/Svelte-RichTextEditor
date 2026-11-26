@@ -73,6 +73,8 @@ const CATALOGUE: Record<string, 'probed' | 'not-served'> = {
   'GET /tenant-fonts/{sha256}': 'probed',
   'DELETE /tenant-fonts/{sha256}': 'probed',
   'GET /imports/{jid}': 'probed',
+  // UX-087: a bundle export is named by its own identifier and belongs to a tenant.
+  'GET /bundle-exports/{bid}': 'probed',
   'GET /threads/{tid}': 'probed',
   'PATCH /threads/{tid}': 'probed',
   'DELETE /threads/{tid}': 'probed',
@@ -570,6 +572,31 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // Nothing landed: the font and its file are still tenant B's.
         const after = await h.call('GET', `/v1/tenant-fonts/${sha256}`, { token: h.b.apiKey });
         expect(after.status).toBe(200);
+      },
+    );
+
+    t()(
+      'a bundle export of one tenant is not found by another, and needs a service credential (UX-087)',
+      async () => {
+        const made = await h.call('POST', '/v1/bundle-exports', {
+          token: h.a.apiKey,
+          body: { kind: 'tenant' },
+        });
+        expect(made.status).toBe(202);
+        const bid = made.json?.id as string;
+        expect(typeof bid).toBe('string');
+        expect(
+          (await h.call('GET', `/v1/bundle-exports/${bid}`, { token: h.a.apiKey })).status,
+        ).toBe(200);
+        // Tenant B's credential names tenant A's export: the answer is the one for an identifier that is not there.
+        const missing = randomUUID();
+        const refused = await h.call('GET', `/v1/bundle-exports/${bid}`, { token: h.b.apiKey });
+        const none = await h.call('GET', `/v1/bundle-exports/${missing}`, { token: h.b.apiKey });
+        same(refused, none, bid, missing);
+        noData(refused.json);
+        // A user token never reaches it: the evidence is personal data (13 §10).
+        const user = await h.call('GET', `/v1/bundle-exports/${bid}`, { token: tokenA });
+        expect(user.status).toBe(403);
       },
     );
 

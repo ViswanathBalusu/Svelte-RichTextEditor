@@ -53,6 +53,7 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
       'origins',
       'tenants',
       'tenants',
+      'bundle-exports',
       'bulk-sends',
       'templates',
     ]);

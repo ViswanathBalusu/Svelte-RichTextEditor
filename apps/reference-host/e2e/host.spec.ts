@@ -235,10 +235,8 @@ test.describe('in the editor', () => {
   });
 
   test('the host toolbar uses queryCommand, exec and de-command-state (UX-093 criterion 4)', async () => {
-    test.fail(
-      true,
-      'Expected to fail: the element offers no queryCommand, exec or de-command-state yet (PRO-085, phase 1b; packet B2).',
-    );
+    // The element offers queryCommand, exec and de-command-state (PRO-085); the walk that compares
+    // the host toolbar with the built-in one is e2e/w3-ux-005-toolbar-parity.spec.ts (UX-005).
     await expect(
       ada.page.getByRole('toolbar', { name: 'Host toolbar' }).getByRole('button'),
     ).toHaveCount(4, {

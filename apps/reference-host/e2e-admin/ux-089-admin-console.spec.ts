@@ -16,7 +16,12 @@ import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
-import { createAdminMock, SERVICE_CREDENTIAL, type AdminMock } from '../test/admin-mock.ts';
+import {
+  createAdminMock,
+  OPERATOR_CREDENTIAL,
+  SERVICE_CREDENTIAL,
+  type AdminMock,
+} from '../test/admin-mock.ts';
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const TYPES: Record<string, string> = {
@@ -73,9 +78,10 @@ async function open(page: Page): Promise<void> {
   });
   await page.goto(origin + '/');
 }
-async function connect(page: Page, credential: string): Promise<void> {
+async function connect(page: Page, credential: string, operator?: string): Promise<void> {
   await page.getByLabel(/Service endpoint/).fill(`${origin}/v1`);
   await page.getByLabel('Service credential').fill(credential);
+  if (operator !== undefined) await page.getByLabel(/Operator credential/).fill(operator);
   await page.getByLabel(/Your name/).fill('admin@example.test');
   await page.getByRole('button', { name: 'Open the console' }).press('Enter');
 }
@@ -106,7 +112,7 @@ test('every section meets WCAG 2.2 AA under axe and works from the keyboard', as
   expect(await page.content()).not.toContain(SERVICE_CREDENTIAL);
 
   const sections = [
-    'Quotas',
+    'Quotas and usage',
     'Origins',
     'Token keys',
     'Retention and holds',
@@ -141,7 +147,11 @@ test('the functions work with the keyboard alone and every change is audited', a
     await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
   };
 
-  // Quotas.
+  // Quotas, and the usage of the month beside them.
+  await expect(page.getByRole('cell', { name: '1048576', exact: true })).toBeVisible();
+  await page.getByLabel(/Month/).fill('2026-10');
+  await page.getByRole('button', { name: 'Show usage' }).press('Enter');
+  await expect(page.getByText('Usage in 2026-10')).toBeVisible();
   await page.getByLabel('New Storage').fill('2048');
   await page.getByRole('button', { name: 'Save quotas' }).press('Enter');
   await expect(page.getByRole('status')).toHaveText('Quotas saved.');
@@ -190,13 +200,93 @@ test('the functions work with the keyboard alone and every change is audited', a
   await page.getByRole('button', { name: 'Place hold' }).press('Enter');
   await expect(page.getByRole('cell', { name: 'Litigation' })).toBeVisible();
   await expectNoViolations(page, 'holds with a row');
+  await page
+    .getByRole('button', { name: 'Release the hold on 0190a000-0000-7000-8000-000000000001' })
+    .press('Enter');
+  await page
+    .getByRole('button', {
+      name: 'Confirm: Release the hold on 0190a000-0000-7000-8000-000000000001',
+    })
+    .press('Enter');
+  await expect(page.getByRole('status')).toHaveText('Legal hold released.');
+  await expect(page.getByText('No document is under hold.')).toBeVisible();
+  await page.getByLabel('Document id').last().fill('0190a000-0000-7000-8000-000000000001');
+  await page.getByLabel(/Reason/).fill('Litigation');
+  await page.getByRole('button', { name: 'Place hold' }).press('Enter');
+  await expect(page.getByRole('cell', { name: 'Litigation' })).toBeVisible();
 
   // Audit: the changes made above, by the named actor.
   await go('Audit trail');
   await page.getByLabel('Event kind').fill('hold.placed');
   await page.getByRole('button', { name: 'Search the audit trail' }).press('Enter');
-  await expect(page.getByRole('row', { name: /hold\.placed.*admin@example\.test/ })).toBeVisible();
+  await expect(
+    page.getByRole('row', { name: /hold\.placed.*admin@example\.test/ }).first(),
+  ).toBeVisible();
   await expectNoViolations(page, 'audit with rows');
 
+  expect(mock.unpublished).toEqual([]);
+});
+
+test('fonts are added and removed with the keyboard, and each is audited', async ({ page }) => {
+  await open(page);
+  await connect(page, SERVICE_CREDENTIAL);
+  const nav = page.getByRole('navigation', { name: 'Administration sections' });
+  await nav.getByRole('button', { name: 'Fonts', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 2, name: 'Fonts' })).toBeVisible();
+  await page.getByLabel('Font file').setInputFiles({
+    name: 'added.ttf',
+    mimeType: 'font/ttf',
+    buffer: Buffer.from('not really a font'),
+  });
+  await page.getByLabel('Licence declaration').fill('OFL-1.1');
+  await page.getByRole('button', { name: 'Add font' }).press('Enter');
+  await expect(page.getByRole('status')).toContainText('Font added: Added Sans');
+  await expectNoViolations(page, 'fonts after adding');
+  const hash = (await page.getByRole('status').textContent())!.match(/[0-9a-f]{64}/)![0];
+  await page.getByLabel('SHA-256 of the file').fill(hash);
+  await page.getByRole('button', { name: 'Remove this font' }).press('Enter');
+  await page.getByRole('button', { name: 'Confirm: Remove this font' }).press('Enter');
+  await expect(page.getByRole('status')).toHaveText('Font removed.');
+  expect(mock.unpublished).toEqual([]);
+});
+
+test('an operator sees the tenants and manages them with the keyboard (criterion 2)', async ({
+  page,
+}) => {
+  await open(page);
+  // Without an operator credential there is no Tenants section.
+  await connect(page, SERVICE_CREDENTIAL);
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Administration sections' })
+      .getByRole('button', { name: 'Tenants', exact: true }),
+  ).toHaveCount(0);
+
+  await open(page);
+  await connect(page, SERVICE_CREDENTIAL, OPERATOR_CREDENTIAL);
+  const nav = page.getByRole('navigation', { name: 'Administration sections' });
+  await expect(nav.getByRole('button', { name: 'Tenants', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(await page.content()).not.toContain(OPERATOR_CREDENTIAL);
+  await expect(page.getByRole('row', { name: /Example tenant.*Active/ })).toBeVisible();
+  await expectNoViolations(page, 'tenants');
+
+  await page.getByLabel('Name', { exact: true }).fill('Second tenant');
+  await page.getByRole('button', { name: 'Register tenant' }).press('Enter');
+  await expect(page.getByRole('status')).toContainText('Tenant registered');
+  await expect(page.getByRole('row', { name: /Second tenant/ })).toBeVisible();
+  await page.getByLabel('New name for Second tenant').fill('Renamed tenant');
+  await page.getByRole('button', { name: 'Rename' }).last().press('Enter');
+  await expect(page.getByRole('status')).toHaveText('Tenant renamed.');
+  await page.getByRole('button', { name: 'Suspend Renamed tenant' }).press('Enter');
+  await page.getByRole('button', { name: 'Confirm: Suspend Renamed tenant' }).press('Enter');
+  await expect(page.getByRole('status')).toHaveText('Tenant suspended.');
+  await expect(page.getByRole('row', { name: /Renamed tenant.*Suspended/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Resume Renamed tenant' }).press('Enter');
+  await expect(page.getByRole('status')).toHaveText('Tenant resumed.');
+  await expectNoViolations(page, 'tenants after changes');
   expect(mock.unpublished).toEqual([]);
 });

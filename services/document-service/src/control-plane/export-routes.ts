@@ -2,7 +2,7 @@
  * Export and preview jobs (05 §6.2; 09 §9.1; EXP-004 to EXP-008, EXP-123; BE-050, BE-051; review
  * SR-C4; D68, D69, D144). See exports.ts for the kinds, the request key and the preview window.
  */
-import { formatTimestamp, uuid7 } from '@docedit/model';
+import { formatTimestamp } from '@docedit/model';
 import type { CreateExportRequest, ExportJob } from '@docedit/protocol';
 import { objectKeys } from '../objects/store.ts';
 import type { Access } from '@docedit/authority';
@@ -28,6 +28,7 @@ import { json, type Kit } from './kit.ts';
 import { admitExportConcurrency } from './live-quota-rest.ts';
 import { capabilitiesOn, guard, hiddenFrom, roleOn, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
+import { askPolicyHook } from './policy-hook-gate.ts';
 import { exportView, projectContent, readerView } from './visibility.ts';
 
 /** The defaults of the export policy: 06 §10 names ten seconds; the rest are settings. */
@@ -138,50 +139,14 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
         'forbidden',
         'page-break reconciliation compiles are not enabled for this tenant',
       );
-    // The tenant's data-loss prevention hook is asked before the export starts (UX-086). An allow
-    // lets it go on. A deny refuses it with the hook's reason. An unanswered hook refuses it too:
-    // fail closed, a proposed decision (docs/adr/0330-lane-U-UX-076-090.md, section 4). Each refusal
-    // is audited, with the action, the target and the reason or cause.
-    if (d.policyHook) {
-      const outcome = await d.policyHook.ask({
-        document: doc,
-        actor: ctx.caller.actor,
-        action: 'export',
-        target: body.target,
-        classification: record.label ?? null,
-      });
-      if (outcome.kind === 'unanswered') {
-        await d.audit?.record([
-          {
-            id: uuid7(),
-            tenant: ctx.caller.tenant,
-            doc,
-            actor: ctx.caller.actor,
-            kind: 'policy_hook.unanswered',
-            data: { action: 'export', target: body.target, cause: outcome.cause },
-            at: d.now(),
-          },
-        ]);
-        throw new ApiError(
-          'unavailable',
-          'the data-loss prevention hook did not answer; the export is not started',
-        );
-      }
-      if (!outcome.decision.allow) {
-        await d.audit?.record([
-          {
-            id: uuid7(),
-            tenant: ctx.caller.tenant,
-            doc,
-            actor: ctx.caller.actor,
-            kind: 'policy_hook.refused',
-            data: { action: 'export', target: body.target, reason: outcome.decision.reason },
-            at: d.now(),
-          },
-        ]);
-        throw new ApiError('forbidden', outcome.decision.reason);
-      }
-    }
+    // The tenant's data-loss prevention hook is asked before the export starts (UX-086). The
+    // outcome and the audit are the same as for a send (policy-hook-gate.ts).
+    await askPolicyHook(d, ctx, {
+      document: doc,
+      action: 'export',
+      target: body.target,
+      classification: record.label ?? null,
+    });
     const ref = refOf(ctx, doc);
     const head = await d.logs.head(ref);
     const seq = body.seq ?? head.seq;

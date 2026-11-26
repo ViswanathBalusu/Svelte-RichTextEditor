@@ -260,6 +260,9 @@ export function roleEnv(
         DOCEDIT_HOST_EXPORT_ORIGINS: e.s3Url,
         DOCEDIT_HOST_ELEMENT_DIR: join(REPO_DIR, 'packages', 'element', 'dist', 'lib'),
         DOCEDIT_DEMO_HOST_PORT: setting(s, 'DOCEDIT_DEMO_HOST_PORT'),
+        // Notifications go to the development mail sink (UX-098 criterion 5).
+        DOCEDIT_HOST_SMTP: `127.0.0.1:${setting(s, 'DOCEDIT_DEMO_MAIL_SMTP_PORT')}`,
+        DOCEDIT_HOST_PUBLIC_URL: e.hostUrl,
       };
     case 'worker': {
       const machine = s['DOCEDIT_PODMAN_MACHINE'];

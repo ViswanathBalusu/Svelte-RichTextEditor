@@ -1285,6 +1285,88 @@ export const REST_SHAPES: readonly NamedShape[] = [
     ),
     'UX',
   ),
+  // The export bundles of a legal request and of a tenant (UX-087, UX-088; owner decision 175;
+  // docs/adr/0373-w3-UX-087-export-bundle-format.md and docs/adr/0433-w3-UX-087-bundle-container-and-routes.md).
+  named(
+    'BundleExportRequest',
+    obj(
+      {
+        kind: req(
+          enm(['discovery', 'tenant']),
+          'A discovery export (a document, some documents or the tenant, with the evidence) or a tenant export (everything the tenant owns).',
+        ),
+        documents: opt(
+          arr(uuid7()),
+          'The documents a discovery export covers; absent, it covers the whole tenant. A tenant export names none.',
+        ),
+        maxDocumentsPerPart: opt(
+          int({ min: 1, max: 500 }),
+          'How many documents one part holds; the service has a default.',
+        ),
+      },
+      {
+        doc: 'The body of a bundle export (UX-087, UX-088).',
+        spec: '13 §10; 08 §12',
+      },
+    ),
+    'UX',
+  ),
+  named(
+    'BundleExport',
+    obj(
+      {
+        id: req(uuid7()),
+        kind: req(enm(['discovery', 'tenant'])),
+        state: req(enm(['queued', 'running', 'completed', 'failed', 'cancelled'])),
+        progress: req(int({ min: 0, max: 100 }), 'Percent of the documents written.'),
+        result: opt(
+          obj({
+            documents: req(count(), 'How many documents the bundle covers.'),
+            counts: req(
+              obj({
+                documents: req(count()),
+                commits: req(count()),
+                threads: req(count()),
+                comments: req(count()),
+                versions: req(count()),
+                grants: req(count()),
+              }),
+              'What the bundle holds, to compare with the stored data.',
+            ),
+            index: req(
+              obj({
+                name: req(text()),
+                sha256: req(text()),
+                size: req(count()),
+                url: req(text(), 'A short-lived signed URL of `parts.json`.'),
+              }),
+            ),
+            parts: req(
+              arr(
+                obj({
+                  name: req(text()),
+                  sha256: req(text()),
+                  size: req(count()),
+                  documents: req(count()),
+                  url: req(text(), 'A short-lived signed URL of the part (a tar archive).'),
+                }),
+              ),
+            ),
+            expiresAt: req(timestamp(), 'When the URLs stop working.'),
+          }),
+          'Set when `state` is `completed`.',
+        ),
+        error: opt(obj({ code: req(ref('ErrorCode')), message: req(text()) })),
+        createdAt: req(timestamp()),
+        finishedAt: opt(timestamp()),
+      },
+      {
+        doc: 'A bundle export: a job that writes the parts of a discovery or tenant bundle (UX-087, UX-088).',
+        spec: '13 §10; 08 §12',
+      },
+    ),
+    'UX',
+  ),
   // Fonts a tenant adds (BE-048; owner decisions 62, 94, 95). The file travels as base64 in the body
   // because the contract has no binary bodies; the shapes are a proposal of docs/adr/0424-w5-BE-048-tenant-fonts.md.
   named(
@@ -2645,6 +2727,32 @@ export const OPERATIONS: readonly OperationDef[] = [
     security: SERVICE,
     requires: 'Service credential',
     success: list(ref('Hold')),
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'createBundleExport',
+    method: 'POST',
+    path: '/bundle-exports',
+    summary:
+      'Starts a job that writes a discovery or tenant export bundle in parts; audited (UX-087, UX-088). Answers 202.',
+    spec: '13 §10; 08 §12',
+    security: SERVICE,
+    requires: 'Service credential',
+    body: ref('BundleExportRequest'),
+    idempotencyKey: true,
+    success: accepted(ref('BundleExport')),
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'getBundleExport',
+    method: 'GET',
+    path: '/bundle-exports/{bid}',
+    summary:
+      'State, progress and, when finished, the parts and their signed URLs (UX-087, UX-088).',
+    spec: '13 §10; 08 §12',
+    security: SERVICE,
+    requires: 'Service credential',
+    success: ok(ref('BundleExport')),
     owner: 'UX',
   }),
   op({

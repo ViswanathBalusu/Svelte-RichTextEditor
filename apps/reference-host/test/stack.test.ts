@@ -9,7 +9,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   allowedOrigins,
   ensureSecrets,
+  roleEnv,
   SECRETS_FILE,
+  stackSettings,
+  type Secrets,
   type Settings,
 } from '../scripts/lib/stack.ts';
 
@@ -82,6 +85,7 @@ describe('the compose definition (UX-091 criterion 1 in part; BE-005 criterion 4
         'document-service',
         'export-sandbox',
         'export-worker',
+        'mail',
         'postgres',
         'reference-host',
         's3',
@@ -89,6 +93,20 @@ describe('the compose definition (UX-091 criterion 1 in part; BE-005 criterion 4
         'setup',
       ].sort(),
     );
+  });
+
+  it('has a development mail sink, pinned by digest, and the host sends to it (UX-098 criterion 5)', async () => {
+    const compose = JSON.parse(await readFile(join(APP_DIR, 'compose.json'), 'utf8')) as {
+      services: Record<string, { image?: string }>;
+    };
+    expect(compose.services['mail']?.image).toMatch(
+      /^docker\.io\/axllent\/mailpit:v[\d.]+@sha256:[0-9a-f]{64}$/,
+    );
+    const s = stackSettings({});
+    const secrets: Secrets = await ensureSecrets('t-demo', await freshDir());
+    const env = roleEnv('host', s, secrets, '/stack');
+    expect(env['DOCEDIT_HOST_SMTP']).toBe(`127.0.0.1:${s['DOCEDIT_DEMO_MAIL_SMTP_PORT']}`);
+    expect(env['DOCEDIT_HOST_PUBLIC_URL']).toBe(`http://127.0.0.1:${s['DOCEDIT_DEMO_HOST_PORT']}`);
   });
 
   it('gives the export sandbox no network (the worker runs its jobs there, 09 §9.3)', async () => {

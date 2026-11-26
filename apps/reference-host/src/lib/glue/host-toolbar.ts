@@ -80,10 +80,16 @@ export function attachHostToolbar(el: CommandHost, container: HTMLElement): (() 
       : [...buttons.keys()];
     void refresh(ids);
   };
+  // The element raises `de-command-state` for a change only, and the states it has when the document
+  // is loaded are its baseline: nothing is raised for them. Before `de-ready` every command answers
+  // disabled, so the buttons read all states again once the document is ready (UX-005 criterion 6).
+  const onReady = () => void refresh([...buttons.keys()]);
   el.addEventListener('de-command-state', onState);
+  el.addEventListener('de-ready', onReady);
   void refresh([...buttons.keys()]);
   return () => {
     el.removeEventListener('de-command-state', onState);
+    el.removeEventListener('de-ready', onReady);
     for (const b of buttons.values()) b.remove();
   };
 }

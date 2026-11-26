@@ -32,6 +32,11 @@ export interface TokenGrant {
   accessSince?: string;
   /** Output restrictions the owner set on the user (05 §3.1 `restrict`); none when empty. */
   restrict?: readonly Restriction[];
+  /**
+   * A workflow participant (12 §7): the token binds to this participant, and says how the host
+   * authenticated them. The service records these claims as given and does not vouch for them.
+   */
+  participant?: { id: string; amr?: readonly string[]; authTime?: number };
 }
 
 export interface TokenIssuer {
@@ -79,6 +84,15 @@ function claimsOf(grant: TokenGrant): Omit<TokenRequest, 'expiresIn'> {
     ...(grant.accessSince !== undefined ? { access_since: grant.accessSince } : {}),
     ...(grant.restrict !== undefined && grant.restrict.length > 0
       ? { restrict: [...grant.restrict] }
+      : {}),
+    ...(grant.participant !== undefined
+      ? {
+          wfp: grant.participant.id,
+          ...(grant.participant.amr !== undefined ? { amr: [...grant.participant.amr] } : {}),
+          ...(grant.participant.authTime !== undefined
+            ? { auth_time: grant.participant.authTime }
+            : {}),
+        }
       : {}),
   };
 }

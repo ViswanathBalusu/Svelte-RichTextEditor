@@ -365,8 +365,11 @@ function Start-Stack {
   $states = [ordered]@{}
   $states['postgres'] = Start-Container 'postgres' $pg $cgroups
   $states['s3'] = Start-Container 's3' $s3 $cgroups
+  $mailUi = [int]$Settings['DOCEDIT_DEMO_MAIL_UI_PORT']
+  $states['mail'] = Start-Container 'mail' $mailUi $cgroups
   Wait-Container 'postgres' $pg
   Wait-Container 's3' $s3
+  Wait-Container 'mail' $mailUi
   Initialize-Builds
   Invoke-NodeStep 'setup'
   $states['document-service'] = Start-NodeProcess 'document-service'
@@ -380,6 +383,7 @@ function Start-Stack {
   foreach ($k in $states.Keys) { Write-Host ("  {0,-17} {1}" -f $k, $states[$k]) }
   Write-Host "  postgres          127.0.0.1:$pg"
   Write-Host "  s3                http://127.0.0.1:$s3 bucket $($Settings['DOCEDIT_DEMO_S3_BUCKET'])"
+  Write-Host "  mail sink         http://127.0.0.1:$mailUi (SMTP 127.0.0.1:$($Settings['DOCEDIT_DEMO_MAIL_SMTP_PORT']); nothing is delivered)"
   Write-Host "  document service  http://127.0.0.1:$servicePort (discovery: /.well-known/dep)"
   Write-Host "  reference host    http://127.0.0.1:$hostPort/  <- open this, choose a person"
   Write-Host "  data and logs     $DataDir"
@@ -403,7 +407,7 @@ function Stop-Stack {
 }
 
 function Show-Status {
-  foreach ($service in @('postgres', 's3')) {
+  foreach ($service in @('postgres', 's3', 'mail')) {
     Write-Host ("{0,-17} {1}" -f $service, (Get-ContainerState (Get-ContainerName $service)))
   }
   $urls = @{

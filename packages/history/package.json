@@ -12,7 +12,8 @@
     }
   },
   "bin": {
-    "docedit-verify-log": "./scripts/verify-log.ts"
+    "docedit-verify-log": "./scripts/verify-log.ts",
+    "docedit-verify-bundle": "./scripts/verify-bundle.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
