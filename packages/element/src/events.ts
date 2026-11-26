@@ -54,6 +54,13 @@ export interface DocEditorEventMap {
    */
   'de-share-request': { docId: string };
   /**
+   * The user asked for the link to a comment (UX-034; owner decision 88). `marker` is the opaque
+   * identifier of the comment: the host builds the address from its own page address, answers with
+   * `copyCommentLink(address)` and, when someone follows the address, passes `marker` to
+   * `openComment`. Identifiers only, never the text of the comment.
+   */
+  'de-comment-link-request': { docId: string; thread: string; comment: string; marker: string };
+  /**
    * A reader asked for access to hidden content (UX-104, ADR 0019). `scope` is the DEP scope
    * identifier of the placeholder. The host decides who answers; the editor sends nothing itself.
    */
@@ -207,6 +214,7 @@ export const EVENT_NAMES: readonly DocEditorEventName[] = [
   'de-auth-required',
   'de-recovered-edits',
   'de-share-request',
+  'de-comment-link-request',
   'de-access-request',
   'de-fork-request',
   'de-export-progress',

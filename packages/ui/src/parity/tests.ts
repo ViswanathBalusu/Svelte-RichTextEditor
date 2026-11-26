@@ -213,6 +213,21 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/ux-013-published-table.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-042 closed (2026-11-25): the findings and the actions on them, with a mock port
+  // and the real authority room in Node.js, in the shell in three browsers, and the custom
+  // dictionaries in the language dialog and in the element with a stand-in port.
+  [
+    'spelling-and-grammar',
+    [
+      { path: 'packages/element/e2e/ux-042-dictionary.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-008-proofing-menu.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-041-042-proofing.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-042-dictionary.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/ux-041-proofing.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/ux-042-finding-actions.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/finding-actions.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-008 closed (2026-11-20): the menu in the element with the real core (at the
   // caret, and on a word a proofing port flagged), the shell's menu in a browser run, and the rule
   // that picks its commands.

@@ -148,6 +148,8 @@ const ENDPOINT_REVIEW: Record<string, EndpointEntry> = {
   getWorkflow: { kind: 'swept' },
   getWorkflowEvidence: { kind: 'swept' },
   getWorkflowFinal: { kind: 'swept' },
+  // FRW-044: the consent text of the participant the token is bound to; no document content.
+  getParticipantConsent: { kind: 'swept' },
 };
 const KNOWN_SWEPT = [
   'getDocument',
@@ -157,6 +159,7 @@ const KNOWN_SWEPT = [
   'getWorkflow',
   'getWorkflowEvidence',
   'getWorkflowFinal',
+  'getParticipantConsent',
 ];
 
 describe('SEC-064 criterion 3: every read endpoint has a read-projection decision', () => {

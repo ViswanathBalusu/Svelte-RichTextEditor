@@ -39,6 +39,8 @@ export function createWorkflowRest(host: WorkflowRestHost): Omit<WorkflowPort, '
       tagged('POST', path(docId, `/${action}`), body === undefined ? {} : { body }),
     participant: (docId, participantId, action, body) =>
       plain('POST', path(docId, `/participants/${enc(participantId)}/${action}`), body),
+    consent: (docId, participantId) =>
+      plain('GET', path(docId, `/participants/${enc(participantId)}/consent`)),
     evidence: (docId) => plain('GET', path(docId, '/evidence')),
     final: (docId) => plain('GET', path(docId, '/final')),
   };

@@ -86,6 +86,7 @@ const PROSE_NOTIFICATIONS = [
   'comment.created',
   'comment.updated',
   'comment.deleted',
+  'comment.reacted',
   'version.created',
   'version.restored',
   'export.progress',
@@ -179,6 +180,8 @@ const PROSE_ROUTES = [
   'POST /threads/{tid}/comments',
   'PATCH /comments/{cid}',
   'DELETE /comments/{cid}',
+  'POST /comments/{cid}/reactions/{reaction}',
+  'DELETE /comments/{cid}/reactions/{reaction}',
   'POST /documents/{id}/assets',
   'POST /assets/{aid}/complete',
   'POST /documents/{id}/assets/resolve',
@@ -228,6 +231,7 @@ const OTHER_ROUTES = [
   'POST /documents/{id}/workflow/remind',
   'POST /documents/{id}/workflow/void',
   'POST /documents/{id}/workflow/participants/{pid}/consent',
+  'GET /documents/{id}/workflow/participants/{pid}/consent',
   'POST /documents/{id}/workflow/participants/{pid}/access-code',
   'POST /documents/{id}/workflow/participants/{pid}/verify',
   'POST /documents/{id}/workflow/participants/{pid}/complete',
@@ -254,6 +258,9 @@ const OTHER_ROUTES = [
   // FRW-063 (12 §9): bulk sends, service credential only.
   'POST /bulk-sends',
   'GET /bulk-sends/{bid}',
+  // FRW-042 (12 §7): the tenant's evidence capture setting, service credential only.
+  'GET /workflow/capture-settings',
+  'PUT /workflow/capture-settings',
 ];
 
 describe('the DEP definition', () => {
@@ -350,6 +357,8 @@ describe('the DEP definition', () => {
         'GET /templates/{tid}',
         'POST /bulk-sends',
         'GET /bulk-sends/{bid}',
+        'GET /workflow/capture-settings',
+        'PUT /workflow/capture-settings',
         'GET /quotas',
         'PUT /quotas',
         'GET /origins',
@@ -451,6 +460,7 @@ describe('the DEP definition', () => {
       'G71',
       'G73',
       'G78',
+      'G81',
       'G97',
     ]);
   });

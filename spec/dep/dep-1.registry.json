@@ -885,6 +885,38 @@
       "owner": "PRO"
     },
     {
+      "operationId": "addReaction",
+      "method": "POST",
+      "path": "/comments/{cid}/reactions/{reaction}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "reactions",
+      "requires": "comment in the scopes of the target",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 13 §5",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "removeReaction",
+      "method": "DELETE",
+      "path": "/comments/{cid}/reactions/{reaction}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "reactions",
+      "requires": "comment in the scopes of the target",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 13 §5",
+      "owner": "PRO"
+    },
+    {
       "operationId": "createAsset",
       "method": "POST",
       "path": "/documents/{id}/assets",
@@ -1801,6 +1833,51 @@
       "owner": "FRW"
     },
     {
+      "operationId": "getParticipantConsent",
+      "method": "GET",
+      "path": "/documents/{id}/workflow/participants/{pid}/consent",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "12 §8.1, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "getWorkflowCaptureSettings",
+      "method": "GET",
+      "path": "/workflow/capture-settings",
+      "security": [
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "12 §7, §10; 13 §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "setWorkflowCaptureSettings",
+      "method": "PUT",
+      "path": "/workflow/capture-settings",
+      "security": [
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "12 §7, §10; 13 §10",
+      "owner": "FRW"
+    },
+    {
       "operationId": "getWorkflowEvidence",
       "method": "GET",
       "path": "/documents/{id}/workflow/evidence",
@@ -2261,6 +2338,13 @@
       "owner": "PRO"
     },
     {
+      "name": "reactions",
+      "relayForbidden": false,
+      "port": "comments",
+      "spec": "05 §6.2; 13 §5",
+      "owner": "PRO"
+    },
+    {
       "name": "assets",
       "relayForbidden": false,
       "port": "assets",
@@ -2376,6 +2460,11 @@
     },
     {
       "type": "comment.deleted",
+      "resource": "/comments/{cid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "comment.reacted",
       "resource": "/comments/{cid}",
       "spec": "05 §5.6"
     },

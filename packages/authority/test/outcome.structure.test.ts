@@ -191,6 +191,7 @@ describe('the operations of `structure` and `manage`, listed once (PRM-001, crit
     for (const op of Object.values(manage)) expect(MANAGE_OPERATIONS, op).toContain(op);
     // Beyond 07 §2: switching track changes off (07 §5.2) and `sensitive` (ADR 0019).
     expect(MANAGE_OPERATIONS).toContain('settings.track_changes_off');
+    expect(MANAGE_OPERATIONS).toContain('settings.track_changes_on');
     expect(MANAGE_OPERATIONS).toContain('field.sensitive');
   });
 
@@ -243,6 +244,13 @@ describe('the operations of `structure` and `manage`, listed once (PRM-001, crit
       () => [new AttrStep(1, 'trackChanges', 'off')],
       everyone,
     ];
+    // Switching it on (owner decision 118): the same step the other way, from a document that has it off.
+    cases.push([
+      'settings.track_changes_on',
+      USERS.carol,
+      () => [new AttrStep(1, 'trackChanges', 'everyone')],
+      doc,
+    ]);
     const enforced = new Set<string>();
     for (const [op, user, make, base] of cases) {
       const v = verdictOf(user, base, make);

@@ -15,7 +15,10 @@ import type {
   DocumentStats,
   EditorMode,
   ExportJobView,
+  DictionaryEntryView,
+  DictionaryScope,
   ParagraphFormatView,
+  ReactionName,
   ExportOptions,
   ExportService,
   ExportTarget,
@@ -310,6 +313,76 @@ export class FakeThreads implements ThreadsService {
     }));
   }
 
+  /** Asks the host for a comment's link (UX-034); present only after `offerLinks`. */
+  requestLink?: NonNullable<ThreadsService['requestLink']>;
+  /** What became of the address the host gave (UX-034); present only after `offerLinks`. */
+  linkCopied?: Value<{ readonly n: number; readonly ok: boolean } | null>;
+  #copies = 0;
+
+  /** Offers the link of a comment, as an element with a host listener does. */
+  offerLinks(): void {
+    this.linkCopied = new Value<{ readonly n: number; readonly ok: boolean } | null>(null);
+    this.requestLink = (id, commentId) => {
+      this.writes.push({ op: 'requestLink', id, commentId });
+      return true;
+    };
+  }
+
+  /** The host gave an address and it was copied, or was not (UX-034). */
+  answerLink(ok: boolean): void {
+    this.linkCopied?.set({ n: ++this.#copies, ok });
+  }
+  /** Takes a reaction or leaves it (UX-033); present only after `offerReactions`. */
+  react?: NonNullable<ThreadsService['react']>;
+
+  /** Offers reactions, as a backend that announces the feature `reactions` does. */
+  offerReactions(): void {
+    this.react = async (id, commentId, reaction, on) => {
+      this.writes.push({ op: 'react', id, commentId, reaction, on });
+      const d = this.details.get(id);
+      if (!d) return { ok: false, code: 'not_found' };
+      return { ok: true, detail: this.#reacted(d, commentId, reaction, this.user, on) };
+    };
+  }
+
+  /** Another client reacts: the copy changes and the pane is told, as `comment.reacted` would. */
+  remoteReact(
+    id: string,
+    commentId: string,
+    reaction: ReactionName,
+    user: string,
+    on: boolean,
+  ): void {
+    this.#reacted(this.details.get(id)!, commentId, reaction, user, on);
+  }
+
+  #reacted(
+    d: ThreadDetail,
+    commentId: string,
+    reaction: ReactionName,
+    user: string,
+    on: boolean,
+  ): ThreadDetail {
+    return this.put({
+      ...d,
+      comments: d.comments.map((c) => {
+        if (c.id !== commentId) return c;
+        const held = new Map((c.reactions ?? []).map((r) => [r.reaction, r.users] as const));
+        const users = (held.get(reaction) ?? []).filter((u) => u !== user);
+        if (on) users.push(user);
+        if (users.length > 0) held.set(reaction, users);
+        else held.delete(reaction);
+        const order: ReactionName[] = ['thumbsUp', 'heart', 'laugh', 'celebrate', 'eyes', 'done'];
+        const reactions = order
+          .filter((r) => held.has(r))
+          .map((r) => ({ reaction: r, users: held.get(r)! }));
+        return reactions.length > 0
+          ? { ...c, reactions }
+          : { id: c.id, author: c.author, createdAt: c.createdAt, body: c.body, edited: c.edited };
+      }),
+    });
+  }
+
   async deleteThread(id: string, etag: string): Promise<{ ok: boolean; code?: string }> {
     this.writes.push({ op: 'deleteThread', id, etag });
     const current = this.details.get(id);
@@ -391,6 +464,7 @@ export const FAKE_COMMANDS = [
   'deleteStyle',
   'setLanguage',
   'setParagraphFormat',
+  'setTrackedForEveryone',
   'markRegion',
   'setRegionPolicy',
   'renameRegion',
@@ -415,6 +489,7 @@ export const FAKE_QUERIES = [
   'canMarkRegion',
   'hasNextEditableRegion',
   'canInsertField',
+  'canSetTrackedForEveryone',
 ];
 
 /** One frame pass for every view that changed, as the engine does (B1): one rAF callback. */
@@ -603,6 +678,35 @@ export class FakeCore implements CoreApi {
   /** Spelling and grammar (UX-041, UX-042), with `proofing`; every action is recorded in `proofingCalls`. */
   readonly proofing?: Value<ProofingStatus>;
   readonly proofingCalls: string[] = [];
+  /** The custom dictionaries (UX-042): a word list per scope; a shared word is removable only by an administrator. */
+  readonly dictionary = {
+    entries: [] as DictionaryEntryView[],
+    admin: false,
+    calls: [] as string[],
+    words: (lang: string): Promise<readonly DictionaryEntryView[] | null> => {
+      this.dictionary.calls.push(`words:${lang}`);
+      return Promise.resolve(this.dictionary.entries.map((e) => ({ ...e })));
+    },
+    add: (word: string, lang: string, scope: DictionaryScope): Promise<boolean> => {
+      this.dictionary.calls.push(`add:${lang}:${scope}:${word}`);
+      if (scope === 'tenant' && !this.dictionary.admin) return Promise.resolve(false);
+      this.dictionary.entries.push({
+        word,
+        scope,
+        removable: scope === 'user' || this.dictionary.admin,
+      });
+      return Promise.resolve(true);
+    },
+    remove: (word: string, lang: string, scope: DictionaryScope): Promise<boolean> => {
+      this.dictionary.calls.push(`remove:${lang}:${scope}:${word}`);
+      const at = this.dictionary.entries.findIndex(
+        (e) => e.word === word && e.scope === scope && e.removable,
+      );
+      if (at < 0) return Promise.resolve(false);
+      this.dictionary.entries.splice(at, 1);
+      return Promise.resolve(true);
+    },
+  };
   // Phase 1b (ADR 0052), with `extended`.
   readonly commandNames?: readonly string[];
   readonly queryNames?: readonly string[];
@@ -893,6 +997,12 @@ export class FakeCore implements CoreApi {
       case 'deleteStyle':
         this.styles?.set((this.styles.get() ?? []).filter((x) => x.id !== a['id']));
         return true;
+      case 'setTrackedForEveryone': {
+        // As the core does (UX-038): only a user with manage changes the setting.
+        if (!this.access?.get().caps.includes('manage')) return false;
+        this.trackedForEveryone?.set(a['on'] === true);
+        return true;
+      }
       case 'setParagraphFormat': {
         // As the engine does: a patch of indents and tabs on the paragraphs at the selection.
         const now = this.paragraphFormat?.get();
@@ -1226,6 +1336,8 @@ export class FakeCore implements CoreApi {
       if (answer !== undefined) return answer;
     }
     switch (name) {
+      case 'canSetTrackedForEveryone':
+        return this.access?.get().caps.includes('manage') ?? false;
       case 'canEditSelection':
         return this.#canChange();
       case 'canUndo':

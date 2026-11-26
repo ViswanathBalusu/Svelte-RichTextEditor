@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-18 v0.2.16 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-26 v0.2.17 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -603,7 +603,11 @@
 % the line breaker from breaking inside an equation and would move the line-start offsets of
 % EXP-055. The math nodes carry DE@attr@mclip, and docedit.lua puts a clip path round the material
 % of each line after the line breaking (clip_math).
-\newcommand\DEmath[1]{\gdef\DE@mathsrc{#1}\begingroup\DE@attr@mclip=1\relax$#1$\endgroup}
+% A formula that begins a line has its opening math node dropped by the line breaker (it is a
+% discardable item at the start of a line, like glue), and the clip would never see the formula
+% start (SEC-034 criterion 5: a formula that begins with a \hspace, or any that follows a break).
+% The empty box before the opening node is not discardable, so the node stays in the line.
+\newcommand\DEmath[1]{\gdef\DE@mathsrc{#1}\begingroup\DE@attr@mclip=1\relax\hbox{}$#1$\endgroup}
 % Tagged equations are a Formula element whose alternative text is the equation's LaTeX source, as
 % the converter wrote it (ADR 0369, EXP-112 criterion 5). latex-lab's own plug would wrap the source
 % in "LaTeX formula starts ... ends" and keep the class's \DE@clipmath in it, so the class has its

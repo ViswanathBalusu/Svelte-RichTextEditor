@@ -191,6 +191,52 @@ export async function acceptConsent(
   return { ok: true, accepted: fact };
 }
 
+/** What a participant reads before accepting: the text the workflow names, and their acceptance of it. */
+export interface ConsentView {
+  readonly textId: string;
+  readonly version: number;
+  readonly text: string;
+  /** The time of the acceptance on record for this very text, or null (none, or the text has changed). */
+  readonly acceptedAtMs: number | null;
+}
+
+/**
+ * The consent text the workflow names, for the participant who has to accept it (FRW-044 criterion
+ * 1). The same preconditions as `acceptConsent` hold, so a participant who cannot accept is not
+ * shown a text. An earlier acceptance of a text that has since changed does not count: the view
+ * says it is not accepted.
+ */
+export async function readConsent(
+  deps: ConsentDeps,
+  ref: DocRef,
+  participant: string,
+): Promise<{ ok: true; view: ConsentView } | { ok: false; problem: ConsentProblem }> {
+  const got = await load(deps, ref, participant);
+  if (!got.ok) return got;
+  const { view, who, consent } = got;
+  if (!CONSENT_KINDS.includes(who.kind))
+    return { ok: false, problem: { code: 'not_applicable', kind: who.kind } };
+  if (view.state !== 'sent' && view.state !== 'in_progress')
+    return { ok: false, problem: { code: 'invalid_state', state: view.state } };
+  if (who.auth?.require?.includes('access_code') === true && who.verifiedAt === undefined)
+    return { ok: false, problem: { code: 'awaiting_code' } };
+  const text = await deps.texts.get(ref.tenant, consent.textId, consent.version);
+  if (text === null) return { ok: false, problem: { code: 'text_missing' } };
+  const verdict = await consentVerdict(deps, ref, participant);
+  const record = verdict.ok
+    ? await recordOnFile(deps.evidence, ref.tenant, ref.doc, participant)
+    : undefined;
+  return {
+    ok: true,
+    view: {
+      textId: consent.textId,
+      version: consent.version,
+      text,
+      acceptedAtMs: record?.acceptedAtMs ?? null,
+    },
+  };
+}
+
 /**
  * Whether a sign request of `participant` may proceed on the consent: the acceptance on record,
  * checked against the text the service holds now for the workflow's `consent`.

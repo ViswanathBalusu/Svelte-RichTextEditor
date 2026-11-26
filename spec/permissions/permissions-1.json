@@ -143,6 +143,13 @@
       "text": "Send, correct, resume, void or remind a workflow."
     },
     {
+      "id": "workflow.evidence",
+      "needs": "manage",
+      "where": "control",
+      "spec": "07 §12; 12 §8.2",
+      "text": "Fetch the evidence bundle of a workflow; every retrieval is audited."
+    },
+    {
       "id": "document.restore",
       "needs": "manage",
       "where": "control",
@@ -155,6 +162,13 @@
       "where": "control",
       "spec": "07 §2, §12",
       "text": "Delete the document."
+    },
+    {
+      "id": "settings.track_changes_on",
+      "needs": "manage",
+      "where": "commit",
+      "spec": "07 §5.2; owner decision 118",
+      "text": "Switch `settings.trackChanges` from `off` to `everyone`."
     },
     {
       "id": "settings.track_changes_off",
@@ -269,7 +283,7 @@
     {
       "row": 10,
       "id": "manage",
-      "operation": "Restore a document, grants, region state or policy, break a lease, workflow actions, delete",
+      "operation": "Restore a document, grants, region state or policy, break a lease, workflow actions, fetch the evidence bundle (audited), delete",
       "requirement": {
         "kind": "manage",
         "operations": [
@@ -279,6 +293,7 @@
           "region.policy",
           "lease.break",
           "workflow.action",
+          "workflow.evidence",
           "document.delete"
         ]
       },
@@ -295,6 +310,7 @@
         "POST /documents/{id}/workflow/participants/{pid}/access-code",
         "POST /documents/{id}/workflow/remind",
         "POST /documents/{id}/workflow/void",
+        "GET /documents/{id}/workflow/evidence",
         "DELETE /documents/{id}"
       ],
       "messages": []
@@ -340,6 +356,8 @@
         "GET /templates/{tid}",
         "POST /bulk-sends",
         "GET /bulk-sends/{bid}",
+        "GET /workflow/capture-settings",
+        "PUT /workflow/capture-settings",
         "GET /history-visibility",
         "PUT /history-visibility",
         "GET /documents/{id}/history-visibility",
@@ -411,6 +429,16 @@
       "note": "deleting a comment: no row (row 5 names threads)"
     },
     {
+      "route": "POST /comments/{cid}/reactions/{reaction}",
+      "class": "open",
+      "note": "a reaction: no row; needs comment, as a reply does (UX-033)"
+    },
+    {
+      "route": "DELETE /comments/{cid}/reactions/{reaction}",
+      "class": "open",
+      "note": "removing a reaction: no row; as above (UX-033)"
+    },
+    {
       "route": "POST /documents/{id}/assets/resolve",
       "class": "open",
       "note": "resolving asset URLs: no row"
@@ -441,6 +469,11 @@
       "note": "12 §7, §8.1"
     },
     {
+      "route": "GET /documents/{id}/workflow/participants/{pid}/consent",
+      "class": "fields",
+      "note": "12 §8.1 step 1: the text to accept"
+    },
+    {
       "route": "POST /documents/{id}/workflow/participants/{pid}/verify",
       "class": "fields",
       "note": "12 §7"
@@ -460,7 +493,6 @@
       "class": "fields",
       "note": "12 §8.1: P7 conditions, then origin `sign`"
     },
-    { "route": "GET /documents/{id}/workflow/evidence", "class": "fields", "note": "12 §7" },
     { "route": "GET /documents/{id}/workflow/final", "class": "fields", "note": "12 §8.2" }
   ]
 }

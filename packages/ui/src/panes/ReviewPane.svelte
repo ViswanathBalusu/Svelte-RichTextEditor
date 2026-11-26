@@ -39,6 +39,26 @@
     return people.lookup(sub).name ?? tr.t('people.fallback');
   }
 
+  // "Tracked changes for everyone" (UX-038; owner decision 118): the setting and who may switch it
+  // are shown. The switch is the core's answer (`manage`, and the document not locked), asked again
+  // at each revision, since the capabilities of the selection's scope do not say it.
+  const tracked = core.trackedForEveryone ? live(core.trackedForEveryone) : null;
+  const mayChangeTracked = $derived(
+    !!tracked &&
+      !!core.runNamed &&
+      (core.commandNames?.includes('setTrackedForEveryone') ?? false) &&
+      (void revision?.current, core.query?.('canSetTrackedForEveryone') ?? false),
+  );
+  let trackedFailed = $state(false);
+
+  function setTracked(event: Event): void {
+    const box = event.currentTarget as HTMLInputElement;
+    const done = core.runNamed?.('setTrackedForEveryone', { on: box.checked }) ?? false;
+    trackedFailed = !done;
+    // The box shows the setting, not the click: a refusal puts it back.
+    if (!done && tracked) box.checked = tracked.current;
+  }
+
   // The regions that hold a suggestion, in document order, and the filter on one of them (UX-036
   // criterion 2). A region the user may not see has no title: it is named without one.
   const regionsView = core.regions ? live(core.regions) : null;
@@ -158,6 +178,25 @@
 </script>
 
 <section class="de-review" aria-label={tr.t('pane.review')}>
+  {#if tracked}
+    <div class="de-review-tracked" data-tracked-setting data-on={tracked.current ? 'true' : 'false'}>
+      <p data-tracked-state>
+        {tr.t(tracked.current ? 'review.tracked.on' : 'review.tracked.off')}
+      </p>
+      {#if tracked.current}
+        <p class="de-hint" data-tracked-who>{tr.t('review.tracked.who')}</p>
+      {/if}
+      {#if mayChangeTracked}
+        <label class="de-check">
+          <input type="checkbox" checked={tracked.current} onchange={setTracked} />
+          <span>{tr.t('review.tracked.toggle')}</span>
+        </label>
+      {/if}
+      {#if trackedFailed}
+        <p class="de-error" role="alert">{tr.t('review.tracked.failed')}</p>
+      {/if}
+    </div>
+  {/if}
   {#if authors.length > 0}
     <div class="de-review-filters">
       {#if regionIds.length > 0}

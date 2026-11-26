@@ -58,6 +58,7 @@ import type { NormalConfig } from './config.ts';
 import { attachWithSwitches, shellWithSwitches, switchedModes } from './feature-switches.ts';
 import type { Connection, StatusDetail } from './events.ts';
 import { fillActionsService } from './fill-actions.ts';
+import { completionService } from './completion.ts';
 import { threadsService, type ThreadsSource } from './threads.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
@@ -213,6 +214,14 @@ export interface MountedEditor extends EditorHandle {
    * the published element does not expose it). Resolves false when the pane is not offered.
    */
   openPane(id: string): Promise<boolean>;
+  /**
+   * Shows the thread of a comment the host named by its marker (UX-034; owner decision 88): opens
+   * the comments pane and focuses the thread. 'unavailable' for a comment that is deleted or that
+   * the user may not view, which show the same message and nothing else.
+   */
+  openLinkedComment(marker: string): Promise<'open' | 'unavailable'>;
+  /** Tells the shell whether the address the host gave was copied (UX-034). */
+  linkResult(ok: boolean): void;
   /** Replaces the host's string replacements while the shell is mounted (UX-063, UX-064). */
   setStrings(overrides: StringOverrides): void;
   /** Replaces the host's icons while the shell is mounted (UX-063). */
@@ -425,7 +434,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The participants of the workflow and their order (FRW-026): the roles pane lists and edits them.
   const participants = options.workflow ? lazyParticipantsService(core, options.workflow) : null;
   // The adoption and signing step (FRW-045, FRW-046): a signature field the participant activated.
-  const signing = options.signing ? signingService(core, options.signing) : null;
+  // The consent step reads the participant's identifier from the workflow status, reported by the server.
+  const signing = options.signing
+    ? signingService(
+        core,
+        options.signing,
+        () => fillActions?.status.get()?.participant?.id ?? null,
+      )
+    : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
   const workflowCompleteListeners = new Set<() => void>();
   const fillActions = options.workflow
@@ -566,6 +582,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'setTableSize',
         'moveBlockUp',
         'moveBlockDown',
+        'setTrackedForEveryone',
         'paragraphStyle',
         'characterStyle',
         'tableStyle',
@@ -615,6 +632,11 @@ export function mountEditor(options: MountOptions): MountedEditor {
         if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
         // The ruler and the paragraph dialog (UX-102): the args are the patch of indents and tab
         // stops; the core checks every value and the user's right to change the paragraphs.
+        // The review pane's switch (UX-038): { on }; the core needs manage, and the server checks again.
+        if (name === 'setTrackedForEveryone') {
+          const on = (args as { on?: unknown } | undefined)?.on;
+          return typeof on === 'boolean' && core.setTrackedForEveryone(on);
+        }
         if (name === 'setParagraphFormat') {
           if (args === null || typeof args !== 'object' || Array.isArray(args)) return false;
           return core.run('setParagraphFormat', {
@@ -727,6 +749,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       paragraphFormat: core.paragraphFormat,
       // The widths of the caret's table and its row height, for the table size dialog (FE-104).
       tableSize: core.tableSize,
+      // `settings.trackChanges` is `everyone` (UX-038): the mode switcher shows review with the reason.
+      trackedForEveryone: core.trackedForEveryone,
       // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
       // port `proofing.get().available` is false and the shell shows no proofing control.
       // The assistant pane, offered only while the backend's assistant port is attached (UX-045).
@@ -736,6 +760,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
       applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
       ignoreFinding: (id, everywhere) => core.ignoreFinding(id, everywhere),
       addFindingToDictionary: (id) => core.addFindingToDictionary(id),
+      // The custom dictionaries, shown while the port supports them (UX-042; decision 34).
+      dictionary: {
+        words: (lang) => core.dictionaryWords(lang),
+        add: (word, lang, scope) => core.addDictionaryWord(word, lang, scope),
+        remove: (word, lang, scope) => core.removeDictionaryWord(word, lang, scope),
+      },
       proofingFinding: (id) => core.proofingFinding(id),
       // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
       // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).
@@ -772,6 +802,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(participants ? { participants } : {}),
       ...(threads ? { threads } : {}),
       ...(signing ? { signing } : {}),
+      // Finishing the participant's part (FRW-048): the fields are checked, then /complete is called.
+      ...(fillActions ? { completion: completionService(fillActions) } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
       ...(fillActions
         ? { accessCode: { submit: (code: string) => fillActions.verify(code) } }
@@ -1017,6 +1049,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     openPane(id: string) {
       return app.openPaneById(id);
+    },
+    openLinkedComment(marker: string) {
+      return app.openLinkedComment(marker);
+    },
+    linkResult(ok: boolean) {
+      threads?.linkResult(ok);
     },
     focus() {
       core.focus();

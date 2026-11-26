@@ -31,6 +31,7 @@ export const NOTIFICATION_TYPES = [
   'comment.created',
   'comment.updated',
   'comment.deleted',
+  'comment.reacted',
   'version.created',
   'version.restored',
   'export.progress',

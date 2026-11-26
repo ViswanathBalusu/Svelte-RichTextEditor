@@ -534,7 +534,8 @@
       "section": "05 §6.2; 13 §5",
       "kind": "missing",
       "text": "No resource or event exists for comment reactions, which 13 §5 lists.",
-      "seeAlso": "Review 2026-11-06 §1"
+      "seeAlso": "Review 2026-11-06 §1",
+      "resolved": "Owner decision 33 (2026-11-15) says to build them. ADR 0424 (proposed, 2026-11-25): feature `reactions`; `POST` and `DELETE /comments/{cid}/reactions/{reaction}` for one of six named reactions; `Comment.reactions`; the notification `comment.reacted`; no commit. The set of reactions is a proposal."
     },
     {
       "id": "G82",

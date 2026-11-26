@@ -293,6 +293,49 @@ export const FRW_SHAPES: readonly NamedShape[] = [
     ),
   },
   {
+    name: 'WorkflowConsentText',
+    owner: FRW,
+    shape: obj(
+      {
+        textId: req(
+          text({ minLength: 1 }),
+          'The identifier of the consent text the workflow names.',
+        ),
+        version: req(count(), 'The version of the text.'),
+        text: req(
+          text({ minLength: 1 }),
+          'The text the service holds for that identifier and version, to be shown in full before any signing action.',
+        ),
+        acceptedAt: req(
+          nullable(text()),
+          'The server time of the acceptance on record for this very text (ISO 8601), or null when the participant has not accepted it.',
+        ),
+      },
+      {
+        doc: 'The consent text and the participant’s acceptance of it (12 §6.1, §8.1 step 1; FRW-044).',
+        spec: '12 §6.1, §8.1, §10',
+        gaps: ['G95'],
+      },
+    ),
+  },
+  {
+    name: 'WorkflowCaptureSettings',
+    owner: FRW,
+    shape: obj(
+      {
+        captureNetworkIdentity: req(
+          bool(),
+          'Whether the IP address and the user agent of a participant are recorded in their evidence. On by default; off keeps neither (12 §7). A change applies to events after it; evidence already stored is not rewritten.',
+        ),
+      },
+      {
+        doc: 'The tenant setting for network identity capture in workflow evidence (12 §7; FRW-042).',
+        spec: '12 §7, §10; 13 §10',
+        gaps: ['G95'],
+      },
+    ),
+  },
+  {
     name: 'WorkflowPlaceholder',
     owner: FRW,
     shape: obj(

@@ -238,6 +238,8 @@ import {
   assembleAssistantContext,
 } from './assistant-context.ts';
 import {
+  type DictionaryEntry,
+  type DictionaryScope,
   type LocatedFinding,
   NO_PROOFING,
   type ProofingClock,
@@ -538,6 +540,7 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'canSetTableSize',
   'canMoveBlockUp',
   'canMoveBlockDown',
+  'canSetTrackedForEveryone',
 ];
 
 /**
@@ -891,6 +894,8 @@ export class DocumentCore implements DocumentApi {
   readonly direction: ReadValue<'ltr' | 'rtl'>;
   /** The document's default language, a BCP 47 tag, or null when it sets none (UX-018). */
   readonly language: ReadValue<string | null>;
+  /** `settings.trackChanges` is `everyone` (UX-038): every user edits as suggestions. */
+  readonly trackedForEveryone: ReadValue<boolean>;
   /** The words in the body; null until the first count, which is made off the typing path (UX-018). */
   readonly words: ReadValue<number | null>;
   /**
@@ -1131,6 +1136,7 @@ export class DocumentCore implements DocumentApi {
     this.revision = new ReadValue<number>(0, Object.is, hub);
     this.direction = new ReadValue<'ltr' | 'rtl'>('ltr', Object.is, hub);
     this.language = new ReadValue<string | null>(null, Object.is, hub);
+    this.trackedForEveryone = new ReadValue<boolean>(false, Object.is, hub);
     this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.paragraphFormat = new ReadValue<ParagraphFormatInfo | null>(null, sameJson, hub);
     this.tableSize = new ReadValue<TableSizeInfo | null>(null, sameJson, hub);
@@ -1530,16 +1536,20 @@ export class DocumentCore implements DocumentApi {
     return this.#proofing?.addToDictionary(id) ?? Promise.resolve(false);
   }
 
-  /** The words of the custom dictionary for a language; null when the port has no dictionary. */
-  dictionaryWords(lang: string): Promise<string[] | null> {
+  /** The custom dictionaries for a language, the person's and the tenant's; null when the port has none. */
+  dictionaryWords(lang: string): Promise<DictionaryEntry[] | null> {
     return this.#proofing?.words(lang) ?? Promise.resolve(null);
   }
 
-  /** Removes a word from the custom dictionary and checks again. */
-  removeDictionaryWord(word: string, lang: string): Promise<boolean> {
-    return this.#proofing?.removeWord(word, lang) ?? Promise.resolve(false);
+  /** Adds a word to a custom dictionary (UX-042); the port says who may change the shared one. */
+  addDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean> {
+    return this.#proofing?.addWord(word, lang, scope) ?? Promise.resolve(false);
   }
 
+  /** Removes a word from a custom dictionary and checks again. */
+  removeDictionaryWord(word: string, lang: string, scope?: DictionaryScope): Promise<boolean> {
+    return this.#proofing?.removeWord(word, lang, scope) ?? Promise.resolve(false);
+  }
   // --- Suggestion mode (FE-041, FE-042, FE-043) ----------------------------------------------
 
   /** `settings.trackChanges` of the document, read again only when the definitions change. */
@@ -1693,6 +1703,7 @@ export class DocumentCore implements DocumentApi {
           this.styles.set(styleSummaries(state.doc));
         this.direction.set(stylesOf(state.doc).settings.dir);
         this.language.set(stylesOf(state.doc).settings.lang ?? null);
+        this.trackedForEveryone.set(this.#trackChangesSetting() === 'everyone');
         // The count is made later, off the typing path (UX-018 criterion 1).
         this.#words.changed();
       }
@@ -1799,6 +1810,8 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('moveBlockUp').enabled;
       case 'canMoveBlockDown':
         return this.queryCommand('moveBlockDown').enabled;
+      case 'canSetTrackedForEveryone':
+        return !this.#locked() && (this.#accessValue?.caps.includes('manage') ?? false);
       default:
         return undefined;
     }
@@ -4168,6 +4181,32 @@ one or original. It is a
     return { ok: true, id };
   }
 
+  /**
+   * Turns "tracked changes for everyone" on or off (UX-038; owner decision 118: only a user with
+   * `manage`). A refusal is recorded for the shell as any refused edit is, and the document is left
+   * as it was. True when the setting now has the value asked for, also when it already had.
+   */
+  setTrackedForEveryone(on: boolean): boolean {
+    if (!this.query('canSetTrackedForEveryone')) {
+      this.#refused(
+        this.#locked()
+          ? { reason: 'read-only', scopes: [] }
+          : { reason: 'scope', scopes: ['defs'] },
+      );
+      return false;
+    }
+    if ((this.#trackChangesSetting() === 'everyone') === on) return true;
+    const doc = this.#state.doc;
+    let at = -1;
+    doc.descendants((node, pos) => {
+      if (node.type.name === 'settings') at = pos;
+      return at < 0;
+    });
+    if (at < 0) return false;
+    const attrs = { ...doc.nodeAt(at)!.attrs, trackChanges: on ? 'everyone' : 'off' };
+    this.dispatchTransaction(this.#state.tr.setNodeMarkup(at, undefined, attrs));
+    return true;
+  }
   deleteStyle(id: string): StyleEditResult {
     const check = this.checkStyleEdit('delete', id);
     if (!check.ok) return this.#styleFailed(check);
