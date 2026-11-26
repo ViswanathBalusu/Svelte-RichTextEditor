@@ -1,6 +1,6 @@
 # Reference host
 
-A small host application for `<doc-editor>` (13 §11.2) and the demo stack of phase 1a (11 §3): demo sign-in, a token endpoint, the page glue, the host's own document catalogue, and a compose definition of the document service, PostgreSQL, an S3-compatible store, one export worker and this host.
+A small host application for `<doc-editor>` (13 §11.2) and the demo stack of phase 1a (11 §3): demo sign-in, a token endpoint, the page glue, the host's own document catalogue, and a compose definition of the document service, PostgreSQL, an S3-compatible store, one export worker, a development mail sink (Mailpit; it keeps what the host sends in memory and delivers nothing) and this host. The host's notification mail (a mention, a task) goes to that sink when `DOCEDIT_HOST_SMTP` is set, which the stack does; the addresses are the host's own (`seed/users.json`), never the document service's.
 
 **Demo only. This is not a production deployment.** Visitors choose a person without a password, every service listens on 127.0.0.1 only, the settings in `stack/.env.example` are test values, and the keys the stack generates are for this demonstration and nothing else. Decisions: [ADR 0048](../../docs/adr/0048-reference-host-and-demo-stack.md).
 

@@ -10,7 +10,9 @@
  * refused with 401. Demo only: a real host keeps its secrets in its own secret store, and keeps
  * the seen identifiers and the queue in durable storage.
  */
-import { logSink, notifier, type NotificationSink } from './webhook-notifications.ts';
+import { SEED_DIR } from './config.ts';
+import { Directory } from './directory.ts';
+import { logSink, mailSink, notifier, type NotificationSink } from './webhook-notifications.ts';
 import { MemorySeenStore, WebhookReceiver, WorkQueue } from './webhook-receiver.ts';
 
 export const WEBHOOK_SECRETS_ENV = 'DOCEDIT_HOST_WEBHOOK_SECRETS';
@@ -66,8 +68,37 @@ export function composeWebhookEndpoint(opts: {
 
 let composed: WebhookEndpoint | null = null;
 
-/** The endpoint of this process: secrets from the environment, notifications to the log. */
+export const SMTP_ENV = 'DOCEDIT_HOST_SMTP';
+export const PUBLIC_URL_ENV = 'DOCEDIT_HOST_PUBLIC_URL';
+export const MAIL_FROM_ENV = 'DOCEDIT_HOST_MAIL_FROM';
+
+/**
+ * The notification sink of this process. With `DOCEDIT_HOST_SMTP` (`host:port`) it sends e-mail to
+ * that relay, which in the demo stack is the development mail sink (UX-098 criterion 5); the
+ * link in the mail starts at `DOCEDIT_HOST_PUBLIC_URL`, and the sender is `DOCEDIT_HOST_MAIL_FROM`
+ * (default `notifications@demo.example.test`). Without it, one log line per notification.
+ */
+export function sinkFromEnv(env: NodeJS.ProcessEnv = process.env): NotificationSink {
+  const relay = env[SMTP_ENV];
+  if (!relay) return logSink();
+  const colon = relay.lastIndexOf(':');
+  const port = Number(relay.slice(colon + 1));
+  if (colon < 1 || !Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error(`${SMTP_ENV} is host:port`);
+  const publicUrl = env[PUBLIC_URL_ENV];
+  if (!publicUrl) throw new Error(`${SMTP_ENV} needs ${PUBLIC_URL_ENV} for the link in the mail`);
+  const seedDir = env['DOCEDIT_HOST_SEED'] ?? SEED_DIR;
+  let directory: Promise<Directory> | null = null;
+  return mailSink({
+    smtp: { host: relay.slice(0, colon), port },
+    directory: () => (directory ??= Directory.load(seedDir)),
+    publicUrl: publicUrl.replace(/\/+$/, ''),
+    from: env[MAIL_FROM_ENV] || 'notifications@demo.example.test',
+  });
+}
+
+/** The endpoint of this process: secrets from the environment, notifications by e-mail or log. */
 export function webhookEndpoint(): WebhookEndpoint {
-  composed ??= composeWebhookEndpoint({ secrets: () => secretsFromEnv(), sink: logSink() });
+  composed ??= composeWebhookEndpoint({ secrets: () => secretsFromEnv(), sink: sinkFromEnv() });
   return composed;
 }

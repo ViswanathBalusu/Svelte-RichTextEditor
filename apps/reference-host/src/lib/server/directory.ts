@@ -12,6 +12,11 @@ export interface DirectoryUser {
   sub: string;
   name: string;
   groups: string[];
+  /**
+   * Where notifications go (UX-098; owner decision 71: the host resolves it from the identifier,
+   * the service stores none). Never returned by `resolve` or `search`.
+   */
+  email?: string;
   /** One line for the demo sign-in page. */
   about: string;
 }
@@ -69,6 +74,26 @@ export class Directory {
 
   user(sub: string): DirectoryUser | null {
     return this.#users.get(sub) ?? null;
+  }
+
+  /**
+   * The people a notification for `principal` (`user:<sub>` or `group:<id>`) goes to, with their
+   * addresses. A person or group the host does not know, or a person without an address, gives
+   * nothing. A group gives its members in seed order.
+   */
+  recipients(principal: string): Array<{ sub: string; name: string; email: string }> {
+    const i = principal.indexOf(':');
+    const kind = principal.slice(0, i);
+    const id = principal.slice(i + 1);
+    const users =
+      kind === 'user'
+        ? [this.#users.get(id)]
+        : kind === 'group' && this.#groups.has(id)
+          ? [...this.#users.values()].filter((u) => u.groups.includes(id))
+          : [];
+    const out: Array<{ sub: string; name: string; email: string }> = [];
+    for (const u of users) if (u?.email) out.push({ sub: u.sub, name: u.name, email: u.email });
+    return out;
   }
 
   /** `resolveUsers`: in the order given, null for an identifier the host does not know. */
