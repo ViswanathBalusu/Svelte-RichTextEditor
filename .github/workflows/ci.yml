@@ -376,7 +376,10 @@ jobs:
         shell: pwsh
         env:
           SYN047_RUNS: '3000'
-        run: pwsh -NoProfile -File infra/test-env.ps1 run -NoExport pnpm test
+        # Only the two convergence suites run here (the whole suite runs in the integration job). Under
+        # `-NoExport` the tests that need the export worker or the asset worker image fail, because
+        # infra/test-env.ps1 run sets DOCEDIT_TEST_ENV=1, so `pnpm test` would fail for the wrong reason.
+        run: pwsh -NoProfile -File infra/test-env.ps1 run -NoExport pnpm exec vitest run --project node convergence.pg.test.ts
 
   fuzz-nightly:
     # SEC-059 criterion 3. A pull request runs every fuzz target bounded, inside `pnpm test` (200
