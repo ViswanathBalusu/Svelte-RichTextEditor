@@ -6,12 +6,16 @@
  * Runs in real browser engines through `pnpm test:browsers`; in Node.js there is no DOM, so the
  * suite is skipped there (the findings are tested in test/ux-041-proofing.test.ts).
  */
+import { loadProofing } from '../core.ts';
 import type { ProofingFinding } from '@docedit/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { internals } from '../testing.ts';
 import { STYLE_IDS, styledDocument, styledEditorAccess } from '../../test/fixtures.ts';
 import { PROOF_CURRENT_CLASS, PROOF_SPELLING_CLASS } from '../proofing-decorations.ts';
 import { EditorCore } from './web.ts';
+
+// The proofing controller is a chunk of its own (UX-070); load it so that attaching a port is synchronous.
+await loadProofing();
 
 const isBrowser = typeof document !== 'undefined';
 
