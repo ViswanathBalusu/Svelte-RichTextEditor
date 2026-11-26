@@ -2346,6 +2346,8 @@ As an author, I want typing in a long document to stay instant, so that the page
 
 **Notes (lane w1, 2026-11-26):** Nothing new ticked. Criterion 2 (restart at the first affected page, stop when the positions settle) needs layoutPassSteps in packages/layout/src/paginate.ts (about 600 lines of closure state) to be resumable from a page start. That restructuring was not made in this run. Criterion 5 needs keystroke timing with CPU throttling on the reference machine, which this machine is not.
 
+Machine check (lane w1, 2026-11-26): this machine matches reference-1 of ADR 0037 section 1 (Alienware Aurora R11, Intel Core i9-10900KF, 4 x 32 GiB DDR4-2667, RTX 3080, High performance power plan, Windows 11 Pro 10.0.26300). The reference-machine criteria can therefore be measured here with packages/perf. No run was made in this lane, so criterion 5 stays unticked; the earlier remark that this is not the reference machine is wrong.
+
 ### FE-089 Paginate long documents in the background
 
 | Type | Phase | Size | Priority | Persona |
