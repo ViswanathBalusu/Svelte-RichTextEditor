@@ -4,6 +4,7 @@
  */
 export { validate, validateDoc, LIMITS } from './validate.ts';
 export { CommitValidator, type CommitContext, type CommitValidation } from './incremental.ts';
+export { readerSet, type ReaderSet } from './readers.ts';
 export type {
   CodeDoc,
   DocumentView,
