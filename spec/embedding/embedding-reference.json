@@ -557,6 +557,13 @@
       "aliases": []
     },
     {
+      "id": "insert.citation",
+      "group": "insert",
+      "capability": "citations",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "insert.crossReference",
       "group": "insert",
       "capability": "editing",

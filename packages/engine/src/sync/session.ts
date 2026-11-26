@@ -814,6 +814,7 @@ export class SyncSession {
       seq: s.seq,
       incarnation: s.incarnation,
       ...(this.#user === undefined ? {} : { user: this.#user }),
+      view: s.view ?? null,
     };
   }
 
@@ -896,6 +897,8 @@ export class SyncSession {
       ...(this.#host.sync.incarnation === '' ? {} : { incarnation: this.#host.sync.incarnation }),
       // Whose work it is: another user who opens the document later does not send it (decision 47).
       ...(this.#user === undefined ? {} : { user: this.#user }),
+      // The projection the commit was made under: another view token on the next visit sets it aside.
+      view: this.#host.sync.view ?? null,
     };
     const queue = stepsToJson(this.#host.sync.queue) as StepJson[];
     this.#queueKey = JSON.stringify(queue);

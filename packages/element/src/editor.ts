@@ -589,6 +589,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'createStyle',
         'changeStyle',
         'deleteStyle',
+        'insertCitation',
       ],
       runNamed: (name, args) => {
         if (name === 'showReferences') return core.showReferences();
@@ -607,6 +608,26 @@ export function mountEditor(options: MountOptions): MountedEditor {
           const a = args as { asset?: unknown; alt?: unknown } | undefined;
           if (typeof a?.asset !== 'string' || typeof a.alt !== 'string') return false;
           return core.setImageAlt(a.asset, a.alt);
+        }
+        // The citation dialog (FE-140 criterion 1): `{ items, mode? }`; the core checks the sources and
+        // the user's right to change the text.
+        if (name === 'insertCitation') {
+          const a = args as { items?: unknown; mode?: unknown } | undefined;
+          if (!Array.isArray(a?.items)) return false;
+          const mode = a.mode;
+          if (
+            mode !== undefined &&
+            mode !== 'normal' &&
+            mode !== 'narrative' &&
+            mode !== 'suppressAuthor'
+          )
+            return false;
+          return core.run('insertCitation', {
+            citation: {
+              items: a.items as never,
+              ...(mode === undefined ? {} : { mode }),
+            },
+          });
         }
         if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
         // The ruler and the paragraph dialog (UX-102): the args are the patch of indents and tab

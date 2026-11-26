@@ -111,6 +111,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `format.paragraph` | format | character-and-paragraph-formatting |  |  |
 | `history.nameVersion` | review | version-history |  |  |
 | `insert.caption` | insert | editing |  |  |
+| `insert.citation` | insert | citations |  |  |
 | `insert.crossReference` | insert | editing |  |  |
 | `insert.field.checkbox` | insert | fields-and-forms |  |  |
 | `insert.field.choice` | insert | fields-and-forms |  |  |

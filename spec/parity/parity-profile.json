@@ -1568,6 +1568,10 @@
       "capability": "editing"
     },
     {
+      "id": "insert.citation",
+      "capability": "citations"
+    },
+    {
       "id": "insert.region",
       "capability": "regions-and-permissions"
     },
