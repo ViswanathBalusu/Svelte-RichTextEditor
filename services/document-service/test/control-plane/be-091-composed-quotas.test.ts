@@ -382,4 +382,110 @@ describe('BE-091 criterion 2: measuring another tenant while one is at its quota
     );
     expect(busy).toBeLessThanOrEqual(Math.max(idle1, idle2) * 1.5 + 5);
   });
+
+  it.skipIf(!process.env['DOCEDIT_LATENCY_RUN'])(
+    'shows no difference in the acknowledgement of the other tenant between blocks with and without the first tenant retrying at its quota (interleaved blocks, bootstrap interval; set DOCEDIT_LATENCY_RUN=1 on a quiet machine)',
+    async () => {
+      // The runs above are taken one after the other, so a drift of the machine (other work, a
+      // growing document) lands in the difference. Here tenant B commits in blocks of 25, strictly
+      // alternating (idle, busy, busy, idle, ...: the order is reversed each pair, so a linear drift
+      // cancels), while tenant A retries at its quota every 20 ms at most in the busy blocks and
+      // sends nothing in the idle ones. The figure is the median of the busy block medians minus the
+      // median of the idle block medians, with a 95 percent bootstrap interval over the blocks.
+      const h = await node('memory');
+      const content = documentWithRegions();
+      const intro = insideAt(content['doc'], INTRO);
+      const docA = await h.createDocument({ content });
+      const tokenA = h.userToken({ [docA]: 'owner' });
+      const b = await secondTenant(h);
+      await putQuotas(h, { commitRate: 1 });
+
+      const cb = await connect(h);
+      await cb.hello(b.token);
+      expect((await cb.open(1, b.doc)).t).toBe('ch.opened');
+      const a = await connect(h);
+      await a.hello(tokenA);
+      await a.open(1, docA);
+      expect((await a.submit(1, { base: 0, steps: [insertText(intro, 'a')] })).t).toBe('sync.ack');
+
+      let refusals = 0;
+      let retrying = false;
+      let stop = false;
+      let lastPing = 0;
+      const loop = (async () => {
+        while (!stop) {
+          if (!retrying) {
+            // A silent session is closed after two heartbeat intervals: a ping now and then.
+            if (Date.now() - lastPing >= 500) {
+              lastPing = Date.now();
+              a.send({ t: 'ping' });
+            }
+            await new Promise((resolve) => setTimeout(resolve, 2));
+            continue;
+          }
+          const r = await a.submit(1, { base: 1, steps: [insertText(intro, 'a')] });
+          if (r.t === 'sync.reject' && r.d?.code === 'quota_exceeded') {
+            refusals += 1;
+            await new Promise((resolve) =>
+              setTimeout(resolve, Math.min(Number(r.d?.retryAfterMs ?? 20), 20)),
+            );
+          }
+        }
+      })();
+
+      let base = 0;
+      const block = async (): Promise<number> => {
+        const out: number[] = [];
+        for (let i = 0; i < 25; i += 1) {
+          const t0 = performance.now();
+          const r = await cb.submit(1, { base, steps: [insertText(intro, 'x')] });
+          out.push(performance.now() - t0);
+          expect(r.t).toBe('sync.ack');
+          base += 1;
+        }
+        return median(out);
+      };
+      for (let i = 0; i < 4; i += 1) await block(); // warm-up, not recorded
+
+      const idle: number[] = [];
+      const busy: number[] = [];
+      const PAIRS = 20;
+      for (let p = 0; p < PAIRS; p += 1) {
+        for (const phase of p % 2 === 0
+          ? (['idle', 'busy'] as const)
+          : (['busy', 'idle'] as const)) {
+          retrying = phase === 'busy';
+          if (retrying) await new Promise((resolve) => setTimeout(resolve, 30));
+          (phase === 'busy' ? busy : idle).push(await block());
+        }
+      }
+      stop = true;
+      await loop;
+
+      const diff = median(busy) - median(idle);
+      // Bootstrap: resample the blocks of each condition with replacement.
+      let seed = 0x2f6e2b1;
+      const rand = (): number => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 2 ** 32;
+      };
+      const draw = (xs: number[]): number[] => xs.map(() => xs[Math.floor(rand() * xs.length)]!);
+      const diffs: number[] = [];
+      for (let i = 0; i < 2000; i += 1) diffs.push(median(draw(busy)) - median(draw(idle)));
+      diffs.sort((x, y) => x - y);
+      const lo = diffs[Math.floor(0.025 * diffs.length)]!;
+      const hi = diffs[Math.floor(0.975 * diffs.length)]!;
+
+      expect(refusals).toBeGreaterThan(0);
+      console.info(
+        `BE-091 criterion 2 (interleaved): tenant B block median ack ${median(idle).toFixed(3)} ms idle, ${median(busy).toFixed(3)} ms while tenant A retried (${PAIRS} pairs of 25 commits, ${refusals} refusals of A); difference ${diff.toFixed(3)} ms, 95% bootstrap interval ${lo.toFixed(3)} to ${hi.toFixed(3)} ms`,
+      );
+      // On a quiet machine the whole interval must lie below 5 ms; the bound is a test setting, not a
+      // figure of the specification. On a machine shared with other work the interval is wider than
+      // that (2026-11-26: -15.6 to 27.1 ms with block medians near 48 ms), which is why the test is
+      // off unless asked for.
+      expect(hi).toBeLessThan(5);
+    },
+    240_000,
+  );
 });
