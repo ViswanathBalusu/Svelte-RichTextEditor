@@ -78,7 +78,9 @@ const CONTEXTS: Context[] = [
   },
   {
     name: 'URLs',
-    attributes: ['mark:link.href', 'source_def.url', 'source_def.doi'],
+    // The URL and DOI of a source no longer reach the .tex file: since EXP-121 they go to
+    // references.bib through `bibField` (exp-121-biblatex.test.ts holds their hostile cases).
+    attributes: ['mark:link.href'],
     emitter: 'url',
     tests: [{ file: CONTEXTS_TEST, title: 'SEC-033 criterion 2: link targets (url)' }],
   },
