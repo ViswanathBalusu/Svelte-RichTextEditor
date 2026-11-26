@@ -231,6 +231,8 @@ What is left in the first set, as the build reports it (gzip, rendered bytes spl
 
 **Notes (integrator, batch 7, 2026-11-26):** the build of the merged state measures 303.4 kB gzip for the host backend and 326.7 kB with the DEP client (the build step of `node scripts/check-parallel.ts --changed`, same command and machine as the notes above). The DEP figure is 6.7 kB over the 320 kB budget, so `pnpm build` fails at the element package on the size check alone; every other package builds. The host-backend figure is 16.6 kB within it. Nobody has measured which batch 7 lane added how much; the first step would be a bundle report of each lane. The gate is not moved. The decision stays with the owner.
 
+**Notes (integrator, batch 8, 2026-11-26):** the build of the merged state measures 305.7 kB gzip for the host backend and 329.0 kB with the DEP client (`node scripts/check-parallel.ts`, same machine as the batch 7 note): 2.3 kB more than at batch 7 (326.7 kB) and 9.0 kB over the 320 kB budget, so `pnpm build` still fails at the element package on the size check alone. The gate is not moved; the decision stays with the owner. Which batch 8 lane added how much was not measured.
+
 ### FND-009 Service latency, load and fault-injection harness
 
 | Type | Phase | Size | Priority | Persona |

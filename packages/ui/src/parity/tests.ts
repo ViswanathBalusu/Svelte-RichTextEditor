@@ -510,6 +510,22 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/e2e/prm-035-grants.spec.ts', kind: 'playwright' },
     ],
   ],
+  // Shipped when EXP-087 closed (2026-11-26): the HTML writer (structure, cascade, fonts, visible
+  // text) and the export job and route that carry its pictures.
+  [
+    'export-html',
+    [
+      { path: 'packages/export-latex/src/exp-087-structure.html.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-087-cascade.html.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-087-fonts.html.test.ts', kind: 'unit' },
+      { path: 'services/export-worker/src/exp-087-html.job.test.ts', kind: 'unit' },
+      { path: 'services/export-worker/src/exp-087-html-pictures.job.test.ts', kind: 'unit' },
+      {
+        path: 'services/document-service/test/control-plane/exp-087-html-assets.test.ts',
+        kind: 'unit',
+      },
+    ],
+  ],
   // Shipped when UX-050 to UX-055 closed (2026-11-26): commands, panels, status items and client
   // filters of host extensions, in the shell and in the real element with the reference host's sample.
   [
@@ -517,7 +533,11 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
     [
       { path: 'packages/ui/test/extension-commands.test.ts', kind: 'unit' },
       { path: 'packages/ui/test/extension-contributions.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/extension-status-bar.test.ts', kind: 'unit' },
+      { path: 'apps/reference-host/test/sample-extension.test.ts', kind: 'unit' },
       { path: 'packages/ui/e2e/extension-contributions.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-050-extensions.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-051-extension-controls.spec.ts', kind: 'playwright' },
       { path: 'packages/ui/e2e/ux-055-import-filters.spec.ts', kind: 'playwright' },
       { path: 'packages/element/e2e/ux-050-extensions.spec.ts', kind: 'playwright' },
       { path: 'packages/element/e2e/ux-050-sample-extension.spec.ts', kind: 'playwright' },

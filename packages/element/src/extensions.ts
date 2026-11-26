@@ -51,7 +51,7 @@ export interface HostExtensionApi {
   registerPanel(panel: {
     id: string;
     label: string;
-    mount: (container: HTMLElement) => unknown;
+    mount: (container: HTMLElement) => (() => void) | undefined;
   }): void;
   /** Opens a panel by its identifier; resolves false when it is not offered. */
   openPanel(id: string): Promise<boolean>;
@@ -60,38 +60,7 @@ export interface HostExtensionApi {
    * alternative a screen reader announces. Removed with the extension.
    */
   addStatusItem(item: { id: string; position: 'start' | 'end'; text: string; label: string }): void;
-  /**
-   * Adds a client import or export filter (UX-055). An import filter reads the bytes of a file of one of
-   * its extensions and returns a CDM fragment, which the editor inserts in place of the selection
-   * through the guards of typing; an export filter receives a copy of the document and returns the
-   * bytes of a file. A filter that throws is reported and leaves the document unchanged. Removed with
-   * the extension.
-   */
-  registerFilter(filter: HostFilter): void;
 }
-
-/** A client filter of an extension (UX-055). */
-export type HostFilter =
-  | {
-      readonly kind: 'import';
-      readonly id: string;
-      readonly label: string;
-      /** File name extensions the filter reads, without dots. */
-      readonly extensions: readonly string[];
-      readonly run: (input: {
-        readonly bytes: Uint8Array;
-        readonly name: string;
-      }) => unknown | Promise<unknown>;
-    }
-  | {
-      readonly kind: 'export';
-      readonly id: string;
-      readonly label: string;
-      readonly mimeType: string;
-      /** The file name extension, without the dot. */
-      readonly extension: string;
-      readonly run: (content: unknown) => Uint8Array | Promise<Uint8Array>;
-    };
 
 /** One element of the `extensions` array. */
 export interface HostExtension {
