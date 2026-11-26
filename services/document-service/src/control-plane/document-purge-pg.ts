@@ -22,6 +22,8 @@ export const PURGE_TABLES: readonly string[] = [
   'doc_snapshots',
   'doc_checkpoints',
   'doc_commits',
+  // Retired regions name the document's head by a foreign key, so they go before it (EXP-108).
+  'retired_regions',
   'doc_heads',
   'doc_assets',
   'versions',
@@ -31,7 +33,6 @@ export const PURGE_TABLES: readonly string[] = [
   'region_grants',
   'region_states',
   'region_leases',
-  'retired_regions',
   'grant_history',
   'grant_revisions',
   'suggestion_introductions',

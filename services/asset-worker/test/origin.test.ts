@@ -228,6 +228,22 @@ describe('the asset origin (BE-045 criteria 2 to 5; SEC-040 criterion 4; SEC-046
     await res.arrayBuffer();
   });
 
+  it('serves a Word file as an attachment with the fixed Word content type, never as a page (EXP-108 criterion 2)', async () => {
+    // The stored bytes are not a page; the headers are what keeps a browser from rendering them.
+    const docx = new TextEncoder().encode('PK not read by the origin');
+    const docxSha = createHash('sha256').update(docx).digest('hex');
+    await objects.put(assetKeys.final(tenant, docxSha), docx, { contentType: 'text/html' });
+    const res = await fetch(sign(docxSha, DOCX));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe(DOCX);
+    expect(res.headers.get('content-disposition')).toBe(`attachment; filename="${docxSha}.docx"`);
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('content-security-policy')).toContain('sandbox');
+    expect(Buffer.from(await res.arrayBuffer()).equals(Buffer.from(docx))).toBe(true);
+    // The same object under another kind in the URL is refused: the kind is part of the signature.
+    expect((await fetch(sign(docxSha, DOCX).replace('.docx', '.html'))).status).toBe(404);
+  });
+
   it('answers a revalidation with 304 and HEAD without a body', async () => {
     const u = sign(sha, PNG);
     const r304 = await fetch(u, { headers: { 'if-none-match': `"${sha}"` } });

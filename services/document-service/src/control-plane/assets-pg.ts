@@ -229,6 +229,17 @@ export class PgAssetRegistry implements AssetRegistry {
     });
   }
 
+  attach(tenant: string, doc: string, id: string, seq: number): Promise<void> {
+    // The same row the persist path writes for the first commit that names an asset (BE-044).
+    return inTenant(this.#pool, tenant, async (c) => {
+      await c.query(
+        `INSERT INTO doc_assets (tenant_id, doc_id, asset_id, first_seq) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (tenant_id, doc_id, asset_id) DO NOTHING`,
+        [tenant, doc, id, seq],
+      );
+    });
+  }
+
   orphanedReady(tenant: string, before: number, limit: number): Promise<AssetRecord[]> {
     // A ready asset with no attachment row (BE-046 criterion 1), oldest settlement first.
     return inTenant(
