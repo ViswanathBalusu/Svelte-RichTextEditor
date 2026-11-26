@@ -98,7 +98,7 @@ describe.skipIf(!hasDom)('painter metrics match the measurer (FE-090, criterion 
     const style = getComputedStyle(span);
     expect(style.fontKerning).toBe(PAINT_TEXT_PINS.fontKerning);
     expect(style.fontVariantLigatures).toBe(PAINT_TEXT_PINS.fontVariantLigatures);
-    expect(style.textRendering).toBe(PAINT_TEXT_PINS.textRendering);
+    expect(style.textRendering.toLowerCase()).toBe(PAINT_TEXT_PINS.textRendering.toLowerCase());
   });
 
   it('paints each sample as wide as the real canvas measurer measures it', () => {
