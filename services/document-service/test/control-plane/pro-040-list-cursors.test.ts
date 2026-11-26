@@ -21,6 +21,7 @@ if (skip) console.warn(`skipped: ${skip}`);
 
 interface Operation {
   responses?: Record<string, unknown>;
+  security?: Array<Record<string, unknown>>;
 }
 interface Spec {
   paths: Record<string, Record<string, Operation>>;
@@ -31,12 +32,16 @@ const spec = JSON.parse(
   readFileSync(new URL('../../../../spec/dep/dep-1.openapi.json', import.meta.url), 'utf8'),
 ) as Spec;
 
-// The GET list operations whose 200 response (or a schema it names) carries `nextCursor`.
+// The GET list operations whose 200 response (or a schema it names) carries `nextCursor` and that a tenant's
+// own credential may call. An operation secured only by the operator credential (`listTenants`, UX-076) is
+// refused to a tenant key by design, so this walk, which holds a tenant key, cannot follow it.
 function announcedListRoutes(): string[] {
   const out: string[] = [];
   for (const [path, ops] of Object.entries(spec.paths)) {
     const get = ops['get'];
     if (!get) continue;
+    const schemes = (get.security ?? []).flatMap((s) => Object.keys(s));
+    if (schemes.length > 0 && schemes.every((s) => s === 'operatorCredential')) continue;
     const text = JSON.stringify(get.responses?.['200'] ?? {});
     const refs = [...text.matchAll(/#\/components\/schemas\/([A-Za-z0-9_]+)/g)].map((m) => m[1]!);
     const named = refs.map((r) => JSON.stringify(spec.components?.schemas?.[r] ?? {})).join(' ');
@@ -169,7 +174,8 @@ describe.skipIf(skip !== null)(
       // Commit lists are walked and compared with the unpaged list, but the snapshot commits seeded
       // here end the page at a reset, so they give no paged items; paging over edit commits needs
       // the data plane (not walked here).
-      expect([...notServed].sort()).toEqual(['/search', '/webhooks']);
+      // /sealing-keys is in the contract (UX-076) and the reference service does not serve it yet.
+      expect([...notServed].sort()).toEqual(['/sealing-keys', '/search', '/webhooks']);
     });
   },
 );

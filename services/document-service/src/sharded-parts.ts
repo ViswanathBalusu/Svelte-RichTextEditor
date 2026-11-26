@@ -41,6 +41,8 @@ const ROUTED = [
   'audit',
   'retention',
   'holds',
+  // HIS-025: the visibility settings of a tenant and its documents are on the shard of the tenant.
+  'historyVisibility',
   'workflows',
   'templates',
   'reminders',
