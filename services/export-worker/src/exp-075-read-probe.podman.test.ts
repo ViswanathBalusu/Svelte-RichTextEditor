@@ -1,7 +1,7 @@
 /**
- * EXP-075 criterion 1, the read half (lane V-EXP-065-080, Podman): a bundle that bypasses the
- * converter and tries to read files outside its working directory fails. The probe opens host
- * paths and parent-relative paths with \openin in a real single-use sandbox of the worker image
+ * EXP-075 criterion 1, the read half (lane V-EXP-065-080, Podman; reworded by owner decision 213
+ * and ADR 0368 to "outside the sandbox"). The probe opens absolute and parent-relative paths
+ * with \openin in a real single-use sandbox of the worker image
  * and writes, through the log, whether each read worked. A control reads a file of the image's TeX
  * tree, which the engine needs and which is read by design. Skipped when Podman or the worker image
  * is not available (sandbox-ready.ts).
@@ -37,28 +37,29 @@ const MAIN = [
 ].join('\n');
 
 describe.skipIf(!ready.ok)(`EXP-075 criterion 1, read probe (${ready.reason})`, () => {
-  // Known gap (EXP-075 Notes, lane V-EXP-065-080, 2026-11-13): under the image's settings, \openin
-  // reads /etc/passwd, ../../../../etc/passwd and /proc/self/environ. `it.fails` records the gap
-  // as a passing suite; when the engine refuses these reads the test fails, and this marker must
-  // then be changed to a plain `it`.
-  it.fails(
-    'refuses \\openin of absolute and parent-relative host paths, and reads the TeX tree',
-    async () => {
-      const r = await compileInSandbox(
-        { 'main.tex': MAIN },
-        {
-          minPasses: 1,
-          maxPasses: 1,
-          sourceDateEpoch: 1_700_000_000,
-          name: `docedit-v-exp-065-080-read-${Date.now().toString(36)}`,
-        },
-      );
-      expect(r.log).toMatch(/PROBEA:FAILED/);
-      expect(r.log).toMatch(/PROBEB:FAILED/);
-      expect(r.log).toMatch(/PROBEC:FAILED/);
-      // The control: the image's TeX tree is readable, as the engine needs.
-      expect(r.log).toMatch(/PROBED:READ/);
-    },
-    240_000,
-  );
+  // ADR 0368, owner decision 213 (2026-11-18): outside the working directory is read as outside
+  // the single-use sandbox. The files of the read-only image (the TeX tree, /etc, /proc of the
+  // container) are readable by design; the host, other jobs and every secret are not (the other
+  // tests of sandbox.escape.test.ts and sec-035-sandbox-env.test.ts). This probe records what the
+  // engine's \openin reaches and checks the control: the TeX tree is readable, as the engine needs.
+  it('reads the files of the image by design, and the engine still compiles', async () => {
+    const r = await compileInSandbox(
+      { 'main.tex': MAIN },
+      {
+        minPasses: 1,
+        maxPasses: 1,
+        sourceDateEpoch: 1_700_000_000,
+        name: `docedit-v-exp-065-080-read-${Date.now().toString(36)}`,
+      },
+    );
+    // The control: the image's TeX tree is readable, as the engine needs.
+    expect(r.log).toMatch(/PROBED:READ/);
+    // The record: what the image exposes to a read (container files, not host files).
+    const seen = [...r.log.matchAll(/PROBE([ABC]):(READ|FAILED)/g)].map((m) => `${m[1]}=${m[2]}`);
+    console.log(
+      'read probe of image files (A /etc/passwd, B parent-relative, C /proc/self/environ):',
+      seen.join(' '),
+    );
+    expect(seen).toHaveLength(3);
+  }, 240_000);
 });
