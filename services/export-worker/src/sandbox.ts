@@ -189,19 +189,43 @@ export async function compileInSandbox(
   const tar = writeTar(
     Object.entries(files).map(([n, c]) => [n, typeof c === 'string' ? enc.encode(c) : c] as const),
   );
-  const r: RunResult = await podman(sandboxArgs(name, opts), {
-    stdin: tar,
-    timeoutMs: (l.wallSeconds + 15) * 1000,
-    maxStdoutBytes: l.outputBytes + 1024 * 1024,
-    onKill: () => {
-      void killContainer(name);
-    },
-    ...(opts.signal ? { signal: opts.signal } : {}),
-  });
-  const out =
-    opts.entrypoint || r.aborted
+  const start = (containerName: string): Promise<RunResult> =>
+    podman(sandboxArgs(containerName, opts), {
+      stdin: tar,
+      timeoutMs: (l.wallSeconds + 15) * 1000,
+      maxStdoutBytes: l.outputBytes + 1024 * 1024,
+      onKill: () => {
+        void killContainer(containerName);
+      },
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    });
+  const read = (res: RunResult): Map<string, Uint8Array> =>
+    opts.entrypoint || res.aborted
       ? new Map<string, Uint8Array>()
-      : readTar(r.stdout, { allow: OUTPUTS, maxFileBytes: l.outputBytes });
+      : readTar(res.stdout, { allow: OUTPUTS, maxFileBytes: l.outputBytes });
+  let r: RunResult = await start(name);
+  let out = read(r);
+  // A container that never reached TeX (the runtime failed to start it, exit 125, or the entry point
+  // failed in its set-up, exit 65 or 70) wrote none of the outputs, not even the timings, and says
+  // nothing about the bundle. It is started once more, under another name. On the hosted CI runners
+  // (rootless Podman, 2026-11-25) a few compiles ended like this with no reason on record; the
+  // first attempt's exit code and standard error stay at the head of the result's `stderr`. A
+  // timeout, an overflow and a cancel are never repeated, and neither is a job that ran TeX.
+  let startFailure = '';
+  let ranName = name;
+  if (
+    !opts.entrypoint &&
+    out.size === 0 &&
+    !r.timedOut &&
+    !r.stdoutOverflow &&
+    !r.aborted &&
+    (r.code === 125 || r.code === 65 || r.code === 70)
+  ) {
+    startFailure = `[first start failed, exit ${r.code} after ${Math.round(r.wallMs)} ms: ${r.stderr.trim().slice(-1000)}]\n`;
+    ranName = `${name}-again`;
+    r = await start(ranName);
+    out = read(r);
+  }
   const dec = new TextDecoder();
   const timings = parseTimings(dec.decode(out.get('timings.txt') ?? new Uint8Array()));
   const pdf = out.get('main.pdf') ?? null;
@@ -216,10 +240,10 @@ export async function compileInSandbox(
     pdf,
     log: dec.decode(out.get('main.log') ?? new Uint8Array()),
     layoutRaw: out.has('main.layout') ? dec.decode(out.get('main.layout')!) : null,
-    stderr: r.stderr,
+    stderr: startFailure + r.stderr,
     wallMs: r.wallMs,
     stdout: opts.entrypoint ? r.stdout : new Uint8Array(),
-    name,
+    name: ranName,
     limits: l,
     passTimeoutSeconds: passTimeout,
   };
