@@ -71,7 +71,7 @@ describe('SEC-045 criterion 4: the keys of a full two-tenant scenario', () => {
     h = await startHarness('memory', {
       jobHandlers: { export: compile },
       assetWorker: { sandbox: unsandboxed(), allowUnsandboxed: true },
-      config: { jobIdleMs: 20, jobLeaseMs: 2000 },
+      env: { DOCEDIT_JOB_IDLE_MS: '20' },
     });
   }, 60_000);
   afterAll(async () => {

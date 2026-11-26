@@ -232,7 +232,7 @@ describe.skipIf(s3Down !== null)(
     beforeAll(async () => {
       output = captureProcessOutput();
       h = await startHarness('memory', {
-        env: { DOCEDIT_METRICS_TOKEN: METRICS_TOKEN },
+        env: { DOCEDIT_METRICS_TOKEN: METRICS_TOKEN, DOCEDIT_JOB_IDLE_MS: '20' },
         onSpan: (span) => void spans.push(span),
         parts: { objects: new S3ObjectStore(s3Settings) },
         assetWorker: { sandbox: unsandboxed(), allowUnsandboxed: true },
@@ -256,7 +256,6 @@ describe.skipIf(s3Down !== null)(
             };
           },
         },
-        config: { jobIdleMs: 20, jobLeaseMs: 2000 },
       });
     }, 60_000);
     afterAll(async () => {
@@ -434,7 +433,7 @@ describe('SEC-047 criterion 1: the export worker, its log lines and the error th
               nextOk,
               `This is LuaHBTeX\n! Undefined control sequence.\nl.7 ${CANARY.workerText} ${CANARY.compileLine}\n`,
             )(files, opts),
-        } as never),
+        }),
       },
       worker: 'w847',
       leaseMs: 60_000,

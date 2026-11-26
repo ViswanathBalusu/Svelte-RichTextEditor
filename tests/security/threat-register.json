@@ -830,17 +830,11 @@
       "builtBy": ["FRW-052", "EXP-068"],
       "provenBy": "SEC-042",
       "phase": "2",
-      "status": "partly-proven",
-      "tests": ["sec-042-tampered-pdf.test.ts", "sealed-write-once.test.ts"],
-      "open": [
-        {
-          "criterion": 4,
-          "what": "the hash sent to the signing service compared with the stored PDF"
-        },
-        {
-          "criterion": 5,
-          "what": "long-term validation data added only as incremental updates, the sealed bytes not rewritten"
-        }
+      "status": "proven",
+      "tests": [
+        "sec-042-tampered-pdf.test.ts",
+        "sealed-write-once.test.ts",
+        "sec-042-sealed-bytes.test.ts"
       ],
       "boundaries": ["service-to-signing"],
       "specRows": ["A tampered PDF being sealed"]
@@ -876,19 +870,13 @@
       "builtBy": ["FRW-040", "FRW-050"],
       "provenBy": "SEC-044",
       "phase": "2",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "evidence-outside-log.test.ts",
         "evidence-purge-job.test.ts",
         "sec-044-evidence-scan.pg.test.ts",
         "sec-044-w8-workflow-scan.test.ts",
         "sec-044-v-payload-salt.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 1,
-          "what": "the scan of the commit log, control commits, audit trail, logs and search entries after a completed workflow"
-        }
       ],
       "boundaries": ["service-to-signing"],
       "specRows": ["Evidence leaking or outliving its purpose"]
@@ -924,13 +912,11 @@
         "sec-045-v-b-identifiers.test.ts",
         "sec-045-signed-url-tenant.test.ts",
         "sec-045-scenario-keys.test.ts",
-        "sec-045-v-c-webhooks.test.ts"
+        "sec-045-v-c-webhooks.test.ts",
+        "sec-045-w8-keys-and-urls.test.ts",
+        "sec-045-w8-key-inventory.test.ts"
       ],
       "open": [
-        {
-          "criterion": 4,
-          "what": "every object key of a full scenario under the tenant prefix, and a signed URL of one tenant refused on a key of another"
-        },
         {
           "criterion": 5,
           "what": "the tenant in the key of every cache, counter and stream"
@@ -967,20 +953,15 @@
       "builtBy": ["BE-088"],
       "provenBy": "SEC-047",
       "phase": "1a",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "logs-no-content.test.ts",
         "sec-047-structural-dump.test.ts",
         "sec-047-compile-log.test.ts",
         "sec-047-v-compile-log-route.test.ts",
         "sec-047-v-canary-surfaces.test.ts",
-        "sec-047-w3-field-values-alt-text.test.ts"
-      ],
-      "open": [
-        {
-          "criterion": 1,
-          "what": "the full canary scenario: no canary in any log line, metric, trace, error report or dump"
-        }
+        "sec-047-w3-field-values-alt-text.test.ts",
+        "sec-047-w8-codes-signatures-workers.test.ts"
       ],
       "boundaries": ["host-backend-to-service"],
       "specRows": ["Logs and metrics never contain document content or tokens"]

@@ -76,6 +76,9 @@ const CATALOGUE: Record<string, 'probed' | 'not-served'> = {
   'POST /threads/{tid}/comments': 'probed',
   'PATCH /comments/{cid}': 'probed',
   'DELETE /comments/{cid}': 'probed',
+  // UX-033: a reaction is named by the comment's identifier and the reaction's own name.
+  'POST /comments/{cid}/reactions/{reaction}': 'probed',
+  'DELETE /comments/{cid}/reactions/{reaction}': 'probed',
   'GET /webhooks/{id}': 'probed',
   'PATCH /webhooks/{id}': 'probed',
   'DELETE /webhooks/{id}': 'probed',
