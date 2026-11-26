@@ -374,6 +374,7 @@ export function createSigningServer(service: SigningService, opts: HttpOptions):
         keyId: out.keyId,
         keyOwner: out.keyOwner,
         ...(out.appearances ? { appearances: out.appearances } : {}),
+        ...(out.provider ? { provider: out.provider } : {}),
       });
     })().catch(() => {
       if (!res.headersSent) send(res, 500, { ok: false, code: 'seal_failed', retryable: false });

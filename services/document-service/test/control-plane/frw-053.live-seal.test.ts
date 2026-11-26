@@ -30,6 +30,9 @@ import {
 import { startTestTsa, type TestTsa } from '../../../signing-service/test/support/tsa.ts';
 import { verifyDetached, verifyWithOpenssl } from '../../../signing-service/test/support/verify.ts';
 import { InProcessKeyService } from '../../../signing-service/test/support/world.ts';
+import { CscKeyService, cscCertificates } from '../../../signing-service/src/csc.ts';
+import { SigningService } from '../../../signing-service/src/service.ts';
+import { startCscServer } from '../../../signing-service/test/support/csc-server.ts';
 import { objectKeys } from '../../src/objects/store.ts';
 import { HttpSigningClient } from '../../src/workflow/signing-client.ts';
 import {
@@ -555,6 +558,104 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         ).toMatchObject({ ok: false, reason: 'tsa_unreachable', retryable: true });
         expect((await sealed.readLatest(w.ref.tenant, w.doc, w.workflowId))!.n).toBe(2);
         authority.current = new HttpTimestampAuthority(tsa.url);
+      },
+      300_000,
+    );
+    it.skipIf(skip !== null)(
+      'finalises with the signature of a provider reached through the CSC API, sends it only hashes, and records its level and signer as asserted by the provider (FRW-059)',
+      async () => {
+        authority.current = new HttpTimestampAuthority(tsa.url);
+        credential.current = DOCUMENT_SERVICE_SECRET;
+        // A second signing service whose operator key is held by a provider (a test double of the
+        // CSC API over the key of this test). The document service is pointed at it for this test.
+        const csc = await startCscServer({
+          key: ks,
+          otherKey: ks,
+          chain: [pki.seal, pki.intermediate],
+          credentialId: 'credential-1',
+          token: 'csc-token-for-tests',
+          subjectDN: 'CN=Ada Lovelace,O=Example Trust Services,C=GB',
+        });
+        const providerKey = new CscKeyService({
+          baseUrl: csc.url,
+          credentialId: 'credential-1',
+          provider: 'Example Trust Services',
+          level: 'advanced electronic signature (as the provider states it)',
+          accessToken: () => Promise.resolve('csc-token-for-tests'),
+          timeoutMs: 20_000,
+        });
+        const world2 = makeWorld({
+          operator: { id: 'operator-key', keyService: providerKey, pki },
+          tsaUrl: tsa.url,
+          timestamps: { stamp: (d) => authority.current.stamp(d) },
+        });
+        const server2 = createSigningServer(
+          new SigningService({
+            ...world2.config,
+            certificates: cscCertificates(new Map([['operator-key', providerKey]])),
+          }),
+          { maxBodyBytes: 5_000_000 },
+        );
+        await new Promise<void>((r) => server2.listen(0, '127.0.0.1', r));
+        const a2 = server2.address();
+        if (!a2 || typeof a2 === 'string') throw new Error('no address');
+        const native = url;
+        url = `http://127.0.0.1:${a2.port}`;
+        try {
+          const w = await complete();
+          await waitFor('finalised', async () => (await stateOf(w.ref)) === 'finalised');
+          const pdf = (await sealed.read(w.ref.tenant, w.doc, w.workflowId))!.bytes;
+          const reports = verifyWithOpenssl(pdf, pki);
+          expect(reports[0]!.main.ok, reports[0]!.main.detail).toBe(true);
+          expect((await verifySealedPdf(pdf, [pki.root])).ok).toBe(true);
+          // The provider was asked for hashes of 32 bytes and nothing else.
+          const signs = csc.requests.filter((r) => r.path === 'signatures/signHash');
+          expect(signs.length).toBeGreaterThan(0);
+          for (const s of signs) {
+            expect(Object.keys(s.body).sort()).toEqual(
+              ['credentialID', 'hash', 'hashAlgo', 'signAlgo'].sort(),
+            );
+            expect(Buffer.from((s.body['hash'] as string[])[0]!, 'base64')).toHaveLength(32);
+          }
+          expect(JSON.stringify(csc.requests)).not.toContain(w.doc);
+          // What the provider says about itself is on record, as asserted by the provider.
+          const asserted = () =>
+            h.parts.audit!.query(h.tenant, {
+              doc: w.doc,
+              kind: 'workflow.seal_provider_asserted',
+              limit: 5,
+            });
+          await waitFor('the assertion on record', async () => (await asserted()).length > 0);
+          expect((await asserted())[0]!.data).toEqual({
+            workflow: w.workflowId,
+            assertedBy: 'provider',
+            provider: 'Example Trust Services',
+            signatureLevel: 'advanced electronic signature (as the provider states it)',
+            signerIdentification: 'CN=Ada Lovelace,O=Example Trust Services,C=GB',
+          });
+          // A provider that is down leaves the workflow completed, with the alert, and nothing stored.
+          csc.fault = 'down';
+          const before = h.service.metrics.value('docedit_finalisation_stopped_total', {
+            reason: 'signing_unavailable',
+            code: 'signing_unavailable',
+            retryable: 'true',
+          });
+          const w2 = await complete();
+          await waitFor('the alert', () => {
+            const n = h.service.metrics.value('docedit_finalisation_stopped_total', {
+              reason: 'signing_unavailable',
+              code: 'signing_unavailable',
+              retryable: 'true',
+            });
+            return n > before;
+          });
+          expect(await stateOf(w2.ref)).toBe('completed');
+          expect(await sealed.read(w2.ref.tenant, w2.doc, w2.workflowId)).toBeNull();
+        } finally {
+          url = native;
+          await csc.close();
+          await new Promise<void>((r) => server2.close(() => r()));
+        }
       },
       300_000,
     );

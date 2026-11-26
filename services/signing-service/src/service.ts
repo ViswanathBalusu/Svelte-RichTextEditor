@@ -39,7 +39,7 @@ import {
   timestampInfo,
   type TimestampSource,
 } from './cms.ts';
-import type { KeyService } from './keyservice.ts';
+import type { KeyService, ProviderAssertion } from './keyservice.ts';
 import {
   extendPdf,
   sealPdf,
@@ -157,6 +157,11 @@ export type SealOutcome =
       readonly keyOwner: 'operator' | 'tenant';
       /** Present when appearances were asked for. */
       readonly appearances?: AppearanceReport;
+      /**
+       * Present when a signature provider holds the key (FRW-059): what the provider asserts about
+       * its level and the signer. Asserted, not verified.
+       */
+      readonly provider?: ProviderAssertion;
     }
   | {
       readonly ok: false;
@@ -443,6 +448,9 @@ export class SigningService {
         }))
       )
         return { ok: false, code: 'audit_unavailable', retryable: true };
+      // A key held by a signature provider says what the provider asserts about it (FRW-059). It was
+      // read when the certificate was; a failure to read it again is not a failed seal.
+      const provider = await keyService.assertion?.().catch(() => undefined);
       return {
         ok: true,
         pdf: result.pdf,
@@ -454,6 +462,7 @@ export class SigningService {
         keyId: key.keyId,
         keyOwner: key.owner,
         ...(drawing ? { appearances: drawing.report } : {}),
+        ...(provider ? { provider } : {}),
       };
     } catch (e) {
       if (e instanceof TimestampFailure) return fail('tsa_unreachable');

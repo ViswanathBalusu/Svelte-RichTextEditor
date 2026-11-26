@@ -185,6 +185,26 @@ export class FinalSealer {
         await recordFirstExpiry(deps.renewals, ref.tenant, ref.doc, run.expiresAtMs).catch((e) =>
           deps.renewalFailed?.(ref, e),
         );
+      // What a signature provider asserted about its level and the signer is on record as asserted
+      // by the provider (FRW-059 criterion 3); the platform does not verify it.
+      if (run.provider)
+        await deps.audit?.record([
+          {
+            id: uuid7(),
+            tenant: ref.tenant,
+            doc: ref.doc,
+            actor: 'system',
+            kind: 'workflow.seal_provider_asserted',
+            data: {
+              workflow: workflow.id,
+              assertedBy: 'provider',
+              provider: run.provider.provider,
+              signatureLevel: run.provider.level,
+              signerIdentification: run.provider.signer,
+            },
+            at: deps.now(),
+          },
+        ]);
       // What was not drawn is on record for the operator and the owner (FRW-057 criterion 6). It is
       // written after the events, so that a slow or failing audit store cannot delay or lose them.
       if (run.appearances && run.appearances.diagnostics.length > 0)
