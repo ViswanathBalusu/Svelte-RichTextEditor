@@ -6,17 +6,22 @@
  * state is in memory; the answers follow the conventions of 05 §6.1 (problem details, ETag and
  * If-Match, `{ items, nextCursor }`).
  *
- * Credentials: `service-ok` is a service credential. Any other bearer value is a user token or
- * a stranger's, and is refused with `forbidden`; no bearer at all is `unauthenticated`.
+ * Credentials: `service-ok` is a service credential and `operator-ok` an operator credential; a
+ * route takes the one its operation names in the file (`security`). Any other bearer value is a user
+ * token or a stranger's, and is refused with `forbidden`; no bearer at all is `unauthenticated`.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export const MOCK_BASE = 'https://dep.example.test/v1';
 export const SERVICE_CREDENTIAL = 'service-ok';
+export const OPERATOR_CREDENTIAL = 'operator-ok';
 
 interface Spec {
-  paths: Record<string, Record<string, { operationId?: string; parameters?: unknown[] }>>;
+  paths: Record<
+    string,
+    Record<string, { operationId?: string; parameters?: unknown[]; security?: object[] }>
+  >;
 }
 interface Route {
   method: string;
@@ -25,6 +30,8 @@ interface Route {
   pattern: RegExp;
   names: string[];
   requiresIfMatch: boolean;
+  /** The operation names the operator credential, not the tenant's service credential. */
+  operator: boolean;
 }
 type Json = Record<string, unknown>;
 
@@ -52,6 +59,7 @@ function routesOf(spec: Spec): Route[] {
         pattern: new RegExp(`^${source}$`),
         names,
         requiresIfMatch,
+        operator: JSON.stringify(op.security ?? []).includes('operatorCredential'),
       });
     }
   }
@@ -103,6 +111,21 @@ export function createAdminMock(): AdminMock {
   const docRetention = new Map<string, { policy: Json; version: number }>();
   const holds: Json[] = [];
   const hooks = new Map<string, { row: Json; version: number; secrets: number }>();
+  const tenants = new Map<string, { row: Json; version: number }>([
+    [
+      '0190a000-0000-7000-8000-0000000000a1',
+      {
+        row: {
+          id: '0190a000-0000-7000-8000-0000000000a1',
+          name: 'Example tenant',
+          state: 'active',
+          createdAt: '2026-11-01T09:00:00.000Z',
+        },
+        version: 1,
+      },
+    ],
+  ]);
+  const tenantFonts = new Map<string, Json>();
   const audit: Json[] = [];
   let counter = 0;
   const id = (prefix: string): string => `${prefix}-${String(++counter).padStart(4, '0')}`;
@@ -262,6 +285,93 @@ export function createAdminMock(): AdminMock {
         note(actor, 'hold.placed', p['id'] ?? null);
         return ok(h, 201);
       }
+      case 'releaseHold': {
+        const at = holds.findIndex((h) => h['id'] === p['holdId'] && h['document'] === p['id']);
+        if (at < 0) return problem(404, 'not_found', 'No such hold in force.');
+        const [gone] = holds.splice(at, 1);
+        note(actor, 'hold.released', p['id'] ?? null);
+        return ok(gone);
+      }
+      case 'getTenantUsage': {
+        const month = url.searchParams.get('month') ?? '2026-11';
+        if (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(month))
+          return problem(400, 'validation_failed', 'The month is YYYY-MM.');
+        return ok({
+          month,
+          connections: 12,
+          openDocuments: 7,
+          commitRate: 31,
+          roomCpuBudget: 480,
+          storage: 1_048_576,
+          exportConcurrency: 2,
+          exportMinutes: 45,
+        });
+      }
+      case 'listTenants':
+        return ok({ items: [...tenants.values()].map((t) => t.row), nextCursor: null });
+      case 'createTenant': {
+        const name = body['name'];
+        if (typeof name !== 'string' || name.trim() === '')
+          return problem(400, 'validation_failed', 'A name is needed.');
+        const row = {
+          id: `0190a000-0000-7000-8000-${String(++counter).padStart(12, '0')}`,
+          name: name.trim(),
+          state: 'active',
+          createdAt: '2026-11-18T09:00:00.000Z',
+        };
+        tenants.set(row.id, { row, version: 1 });
+        note(actor, 'tenant.created');
+        return ok(row, 201);
+      }
+      case 'getTenant': {
+        const t = tenants.get(p['tenantId'] ?? '');
+        if (!t) return problem(404, 'not_found', 'No such tenant.');
+        return ok(t.row, 200, `"t${t.version}"`);
+      }
+      case 'updateTenant': {
+        const t = tenants.get(p['tenantId'] ?? '');
+        if (!t) return problem(404, 'not_found', 'No such tenant.');
+        if (ifMatch !== `"t${t.version}"`) return problem(412, 'conflict', 'The tenant changed.');
+        if (
+          body['state'] !== undefined &&
+          body['state'] !== 'active' &&
+          body['state'] !== 'suspended'
+        )
+          return problem(400, 'validation_failed', 'The state is active or suspended.');
+        t.row = { ...t.row, ...body };
+        t.version += 1;
+        note(actor, 'tenant.updated');
+        return ok(t.row, 200, `"t${t.version}"`);
+      }
+      case 'addTenantFont': {
+        if (typeof body['licence'] !== 'string' || body['licence'].trim() === '')
+          return problem(400, 'validation_failed', 'A licence declaration is needed.');
+        if (typeof body['content'] !== 'string' || body['content'] === '')
+          return problem(400, 'validation_failed', 'The font file is needed.');
+        const sha256 = [...body['content'].slice(0, 16)]
+          .map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
+          .join('')
+          .padEnd(64, '0')
+          .slice(0, 64);
+        const font = {
+          sha256,
+          family: 'Added Sans',
+          style: 'regular',
+          format: 'truetype',
+          bytes: body['content'].length,
+          licence: body['licence'],
+          serverUse: body['serverUse'] === true,
+        };
+        tenantFonts.set(sha256, font);
+        note(actor, 'font.added');
+        return ok(font, 201);
+      }
+      case 'removeTenantFont': {
+        if (!tenantFonts.delete(p['sha256'] ?? ''))
+          return problem(404, 'not_found', 'No such font of this tenant.');
+        note(actor, 'font.removed');
+        return ok({ removed: p['sha256'] });
+      }
       case 'listWebhooks':
         return ok({ items: [...hooks.values()].map((h) => hookView(h)), nextCursor: null });
       case 'createWebhook': {
@@ -398,8 +508,12 @@ export function createAdminMock(): AdminMock {
     if (auth !== null) credentials.push(auth);
     actors.push(headers.get('DEP-Actor') ?? '');
     if (auth === null) return problem(401, 'unauthenticated', 'A credential is required.');
-    if (auth !== `Bearer ${SERVICE_CREDENTIAL}`)
-      return problem(403, 'forbidden', 'Only a service credential may call this route.');
+    if (auth !== `Bearer ${route.operator ? OPERATOR_CREDENTIAL : SERVICE_CREDENTIAL}`)
+      return problem(
+        403,
+        'forbidden',
+        `Only ${route.operator ? 'an operator' : 'a service'} credential may call this route.`,
+      );
     if (route.requiresIfMatch && !headers.has('If-Match'))
       return problem(428, 'precondition_failed', 'If-Match is required.');
     let body: Json = {};

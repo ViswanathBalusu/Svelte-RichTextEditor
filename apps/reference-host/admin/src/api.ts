@@ -115,6 +115,54 @@ export interface FontManifest {
   families: FontFamily[];
 }
 
+/** One calendar month of use (`GET /usage`; UX-076, decision 69). */
+export interface UsageView {
+  month: string;
+  connections: number;
+  openDocuments: number;
+  commitRate: number;
+  roomCpuBudget: number;
+  storage: number;
+  exportConcurrency: number;
+  exportMinutes: number;
+}
+export const USAGE_NAMES = [
+  'connections',
+  'openDocuments',
+  'commitRate',
+  'roomCpuBudget',
+  'storage',
+  'exportConcurrency',
+  'exportMinutes',
+] as const satisfies readonly (keyof UsageView)[];
+
+/** A tenant of the service, as an operator sees it (`GET /tenants`; UX-076). */
+export interface TenantView {
+  id: string;
+  name: string;
+  state: 'active' | 'suspended';
+  createdAt: string;
+}
+
+/** A font a tenant added (`POST /tenant-fonts`; BE-048). */
+export interface TenantFont {
+  sha256: string;
+  family: string;
+  style: string;
+  format: string;
+  bytes: number;
+  licence: string;
+  serverUse: boolean;
+}
+export interface FontUpload {
+  filename?: string;
+  mime: 'font/ttf' | 'font/otf' | 'font/woff2';
+  /** The file, base64. */
+  content: string;
+  licence: string;
+  serverUse: boolean;
+}
+
 export interface Page<T> {
   items: T[];
   nextCursor: string | null;
@@ -144,6 +192,11 @@ export interface AdminClientOptions {
   fetch?: typeof fetch;
   /** Sent as `DEP-Actor`, so that the audit trail names the person at the console. */
   actor?: string;
+  /**
+   * An operator credential, for the tenants of the service (`/tenants`, UX-076). Without it the
+   * console offers no tenant function: a tenant administrator has none.
+   */
+  operatorCredential?: string;
 }
 
 interface Call {
@@ -151,6 +204,8 @@ interface Call {
   body?: unknown;
   ifMatch?: string;
   idempotent?: boolean;
+  /** The route is an operator route: the operator credential is sent instead of the tenant's. */
+  operator?: boolean;
 }
 interface Answer {
   status: number;
@@ -176,12 +231,14 @@ function problemOf(status: number, body: unknown): AdminApiError {
 export class AdminClient {
   readonly #base: string;
   readonly #credential: string;
+  readonly #operator: string | undefined;
   readonly #actor: string | undefined;
   readonly #fetch: typeof fetch;
 
   constructor(options: AdminClientOptions) {
     this.#base = options.endpoint.replace(/\/+$/, '');
     this.#credential = options.credential;
+    this.#operator = options.operatorCredential;
     this.#actor = options.actor;
     this.#fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   }
@@ -190,8 +247,10 @@ export class AdminClient {
     const url = new URL(this.#base + path);
     for (const [k, v] of Object.entries(call.query ?? {}))
       if (v !== undefined && v !== '') url.searchParams.set(k, String(v));
+    if (call.operator === true && this.#operator === undefined)
+      throw new AdminApiError(0, 'no_operator', 'This function needs an operator credential.');
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.#credential}`,
+      Authorization: `Bearer ${call.operator === true ? this.#operator : this.#credential}`,
       Accept: 'application/json',
     };
     if (this.#actor !== undefined) headers['DEP-Actor'] = this.#actor;
@@ -221,6 +280,11 @@ export class AdminClient {
     return { status: res.status, body, etag: res.headers.get('ETag') };
   }
 
+  /** Whether an operator credential was given, so that the tenant functions can be offered. */
+  get hasOperator(): boolean {
+    return this.#operator !== undefined;
+  }
+
   /**
    * Whether the credential may administer: the console reads the quotas, a service-only route.
    * Anything but a 2xx means no. A refusal (401, 403) is a normal answer, not an error.
@@ -243,6 +307,45 @@ export class AdminClient {
   async setQuotas(values: Partial<QuotaSettings>, etag: string): Promise<Etagged<QuotaSettings>> {
     const a = await this.#call('PUT', '/quotas', { body: values, ifMatch: etag });
     return { value: a.body as QuotaSettings, etag: a.etag };
+  }
+
+  // Usage (UX-076): one calendar month of use, this month when none is named.
+  async getUsage(month?: string): Promise<UsageView> {
+    const a = await this.#call('GET', '/usage', { query: { month } });
+    return a.body as UsageView;
+  }
+
+  // Tenants (UX-076): operator routes.
+  async listTenants(cursor?: string): Promise<Page<TenantView>> {
+    const a = await this.#call('GET', '/tenants', {
+      query: { cursor, limit: 50 },
+      operator: true,
+    });
+    return a.body as Page<TenantView>;
+  }
+  async createTenant(name: string): Promise<TenantView> {
+    const a = await this.#call('POST', '/tenants', {
+      body: { name },
+      idempotent: true,
+      operator: true,
+    });
+    return a.body as TenantView;
+  }
+  async getTenant(id: string): Promise<Etagged<TenantView>> {
+    const a = await this.#call('GET', `/tenants/${encodeURIComponent(id)}`, { operator: true });
+    return { value: a.body as TenantView, etag: a.etag };
+  }
+  async updateTenant(
+    id: string,
+    change: { name?: string; state?: 'active' | 'suspended' },
+    etag: string,
+  ): Promise<Etagged<TenantView>> {
+    const a = await this.#call('PATCH', `/tenants/${encodeURIComponent(id)}`, {
+      body: change,
+      ifMatch: etag,
+      operator: true,
+    });
+    return { value: a.body as TenantView, etag: a.etag };
   }
 
   // Origins and keys (UX-077).
@@ -296,6 +399,12 @@ export class AdminClient {
     const a = await this.#call('GET', '/holds', { query: { cursor, limit: 50 } });
     return a.body as Page<Hold>;
   }
+  async releaseHold(document: string, holdId: string): Promise<void> {
+    await this.#call(
+      'DELETE',
+      `/documents/${encodeURIComponent(document)}/holds/${encodeURIComponent(holdId)}`,
+    );
+  }
   async placeHold(document: string, reason: string): Promise<Hold> {
     const a = await this.#call('POST', `/documents/${encodeURIComponent(document)}/holds`, {
       body: { reason },
@@ -348,6 +457,13 @@ export class AdminClient {
   async getFonts(): Promise<FontManifest> {
     const a = await this.#call('GET', '/fonts');
     return a.body as FontManifest;
+  }
+  async addFont(font: FontUpload): Promise<TenantFont> {
+    const a = await this.#call('POST', '/tenant-fonts', { body: font, idempotent: true });
+    return a.body as TenantFont;
+  }
+  async removeFont(sha256: string): Promise<void> {
+    await this.#call('DELETE', `/tenant-fonts/${encodeURIComponent(sha256)}`);
   }
 }
 
