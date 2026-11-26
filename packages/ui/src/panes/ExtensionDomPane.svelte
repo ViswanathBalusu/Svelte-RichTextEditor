@@ -13,7 +13,7 @@
 
   interface Props extends PaneProps {
     /** Draws the panel into `container`; may return the function that removes what it drew. */
-    mount: (container: HTMLElement) => (() => void) | void;
+    mount: (container: HTMLElement) => (() => void) | undefined;
     /** Receives a problem the extension's `mount` raised. */
     onError?: (error: unknown) => void;
   }

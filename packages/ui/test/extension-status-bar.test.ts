@@ -41,10 +41,11 @@ describe('extension status-bar items (UX-052 criterion 2, wiring)', () => {
   });
 
   it('the shell passes the host registry to the status bar', () => {
-    expect(shell).toContain(
-      "import type { StatusItemRegistry } from './extensions/contributions.ts';",
-    );
+    // The shell takes the host registry, or makes its own when none is given (UX-050), and hands
+    // that one registry to the status bar.
+    expect(shell).toMatch(/StatusItemRegistry,[\s\S]*from '\.\/extensions\/contributions\.ts';/);
     expect(shell).toContain('statusItems?: StatusItemRegistry;');
-    expect(shell).toContain('statusItems={props.statusItems}');
+    expect(shell).toContain('props.statusItems ?? new StatusItemRegistry()');
+    expect(shell).toContain('statusItems={statusRegistry}');
   });
 });

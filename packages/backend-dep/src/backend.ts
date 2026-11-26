@@ -287,16 +287,12 @@ export class DepBackend implements Backend {
     );
     this.sync = {
       loadContent: (docId, seq) => this.loadContent(docId, seq),
-<<<<<<< HEAD
-      open: (docId, o) => this.open(docId, o.resume, o.features),
-=======
       // The metadata read (PRO-048): the answer is checked against its shape and unknown fields stay.
       document: (docId) =>
         this.tagged<DocumentResource>('GET', `/documents/${enc(docId)}`, {
           shape: 'DocumentResource',
         }),
-      open: (docId, o) => this.open(docId, o.resume),
->>>>>>> stories/w5
+      open: (docId, o) => this.open(docId, o.resume, o.features),
     };
     const base: PermissionsPort = {
       current: (docId) => this.accesses.get(docId) ?? null,

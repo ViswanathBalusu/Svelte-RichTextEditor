@@ -468,9 +468,10 @@ describe('the export job handler (EXP-001)', () => {
     const hidden = await h.run({ hiddenRegions: ['rPriceBBBBBBBBB1'] });
     expect(hidden.state).toBe('completed');
     expect(codes(hidden)).not.toContain('view_unsupported');
-    const margin = await h.run({ options: { comments: 'margin' } });
-    expect(margin.error?.code).toBe('validation_failed');
-    expect(codes(margin)).toContain('option_unsupported');
+    // Margin comments are honoured since EXP-084 (see exp-084-comments.job.test.ts); PDF/UA-2 without tagging is not.
+    const untagged = await h.run({ options: { pdfStandard: 'ua-2', tagging: 'off' } });
+    expect(untagged.error?.code).toBe('validation_failed');
+    expect(codes(untagged)).toContain('option_unsupported');
     const docx = await h.run({ target: 'docx' });
     expect(docx.error?.code).toBe('validation_failed');
     // Only the projected view compiled; the refused options did not.
