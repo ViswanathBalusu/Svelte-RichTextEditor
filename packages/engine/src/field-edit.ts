@@ -21,7 +21,7 @@
 import { CDM1 } from '@docedit/model/definition';
 import { checkGrammar, validateDoc } from '@docedit/model/validate';
 import type { EditorState, Transaction } from 'prosemirror-state';
-import { findFormField } from './field-entries.ts';
+import { findFormField } from './field-lookup.ts';
 import {
   FIELD_PROPERTY_NAMES,
   type FieldProperties,

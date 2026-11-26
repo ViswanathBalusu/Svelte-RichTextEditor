@@ -10,11 +10,15 @@
  */
 import { MockService } from '@docedit/backend-mock';
 import type { Content, SyncChannel } from '@docedit/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeAll } from 'vitest';
 import { DocumentCore, readRestorePlan, restoreBase } from '../src/headless.ts';
 import { memoryJournal } from '../src/index.ts';
 import { FIELD_IDS, fieldsDocument } from './frw-fields-fixture.ts';
 import { microtask, until } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The forms part holds the entries of the fields (FND-008; parts.ts).
+beforeAll(() => loadParts(['forms']));
 
 async function visit(
   service: MockService,

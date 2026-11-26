@@ -5,9 +5,12 @@
  *
  * Runs through `pnpm vitest run --project browser <this file>`; skipped in Node.js, which has no DOM.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { FIELD_IDS, fieldsDocument, participantAccess } from '../../test/frw-fields-fixture.ts';
-import { EditorCore } from './web.ts';
+import { EditorCore, loadFormViews } from './web.ts';
+
+// The drawing of the fields and the forms part of the core load on first use (FND-008).
+beforeAll(() => loadFormViews());
 
 const isBrowser = typeof document !== 'undefined';
 

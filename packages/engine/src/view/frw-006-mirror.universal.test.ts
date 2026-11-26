@@ -8,11 +8,14 @@
  */
 import { MockService } from '@docedit/backend-mock';
 import { NodeSelection } from 'prosemirror-state';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { FIELD_IDS, fieldsDocument } from '../../test/frw-fields-fixture.ts';
 import { DocumentCore } from '../core.ts';
 import { internals } from '../testing.ts';
-import { EditorCore } from './web.ts';
+import { EditorCore, loadFormViews } from './web.ts';
+
+// The drawing of the fields and the forms part of the core load on first use (FND-008).
+beforeAll(() => loadFormViews());
 
 const isBrowser = typeof document !== 'undefined';
 

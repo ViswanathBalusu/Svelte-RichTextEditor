@@ -24,7 +24,7 @@ import {
   type RuleSet,
 } from '@docedit/rules';
 import type { Node as PMNode } from 'prosemirror-model';
-import { formFieldsOf } from './field-entries.ts';
+import { formFieldsOf } from './field-lookup.ts';
 import type { FieldRuleState, RuleEvaluationStats } from './field-rules-types.ts';
 
 /** One `form_field` as the editor last read it: the node, and what the rules see of its attributes. */
@@ -54,7 +54,7 @@ export interface RuleRun {
 
 /**
  * The first `form_field` of each key, in document order (as the rules read a document). Read from
- * the list of the document's fields, which is walked once for every reader (field-entries.ts).
+ * the list of the document's fields, which is walked once for every reader (field-lookup.ts).
  */
 function scanFields(doc: PMNode): Map<string, PMNode> {
   const out = new Map<string, PMNode>();

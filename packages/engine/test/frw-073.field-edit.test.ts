@@ -14,7 +14,7 @@ import { FIELD_IDS, fieldsDocument, participantAccess } from './frw-fields-fixtu
 import { loadParts } from '../src/parts.ts';
 
 // The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
-beforeAll(() => loadParts(['authoring', 'rules']));
+beforeAll(() => loadParts(['authoring', 'forms', 'rules']));
 
 const schedule = (run: () => void): void => queueMicrotask(run);
 const core = (): DocumentCore => new DocumentCore({ doc: fieldsDocument(), schedule });

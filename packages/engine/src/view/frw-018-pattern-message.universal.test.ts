@@ -5,10 +5,14 @@
  *
  * Runs through `pnpm vitest run --project browser <this file>`; skipped in Node.js, which has no DOM.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { CODE, MESSAGE, PATTERN, PLAIN, patternDocument } from '../../test/frw-018-fixture.ts';
 import { participantAccess } from '../../test/frw-fields-fixture.ts';
-import { EditorCore } from './web.ts';
+import { loadParts } from '../parts.ts';
+import { EditorCore, loadFormViews } from './web.ts';
+
+// The drawing of the fields, the forms part and the rules language load on first use (FND-008).
+beforeAll(() => Promise.all([loadFormViews(), loadParts(['authoring', 'rules'])]));
 
 const isBrowser = typeof document !== 'undefined';
 

@@ -6,7 +6,7 @@
 // `packages/authority/test/frw-035.workflow-push.test.ts`. Node.js, no DOM.
 import { DocumentCore } from '@docedit/engine/headless';
 import type { WorkflowPort } from '@docedit/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeAll } from 'vitest';
 import { fillActionsService } from '../src/fill-actions.ts';
 import { fillView, type FillSource } from '../src/fill.ts';
 import {
@@ -14,6 +14,10 @@ import {
   fieldsDocument,
   participantAccess,
 } from '../../engine/test/frw-fields-fixture.ts';
+import { loadParts } from '@docedit/engine/headless';
+
+// The forms part holds the entries of the fields (FND-008; parts.ts).
+beforeAll(() => loadParts(['forms']));
 
 type Status = Parameters<Parameters<WorkflowPort['onChange']>[1]>[0];
 

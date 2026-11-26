@@ -156,10 +156,13 @@ export const LIBRARY_MINIFY = {
  * bundler gives each such module a chunk of its own, 20 chunks of 0.1 to 2.9 kB of gzip, and each
  * chunk costs its own header, its import lines and a compression that starts from nothing. They are
  * all loaded with the first document, so they are one chunk (FND-008). A module that is not named
- * here keeps the chunk the bundler gives it; the size gate catches a module that moves.
+ * here keeps the chunk the bundler gives it; the size gate catches a module that moves. A module
+ * that the `forms` part and the first interactive code both import (engine `field-lookup.ts`) is
+ * one of these, and so are the small modules of the other parts (`regions`, `proofing`, the
+ * `*-read` modules), which would each be a chunk of a few hundred bytes.
  */
 export const SHARED_MODULES =
-  /\/packages\/(?:ui\/src\/(?:shell\/(?:comment-rules|fields|fill)|icons\/icons)|engine\/src\/(?:rule-read|read-value|meta|parts|sync\/restore)|model\/src\/(?:definition\/index|canonical\/(?:jcs|hash)|cascade\/(?:table-format|styles|resolve)|numbering\/(?:format|labels)|conventions\/(?:platform|time))|protocol\/src\/ports\/(?:errors|features)|element\/src\/(?:export|errors|font-manifest|font-registration|font-family-lookup|font-loader|shortcuts|strings))\.ts$/;
+  /\/packages\/(?:ui\/src\/(?:context|shell\/(?:comment-rules|fields|fill)|icons\/icons)|engine\/src\/(?:field-lookup|field-read|proofing|regions|role-read|rule-read|read-value|meta|parts|source-read|sync\/restore)|model\/src\/(?:definition\/index|canonical\/(?:jcs|hash)|cascade\/(?:table-format|styles|resolve)|numbering\/(?:dates|format|labels)|conventions\/(?:platform|time))|protocol\/src\/ports\/(?:errors|features)|element\/src\/(?:export|errors|font-manifest|font-registration|font-family-lookup|font-loader|shortcuts|strings))\.ts$/;
 
 export function libraryConfig(): InlineConfig {
   const config = base(libDir);

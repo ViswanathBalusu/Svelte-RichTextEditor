@@ -7,7 +7,7 @@
  * - `@docedit/engine/headless`: the same core without the view, for Node.js and workers (FE-121).
  * - `@docedit/engine/testing`: instrumentation for tests and the spike pages; not product API.
  */
-export { EditorCore } from './view/web.ts';
+export { EditorCore, loadFormViews } from './view/web.ts';
 export {
   CDM_VERSION,
   DocumentCore,

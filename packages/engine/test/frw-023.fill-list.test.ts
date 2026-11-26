@@ -26,7 +26,7 @@ import { microtask, posOf } from './support.ts';
 import { loadParts } from '../src/parts.ts';
 
 // The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
-beforeAll(() => loadParts(['authoring', 'rules']));
+beforeAll(() => loadParts(['authoring', 'forms', 'rules']));
 
 const FORMAT = new Set(['type', 'pattern', 'preset', 'not_an_option']);
 const RANGE = new Set(['min', 'max', 'min_length', 'max_length', 'too_large']);

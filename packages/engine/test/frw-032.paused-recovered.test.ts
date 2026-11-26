@@ -7,10 +7,14 @@
  * the refusal here comes from the document's lock; the code and the path in the core are the same.
  */
 import { MockService } from '@docedit/backend-mock';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeAll } from 'vitest';
 import { DocumentCore } from '../src/headless.ts';
 import { FIELD_IDS, fieldsDocument } from './frw-fields-fixture.ts';
 import { microtask, sleep, until } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The forms part holds the entries of the fields (FND-008; parts.ts).
+beforeAll(() => loadParts(['forms']));
 
 async function participant(service: MockService, docId: string) {
   const backend = service.backend(

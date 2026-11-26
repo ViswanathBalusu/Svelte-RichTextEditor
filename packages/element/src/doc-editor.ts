@@ -1029,12 +1029,15 @@ export class DocEditorElement extends Base {
     this.#settings = settings;
     const workflow = this.#workflowSource(docId);
     // A document with rules, or a host with a workflow, needs the rules language before anything is
-    // drawn. A document without either never loads it (FND-008; engine parts.ts).
+    // drawn; one with form fields needs the forms part. A document without either never loads them
+    // (FND-008; engine parts.ts).
     // The host's extensions are given the document API, which is a part of its own (UX-050).
     const needed = new Set(
       partsFor({ doc: content.doc, workflow: workflow.workflow !== undefined }),
     );
     if (this.#extensions.length > 0) needed.add('extension');
+    // A document with a form field, or a host with a workflow, also needs the drawing of the fields.
+    if (needed.has('forms')) await module.loadFormViews();
     await loadParts([...needed]);
     const mounted = mountEditor({
       root: this.#root,

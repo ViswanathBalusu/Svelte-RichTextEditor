@@ -30,7 +30,7 @@ import {
 } from '@docedit/rules';
 import type { Node } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
-import { rolesOf } from './field-entries.ts';
+import { rolesOf } from './field-lookup.ts';
 import { RULE_ATTRS as ATTRS, listRuleDefs, ruleNodes, ruleOf } from './rule-read.ts';
 
 export { listRuleDefs } from './rule-read.ts';

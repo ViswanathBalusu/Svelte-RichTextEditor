@@ -8,7 +8,7 @@
  */
 import type { JsonValue } from '@docedit/model/definition';
 import type { Node } from 'prosemirror-model';
-import { findFormField } from './field-entries.ts';
+import { findFormField } from './field-lookup.ts';
 
 /** The attributes of a form field an author may set. */
 export const FIELD_PROPERTY_NAMES = [

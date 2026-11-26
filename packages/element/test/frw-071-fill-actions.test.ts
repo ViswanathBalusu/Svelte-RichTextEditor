@@ -6,7 +6,7 @@
 // `frw-033.decline-void.test.ts`; no backend implements the workflow port over HTTP yet.
 import { DocumentCore } from '@docedit/engine/headless';
 import type { WorkflowPort } from '@docedit/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeAll } from 'vitest';
 import type { EditorCore } from '@docedit/engine';
 import { fieldsDocument, participantAccess } from '../../engine/test/frw-fields-fixture.ts';
 import { SIGN_LANDLORD, SIGN_TENANT, withSignatures } from '../../engine/test/frw-046-fixture.ts';
@@ -17,6 +17,10 @@ import { elementMethods, hostApi } from '../src/host-api.ts';
 import { Session, type EditorHandle } from '../src/session.ts';
 import { coreHost, until } from './core-host.ts';
 import { backendFor, service } from './support.ts';
+import { loadParts } from '@docedit/engine/headless';
+
+// The forms part holds the entries of the fields (FND-008; parts.ts).
+beforeAll(() => loadParts(['forms']));
 
 type Status = Parameters<Parameters<WorkflowPort['onChange']>[1]>[0];
 type Call = { participant: string; action: string; body: unknown };

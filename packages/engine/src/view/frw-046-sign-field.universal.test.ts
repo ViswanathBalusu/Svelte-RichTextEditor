@@ -6,7 +6,7 @@
  * in Chromium, Firefox and WebKit; skipped in Node.js, which has no DOM.
  */
 import type { userEvent as BrowserUserEvent } from 'vitest/browser';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { participantAccess } from '../../test/frw-fields-fixture.ts';
 import {
   INITIALS_TENANT,
@@ -15,7 +15,10 @@ import {
   SIGNED_TENANT,
   withSignatures,
 } from '../../test/frw-046-fixture.ts';
-import { EditorCore } from './web.ts';
+import { EditorCore, loadFormViews } from './web.ts';
+
+// The drawing of the fields and the forms part of the core load on first use (FND-008).
+beforeAll(() => loadFormViews());
 
 const isBrowser = typeof document !== 'undefined';
 const userEvent: typeof BrowserUserEvent | undefined = isBrowser

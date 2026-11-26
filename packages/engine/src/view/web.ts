@@ -7,7 +7,7 @@ import { baseKeymap, toggleMark } from 'prosemirror-commands';
 import { dropCursor } from 'prosemirror-dropcursor';
 import { gapCursor } from 'prosemirror-gapcursor';
 import { keymap } from 'prosemirror-keymap';
-import type { Schema } from 'prosemirror-model';
+import { DOMSerializer, type Node as PMNode, type Schema } from 'prosemirror-model';
 import {
   type Command,
   type EditorState,
@@ -17,7 +17,7 @@ import {
   type Transaction,
 } from 'prosemirror-state';
 import { AttrStep, Mapping } from 'prosemirror-transform';
-import { EditorView } from 'prosemirror-view';
+import { EditorView, type NodeViewConstructor } from 'prosemirror-view';
 import type { CoreLabels, PeerCaretInfo } from '../api.ts';
 import { type ClipboardPayload, fragmentFromHtml } from '../clipboard.ts';
 import { CDM_VERSION, type CoreConfig, DocumentCore } from '../core.ts';
@@ -56,7 +56,8 @@ import { SubEditor, type SubEditorTarget } from '../subeditor.ts';
 import { cssomMarkViews, type SelectionShim, shimShadowSelection } from '../view-support.ts';
 import { bibliographyPlugin, bibliographyView } from './bibliography-view.ts';
 import { footnoteNumbers, footnoteRefView } from './footnote-view.ts';
-import { FormFieldViews, fieldView, formFieldView } from './form-field-view.ts';
+import type * as FormFieldModule from './form-field-view.ts';
+import { formsPart } from '../parts.ts';
 import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
 import { picturePlaceholderView } from './picture-placeholder-view.ts';
@@ -73,6 +74,42 @@ import { sectionWarningPlugin } from './section-warning-view.ts';
 import { SuggestionCard } from './suggestion-card.ts';
 import { tocPlugin, tocView } from './toc-view.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
+
+/**
+ * The drawing of form fields, and of the mirrors and computed fields beside them
+ * (form-field-view.ts), is a lazy module with the `forms` part of the core (FND-008). The element
+ * loads it before it mounts the editor for a document that holds such a field (`partsFor`). A field
+ * that arrives later (a paste, a remote change, a command) is drawn from the schema until the module
+ * is there, and then drawn again by it.
+ */
+type FormViews = typeof FormFieldModule;
+let formViews: FormViews | null = null;
+let formViewsPending: Promise<void> | null = null;
+
+/** Loads the drawing of form fields and the `forms` part of the core, once. Retried after a failure. */
+export function loadFormViews(): Promise<void> {
+  if (formViews !== null) return formsPart.load().then(() => undefined);
+  formViewsPending ??= Promise.all([import('./form-field-view.ts'), formsPart.load()]).then(
+    ([module]) => {
+      formViews = module;
+    },
+    (error: unknown) => {
+      formViewsPending = null;
+      throw error;
+    },
+  );
+  return formViewsPending;
+}
+
+/** The node view of a field before the module that draws it is there: the schema's own drawing. */
+function schemaFieldView(onDrawn: () => void): NodeViewConstructor {
+  return (node: PMNode) => {
+    onDrawn();
+    const toDOM = node.type.spec.toDOM;
+    if (!toDOM) throw new Error(`the node ${node.type.name} has no drawing`);
+    return { dom: DOMSerializer.renderSpec(document, toDOM(node)).dom as HTMLElement };
+  };
+}
 
 function viewPlugins(schema: Schema): Plugin[] {
   return [
@@ -221,7 +258,8 @@ export class EditorCore extends DocumentCore {
   #view: EditorView | null = null;
   #card: SuggestionCard | null = null;
   /** The live form field controls and mirrors of the body view (FRW-004, FRW-006). */
-  readonly #fieldViews = new FormFieldViews();
+  /** The live views of the fields (form-field-view.ts); null until that module is loaded. */
+  #fieldViews: InstanceType<FormViews['FormFieldViews']> | null = null;
   #sub: SubEditor | null = null;
   #subKind: SubEditorTarget['kind'] | null = null;
   #labels: CoreLabels = DEFAULT_LABELS;
@@ -475,6 +513,52 @@ export class EditorCore extends DocumentCore {
     (view as unknown as { domObserver?: { flush?: () => void } }).domObserver?.flush?.();
   }
 
+  /**
+   * The node views of the form fields and of the document's own fields. The schema's drawing when
+   * the module that draws them is not loaded yet; it is loaded at once, and the fields are drawn
+   * again by it (`loadFormViews`).
+   */
+  #fieldNodeViews(): Record<string, NodeViewConstructor> {
+    const views = formViews;
+    if (views === null) {
+      const drawn = schemaFieldView(() => {
+        void loadFormViews().then(
+          () => this.#drawFieldViews(),
+          () => {},
+        );
+      });
+      return { form_field: drawn, field: drawn };
+    }
+    const registry = (this.#fieldViews ??= new views.FormFieldViews());
+    return {
+      form_field: views.formFieldView(
+        {
+          entry: (id) => this.fieldEntry(id),
+          check: (id, value) => this.checkFieldEntry(id, value),
+          enter: (id, value) => {
+            this.enterFieldValue(id, value);
+          },
+          fillable: (id) => this.fieldFillable(id),
+          rules: (id) => this.fieldRuleState(id),
+          focused: (id) => this.selectField(id),
+          signable: (id) => this.fieldSignable(id),
+          signRequest: (id) => {
+            this.requestSign(id);
+          },
+        },
+        registry,
+      ),
+      field: views.fieldView(registry),
+    };
+  }
+
+  /** The module that draws the fields has arrived after the view: the fields are drawn again by it. */
+  #drawFieldViews(): void {
+    const view = this.#view;
+    if (!view || this.#fieldViews !== null) return;
+    view.setProps({ nodeViews: { ...view.props.nodeViews, ...this.#fieldNodeViews() } });
+  }
+
   /** Mounts the body web view on an element inside the shadow root. */
   mountBody(target: HTMLElement): () => void {
     if (this.#view) throw new Error('the body view is already mounted');
@@ -491,24 +575,7 @@ export class EditorCore extends DocumentCore {
           // FE-129: the indents, spacing, line spacing, borders and shading a paragraph carries.
           paragraph: paragraphView,
           // FRW-004, FRW-006: a native control for a form field, and a mirror that follows its target.
-          form_field: formFieldView(
-            {
-              entry: (id) => this.fieldEntry(id),
-              check: (id, value) => this.checkFieldEntry(id, value),
-              enter: (id, value) => {
-                this.enterFieldValue(id, value);
-              },
-              fillable: (id) => this.fieldFillable(id),
-              rules: (id) => this.fieldRuleState(id),
-              focused: (id) => this.selectField(id),
-              signable: (id) => this.fieldSignable(id),
-              signRequest: (id) => {
-                this.requestSign(id);
-              },
-            },
-            this.#fieldViews,
-          ),
-          field: fieldView(this.#fieldViews),
+          ...this.#fieldNodeViews(),
           bibliography: bibliographyView,
           toc: tocView,
           image: imageView(this.#assetImage),
@@ -733,11 +800,11 @@ export class EditorCore extends DocumentCore {
       accessChanged: () => {
         if (!this.#view) return;
         this.#view.setProps({});
-        this.#fieldViews.refresh(this.#view.state.doc);
+        this.#fieldViews?.refresh(this.#view.state.doc);
       },
       lockChanged: () => {
         this.#view?.setProps({});
-        if (this.#view) this.#fieldViews.refresh(this.#view.state.doc);
+        if (this.#view) this.#fieldViews?.refresh(this.#view.state.doc);
         this.#sub?.view.setProps({});
       },
       // Suspended: nothing of this view listens on the page's window. Back: it listens again, and
@@ -775,7 +842,7 @@ export class EditorCore extends DocumentCore {
     this.#card?.update();
     // Mirrors follow their target fields, and a control follows its entry (FRW-004, FRW-006).
     // A change of nothing but field values draws only the fields whose state moved (FRW-023 c. 6).
-    if (before !== state.doc) this.#fieldViews.refresh(state.doc, onlyFieldValues(transactions));
+    if (before !== state.doc) this.#fieldViews?.refresh(state.doc, onlyFieldValues(transactions));
     // The layout may have moved: the peers' carets are measured in the new state.
     this.#drawCarets();
     const sub = this.#sub;

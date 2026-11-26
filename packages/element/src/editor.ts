@@ -16,6 +16,9 @@ import {
   type EquationDrawer,
   type SuggestionIntroduction,
 } from '@docedit/engine';
+
+/** Loads the drawing of form fields and the `forms` part of the core (engine parts.ts; FND-008). */
+export { loadFormViews } from '@docedit/engine';
 import {
   PortError,
   type Access,

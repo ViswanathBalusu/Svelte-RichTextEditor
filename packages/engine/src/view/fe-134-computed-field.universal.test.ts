@@ -10,10 +10,13 @@
  */
 import { computeLabels, referenceText } from '@docedit/model';
 import type { Node as PMNode } from 'prosemirror-model';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { ownerAccess } from '../../test/fixtures.ts';
 import { spikeDocument } from '../spike-document.ts';
-import { EditorCore, viewsOf } from './web.ts';
+import { EditorCore, loadFormViews, viewsOf } from './web.ts';
+
+// The drawing of the fields and the forms part of the core load on first use (FND-008).
+beforeAll(() => loadFormViews());
 
 const isBrowser = typeof document !== 'undefined' && typeof DataTransfer !== 'undefined';
 

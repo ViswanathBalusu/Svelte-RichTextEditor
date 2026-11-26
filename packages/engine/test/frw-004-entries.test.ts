@@ -9,10 +9,14 @@
  *   the entry changes.
  */
 import { MockService } from '@docedit/backend-mock';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeAll } from 'vitest';
 import { DocumentCore } from '../src/headless.ts';
 import { FIELD_IDS, fieldsDocument, participantAccess } from './frw-fields-fixture.ts';
 import { counted, microtask, traffic, until } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The forms part holds the entries of the fields (FND-008; parts.ts).
+beforeAll(() => loadParts(['forms']));
 
 /** A stored node, as far as this test reads it. */
 interface StoredNode {

@@ -33,7 +33,8 @@ import type { NodeView, NodeViewConstructor } from 'prosemirror-view';
 import { type StaleCache, fieldTexts } from '../captions-refs.ts';
 import { formatFieldValue, type FieldFormat } from '../field-display.ts';
 import { computedFieldView } from './computed-field-view.ts';
-import { rolesOf, type FieldEntryState } from '../field-entries.ts';
+import type { FieldEntryState } from '../field-entries.ts';
+import { rolesOf } from '../field-lookup.ts';
 import type { FieldRuleState } from '../field-rules.ts';
 
 /** What the views need from the core. */

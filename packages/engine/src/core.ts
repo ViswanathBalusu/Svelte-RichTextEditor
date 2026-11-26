@@ -133,7 +133,7 @@ import type { RoleEdit, RoleEditOutcome, RoleInfo } from './role-edit.ts';
 import { listRoles, nextRoleId } from './role-read.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
 import { listSources } from './source-read.ts';
-import { authoringPart, extensionPart, rulesPart } from './parts.ts';
+import { authoringPart, extensionPart, formsPart, rulesPart } from './parts.ts';
 import {
   type SectionWarning,
   insertBreak,
@@ -188,14 +188,14 @@ import { FieldRules, ruleWords, type FieldRuleState } from './field-rules.ts';
 import type { RuleParts } from '@docedit/rules';
 import type { RuleDefInfo, RuleEdit, RuleEditOutcome, RuleItemInfo } from './rule-edit.ts';
 import { listRuleDefs } from './rule-read.ts';
-import {
-  type EnterResult,
-  type FieldChange,
+import type {
+  EnterResult,
+  FieldChange,
   FieldEntries,
-  type FieldEntryState,
-  type FieldStatus,
-  findFormField,
+  FieldEntryState,
+  FieldStatus,
 } from './field-entries.ts';
+import { findFormField, formFieldsOf } from './field-lookup.ts';
 import type { FieldEditOutcome, FieldPatch, FieldProperties } from './field-edit.ts';
 import { fieldProperties, listFormFields } from './field-read.ts';
 import { type Refusal, canWrite, capsOf, checkChange, depScope, guardPlugin } from './guard.ts';
@@ -522,6 +522,9 @@ export interface ViewBridge {
    */
   suspended?(on: boolean): void;
 }
+
+/** The list of a document with no form field: one object, so that readers can tell it by identity. */
+const NO_FIELD_STATUS: readonly FieldStatus[] = [];
 
 const EMPTY_SUMMARY: SelectionSummary = {
   empty: true,
@@ -1061,11 +1064,13 @@ export class DocumentCore implements DocumentApi {
   /** The `mode` the host set, and the one in force under the access (FE-029). */
   #requested: EditMode = 'edit';
   #effective: EditMode = 'edit';
-  /** The entries typed into form fields (FRW-004). */
-  readonly #fieldEntries = new FieldEntries({
-    state: () => this.#state,
-    dispatch: (tr) => this.dispatchTransaction(tr),
-  });
+  /**
+   * The entries typed into form fields (FRW-004): made when the `forms` part is there, which a
+   * document with form fields has before it is drawn (parts.ts). Before that no field has an entry.
+   */
+  #fieldEntriesMade: FieldEntries | null = null;
+  /** The listeners of `onFieldChange`, which outlive the entries: they are given to them once made. */
+  readonly #fieldChangeListeners = new Set<(change: FieldChange) => void>();
   /** The rules as the editor applies them while a person fills (FRW-023). */
   readonly #fieldRules = new FieldRules({
     state: () => this.#state,
@@ -2307,12 +2312,12 @@ export class DocumentCore implements DocumentApi {
    * (FRW-004). Null when the document has no such field.
    */
   fieldEntry(id: string): FieldEntryState | null {
-    return this.#fieldEntries.entry(id);
+    return this.#entries(id)?.entry(id) ?? null;
   }
 
   /** The problems `value` would have as the entry of the field `id`, without submitting it. */
   checkFieldEntry(id: string, value: JsonValue): readonly EntryProblem[] {
-    return this.#fieldEntries.check(id, value);
+    return this.#entries(id)?.check(id, value) ?? [];
   }
 
   /**
@@ -2325,7 +2330,7 @@ export class DocumentCore implements DocumentApi {
     // authority decides on its own evaluation, and its answer wins (FRW-022 criterion 6).
     const rule = this.#fieldRules.of(id);
     if (rule !== null && (!rule.visible || !rule.enabled || rule.computed)) return false;
-    const tr = this.#fieldEntries.probe(id);
+    const tr = this.#entries(id)?.probe(id);
     if (!tr) return false;
     return (
       checkChange(this.#state.doc, tr.doc, tr.steps, tr.docs, this.#accessValue, false) === null
@@ -2410,7 +2415,7 @@ export class DocumentCore implements DocumentApi {
    * until the entry changes, whatever the authority answers.
    */
   enterFieldValue(id: string, value: JsonValue): EnterResult {
-    return this.#fieldEntries.enter(id, value);
+    return this.#entries(id)?.enter(id, value) ?? { ok: false, reason: 'no-field' };
   }
 
   /**
@@ -2418,7 +2423,7 @@ export class DocumentCore implements DocumentApi {
    * empty or whose entry has a problem, in document order, by the checks of `@docedit/rules`.
    */
   validateFields(): FieldReport[] {
-    return this.#fieldEntries.validate();
+    return this.#entries(null)?.validate() ?? [];
   }
 
   /**
@@ -2494,7 +2499,7 @@ export class DocumentCore implements DocumentApi {
    * what the guided bar and the summary of fill mode count (12 §11; FRW-076, FRW-078).
    */
   fillFields(): readonly FieldStatus[] {
-    const status = this.#fieldEntries.status();
+    const status = this.#entries(null)?.status() ?? NO_FIELD_STATUS;
     const rules = this.#fieldRules.states();
     if (rules.size === 0) return status;
     // The same entries under the same rule states give the list made before: the guided bar, the
@@ -2538,9 +2543,37 @@ export class DocumentCore implements DocumentApi {
    */
   onFieldChange(listener: (change: FieldChange) => void): () => void {
     // An entry made in a preview as a role is not the person's fill, so it is not reported (FRW-075).
-    return this.#fieldEntries.onChange((change) => {
+    const heard = (change: FieldChange): void => {
       if (this.#preview === null) listener(change);
+    };
+    this.#fieldChangeListeners.add(heard);
+    return () => {
+      this.#fieldChangeListeners.delete(heard);
+    };
+  }
+
+  /**
+   * The entries of the form fields, made from the `forms` part. `field` is the field asked about, or
+   * null for the whole document. Without the part no field has an entry: a document or a field
+   * that has none is answered as such (null); one that has fields needs the part, and the call
+   * says so (`PartNotLoadedError`; parts.ts).
+   */
+  #entries(field: string | null): FieldEntries | null {
+    if (this.#fieldEntriesMade !== null) return this.#fieldEntriesMade;
+    if (formsPart.peek() === null) {
+      const doc = this.#state.doc;
+      const none =
+        field === null ? formFieldsOf(doc).list.length === 0 : findFormField(doc, field) === null;
+      if (none) return null;
+    }
+    const entries = new (formsPart.get().FieldEntries)({
+      state: () => this.#state,
+      dispatch: (tr) => this.dispatchTransaction(tr),
     });
+    entries.onChange((change) => {
+      for (const listener of [...this.#fieldChangeListeners]) listener(change);
+    });
+    return (this.#fieldEntriesMade = entries);
   }
 
   // --- Preview as a role (FRW-075) -----------------------------------------------------------
@@ -2557,7 +2590,7 @@ export class DocumentCore implements DocumentApi {
     const current = this.#preview;
     if (current !== null) {
       this.#previewRevert();
-      this.#fieldEntries.clear();
+      this.#fieldEntriesMade?.clear();
       current.role = role;
     } else {
       this.#preview = {
@@ -2598,7 +2631,7 @@ export class DocumentCore implements DocumentApi {
     if (preview === null) return false;
     this.#previewRevert();
     this.#preview = null;
-    this.#fieldEntries.clear();
+    this.#fieldEntriesMade?.clear();
     this.#requested = preview.saved.requested;
     this.rolePreview.set(null);
     this.setAccess(preview.saved.access);

@@ -14,7 +14,7 @@ import { microtask, until } from './support.ts';
 import { loadParts } from '../src/parts.ts';
 
 // The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
-beforeAll(() => loadParts(['authoring', 'rules']));
+beforeAll(() => loadParts(['authoring', 'forms', 'rules']));
 
 /** The fields document with one rule: the name is hidden while the amount is empty. */
 function withHideRule() {

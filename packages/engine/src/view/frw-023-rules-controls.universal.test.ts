@@ -8,10 +8,14 @@
  * Runs through `pnpm vitest run --project browser <this file>` in Chromium, Firefox and WebKit; the
  * suite is skipped in Node.js, which has no DOM. The core part is in `test/frw-023.rules-state.test.ts`.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { RULE_FIELD_IDS as ID, ruleDocument } from '../../test/frw-023-fixture.ts';
 import { participantAccess } from '../../test/frw-fields-fixture.ts';
-import { EditorCore } from './web.ts';
+import { loadParts } from '../parts.ts';
+import { EditorCore, loadFormViews } from './web.ts';
+
+// The drawing of the fields, the forms part and the rules language load on first use (FND-008).
+beforeAll(() => Promise.all([loadFormViews(), loadParts(['authoring', 'rules'])]));
 
 const isBrowser = typeof document !== 'undefined';
 

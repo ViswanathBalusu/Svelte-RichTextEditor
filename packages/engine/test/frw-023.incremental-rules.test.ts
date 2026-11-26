@@ -14,7 +14,7 @@ import { scaleDocument, scaleId, SCALE_FIELDS, SCALE_RULES } from './frw-023-sca
 import { loadParts } from '../src/parts.ts';
 
 // The rules language and the authoring checks load on first use (FND-008; engine parts.ts).
-beforeAll(() => loadParts(['authoring', 'rules']));
+beforeAll(() => loadParts(['authoring', 'forms', 'rules']));
 
 /** A document held as editor state, with a way to change one field's value or its text. */
 function held(envelope: unknown, roles: string[] = ['role_tenant']) {

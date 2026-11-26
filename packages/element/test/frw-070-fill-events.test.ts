@@ -6,10 +6,14 @@
  */
 import { DocumentCore } from '@docedit/engine/headless';
 import type { Access } from '@docedit/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeAll } from 'vitest';
 import { EVENT_NAMES, type FieldChangeDetail, type FillProgressDetail } from '../src/events.ts';
 import { FillEvents, type FillWatch, fillView, progressDetail } from '../src/fill.ts';
 import { Value, contractDocument } from './support.ts';
+import { loadParts } from '@docedit/engine/headless';
+
+// The forms part holds the entries of the fields (FND-008; parts.ts).
+beforeAll(() => loadParts(['forms']));
 
 type J = Record<string, unknown>;
 

@@ -19,10 +19,11 @@
 
 import type * as Authoring from './authoring.ts';
 import type * as ExtensionPart from './extension-part.ts';
+import type * as FormsPart from './forms-part.ts';
 import type * as RulesPart from './rules-part.ts';
 
 /** The names of the parts. */
-export type PartName = 'authoring' | 'extension' | 'rules';
+export type PartName = 'authoring' | 'extension' | 'forms' | 'rules';
 
 export class PartNotLoadedError extends Error {
   readonly part: PartName;
@@ -88,12 +89,19 @@ export const extensionPart = new Part<typeof ExtensionPart>(
   () => import('./extension-part.ts'),
 );
 
+/**
+ * The entries a person types into form fields and the checks behind them (forms-part.ts). The web
+ * view loads the drawing of the fields next to it (`loadFormViews` of view/web.ts).
+ */
+export const formsPart = new Part<typeof FormsPart>('forms', () => import('./forms-part.ts'));
+
 /** The rules language: evaluation while filling, the rule builder, the pre-send checks. */
 export const rulesPart = new Part<typeof RulesPart>('rules', () => import('./rules-part.ts'));
 
 const PARTS: Readonly<Record<PartName, Part<unknown>>> = {
   authoring: authoringPart,
   extension: extensionPart,
+  forms: formsPart,
   rules: rulesPart,
 };
 
@@ -117,9 +125,11 @@ export interface PartsInput {
 
 /**
  * The parts a document and a configuration need from the first moment: the rules part for a
- * document that holds a `rule_def` in its definitions, and for a host that has a workflow. The
- * element loads these before it mounts the editor, so that nothing a person sees is drawn without
- * them. Reads the first child of the root only, where the definitions are.
+ * document that holds a `rule_def` in its definitions, and for a host that has a workflow; the
+ * forms part for a document that holds a form field or a field of the document's own (a mirror,
+ * a number or a reference), and for a host that has a workflow. The element loads these before it
+ * mounts the editor, so that nothing a person sees is drawn without them. The rules are read from
+ * the first child of the root, where the definitions are; the fields from the whole document, once.
  */
 export function partsFor(input: PartsInput): PartName[] {
   const out: PartName[] = [];
@@ -128,10 +138,24 @@ export function partsFor(input: PartsInput): PartName[] {
     ? (doc.content[0] as { content?: unknown } | undefined)
     : undefined;
   const defs: unknown[] = Array.isArray(first?.content) ? first.content : [];
+  // The entries and the drawing of form fields, and of the mirrors and computed fields beside them.
+  if (input.workflow === true || holdsField(doc)) out.push('forms');
   if (
     input.workflow === true ||
     defs.some((d) => (d as { type?: unknown } | null)?.type === 'rule_def')
   )
     out.push('rules');
   return out;
+}
+
+/** Whether a node of the document as JSON is a `form_field` or a `field`, or holds one. */
+function holdsField(root: unknown): boolean {
+  const pending: unknown[] = [root];
+  while (pending.length > 0) {
+    const node = pending.pop() as { type?: unknown; content?: unknown } | null | undefined;
+    if (node === null || typeof node !== 'object') continue;
+    if (node.type === 'form_field' || node.type === 'field') return true;
+    if (Array.isArray(node.content)) pending.push(...(node.content as unknown[]));
+  }
+  return false;
 }

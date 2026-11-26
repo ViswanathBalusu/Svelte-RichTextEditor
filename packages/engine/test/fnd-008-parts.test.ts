@@ -18,22 +18,42 @@ const schedule = (run: () => void): void => queueMicrotask(run);
 const core = (doc = fieldsDocument()): DocumentCore => new DocumentCore({ doc, schedule });
 
 describe('which parts a document needs (FND-008)', () => {
-  it('needs none for a document without rules and without a workflow', () => {
-    expect(partsFor({ doc: fieldsDocument().doc })).toEqual([]);
+  const plain = {
+    type: 'doc',
+    content: [{ type: 'defs' }, { type: 'body', content: [{ type: 'paragraph' }] }],
+  };
+
+  it('needs none for a document without rules, form fields or a workflow', () => {
+    expect(partsFor({ doc: plain })).toEqual([]);
     expect(partsFor({ doc: undefined })).toEqual([]);
     expect(partsFor({ doc: { type: 'doc' } })).toEqual([]);
   });
 
-  it('needs the rules part for a document that holds a rule', () => {
-    expect(partsFor({ doc: ruleDocument().doc })).toEqual(['rules']);
+  it('needs the forms part for a document that holds a form field, or a field of its own', () => {
+    expect(partsFor({ doc: fieldsDocument().doc })).toEqual(['forms']);
+    const mirror = {
+      type: 'doc',
+      content: [
+        { type: 'defs' },
+        {
+          type: 'body',
+          content: [{ type: 'paragraph', content: [{ type: 'field', attrs: { kind: 'seq' } }] }],
+        },
+      ],
+    };
+    expect(partsFor({ doc: mirror })).toEqual(['forms']);
   });
 
-  it('needs the rules part for a host that has a workflow', () => {
-    expect(partsFor({ doc: fieldsDocument().doc, workflow: true })).toEqual(['rules']);
-    expect(partsFor({ doc: fieldsDocument().doc, workflow: false })).toEqual([]);
+  it('needs the rules part for a document that holds a rule', () => {
+    expect(partsFor({ doc: ruleDocument().doc })).toEqual(['forms', 'rules']);
+  });
+
+  it('needs the rules and forms parts for a host that has a workflow', () => {
+    expect(partsFor({ doc: plain, workflow: true })).toEqual(['forms', 'rules']);
+    expect(partsFor({ doc: plain, workflow: false })).toEqual([]);
+    expect(partsFor({ doc: fieldsDocument().doc, workflow: false })).toEqual(['forms']);
   });
 });
-
 describe('before a part is loaded', () => {
   it('reads what the shell reads at once without any part', () => {
     const c = core(ruleDocument());
@@ -69,6 +89,14 @@ describe('before a part is loaded', () => {
     needs(() => c.ruleItems(), 'rules');
     needs(() => c.sendChecklist([]), 'rules');
     needs(() => c.extensionApi({ maxRanges: 2 }), 'extension');
+    // The entries of the form fields are the forms part's: a document that has fields needs it, and
+    // an identifier that names no field has no entry without it.
+    needs(() => c.enterFieldValue(FIELD_IDS.name, 'Ada'), 'forms');
+    needs(() => c.fieldEntry(FIELD_IDS.name), 'forms');
+    needs(() => c.validateFields(), 'forms');
+    needs(() => c.fillFields(), 'forms');
+    expect(c.fieldEntry('no-such-field')).toBeNull();
+    expect(c.enterFieldValue('no-such-field', 'x')).toEqual({ ok: false, reason: 'no-field' });
     expect(JSON.stringify(c.getContent().doc)).toBe(before);
     c.destroy();
   });
