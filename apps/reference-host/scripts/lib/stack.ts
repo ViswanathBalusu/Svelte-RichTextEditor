@@ -75,8 +75,7 @@ export interface Secrets {
   /** The service's key for the tokens it mints (EdDSA). */
   serviceSigning: JsonWebKey & { kid: string };
   viewKey: string;
-  cursorSecret: string;
-}
+  cursorSecret: string;}
 
 export const SECRETS_FILE = 'secrets.json';
 
@@ -111,8 +110,7 @@ export async function ensureSecrets(tenant: string, dir = dataDir()): Promise<Se
       kid: `demo-service-${randomUUID().slice(0, 8)}`,
     },
     viewKey: randomBytes(32).toString('base64'),
-    cursorSecret: randomBytes(32).toString('base64url'),
-  };
+    cursorSecret: randomBytes(32).toString('base64url'),  };
   await mkdir(dir, { recursive: true });
   const temp = join(dir, `${SECRETS_FILE}.${process.pid}.tmp`);
   await writeFile(temp, `${JSON.stringify(secrets, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
@@ -260,6 +258,9 @@ export function roleEnv(
         DOCEDIT_HOST_EXPORT_ORIGINS: e.s3Url,
         DOCEDIT_HOST_ELEMENT_DIR: join(REPO_DIR, 'packages', 'element', 'dist', 'lib'),
         DOCEDIT_DEMO_HOST_PORT: setting(s, 'DOCEDIT_DEMO_HOST_PORT'),
+        // Notifications go to the development mail sink (UX-098 criterion 5).
+        DOCEDIT_HOST_SMTP: `127.0.0.1:${setting(s, 'DOCEDIT_DEMO_MAIL_SMTP_PORT')}`,
+        DOCEDIT_HOST_PUBLIC_URL: e.hostUrl,
       };
     case 'worker': {
       const machine = s['DOCEDIT_PODMAN_MACHINE'];

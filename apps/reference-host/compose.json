@@ -57,6 +57,24 @@
       },
       "labels": { "org.docedit.env": "demo" }
     },
+    "mail": {
+      "x-note": "The development mail sink (UX-098 criterion 5; owner decision 131): Mailpit takes every message the host sends and shows it in a web page and an API on 127.0.0.1, and delivers nothing. The image is pinned by digest. Messages are kept in memory only, so a restart empties it.",
+      "image": "docker.io/axllent/mailpit:v1.21.8@sha256:b68fac5c01d90c31cd2dcabed60bec3ca0c9680dadac87c527c6a43c85e5b814",
+      "network_mode": "host",
+      "command": [
+        "--smtp",
+        "127.0.0.1:${DOCEDIT_DEMO_MAIL_SMTP_PORT}",
+        "--listen",
+        "127.0.0.1:${DOCEDIT_DEMO_MAIL_UI_PORT}"
+      ],
+      "healthcheck": {
+        "test": ["CMD", "/mailpit", "readyz", "--listen", "127.0.0.1:${DOCEDIT_DEMO_MAIL_UI_PORT}"],
+        "interval": "1s",
+        "timeout": "3s",
+        "retries": 60
+      },
+      "labels": { "org.docedit.env": "demo" }
+    },
     "setup": {
       "x-note": "One-shot: secrets (generated, demo-only), the bucket and its CORS rules, the database, the service role, the migrations and the tenant registration (scripts/setup.ts).",
       "x-docedit-process": true,

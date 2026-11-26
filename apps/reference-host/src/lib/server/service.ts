@@ -233,4 +233,100 @@ export class ServiceClient {
   async getExport(jobId: string): Promise<ExportJob> {
     return (await this.#call<ExportJob>('GET', `/exports/${encodeURIComponent(jobId)}`)).body;
   }
+
+  /** `GET /documents/{id}/workflow` (12 §6.1; FRW-025): the resource, or null when there is none. */
+  async getWorkflow(id: string): Promise<{ workflow: WorkflowView; etag: string } | null> {
+    try {
+      const r = await this.#call<WorkflowView>(
+        'GET',
+        `/documents/${encodeURIComponent(id)}/workflow`,
+      );
+      return { workflow: r.body, etag: r.etag ?? '' };
+    } catch (e) {
+      if (e instanceof ServiceError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  /** `PUT /documents/{id}/workflow` with `If-Match`: `"0"` creates it (12 §6.1; FRW-025). */
+  async putWorkflow(
+    id: string,
+    body: WorkflowView,
+    ifMatch: string,
+    actor?: string,
+  ): Promise<WorkflowView> {
+    return (
+      await this.#call<WorkflowView>('PUT', `/documents/${encodeURIComponent(id)}/workflow`, {
+        body,
+        headers: { 'If-Match': ifMatch },
+        ...(actor !== undefined ? { actor } : {}),
+      })
+    ).body;
+  }
+
+  /** `POST /documents/{id}/workflow/send` (12 §6.2; FRW-027): activates the first participants. */
+  async sendWorkflow(id: string, idempotencyKey: string, actor?: string): Promise<WorkflowView> {
+    return (
+      await this.#call<WorkflowView>('POST', `/documents/${encodeURIComponent(id)}/workflow/send`, {
+        headers: { 'Idempotency-Key': idempotencyKey },
+        ...(actor !== undefined ? { actor } : {}),
+      })
+    ).body;
+  }
+
+  /** `GET /documents/{id}/workflow/final`: the sealed PDF, once the workflow is finalised (12 §8.2). */
+  async getSealedPdf(id: string): Promise<Uint8Array> {
+    return this.#bytes(`/documents/${encodeURIComponent(id)}/workflow/final`);
+  }
+
+  /** `GET /documents/{id}/workflow/evidence`: the evidence bundle, as the service serialises it. */
+  async getEvidenceBundle(id: string): Promise<Uint8Array> {
+    return this.#bytes(`/documents/${encodeURIComponent(id)}/workflow/evidence`);
+  }
+
+  async #bytes(path: string): Promise<Uint8Array> {
+    let res: Response;
+    try {
+      res = await this.#fetch(`${this.#rest}${path}`, {
+        headers: { Authorization: `Bearer ${this.#apiKey}` },
+      });
+    } catch (e) {
+      throw new ServiceError(
+        0,
+        'unavailable',
+        `the document service is unreachable (${e instanceof Error ? e.name : 'error'})`,
+      );
+    }
+    const data = new Uint8Array(await res.arrayBuffer());
+    if (!res.ok) {
+      let code = 'internal';
+      try {
+        code = (JSON.parse(new TextDecoder().decode(data)) as Partial<ProblemDetails>).code ?? code;
+      } catch {
+        // Not a problem document: the status stands.
+      }
+      throw new ServiceError(res.status, code, `GET ${path}: ${res.status} ${code}`);
+    }
+    return data;
+  }
+}
+
+/** The workflow resource as the host reads and writes it (12 §6.1); the service checks the shape. */
+export interface WorkflowView {
+  id: string;
+  doc: string;
+  state: string;
+  rev: number;
+  timeZone: string;
+  participants: Array<{
+    id: string;
+    roles: string[];
+    kind: string;
+    order: number;
+    sub?: string;
+    name?: string;
+    state?: string;
+    [member: string]: unknown;
+  }>;
+  [member: string]: unknown;
 }
