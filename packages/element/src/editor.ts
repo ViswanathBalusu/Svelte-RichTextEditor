@@ -42,6 +42,7 @@ import {
   type EditorMode,
   type ExportService,
   type LeasesService,
+  type RegionSummary,
   type ResolveUsers,
   type ReviewItem,
   type ShellSettings,
@@ -765,6 +766,15 @@ export function mountEditor(options: MountOptions): MountedEditor {
               { grants: port.grants.bind(port), updateGrants: port.updateGrants.bind(port) },
               options.docId,
             ),
+          }
+        : {}),
+      // A region's state (PRM-048 criterion 4): `PUT .../state`, for people who manage. `*` because
+      // the pane shows the list it has read; the server checks the right, not a tag.
+      ...(port?.setRegionState
+        ? {
+            setRegionState: async (region: string, state: RegionSummary['state']): Promise<void> => {
+              await port.setRegionState!(options.docId, region, state, { ifMatch: '*' });
+            },
           }
         : {}),
       // Check-out (PRM-043): the leases port, when the backend announced the feature.

@@ -148,6 +148,8 @@ export interface FakeCoreOptions {
   grants?: readonly RegionGrant[] | null;
   /** Check-out of regions (PRM-043); the holder this session takes leases as. Absent: no leases port. */
   leases?: { holder: string } | null;
+  /** The core can set a region's state (PRM-048 criterion 4); each call is in `stateCalls`. */
+  regionStates?: boolean;
   fill?: FillSummary | null;
   carets?: readonly PeerCaret[];
   /** The document's base direction (`settings.dir`); absent: no `direction` view (UX-065). */
@@ -606,6 +608,8 @@ export class FakeCore implements CoreApi {
   readonly exports?: FakeExports;
   readonly grants?: FakeGrants;
   readonly leases?: FakeLeases;
+  /** The states the shell set, as `<region> <state>` (PRM-048 criterion 4). */
+  readonly stateCalls: string[] = [];
   readonly threads?: FakeThreads;
   regionLabels: Readonly<Record<string, RegionLabel>> | null = null;
   copiedFormat: string[] | null = null;
@@ -739,6 +743,18 @@ export class FakeCore implements CoreApi {
     if (options.grants !== null && options.grants !== undefined)
       Object.assign(this, { grants: new FakeGrants(options.grants) });
     if (options.leases) Object.assign(this, { leases: new FakeLeases(options.leases.holder) });
+    if (options.regionStates)
+      Object.assign(this, {
+        // The service answers, then the region list follows (a state change raises `perm.changed`).
+        setRegionState: async (region: string, state: RegionSummary['state']): Promise<void> => {
+          this.stateCalls.push(`${region} ${state}`);
+          this.regions?.set(
+            (this.regions.get() as readonly RegionSummary[]).map((r) =>
+              r.id === region ? { ...r, state } : r,
+            ),
+          );
+        },
+      });
     if (options.fill === undefined) Object.assign(this, { fill: undefined });
   }
 

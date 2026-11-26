@@ -735,6 +735,7 @@ export const EN_GB_CORE = {
   'region.editors.namesAndRoles': 'It can be edited by {names}, and by document {roles}.',
   'region.editors.roles': 'It can be edited by document {roles}.',
   'region.editors.lease': '{name} is editing it at the moment.',
+  'region.editors.leaseUntil': '{name} is editing it at the moment. The lease expires {when}.',
   'region.editors.approved': 'It is approved, so nobody can edit it.',
   'region.lock.approved': 'It is approved. An owner must change its state before it can be edited.',
   'region.role.owner': 'owners',
