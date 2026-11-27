@@ -33,6 +33,38 @@ export interface AccessibilityResult {
 /** What the run reads of the core; every member is an optional one of `CoreApi`. */
 export type CheckedCore = Pick<CoreApi, 'getContent' | 'permissions' | 'regions'>;
 
+/**
+ * The pictures without alternative text as the export reports them (EXP-113 criterion 4; 09 §13):
+ * the `image_without_alt` findings of the export's preflight, which the editor builds with the
+ * converter's own check, one per picture. The block identifiers repeat when a block holds two
+ * pictures, so `count` can be larger than `blockIds`.
+ */
+export interface ExportAltList {
+  readonly count: number;
+  readonly blockIds: readonly string[];
+}
+
+/** The code the export gives a picture without alternative text (`image_without_alt`). */
+const IMAGE_WITHOUT_ALT = 'image_without_alt';
+
+/**
+ * Asks the export service for its list of pictures without alternative text. Null when the editor
+ * has no export service or its preflight, or when the preflight fails: the checker then shows its
+ * own list only. It changes nothing.
+ */
+export async function exportAltList(core: Pick<CoreApi, 'exports'>): Promise<ExportAltList | null> {
+  const service = core.exports;
+  if (!service?.preflight) return null;
+  try {
+    const found = await service.preflight('pdf');
+    const alt = found.filter((d) => d.code === IMAGE_WITHOUT_ALT);
+    const blockIds = [...new Set(alt.flatMap((d) => (d.blockId === null ? [] : [d.blockId])))];
+    return { count: alt.length, blockIds };
+  } catch {
+    return null;
+  }
+}
+
 /** The capabilities of a scope; the body falls back to the document-level ones. */
 function capsOf(access: AccessObject | null | undefined, scope: string): readonly string[] {
   if (!access) return [];

@@ -17,8 +17,10 @@
   import { live } from '../live.ts';
   import type { CheckKind } from '../shell/accessibility-check.ts';
   import {
+    exportAltList,
     runAccessibilityCheck,
     type AccessibilityResult,
+    type ExportAltList,
     type ListedIssue,
   } from '../shell/accessibility-run.ts';
   import { browserIdle, quietScheduler } from '../shell/quiet-scheduler.ts';
@@ -67,6 +69,19 @@
     }
     scheduler.request(() => {
       result = untrack(compute);
+    });
+  });
+
+  // The export's own list of pictures without alternative text (EXP-113 criterion 4): the pane asks
+  // the export service each time the document is checked and shows the count beside its own list.
+  let exportAlt = $state.raw<ExportAltList | null>(null);
+  let askedFor = 0;
+  $effect(() => {
+    void result;
+    if (!core) return;
+    const ask = ++askedFor;
+    void exportAltList(core).then((list) => {
+      if (ask === askedFor) exportAlt = list;
     });
   });
 
@@ -184,6 +199,11 @@
         ? tr.t('checker.none')
         : tr.t('checker.count', { count: result.report.count })}
     </p>
+    {#if exportAlt && exportAlt.count > 0}
+      <p class="de-hint" data-status="export-alt" data-count={exportAlt.count}>
+        {tr.t('checker.export.alt-text', { count: exportAlt.count })}
+      </p>
+    {/if}
     {#each groups as group (group.kind)}
       <h3 class="de-checker-kind" data-kind={group.kind}>
         {kindLabel(group.kind)} ({group.items.length})
