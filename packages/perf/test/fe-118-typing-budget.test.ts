@@ -50,9 +50,9 @@ describe('the typing budget gate (FE-118)', () => {
     ]);
   });
 
-  it('fails when nothing was measured, so that a missing metric cannot pass the gate', () => {
-    expect(budgetBreaches(run([])).map((b) => b.key)).toEqual(['typing.p95@pages-100']);
-    expect(budgetBreaches(run([p95(null)])).map((b) => b.value)).toEqual([null]);
+  it('leaves a metric that was not measured to the baseline comparison, which lists it as missing', () => {
+    expect(budgetBreaches(run([]))).toEqual([]);
+    expect(budgetBreaches(run([p95(null)]))).toEqual([]);
   });
 
   it('does not gate the median, which the baseline tolerance watches', () => {

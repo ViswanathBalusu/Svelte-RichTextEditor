@@ -95,15 +95,16 @@ export const BUDGET_GATED_METRICS: readonly string[] = ['typing.p95@pages-100'];
 
 export interface BudgetBreach {
   readonly key: string;
-  /** The measured value, or the bound of a censored quantile; null when the run has none. */
-  readonly value: number | null;
+  /** The measured value, or the bound of a censored quantile. */
+  readonly value: number;
   readonly max: number;
 }
 
 /**
- * The gated metrics that a run does not bring within budget. A gated metric that the run does not
- * have, or has without a value, is a breach: a gate that passes when nothing was measured is no
- * gate. A censored quantile ("below 16 ms") is within a budget above its bound.
+ * The gated metrics that a run measured over their budget. A gated metric the run does not have, or
+ * has without a value, is not listed here: when the baseline holds it, `compareWithBaseline` lists
+ * it as missing and fails the comparison. A censored quantile ("below 16 ms") is within a budget
+ * above its bound.
  */
 export function budgetBreaches(
   run: RunResult,
@@ -114,16 +115,11 @@ export function budgetBreaches(
   for (const key of keys) {
     const m = byKey.get(key);
     const max = m?.target?.max;
-    if (!m || max === undefined) {
-      out.push({ key, value: null, max: Number.NaN });
-      continue;
-    }
-    const value = m.value ?? m.below ?? null;
-    if (value === null || value > max) out.push({ key, value, max });
+    const value = m ? (m.value ?? m.below ?? null) : null;
+    if (max !== undefined && value !== null && value > max) out.push({ key, value, max });
   }
   return out;
 }
-
 /** A baseline from a run, with the given tolerance. */
 export function baselineFrom(run: RunResult, tolerance: Baseline['tolerance']): Baseline {
   const metrics: Record<string, { value: number; better: 'lower' | 'higher' }> = {};

@@ -76,8 +76,6 @@ if (writeFrom) {
   for (const i of report.incompatible) console.log(`INCOMPATIBLE ${i}`);
   const breaches = budgetBreaches(run);
   for (const b of breaches)
-    console.log(
-      `OVER BUDGET ${b.key}: ${b.value ?? 'not measured'} against a target of at most ${b.max}`,
-    );
+    console.log(`OVER BUDGET ${b.key}: ${b.value} against a target of at most ${b.max}`);
   if (!report.ok || breaches.length > 0) process.exit(1);
 }
