@@ -201,6 +201,56 @@ describe.skipIf(!enabled)('the authority service container (BE-007)', () => {
     expect(info[0]!.Config.User).toBe('node');
   }, 600_000);
 
+  // Criterion 1 as the compose file says it: the container that a Compose provider started. Start it
+  // first (infra/tools/podman-compose/README.md), then set DOCEDIT_AUTHORITY_COMPOSE_URL to its address
+  // and DOCEDIT_AUTHORITY_COMPOSE_NAME to the name Compose gave the container.
+  const composeUrl = process.env['DOCEDIT_AUTHORITY_COMPOSE_URL'];
+  const composeName = process.env['DOCEDIT_AUTHORITY_COMPOSE_NAME'];
+  it.skipIf(!composeUrl || !composeName)(
+    'serves the interface and reports ready when `podman compose` started it from compose.json (criterion 1)',
+    async () => {
+      const url = composeUrl!;
+      await ready(url);
+      const built = await buildLog(['a', 'b', 'c']);
+      const req = await openRequest(built, 3);
+      const opened = await fetch(`${url}/v1/authority/documents/${built.doc}/open`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      expect(opened.status).toBe(201);
+      const content = await fetch(`${url}/v1/authority/states/${req.stateId}/content`);
+      expect(content.status).toBe(200);
+      expect(await content.text()).toBe(canonicalText(envelopeOf(built.docs[3]!)));
+      const caps = (await (await fetch(`${url}/v1/authority/capabilities`)).json()) as {
+        calls: string[];
+      };
+      expect(caps.calls).toEqual([
+        'open',
+        'materialise',
+        'applyCommit',
+        'restoreSteps',
+        'diff',
+        'attribution',
+        'evaluateRules',
+        'mapRanges',
+      ]);
+      // Compose, not `podman run`, made the container: it carries the project's label, and the
+      // options of the file are in force, with the file's health check reporting healthy.
+      const info = JSON.parse((await run(cli, ['inspect', composeName!])).stdout) as Array<{
+        HostConfig: { ReadonlyRootfs: boolean; NetworkMode: string };
+        Config: { User: string; Labels: Record<string, string> };
+        State: { Health?: { Status: string } };
+      }>;
+      expect(info[0]!.Config.Labels['com.docker.compose.project']).toMatch(/^docedit-authority/);
+      expect(info[0]!.HostConfig.ReadonlyRootfs).toBe(true);
+      expect(info[0]!.HostConfig.NetworkMode).toBe('host');
+      expect(info[0]!.Config.User).toBe('node');
+      expect(info[0]!.State.Health?.Status).toBe('healthy');
+    },
+    120_000,
+  );
+
   it('gives the same applyCommit answer after it was killed, started again and opened again (criterion 2)', async () => {
     await build();
     const name = `${NAME}-kill`;
