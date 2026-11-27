@@ -251,6 +251,22 @@ describe('the operations of `structure` and `manage`, listed once (PRM-001, crit
       () => [new AttrStep(1, 'trackChanges', 'everyone')],
       doc,
     ]);
+    // A new style needs `defs.add` (ADR 0424): without it, only `structure` adds one.
+    cases.push([
+      'defs.add',
+      MORE.rita,
+      (d) => {
+        const at = posOf(d, 'LegalBody');
+        const style = schema.nodes['style_def']!.create({
+          id: 'Fresh',
+          kind: 'paragraph',
+          name: 'Fresh',
+          basedOn: 'Normal',
+        });
+        return [new ReplaceStep(at, at, new Slice(Fragment.from(style), 0, 0))];
+      },
+      doc,
+    ]);
     const enforced = new Set<string>();
     for (const [op, user, make, base] of cases) {
       const v = verdictOf(user, base, make);

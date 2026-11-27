@@ -3,13 +3,18 @@
 # crates are mounted when it runs (`packages/layout-kernel/scripts/build.ts`).
 #
 # The base image is Rust 1.89.0 on Debian 12, pinned by digest. wasm-bindgen-cli and binaryen come
-# from their release archives, checked against the SHA-256 that the projects publish.
+# from their release archives, checked against the SHA-256 that the projects publish. cargo-deny
+# (WASM-013, owner decision 281) is built from its crate archive on crates.io, checked against the
+# SHA-256 that the registry publishes for that version (`curl https://crates.io/api/v1/crates/cargo-deny`,
+# field `checksum`), and installed with the lock file of the crate (`--locked`).
 FROM docker.io/library/rust:1.89.0-slim-bookworm@sha256:294917190b5a3fed18d3303213943f40ec9b644b3cd6e5cdc8cd029334a770b3
 
 ARG WASM_BINDGEN_VERSION=0.2.130
 ARG WASM_BINDGEN_SHA256=9687f3bb551b9f66f37ed32a40d7913a00f7962db653054e56857bc306c3227f
 ARG BINARYEN_VERSION=version_133
 ARG BINARYEN_SHA256=2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489
+ARG CARGO_DENY_VERSION=0.21.0
+ARG CARGO_DENY_SHA256=1f157ad008ab03dc465a9c255fa4caff59f3d7f86f005cb34f401142d1b269b5
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl \
@@ -29,6 +34,9 @@ RUN set -eu; cd /tmp; \
     cp -r "binaryen-${BINARYEN_VERSION}/lib" /usr/local/lib/binaryen 2>/dev/null || true; \
     rm -rf /tmp/*; \
     wasm-bindgen --version; wasm-opt --version
+
+# `git` is not needed: cargo-deny fetches the RustSec advisory database itself, on each run.
+RUN set -eu; mkdir /tmp/deny; cd /tmp/deny;     curl -fsSL -o deny.crate "https://static.crates.io/crates/cargo-deny/cargo-deny-${CARGO_DENY_VERSION}.crate";     echo "${CARGO_DENY_SHA256}  deny.crate" | sha256sum -c -;     tar -xzf deny.crate;     cargo install --locked --path "cargo-deny-${CARGO_DENY_VERSION}" --root /usr/local;     cd /; rm -rf /tmp/deny /usr/local/cargo/registry /usr/local/cargo/git;     cargo deny --version
 
 WORKDIR /work/crates
 ENTRYPOINT ["/bin/sh", "/work/crates/build.sh"]

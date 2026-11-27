@@ -33,6 +33,11 @@ const SCRIPTS: Record<string, Composition[]> = {
     { steps: ['ㅎ', '하', '한'], commit: '한' },
     { steps: ['ㄱ', '구', '국'], commit: '국' },
   ],
+  // FE-111 criterion 3: the scripts of the right-to-left and complex-script corpus (input-method-matrix.ts).
+  arabic: [{ steps: ['m', 'مر', 'مرح', 'مرحب', 'مرحبا'], commit: 'مرحبا' }],
+  hebrew: [{ steps: ['sh', 'של', 'שלו', 'שלום'], commit: 'שלום' }],
+  devanagari: [{ steps: ['n', 'न', 'नम', 'नमस्', 'नमस्ते'], commit: 'नमस्ते' }],
+  thai: [{ steps: ['ส', 'สว', 'สวั', 'สวัส', 'สวัสด', 'สวัสดี'], commit: 'สวัสดี' }],
 };
 
 type Editor = 'main' | 'footnote' | 'header';

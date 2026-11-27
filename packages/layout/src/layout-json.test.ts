@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { validateLayoutJson } from './layout-json.ts';
+import { adoptablePins } from './reconcile.ts';
 
 function example(): Record<string, unknown> {
   return {
@@ -143,5 +144,74 @@ describe('validateLayoutJson (FE-100 criterion 6)', () => {
     const value = { ...example(), seq: 'x', granularity: 'word', pages: 'many' };
     const problems = problemsOf(value);
     expect(problems.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('validateLayoutJson reads the file the export worker writes (FE-100 criterion 5)', () => {
+  /** The shape of `LAYOUT_SCHEMA` in services/export-worker/src/layout.ts: every optional key set. */
+  function workerFile(): Record<string, unknown> {
+    return {
+      seq: 7,
+      classVersion: '1.3.0',
+      granularity: 'line',
+      unit: 'twip',
+      pages: [
+        {
+          n: 1,
+          setup: null,
+          starts: { blockId: 'p0000000000000001', offset: 0, y: 1440 },
+          opensWith: 'text',
+        },
+        { n: 2, setup: 'ps1', starts: null, opensWith: 'float' },
+      ],
+      blocks: {
+        p0000000000000001: {
+          page: 1,
+          y: 1440,
+          lineStarts: [0, 40, 81],
+          linePages: [1, 1, 2],
+          columnBreaks: [2],
+        },
+        t0000000000000002: { page: 2, y: 200, rowPages: [2, null, 3] },
+        i0000000000000003: { page: 3, y: 0, granularity: 'block' },
+      },
+      fields: {},
+    };
+  }
+
+  it('accepts the unit, the y of a start, a page with no setup or start, and the block keys', () => {
+    const check = validateLayoutJson(workerFile());
+    if (!check.ok) throw new Error(check.problems.join('; '));
+    expect(check.layout.unit).toBe('twip');
+    expect(check.layout.pages[0]?.setup).toBeNull();
+    expect(check.layout.pages[1]?.starts).toBeNull();
+    expect(check.layout.blocks['p0000000000000001']?.linePages).toEqual([1, 1, 2]);
+    expect(check.layout.blocks['t0000000000000002']?.rowPages).toEqual([2, null, 3]);
+    expect(check.layout.blocks['t0000000000000002']?.lineStarts).toEqual([]);
+  });
+
+  it('still refuses a unit other than twip, a null seq and a misshapen block key', () => {
+    expect(problemsOf({ ...workerFile(), unit: 'pt' })).toEqual([
+      'unit: must be "twip" when present',
+    ]);
+    expect(problemsOf({ ...workerFile(), seq: null })).toEqual([
+      'seq: must be a non-negative integer',
+    ]);
+    const value = workerFile();
+    (value['blocks'] as Record<string, Record<string, unknown>>)['p0000000000000001']![
+      'linePages'
+    ] = [1];
+    expect(problemsOf(value)).toEqual([
+      'blocks.p0000000000000001.linePages: must have one page for each line start',
+    ]);
+  });
+
+  it('adopts no page start from a page without one, and no line starts from a block-level block', () => {
+    const check = validateLayoutJson(workerFile());
+    if (!check.ok) throw new Error(check.problems.join('; '));
+    const pins = adoptablePins(check.layout, new Set(), 'line');
+    expect(pins.pages).toEqual([{ page: 1, blockId: 'p0000000000000001', offset: 0 }]);
+    expect(pins.keptOwnPages).toEqual([2]);
+    expect(pins.lines.map((l) => l.offset)).toEqual([0, 40, 81]);
   });
 });

@@ -7,6 +7,7 @@ import {
   INPUT_METHOD_MATRIX,
   MATRIX_EDITORS,
   MATRIX_REMOTE_MODES,
+  SCRIPT_CORPUS,
   driverFromFacts,
   matrixRuns,
 } from './input-method-matrix.ts';
@@ -80,5 +81,45 @@ describe('the matrix runs (FE-123 criterion 2)', () => {
     expect(new Set(MATRIX_REMOTE_MODES)).toEqual(new Set(['none', 'during-composition']));
     const keys = new Set(runs.map((r) => `${r.case.id}|${r.editor}|${r.remote}`));
     expect(keys.size).toBe(runs.length);
+  });
+});
+
+describe('the corpus of right-to-left and complex scripts (FE-111 criterion 3)', () => {
+  const LANGUAGES = ['ar', 'he', 'hi', 'th'] as const;
+
+  it('has a composition case and a text for Arabic, Hebrew, Devanagari and Thai', () => {
+    for (const language of LANGUAGES) {
+      expect(
+        INPUT_METHOD_MATRIX.some((c) => c.kind === 'composition' && c.language === language),
+        `composition in ${language}`,
+      ).toBe(true);
+      expect(
+        SCRIPT_CORPUS.some((t) => t.language === language),
+        `text in ${language}`,
+      ).toBe(true);
+    }
+  });
+
+  it('writes each case in its script: the steps after the first Latin letters and the commit', () => {
+    const ranges = {
+      ar: /^\p{Script=Arabic}+$/u,
+      he: /^\p{Script=Hebrew}+$/u,
+      hi: /^\p{Script=Devanagari}+$/u,
+      th: /^\p{Script=Thai}+$/u,
+    } as const;
+    for (const language of LANGUAGES) {
+      const c = INPUT_METHOD_MATRIX.find(
+        (m) => m.kind === 'composition' && m.language === language,
+      )!;
+      expect(c.commit, c.id).toMatch(ranges[language]);
+      expect(c.steps.at(-1), c.id).toBe(c.commit);
+    }
+  });
+
+  it('runs in every editor, with and without remote commits, like the other cases', () => {
+    const keys = matrixRuns()
+      .filter((r) => (LANGUAGES as readonly string[]).includes(r.case.language))
+      .map((r) => `${r.case.language}|${r.editor}|${r.remote}`);
+    expect(new Set(keys).size).toBe(LANGUAGES.length * MATRIX_EDITORS.length * 2);
   });
 });

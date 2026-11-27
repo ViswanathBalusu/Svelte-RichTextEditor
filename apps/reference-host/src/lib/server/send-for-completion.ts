@@ -121,6 +121,11 @@ export class WorkflowStore {
     await this.save();
   }
 
+  /** Forgets a record, for a send that the service refused. */
+  async remove(doc: string): Promise<void> {
+    if (this.#records.delete(doc)) await this.save();
+  }
+
   /** Writes after a change made in place to a record that `get` returned. */
   async save(): Promise<void> {
     await mkdir(join(this.#path, '..'), { recursive: true });
@@ -233,16 +238,28 @@ export async function sendForCompletion(
     existing ? existing.etag : '"0"',
     input.owner,
   );
-  const sent = await h.service.sendWorkflow(input.doc, `refhost-send-${written.id}`, input.owner);
+  // The record is kept before the send: the service raises `participant_activated` while it
+  // handles the send, and its delivery can reach the host's receiver before this call returns. An
+  // event for a document without a record is ignored, so the invitation would be lost (UX-105).
   const record: WorkflowRecord = {
     doc: input.doc,
-    workflow: sent.id,
+    workflow: written.id,
     owner: input.owner,
     sentAt: new Date(clockOf(h)).toISOString(),
     participants: bindings,
     state: 'sent',
   };
   await store.put(record);
+  try {
+    const sent = await h.service.sendWorkflow(input.doc, `refhost-send-${written.id}`, input.owner);
+    if (sent.id !== record.workflow) {
+      record.workflow = sent.id;
+      await store.save();
+    }
+  } catch (e) {
+    await store.remove(input.doc);
+    throw e;
+  }
   return record;
 }
 

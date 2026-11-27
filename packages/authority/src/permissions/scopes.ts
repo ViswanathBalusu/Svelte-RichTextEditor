@@ -48,6 +48,16 @@ export interface ScopeDiff {
   sectionBreaksChanged: boolean;
   /** Definition scopes that changed, with the node type and identifier. */
   definitionsChanged: Array<{ scope: string; type: string; id: string | null }>;
+  /** The definitions the commit adds: scopes present afterwards and absent before (ADR 0424). */
+  definitionsAdded: Array<{ scope: string; type: string; id: string | null }>;
+  /** The scopes of definitions present before and absent afterwards. */
+  definitionsRemoved: string[];
+  /**
+   * Whether `doc` is in `changed` only because definitions were inserted into the definitions node
+   * (their order changes with them). False when `doc` is not changed, or changed for any other
+   * reason, including a removal or a move of a definition (ADR 0424; PRM-069).
+   */
+  docOnlyByAddedDefinitions: boolean;
   /** Fields present on both sides whose value changed. */
   fields: FieldChange[];
   /**
@@ -198,6 +208,9 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
     regionPolicyChanged: [],
     sectionBreaksChanged: false,
     definitionsChanged: [],
+    definitionsAdded: [],
+    definitionsRemoved: [],
+    docOnlyByAddedDefinitions: false,
     fields: [],
     fieldNodes: [],
     visited: 0,
@@ -218,16 +231,23 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
     d.forEach((c) => out.push(defKey(c).scope));
     return out;
   };
-  if (
+  const docOther =
     !deepEqual(before.attrs, after.attrs) ||
     !deepEqual(storyIds(b.stories), storyIds(a.stories)) ||
     !deepEqual(b.body.attrs, a.body.attrs) ||
     (b.defs !== a.defs &&
-      (!deepEqual(b.defs.attrs, a.defs.attrs) ||
-        !sameMarks(b.defs.marks, a.defs.marks) ||
-        !deepEqual(defOrder(b.defs), defOrder(a.defs))))
-  ) {
-    changed.add('doc');
+      (!deepEqual(b.defs.attrs, a.defs.attrs) || !sameMarks(b.defs.marks, a.defs.marks)));
+  const orderBefore = b.defs !== a.defs ? defOrder(b.defs) : [];
+  const orderAfter = b.defs !== a.defs ? defOrder(a.defs) : [];
+  const orderChanged = !deepEqual(orderBefore, orderAfter);
+  if (docOther || orderChanged) changed.add('doc');
+  if (!docOther && orderChanged) {
+    // Insertions explain the new order when taking them out gives the old order back.
+    const had = new Set(orderBefore);
+    diff.docOnlyByAddedDefinitions = deepEqual(
+      orderBefore,
+      orderAfter.filter((k) => had.has(k)),
+    );
   }
 
   // Definitions, one scope each.
@@ -242,7 +262,10 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
       if (x && y && (x === y || eqIgnoringFieldValues(x, y, counter))) continue;
       changed.add(key);
       const n = (y ?? x)!;
-      diff.definitionsChanged.push({ scope: key, type: n.type.name, id: defKey(n).id });
+      const entry = { scope: key, type: n.type.name, id: defKey(n).id };
+      diff.definitionsChanged.push(entry);
+      if (!x) diff.definitionsAdded.push(entry);
+      else if (!y) diff.definitionsRemoved.push(key);
     }
   }
 

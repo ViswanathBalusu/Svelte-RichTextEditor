@@ -121,13 +121,13 @@
       "labels": { "org.docedit.env": "demo" }
     },
     "seed": {
-      "x-note": "One-shot: the demo documents, created through the service with the host's externalId, their region grants, and the host's catalogue (scripts/seed.ts).",
+      "x-note": "One-shot: the demo documents, created through the service with the host's externalId, their region grants, and the host's catalogue, and the host's webhook subscription (scripts/seed.ts). The seed acts as the host, so it mounts the host's role volume writable: the signing secret of the subscription is issued by the service when it is registered, and the seed keeps it there, in webhook-secret.json, for the host to read at start (UX-105 criterion 1).",
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
       "env_file": ["${DOCEDIT_DEMO_ENV_FILE:-./stack/.env.example}"],
       "network_mode": "host",
       "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
-      "volumes": ["stack-data:/stack", "secrets-host:/secrets/role-host:ro"],
+      "volumes": ["stack-data:/stack", "secrets-host:/secrets/role-host"],
       "command": ["node", "apps/reference-host/scripts/seed.ts"],
       "depends_on": {
         "document-service": { "condition": "service_healthy" }
