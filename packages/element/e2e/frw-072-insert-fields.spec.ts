@@ -9,7 +9,7 @@
  * `pnpm exec playwright test -c packages/element/playwright.config.ts e2e/frw-072-insert-fields.spec.ts`.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { openEmbed } from './embed-helpers.ts';
+import { openEmbed, selectionSynced } from './embed-helpers.ts';
 import { confirmed, editorOf, mountFields, nodes } from './frw-helpers.ts';
 
 const EDITOR = editorOf('one');
@@ -42,6 +42,7 @@ test('each kind of the palette is inserted at the caret with a fresh identifier 
   const before = await formFields(page);
   expect(before).toHaveLength(4);
   await page.locator(`${EDITOR} .de-editing-surface p`, { hasText: 'Last paragraph.' }).click();
+  await selectionSynced(page, 'one');
 
   for (const [label] of KINDS) {
     await search(page, label);
@@ -76,6 +77,7 @@ test('at 2,000 fields the insert commands are disabled with the stated reason', 
   await mountFields(page, { name: 'one', sub: 'bob', role: 'editor', limit: true });
   expect(await formFields(page)).toHaveLength(1999);
   await page.locator(`${EDITOR} .de-editing-surface p`, { hasText: 'Last paragraph.' }).click();
+  await selectionSynced(page, 'one');
 
   // One short of the limit: the command is offered and the 2,000th field is stored.
   const offered = await search(page, 'Text field');

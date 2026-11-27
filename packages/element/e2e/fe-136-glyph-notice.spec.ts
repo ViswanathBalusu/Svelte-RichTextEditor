@@ -9,7 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { type Page, expect, test } from '@playwright/test';
-import { openEmbed } from './embed-helpers.ts';
+import { openEmbed, selectionSynced } from './embed-helpers.ts';
 
 const NAME = 'fe-136-glyph';
 const HOST = `doc-editor[data-test="${NAME}"]`;
@@ -122,6 +122,8 @@ async function mount(page: Page): Promise<void> {
 async function insertSymbol(page: Page, paragraph: number, symbol: string): Promise<boolean> {
   await page.locator(`${HOST} .de-editing-surface p`).nth(paragraph).click();
   await page.keyboard.press('End');
+  // The core reads the click and the key on selectionchange; the symbol goes in at its caret.
+  await selectionSynced(page, NAME);
   return page.evaluate(
     ({ host, symbol }) => {
       type Core = { exec(name: string, args: unknown): boolean };

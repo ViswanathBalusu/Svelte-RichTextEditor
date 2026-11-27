@@ -15,7 +15,7 @@
  * confirmed content the element returns (`getContent`) holds no `data:` string.
  */
 import { type Page, expect, test } from '@playwright/test';
-import { mountEditor, openEmbed } from './embed-helpers.ts';
+import { mountEditor, openEmbed, selectionSynced } from './embed-helpers.ts';
 
 /** A 1x1 PNG, and an SVG with a script, both as data URLs. */
 const PNG_DATA_URL =
@@ -147,6 +147,7 @@ test.describe('SEC-006 criterion 3: pasted data URL images', () => {
     await surface.locator('p').last().click();
     await page.keyboard.press('Home');
     await page.keyboard.press('Shift+End');
+    await selectionSynced(page, name);
     // Capture the copy the component makes, for a fragment of the right shape to start from.
     await page.evaluate(() => {
       document.addEventListener(
