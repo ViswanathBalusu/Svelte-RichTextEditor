@@ -2501,6 +2501,8 @@ As an integrating developer, I want one call that rebases, applies, checks invar
 
 **Notes (lane w5, 2026-11-26, second run):** Nothing new is ticked; status partial (criteria 1, 2 and 4 ticked, 3 and 5 open). Criterion 3 needs an adapter that runs the S3 simulation's `Room` effects (`open`, `submit`, `writeCompleted`, `close`, `permissionsChanged` in `packages/authority/test/harness/sim.ts`) as calls to the service. The service keeps no room lifecycle for those effects, so the adapter is a design task and was not built in this run. Criterion 5 still needs the reference machine (ADR 0037).
 
+**Notes (lane w5, 2026-11-27, third run):** Nothing new is ticked; status partial (criteria 1, 2 and 4 ticked, 3 and 5 open). Decision 225 (docs/owner-decisions-2026-11-26.md) registers the reference laptop as a dedicated self-hosted runner and names this story, but that runner does not exist on this machine, so criterion 5 waits for a measurement on it; the figures of the second run above are not the reference measurement. Criterion 3 was re-checked against the S3 harness and stays open: `Simulation` (packages/authority/test/harness/sim.ts) holds a concrete `Room` and uses its resume, acknowledgement order, pending-write count, snapshots and failover, none of which `applyCommit` offers (it rebases, applies and answers per call). A faithful adapter would need a room lifecycle in the service, which is a design choice for the service owner and not a test helper, so none was built; the differential property in Evidence stays the nearest proof, not the S3 suite.
+
 ### PRO-105 Map ranges through commits in the authority service
 
 | Type | Phase | Size | Priority | Persona |
