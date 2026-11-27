@@ -252,8 +252,26 @@ interface Payload {
   suggestionAccess: SuggestionAccess | null;
   /** The comment threads at the exported `seq` (EXP-084), written by the control plane; or none. */
   commentThreads: CommentThread[];
+  /** The server time of the commit that introduced each suggestion, by identifier (EXP-093). */
+  suggestionDates: Record<string, string>;
   /** The ready assets of the document that the exported content names, by identifier (EXP-087). */
   assets: Record<string, { sha256: string; mediaType: string }>;
+}
+
+/** The suggestion dates of a payload, or `invalid` when they are not the shape the control plane writes. */
+function readSuggestionDates(v: unknown): Payload['suggestionDates'] | 'invalid' {
+  if (v === undefined || v === null) return {};
+  if (typeof v !== 'object' || Array.isArray(v)) return 'invalid';
+  const out: Payload['suggestionDates'] = Object.create(null) as Payload['suggestionDates'];
+  const entries = Object.entries(v);
+  if (entries.length > 5000) return 'invalid';
+  for (const [id, t] of entries) {
+    // Canonical timestamps only (`formatTimestamp` of the model): a date is never free text.
+    if (id.length > 64 || typeof t !== 'string' || !/^\d{4}-\d\d-\d\dT[\d:.]+Z$/.test(t))
+      return 'invalid';
+    out[id] = t;
+  }
+  return out;
 }
 
 /** The picture types an HTML page shows, and the file extension each gets in the archive. */
@@ -400,6 +418,12 @@ function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
       'internal',
       'the comment threads of the job are not the shape the control plane writes',
     );
+  const suggestionDates = readSuggestionDates(p['suggestionDates']);
+  if (suggestionDates === 'invalid')
+    throw new JobFailure(
+      'internal',
+      'the suggestion dates of the job are not the shape the control plane writes',
+    );
   const assets = readAssets(p['assets']);
   if (assets === 'invalid')
     throw new JobFailure(
@@ -411,6 +435,7 @@ function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
     certificate,
     suggestionAccess,
     commentThreads,
+    suggestionDates,
     assets,
     doc: p['doc'],
     target: p['target'],
@@ -790,6 +815,8 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
           { get: (id) => pictures.get(id) },
           {
             suggestions: 'markup',
+            // The commit time of each suggestion, from the control plane (EXP-093 criterion 2).
+            suggestionDates: payload.suggestionDates,
             instant: new Date(job.createdAt).toISOString(),
             timeZone: docxPlan.plan.timeZone,
             ...(docxContent.title !== null ? { title: docxContent.title } : {}),

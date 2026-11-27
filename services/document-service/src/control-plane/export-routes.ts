@@ -7,6 +7,7 @@ import type { CreateExportRequest, ExportJob } from '@docedit/protocol';
 import { objectKeys } from '../objects/store.ts';
 import type { Access } from '@docedit/authority';
 import { hasSuggestions, suggestionOwners } from './content.ts';
+import { suggestionDatesAt } from './export-suggestion-dates.ts';
 import { commentThreadsAt } from './export-comments.ts';
 import {
   EXPORT_KIND,
@@ -203,6 +204,13 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       options['comments'] === 'margin' && (body.target === 'pdf' || body.target === 'tex')
         ? await commentThreadsAt(d, { ref, seq, doc: content.doc, view })
         : null;
+    // A `docx` export with tracked changes dates each suggestion by the server time of the commit
+    // that introduced it (EXP-093 criterion 2). The times are looked up here, from the suggestion
+    // index, so the writer reads no client value; they are part of the request key.
+    const suggestionDates =
+      body.target === 'docx' && options['suggestions'] === 'markup'
+        ? await suggestionDatesAt(d, ref, projectContent(view, content.doc))
+        : null;
     // The pictures of an `html` export travel with the page (EXP-087 criterion 6): the ready assets
     // of this document that the readable content names, by identifier, with their hash and type.
     // The worker reads the bytes by hash; an asset of another document is never named.
@@ -224,6 +232,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       classification: record.label ?? null,
       suggestionAccess,
       commentThreads,
+      suggestionDates,
       assets,
     });
     const now = d.now();
@@ -240,6 +249,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       classVersion: policy.classVersion,
       ...(suggestionAccess ? { suggestionAccess } : {}),
       ...(commentThreads ? { commentThreads } : {}),
+      ...(suggestionDates && Object.keys(suggestionDates).length > 0 ? { suggestionDates } : {}),
       ...(assets && Object.keys(assets).length > 0 ? { assets } : {}),
       ...exportView(view),
     };
