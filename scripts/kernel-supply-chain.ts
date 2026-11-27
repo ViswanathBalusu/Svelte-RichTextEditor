@@ -158,3 +158,119 @@ export function parseCargoTree(output: string): KernelCrate[] {
     a.name === b.name ? a.version.localeCompare(b.version) : a.name.localeCompare(b.name),
   );
 }
+
+export interface AdvisoryException {
+  /** The advisory, as RustSec names it: `RUSTSEC-YYYY-NNNN`. */
+  id: string;
+  /** The crate and version range the advisory is about. */
+  crate: string;
+  /** Why the advisory does not apply, or why it is accepted for now. */
+  reason: string;
+  /** The decision record, with its date. */
+  decision: string;
+  /** YYYY-MM-DD; after it the gate fails again. */
+  expires: string;
+}
+
+/** Text between `key = [` and the matching `]` of one `[table]` section of a TOML file. */
+function tomlSection(text: string, table: string): string {
+  const header = new RegExp(String.raw`^\[${table}\]\s*$`, 'm').exec(text);
+  if (!header) return '';
+  const rest = text.slice(header.index + header[0].length);
+  const next = /^\[[^\]]+\]\s*$/m.exec(rest);
+  return next ? rest.slice(0, next.index) : rest;
+}
+
+/** The TOML text with its comments removed (a `#` outside a string; strings here hold none). */
+const withoutComments = (text: string): string =>
+  text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s*#.*$/, ''))
+    .join('\n');
+
+/** The array after `key =` in a section, as its text, or null when the key is absent. */
+function tomlArray(section: string, key: string): string | null {
+  const m = new RegExp(String.raw`^${key}\s*=\s*\[`, 'm').exec(section);
+  if (!m) return null;
+  let depth = 0;
+  const start = m.index + m[0].length - 1;
+  for (let i = start; i < section.length; i++) {
+    if (section[i] === '[') depth++;
+    else if (section[i] === ']' && --depth === 0) return section.slice(start + 1, i);
+  }
+  return null;
+}
+
+/** The licences `crates/deny.toml` allows. */
+export function denyAllowedLicences(denyText: string): string[] {
+  const body = tomlArray(tomlSection(withoutComments(denyText), 'licenses'), 'allow') ?? '';
+  return [...body.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+}
+
+/** The advisories `crates/deny.toml` ignores. */
+export function denyIgnoredAdvisories(denyText: string): string[] {
+  const body = tomlArray(tomlSection(withoutComments(denyText), 'advisories'), 'ignore') ?? '';
+  return [...body.matchAll(/RUSTSEC-\d{4}-\d{4}/g)].map((m) => m[0]);
+}
+
+/**
+ * What is wrong with the cargo-deny configuration (WASM-013 criterion 2): a missing check, a licence
+ * the repository's policy does not allow, an advisory ignored with no unexpired record, a record for
+ * an advisory that is not ignored, or a source other than crates.io.
+ */
+export function denyConfigProblems(
+  denyText: string,
+  policyAllow: readonly string[],
+  exceptions: readonly AdvisoryException[],
+  today: string,
+): string[] {
+  const problems: string[] = [];
+  const plain = withoutComments(denyText);
+  const advisories = tomlSection(plain, 'advisories');
+  const sources = tomlSection(plain, 'sources');
+  if (!/^yanked\s*=\s*"deny"/m.test(advisories))
+    problems.push('deny.toml: [advisories] yanked must be "deny"');
+  if (/^(vulnerability|notice)\s*=\s*"(warn|allow)"/m.test(advisories))
+    problems.push('deny.toml: a vulnerability must fail, not warn');
+  if (!/^unknown-registry\s*=\s*"deny"/m.test(sources))
+    problems.push('deny.toml: [sources] unknown-registry must be "deny"');
+  if (!/^unknown-git\s*=\s*"deny"/m.test(sources))
+    problems.push('deny.toml: [sources] unknown-git must be "deny"');
+  const registries = [...(tomlArray(sources, 'allow-registry') ?? '').matchAll(/"([^"]+)"/g)].map(
+    (m) => m[1]!,
+  );
+  if (registries.some((r) => r !== 'https://github.com/rust-lang/crates.io-index'))
+    problems.push('deny.toml: crates.io is the only registry that may be allowed');
+  if ((tomlArray(sources, 'allow-git') ?? '').trim() !== '')
+    problems.push('deny.toml: no git source may be allowed');
+
+  const allowed = denyAllowedLicences(denyText);
+  if (allowed.length === 0) problems.push('deny.toml: [licenses] allow is empty');
+  for (const licence of allowed)
+    if (!policyAllow.includes(licence))
+      problems.push(`deny.toml allows ${licence}, which licences/policy.json does not`);
+
+  const ignored = denyIgnoredAdvisories(denyText);
+  for (const id of ignored) {
+    const record = exceptions.find((e) => e.id === id);
+    if (!record) {
+      problems.push(
+        `${id} is ignored in deny.toml and has no record in licences/cargo-advisory-exceptions.json`,
+      );
+      continue;
+    }
+    if (!record.crate || !record.reason || !record.decision)
+      problems.push(`${id}: the exception needs crate, reason and decision`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(record.expires ?? '')) {
+      problems.push(`${id}: the exception needs an expiry date`);
+    } else if (record.expires < today) {
+      problems.push(`${id}: the exception expired on ${record.expires}`);
+    }
+  }
+  for (const record of exceptions)
+    if (!ignored.includes(record.id))
+      problems.push(
+        `${record.id} has a record but deny.toml does not ignore it (remove the record)`,
+      );
+  return problems;
+}

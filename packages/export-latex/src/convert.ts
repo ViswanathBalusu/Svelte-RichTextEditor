@@ -50,6 +50,7 @@ import {
 } from './emit.ts';
 import { ALLOW_LIST } from './math/allow-list.ts';
 import { mergeRanges, type CodeRange } from './fonts/coverage.ts';
+import { hasComplexScript } from './fonts/scripts.ts';
 import { LANGUAGES } from './languages.ts';
 import { pageSetups, setupIndex, setupTex, storiesTex } from './page.ts';
 import { preflight } from './preflight.ts';
@@ -57,7 +58,7 @@ import { serverFonts } from './server-fonts.ts';
 import { styleMacro, substituteKey } from './props.ts';
 
 /** The house class version (EXP-015): raised with every change to docedit.cls or docedit.lua. */
-export const CLASS_VERSION = '0.2.21';
+export const CLASS_VERSION = '0.2.22';
 
 /** A TeX Live image digest (EXP-073): `sha256:` and 64 lowercase hex digits. */
 export const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
@@ -178,7 +179,8 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
   const o = {
     tagging: options.tagging ?? 'on',
     pdfStandard: options.pdfStandard ?? 'ua-2+a-4f',
-    renderer: options.renderer ?? 'node',
+    // A script that needs shaping (Arabic, the Indic scripts, Thai ...) is set by HarfBuzz (EXP-037).
+    renderer: options.renderer ?? (hasComplexScript(envelope.doc) ? 'harf' : 'node'),
     layout: options.layout ?? 'line',
     profile: options.profile ?? 'final',
     fields: options.fields ?? 'flatten',
@@ -255,6 +257,11 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
     styleLines: [],
     tabLists: new Map(),
     borderLists: new Map(),
+    scripts: {
+      faces: (options.fonts.fallback ?? []).filter((f) => f.coverage !== undefined),
+      used: new Map(),
+    },
+    bidi: { used: false },
     styleRefs: new Map(),
     seqCursor: new Map(),
     assetFiles: new Map(),
@@ -446,7 +453,8 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
   );
   line(ctx, t('\\input{styles.tex}'));
   const hyphenation = settings['hyphenation'] === true;
-  if (hyphenation || ctx.languages.size > 0) {
+  if (hyphenation || ctx.languages.size > 0 || ctx.bidi.used) {
+    if (ctx.bidi.used) line(ctx, t('\\DEbidi'));
     line(ctx, tex`\DEbabel{${lang?.name ?? t('english')}}{${lang?.ini ?? t('en')}}`);
     for (const [tag, k] of ctx.languages) {
       const l = LANGUAGES[tag]!;
@@ -485,6 +493,9 @@ export async function convert(input: CdmEnvelope, requested: ConvertOptions): Pr
   ];
   for (const face of options.fonts.fallback ?? [options.fonts.math])
     styleHead.push(tex`\DEfallback{${fontFile(face.file)}}`);
+  // The faces that set runs of a script that needs shaping (EXP-037), numbered as the runs use them.
+  for (const [file, { k, script }] of ctx.scripts.used)
+    styleHead.push(tex`\DEscrfont{${int(k)}}{${fontFile(file)}}{${t(script)}}`);
   options.fonts.families.forEach((f, i) =>
     styleHead.push(
       tex`\DEdeffamily{${int(i + 1)}}{${int(f.lineHeight)}}{${fontFile(f.regular.file)}}{${fontFile(f.bold.file)}}{${fontFile(f.italic.file)}}{${fontFile(f.boldItalic.file)}}`,

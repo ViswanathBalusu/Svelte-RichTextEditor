@@ -3,8 +3,10 @@
 # machine that has the pinned toolchain (crates/rust-toolchain.toml), wasm-bindgen-cli 0.2.130 and
 # wasm-opt (binaryen version_133). `packages/layout-kernel/scripts/build.ts` calls it.
 #
-#   build.sh test          native tests, formatting, clippy, and the check for system libraries
-#   build.sh build OUTDIR  wasm32-unknown-unknown, wasm-bindgen, wasm-opt; writes the package files
+#   build.sh test          native tests, formatting, clippy, the check for system libraries, and
+#                          cargo-deny (advisories, licences, sources; needs the network)
+#   build.sh build OUTDIR  cargo-deny, then wasm32-unknown-unknown, wasm-bindgen, wasm-opt; writes
+#                          the package files
 #   build.sh build-sea OUTDIR  the same for the module of Thai, Lao, Khmer and Burmese (WASM-016)
 #
 # Two builds of one commit give byte-identical files: the target directory is fresh or fixed, no
@@ -48,6 +50,30 @@ forbid_unsafe() {
   done
 }
 
+# Advisories, licences, bans and sources of every dependency (WASM-013; owner decision 281), by
+# cargo-deny with crates/deny.toml. A machine without cargo-deny fails here instead of skipping the
+# check. The RustSec advisory database is fetched on each run: by cargo-deny itself when `git` is
+# there, and otherwise (the builder image has no git) by `build.ts` on the host, which mounts the
+# fresh clone at $CARGO_HOME/advisory-dbs. Then cargo-deny runs offline, which it only allows for a
+# database fetched in the last 90 days, and the crates come from the registry that `cargo fetch`
+# has just filled.
+advisories() {
+  if ! command -v cargo-deny >/dev/null 2>&1; then
+    echo "cargo-deny is not installed: use the builder image (crates/Containerfile) or cargo install cargo-deny" >&2
+    exit 1
+  fi
+  offline=""
+  if ! command -v git >/dev/null 2>&1; then
+    if [ ! -d "$cargo_home/advisory-dbs" ]; then
+      echo "no git and no advisory database mounted at $cargo_home/advisory-dbs (build.ts fetches it)" >&2
+      exit 1
+    fi
+    cargo fetch --locked
+    offline="--offline"
+  fi
+  cargo deny --locked $offline --manifest-path "$here/Cargo.toml" --config "$here/deny.toml" check
+}
+
 case "${1:-}" in
   test)
     forbid_unsafe
@@ -55,6 +81,7 @@ case "${1:-}" in
     cargo clippy --locked --all-targets -- -D warnings
     cargo test --locked
     no_system_libraries
+    advisories
     ;;
   build|build-sea)
     # `build` is the layout kernel. `build-sea` is the module of Thai, Lao, Khmer and Burmese
@@ -68,6 +95,7 @@ case "${1:-}" in
     fi
     out="${2:?usage: build.sh build OUTDIR | build-sea OUTDIR}"
     no_system_libraries
+    advisories
     cargo build --locked --release --target wasm32-unknown-unknown -p "$crate"
     raw="$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/$stem.wasm"
     rm -rf "$out"

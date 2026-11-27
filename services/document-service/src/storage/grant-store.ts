@@ -15,6 +15,7 @@
 import type {
   DocumentState,
   Lease,
+  OperationId,
   PermissionState,
   RegionApproval,
   RegionGrant,
@@ -106,8 +107,9 @@ export async function readPermissions(c: Queryable, doc: string): Promise<Permis
     principal: string;
     role: RegionGrant['role'];
     expires_at: Date | null;
+    structure: string[] | null;
   }>(
-    `SELECT region_id, principal, role, expires_at FROM region_grants WHERE doc_id = $1
+    `SELECT region_id, principal, role, expires_at, structure FROM region_grants WHERE doc_id = $1
       ORDER BY region_id COLLATE "C", principal COLLATE "C"`,
     [doc],
   );
@@ -143,6 +145,10 @@ export async function readPermissions(c: Queryable, doc: string): Promise<Permis
       principal: g.principal,
       role: g.role,
       expiresAt: millis(g.expires_at),
+      // The list the grant was written with; absent when it has none (PRM-068).
+      ...(g.structure && g.structure.length
+        ? { structure: g.structure as readonly OperationId[] }
+        : {}),
     })),
     regionStates: new Map(states.rows.map((s) => [s.region_id, s.state])),
     ...(approvals.size ? { approvals } : {}),
@@ -176,13 +182,15 @@ export async function applyPermissionRows(
     const g = change.putGrants;
     await c.query(
       `INSERT INTO region_grants (doc_id, region_id, principal, tenant_id, role, expires_at,
-                                  created_by, created_at)
-       SELECT $1, x.region_id, x.principal, $2, x.role, x.expires_at, $7, now()
-         FROM unnest($3::text[], $4::text[], $5::text[], $6::timestamptz[])
-           AS x(region_id, principal, role, expires_at)
+                                  created_by, created_at, structure)
+       SELECT $1, x.region_id, x.principal, $2, x.role, x.expires_at, $7, now(),
+              CASE WHEN x.structure = '' THEN NULL ELSE string_to_array(x.structure, ',') END
+         FROM unnest($3::text[], $4::text[], $5::text[], $6::timestamptz[], $8::text[])
+           AS x(region_id, principal, role, expires_at, structure)
        ON CONFLICT (doc_id, region_id, principal) DO UPDATE
           SET role = excluded.role, expires_at = excluded.expires_at,
-              created_by = excluded.created_by, created_at = excluded.created_at`,
+              created_by = excluded.created_by, created_at = excluded.created_at,
+              structure = excluded.structure`,
       [
         doc,
         tenant,
@@ -191,6 +199,8 @@ export async function applyPermissionRows(
         g.map((x) => x.role),
         g.map((x) => (x.expiresAt === null ? null : iso(x.expiresAt))),
         actor,
+        // One text per grant ('' for none): arrays of arrays cannot be unnested row by row.
+        g.map((x) => (x.structure ?? []).join(',')),
       ],
     );
   }

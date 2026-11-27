@@ -38,6 +38,7 @@ export type {
   FillField,
   FillSummary,
   GrantsService,
+  GrantStructureOperation,
   GrantsSnapshot,
   HeaderPaneName,
   HeldLease,

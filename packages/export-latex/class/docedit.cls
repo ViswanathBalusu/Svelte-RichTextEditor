@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-26 v0.2.21 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-27 v0.2.22 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -226,6 +226,15 @@
       Ligatures=TeXOff, Renderer=\DE@renderer\DE@fallbackopt]}%
   \DE@tmp
   \expandafter\chardef\csname DE@lh@#1\endcsname=#2\relax}
+% A run of a script that needs shaping (EXP-037): \DEscrfont{k}{file}{script} defines the face, \DEscr{k}{text}
+% sets the text in it with HarfBuzz and the script given, as a whole. The fallback chain below would
+% give a glyph at a time, and an Indic syllable would not be reordered.
+\newcommand*\DEscrfont[3]{%
+  \edef\DE@tmp{%
+    \noexpand\newfontface\expandafter\noexpand\csname DE@scr@#1\endcsname{#2}[%
+      Path=\DE@fontpath, Ligatures=TeXOff, Renderer=HarfBuzz, Script=#3]}%
+  \DE@tmp}
+\newcommand*\DEscr[2]{{\csname DE@scr@#1\endcsname #2}}
 % \DEmainfamily{regular}{bold}{italic}{bold italic}: the font of class text (footnote marks)
 \newcommand*\DEmainfamily[4]{%
   \edef\DE@tmp{%
@@ -243,9 +252,23 @@
 
 % ---------------------------------------------------------------------------------------------
 % Languages (09 §3.1; EXP-027): babel through its ini files only, shorthands off.
+% Right-to-left text (09 §8; EXP-037). \DEbidi, written before \DEbabel by a document that has a
+% right-to-left paragraph, makes babel reorder the text of every line with the Unicode
+% bidirectional algorithm (`bidi=basic`: it follows the implicit algorithm and nothing else, so the
+% embeddings and overrides that the `text` emitter removes could not change the display) and
+% provides one right-to-left locale (arabic) whose direction a paragraph takes. \DEdir{1} makes the
+% paragraphs that follow right to left, \DEdir{0} left to right again. In a right-to-left paragraph
+% LuaTeX swaps the sides: the left indent, the first-line indent and the alignment `start` are those
+% of the right margin, and `end` is the left margin.
+\newif\ifDE@bidi
+\def\DE@mainlang{english}
+\newcommand*\DEbidi{\DE@biditrue}
 \newcommand*\DEbabel[2]{%
-  \RequirePackage[shorthands=off]{babel}%
-  \babelprovide[import=#2, main]{#1}}
+  \ifDE@bidi \RequirePackage[shorthands=off,bidi=basic]{babel}%
+  \else \RequirePackage[shorthands=off]{babel}\fi
+  \def\DE@mainlang{#1}%
+  \babelprovide[import=#2, main]{#1}%
+  \ifDE@bidi \babelprovide[import=ar]{arabic}\fi}
 % \DEdeflang{k}{babel name}{ini}{BCP 47 tag}
 \newcommand*\DEdeflang[4]{%
   \babelprovide[import=#3]{#2}%
@@ -286,14 +309,14 @@
 % the cascade's.
 \newcount\DE@fam    \newdimen\DE@size   \newcount\DE@bf  \newcount\DE@it  \newcount\DE@sc
 \newcount\DE@lsrule \newcount\DE@lsval
-\newcount\DE@align  \newdimen\DE@indL   \newdimen\DE@indR   \newdimen\DE@indF
+\newcount\DE@dir    \newcount\DE@align  \newdimen\DE@indL   \newdimen\DE@indR   \newdimen\DE@indF
 \newcount\DE@widows \newcount\DE@keeplines
 \newcount\DE@plh    \newcount\DE@pld    \newcount\DE@tabs
 \def\DE@color{}
 \newcommand*\DE@defaults{%
   \DE@fam=\DE@deffam\relax \DE@size=11bp \DE@bf=0 \DE@it=0 \DE@sc=0 \def\DE@color{}%
   \DE@lsrule=0 \DE@lsval=1000 \DE@align=1 \DE@plh=300 \DE@pld=47 \DE@tabs=0
-  \DE@indL=0pt \DE@indR=0pt \DE@indF=0pt \DE@widows=1 \DE@keeplines=0 \DE@shadev=0 \DE@bord=0 }
+  \DE@dir=0 \DE@indL=0pt \DE@indR=0pt \DE@indF=0pt \DE@widows=1 \DE@keeplines=0 \DE@shadev=0 \DE@bord=0 }
 \newcommand*\DEfam[1]{\DE@fam=#1\relax}
 \newcommand*\DEsz[1]{\DE@size=#1\relax}
 \newcommand*\DElh[2]{\DE@plh=#1\relax \DE@pld=#2\relax}
@@ -308,6 +331,7 @@
 \newcommand*\DElsa[1]{\DE@lsrule=2 \DE@lsval=#1\relax}
 % Alignment: 0 justify, 1 start, 2 centre, 3 end
 \newcommand*\DEal[1]{\DE@align=#1\relax}
+\newcommand*\DEdir[1]{\DE@dir=#1\relax}
 \newcommand*\DEil[1]{\DE@indL=#1\relax}
 \newcommand*\DEir[1]{\DE@indR=#1\relax}
 \newcommand*\DEif[1]{\DE@indF=#1\relax}
@@ -331,6 +355,7 @@
   \selectfont
   \ifx\DE@color\@empty\else\color[HTML]{\DE@color}\fi}
 \newcommand*\DE@apply{%
+  \ifDE@bidi \ifnum\DE@dir=1 \selectlanguage{arabic}\else \selectlanguage{\DE@mainlang}\fi\fi
   \DE@selectfont
   % \baselineskip is the natural single line height: struts of tables and arrays use it. The
   % lines themselves get their height in docedit.lua.

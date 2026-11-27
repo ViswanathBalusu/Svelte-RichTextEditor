@@ -1,0 +1,62 @@
+# The reference document service as a container (06; FND-012 criterion 3). Build from the repository
+# root with Podman:
+#
+#   podman build -f services/document-service/Containerfile \
+#     -t localhost/docedit-document-service:dev .
+#
+# Podman reads `Containerfile.dockerignore` next to this file: everything is left out of the context
+# except what is copied below. The settings are environment variables (src/config.ts); the service
+# needs PostgreSQL and an S3-compatible store, which the image does not hold.
+#
+# The image holds the service and the packages it reads, with their production dependencies, and no
+# other service, no test and no secret. It runs as the unprivileged user `node`. The command is
+# `node services/document-service/src/main.ts`; `src/storage/migrate-cli.ts` and `src/tenant-cli.ts`
+# are the other entry points of the same image (`podman run ... node <file>`).
+#
+# Node.js 22.18.0 on Debian 12, pinned by its multi-arch index digest (as
+# services/authority-service/Containerfile and apps/reference-host/containers/Containerfile).
+FROM docker.io/library/node:22.18.0-bookworm-slim@sha256:752ea8a2f758c34002a0461bd9f1cee4f9a3c36d48494586f60ffce1fc708e0e
+
+ENV CI=true NODE_ENV=production
+WORKDIR /app
+# The pnpm of the workspace (package.json `packageManager`); corepack of Node.js 22.18 cannot run it.
+# The npm cache and its logs carry dates and random names, so they are removed in the same step:
+# two builds of one commit must give one image (scripts/release/image.ts).
+# (Node.js 22 also leaves a compile cache in /tmp.)
+RUN npm install --global pnpm@12.18.0 && rm -rf /root/.npm /tmp/node-compile-cache
+
+# The workspace manifests first, so that the dependency layer is cached.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY services/document-service/package.json services/document-service/
+COPY services/asset-worker/package.json services/asset-worker/
+COPY packages/authority/package.json packages/authority/
+COPY packages/corpus/package.json packages/corpus/
+COPY packages/export-latex/package.json packages/export-latex/
+COPY packages/history/package.json packages/history/
+COPY packages/model/package.json packages/model/
+COPY packages/protocol/package.json packages/protocol/
+COPY packages/rules/package.json packages/rules/
+# The package store, the caches and the install's own state files hold dates; the service reads none.
+RUN pnpm install --frozen-lockfile --prod --filter "@docedit/document-service..." \
+  && rm -rf /root/.local /root/.cache /root/.npm /tmp/node-compile-cache /app/node_modules/.modules.yaml \
+    /app/node_modules/.pnpm-workspace-state-v1.json /app/node_modules/.pnpm/lock.yaml
+
+COPY services/document-service/src services/document-service/src
+COPY services/document-service/migrations services/document-service/migrations
+COPY services/asset-worker/src services/asset-worker/src
+COPY packages/authority/src packages/authority/src
+COPY packages/authority/fixtures packages/authority/fixtures
+COPY packages/corpus/src packages/corpus/src
+COPY packages/export-latex/src packages/export-latex/src
+COPY packages/export-latex/class packages/export-latex/class
+COPY packages/history/src packages/history/src
+COPY packages/history/fixtures packages/history/fixtures
+COPY packages/model/src packages/model/src
+COPY packages/model/fixtures packages/model/fixtures
+COPY packages/protocol/src packages/protocol/src
+COPY packages/rules/src packages/rules/src
+# The published definitions that the model and the protocol read (SYN-002).
+COPY spec spec
+
+USER node
+ENTRYPOINT ["node", "services/document-service/src/main.ts"]

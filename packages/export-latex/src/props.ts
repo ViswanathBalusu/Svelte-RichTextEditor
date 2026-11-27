@@ -242,13 +242,12 @@ export function setters(
     const k = borderList(ctx, v.borders, blockId);
     parts.push(k > 0 ? tex`\DEbord{${int(k)}}` : t('\\DEnobord'));
   }
-  if (v.dir === 'rtl' && differs('dir'))
-    warnOnce(
-      ctx,
-      'rtl_unsupported',
-      'right-to-left paragraphs are set left to right (EXP-037)',
-      blockId,
-    );
+  // The direction (EXP-037). A right-to-left paragraph, or a left-to-right one under a right-to-left
+  // style, sets \DEdir; the document then asks for the bidirectional algorithm (\DEbidi).
+  if (v.dir !== (b?.dir ?? 'ltr')) {
+    if (v.dir === 'rtl') ctx.bidi.used = true;
+    parts.push(v.dir === 'rtl' ? t('\\DEdir{1}') : t('\\DEdir{0}'));
+  }
   return join(parts);
 }
 

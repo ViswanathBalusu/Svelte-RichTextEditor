@@ -150,13 +150,16 @@ equires; returns the job. */
     );
   }, 300_000);
 
-  it('fails the job, and stores nothing, when the document lacks a feature the import needs', async () => {
+  // UX-107 turned requires growth on in the document service (03 §11.1; CDM-047): a snapshot that
+  // needs a feature the document does not list is accepted when every attached client announced the
+  // feature, and no client is attached to an import. Before, the room refused it (I1).
+  it('adds the feature the import needs to the document when no attached client lacks it', async () => {
     const { doc, job } = await run('poi/sample.docx', 'none');
-    expect(job['state']).toBe('failed');
-    // The room refuses the snapshot (I1): the document does not list the preserve feature.
-    expect(job['error']).toMatchObject({ code: 'validation_failed' });
-    expect(JSON.stringify(job['error'])).toContain('preserve');
+    expect(job['error'] ?? null).toBeNull();
+    expect(job['state']).toBe('completed');
     const content = await h.call('GET', '/v1/documents/' + doc + '/content', { token: h.apiKey });
-    expect(JSON.stringify(content.json.doc)).toContain('Liability');
+    const stored = JSON.stringify(content.json);
+    expect(stored).not.toContain('Liability');
+    expect(stored).toContain('"preserve"');
   });
 });

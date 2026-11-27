@@ -41,6 +41,11 @@ export const RULE_INVARIANTS: InvariantCheck = {
       doc: 'A validation.pattern or matches pattern outside the regular-expression subset (FRW-018).',
     },
   },
+  // What `check` reads: `readDocument` takes the fields (`form_field`), the roles (`role_def`) and
+  // the rules (`rule_def`) of the document, and `checkDocumentPatterns` the same fields and rules.
+  // It reads no text and no other node type, so the model's commit validator skips the check for a
+  // commit that changes none of the three (ADR 0422; SYN-040).
+  reads: { nodes: ['form_field', 'role_def', 'rule_def'] },
   check(view, report) {
     // FRW-018 criterion 1, the commit path: a pattern outside the subset is refused on every commit.
     for (const p of checkDocumentPatterns(view.envelope)) {

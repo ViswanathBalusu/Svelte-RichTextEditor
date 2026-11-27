@@ -20,7 +20,9 @@
  * searched; regions and tables are, as `computeLabels` counts through them.
  */
 import { computeLabels, outlineLevelOf, styleTable } from '@docedit/model';
-import type { Node as PMNode } from 'prosemirror-model';
+import { ReplaceStep } from 'prosemirror-transform';
+import type { Transaction } from 'prosemirror-state';
+import type { Node as PMNode, Slice } from 'prosemirror-model';
 import { fieldTexts, type StaleCache } from './captions-refs.ts';
 
 export interface TocEntry {
@@ -68,6 +70,39 @@ function blocks(
 }
 
 /** The `toc` nodes of the body with their positions. */
+/**
+ * True when the transaction only inserts or deletes plain text inside paragraphs that cannot appear
+ * in a list of contents: no outline level, and no inline node (no caption field, no anchor) in the
+ * paragraph. Such an edit changes no entry and no label, so the lists of the document stay as they
+ * are and only move with the text (FE-120: the lists were rebuilt for the whole document on every
+ * keystroke). Any other step, any paragraph with a level or an inline node, and any range that
+ * leaves its paragraph gives false, and the caller computes the lists again.
+ */
+export function isPlainTextEdit(tr: Transaction): boolean {
+  if (tr.steps.length === 0) return false;
+  const styles = styleTable(tr.before);
+  for (let i = 0; i < tr.steps.length; i++) {
+    const step = tr.steps[i];
+    if (!(step instanceof ReplaceStep)) return false;
+    const { from, to, slice } = step as unknown as { from: number; to: number; slice: Slice };
+    if (slice.openStart !== 0 || slice.openEnd !== 0) return false;
+    let text = true;
+    slice.content.forEach((node) => {
+      if (!node.isText) text = false;
+    });
+    if (!text) return false;
+    const $from = tr.docs[i]!.resolve(from);
+    const parent = $from.parent;
+    if (parent.type.name !== 'paragraph' || to > $from.end()) return false;
+    let plain = true;
+    parent.forEach((child) => {
+      if (!child.isText) plain = false;
+    });
+    if (!plain || outlineLevelOf(styles, parent.attrs) !== null) return false;
+  }
+  return true;
+}
+
 export function tocNodes(doc: PMNode): Array<{ node: PMNode; pos: number }> {
   const out: Array<{ node: PMNode; pos: number }> = [];
   doc.forEach((top, offset) => {

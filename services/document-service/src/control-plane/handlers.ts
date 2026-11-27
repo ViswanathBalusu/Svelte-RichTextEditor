@@ -11,6 +11,7 @@ import {
   type PermissionState,
   type RegionGrant,
   parsePrincipal,
+  validateGrantStructure,
 } from '@docedit/authority';
 import {
   canonicalize,
@@ -25,6 +26,7 @@ import { readDocument } from '@docedit/model/validate';
 import type {
   CreateDocumentRequest,
   DocumentResource,
+  GrantStructureOperation,
   Grants,
   GrantsPatch,
   RegionInfo,
@@ -593,6 +595,9 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
         principal: names(g.principal),
         role: g.role,
         expiresAt: g.expiresAt === null ? null : formatTimestamp(g.expiresAt),
+        ...(g.structure?.length
+          ? { structure: [...g.structure] as GrantStructureOperation[] }
+          : {}),
       })),
     };
   }
@@ -657,6 +662,15 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
             ],
           },
         );
+      // `structure`: only `region.retitle` and `defs.add`, each once, only with the role editor
+      // (ADR 0424; PRM-068). The reason names the entry.
+      if (g.structure !== undefined) {
+        const problems = validateGrantStructure(g.structure, g.role);
+        if (problems.length)
+          throw new ApiError('validation_failed', problems.join('; '), {
+            violations: problems.map((rule) => ({ path: `${at}/structure`, rule })),
+          });
+      }
       const key = `${g.region}\u0000${g.principal}`;
       if (seen.has(key))
         throw new ApiError('validation_failed', 'two grants for one region and principal', {
@@ -669,6 +683,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
         role: g.role,
         expiresAt:
           g.expiresAt === undefined || g.expiresAt === null ? null : parseTimestamp(g.expiresAt),
+        ...(g.structure?.length ? { structure: [...g.structure] } : {}),
       });
     }
     const change = diffPermissions(current, { ...current, grants: wanted });

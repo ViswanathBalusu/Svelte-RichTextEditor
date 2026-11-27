@@ -17,6 +17,7 @@
  * The module reads no clock and no store. It is universal: no Node.js or browser API.
  */
 import { FIELD_LIMITS } from '@docedit/model/definition';
+import type { Node as PMNode } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { FieldResult, InsertFieldOptions } from './fields-types.ts';
 
@@ -48,12 +49,31 @@ export function nextFormFieldKey(
   }
 }
 
+/**
+ * The form fields in each node that has children, by node. Nodes are immutable and an edit keeps
+ * every node it did not touch, so the count after an edit visits the nodes on the path to the edit
+ * and reads the rest from here (FE-120: the command registry asks for this on every transaction, and
+ * the walk over a 300-page document was about 15 per cent of the main thread while typing).
+ */
+const fieldCounts = new WeakMap<PMNode, number>();
+
+function fieldsIn(node: PMNode): number {
+  if (node.childCount === 0) return node.type.name === 'form_field' ? 1 : 0;
+  const known = fieldCounts.get(node);
+  if (known !== undefined) return known;
+  let count = node.type.name === 'form_field' ? 1 : 0;
+  node.forEach((child) => {
+    count += fieldsIn(child);
+  });
+  fieldCounts.set(node, count);
+  return count;
+}
+
 /** The number of form fields in the document. */
 export function formFieldCount(state: EditorState): number {
   let count = 0;
-  state.doc.descendants((node) => {
-    if (node.type.name === 'form_field') count += 1;
-    return true;
+  state.doc.forEach((child) => {
+    count += fieldsIn(child);
   });
   return count;
 }

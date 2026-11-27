@@ -313,10 +313,6 @@ export const DIAGNOSTIC_CODES = {
     severity: 'warning',
     message: 'A table row is taller than a page.',
   },
-  rtl_unsupported: {
-    severity: 'warning',
-    message: 'Right-to-left paragraphs are set left to right.',
-  },
   span_taller_than_rows: {
     severity: 'warning',
     message:
