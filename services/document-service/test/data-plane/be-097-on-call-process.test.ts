@@ -81,6 +81,13 @@ describe('BE-097 on-call process for hosted mode', () => {
     expect(section('6. Written review')).toMatch(/timeline/);
   });
 
+  it('records the paging cover of decision 276: a named rota in business hours', () => {
+    expect(section('1. Roles')).toMatch(/named\s+rota\s+covers\s+business\s+hours/);
+    expect(section('1. Roles')).toContain('276');
+    expect(section('3. Alerts')).toContain('named on the rota');
+    expect(section('8. What is not decided')).toContain('276');
+  });
+
   it('refers to the abuse policy of SEC-061 and leaves the rules to it', () => {
     const abuse = section('7. Abuse reports');
     expect(abuse).toContain('SEC-061');

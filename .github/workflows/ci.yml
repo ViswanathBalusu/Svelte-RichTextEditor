@@ -232,6 +232,63 @@ jobs:
         with:
           fail-on-severity: moderate
 
+  bundle-report:
+    # FND-008 criterion 4: the bundle report of the pull request, compared with the base branch.
+    # It goes to the job summary and to an artifact on every pull request, and to a comment on the
+    # pull request when a chunk changes size. The comment is a courtesy: a pull request from a
+    # fork has a read-only token, and the step then fails without failing the job.
+    name: Bundle report (FND-008)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build this change
+        run: pnpm --filter @docedit/element build
+      - name: Build the base, when it can be built (its report may be missing)
+        working-directory: base
+        continue-on-error: true
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @docedit/element build
+      - name: Compare the two reports
+        run: |
+          base=-
+          if [ -f base/packages/element/dist/lib/bundle-report.json ]; then
+            base=base/packages/element/dist/lib/bundle-report.json
+          fi
+          node packages/element/scripts/bundle-diff.ts "$base" packages/element/dist/lib/bundle-report.json bundle-summary.md
+          cat bundle-summary.md >> "$GITHUB_STEP_SUMMARY"
+          if grep -q 'alters the size' bundle-summary.md; then echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+        id: compare
+      - name: Comment on the pull request when a chunk changes size
+        if: steps.compare.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ github.event.pull_request.number }}" --body-file bundle-summary.md --edit-last --create-if-none
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: bundle-report
+          path: |
+            bundle-summary.md
+            packages/element/dist/lib/bundle-report.json
+          if-no-files-found: ignore
+
   conformance-kit:
     # The conformance kit (packages/tck; ADR 0042): the independent canonical-form implementation
     # in Python against the model's fixtures (CDM-011), the kit's own tests with its targets
