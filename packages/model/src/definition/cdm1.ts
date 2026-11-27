@@ -56,8 +56,15 @@ export { DEFINITION_ID_PATTERN, EXT_KEY_PATTERN, FIELD_KEY_PATTERN } from './sha
 // Patterns (ASCII, shared with the JSON Schema).
 
 export const FONT_FAMILY_PATTERN = '^[A-Za-z0-9][A-Za-z0-9 ._+-]{0,63}$';
-/** Numbering level text: placeholders %1 to %9 and the punctuation `. ( ) - §` and space (03 §4.1). */
-export const LEVEL_TEXT_PATTERN = '^(?:%[1-9]|[.()§ -])*$';
+/**
+ * Numbering level text (03 §4.1): the placeholders `%1` to `%9` and literal text, which is any
+ * character but `%`, the control characters, the TeX specials `\` `{` `}` and the bidirectional
+ * overrides (CDM-015). Widened by owner decision 240 (2026-11-26), so that "Article %1" and
+ * "NEW-%1-FORMAT" of Word files can be stored. A `%` that is not a placeholder is not stored.
+ * Written with escapes, so that the source stays ASCII.
+ */
+export const LEVEL_TEXT_PATTERN =
+  '^(?:%[1-9]|[^%\\\\{}\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069])*$';
 export const BOOKMARK_NAME_PATTERN = '^[A-Za-z_][A-Za-z0-9_]{0,39}$';
 export const EQUATION_LABEL_PATTERN = '^[A-Za-z][A-Za-z0-9:_-]{0,63}$';
 export const SEQUENCE_NAME_PATTERN = '^[A-Za-z][A-Za-z0-9_-]{0,31}$';
@@ -98,6 +105,7 @@ export const NUMBER_FORMATS = [
   'upperLetter',
   'lowerRoman',
   'upperRoman',
+  'lowerGreek',
   'bullet',
   'none',
 ] as const;

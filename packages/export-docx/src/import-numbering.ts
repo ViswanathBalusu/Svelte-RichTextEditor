@@ -12,8 +12,8 @@
  * part and the paragraph's `w:numPr` stay in the package and the paragraph's preserved formatting.
  *
  * What the grammar of 03 §4.1 cannot hold is reduced and reported: a level template is cut to the
- * placeholders `%1` to `%9` and the punctuation the grammar allows, number formats the model lacks
- * become `decimal`, and a symbol-font bullet becomes the nearest character of the published list.
+ * placeholders `%1` to `%9` and literal text without `%` and controls (owner decision 240), number
+ * formats the model lacks (all but Word's custom Greek sequence) become `decimal`, and a symbol-font bullet becomes the nearest character of the published list.
  */
 import type { JsonNode, JsonValue } from '@docedit/model';
 import { BULLET_CHARS } from '@docedit/model/definition';
@@ -31,6 +31,7 @@ const FORMATS: Readonly<Record<string, string>> = {
   upperLetter: 'upperLetter',
   lowerRoman: 'lowerRoman',
   upperRoman: 'upperRoman',
+  lowerGreek: 'lowerGreek',
   bullet: 'bullet',
   none: 'none',
 };
@@ -87,18 +88,53 @@ const int = (s: string | undefined): number | null =>
  * `mc:AlternateContent` with a `decimal` fallback; the choice is what Word shows, so it is read.
  */
 function numFmtOf(l: XmlElement): string | undefined {
-  const direct = val(child(l, NS.w, 'numFmt'));
+  const direct = numFmtName(child(l, NS.w, 'numFmt'));
   if (direct !== undefined) return direct;
   for (const alt of elements(l)) {
     if (alt.ns !== NS.mc || alt.local !== 'AlternateContent') continue;
     const choice = child(alt, NS.mc, 'Choice');
-    const fmt = choice ? val(child(choice, NS.w, 'numFmt')) : undefined;
+    const fmt = choice ? numFmtName(child(choice, NS.w, 'numFmt')) : undefined;
     if (fmt !== undefined) return fmt;
   }
   return undefined;
 }
 
+/**
+ * The name of a `w:numFmt`. Word's custom sequence "α, β, γ, ..." (`w:val="custom"` with the sequence
+ * in `w:format`) is the model's `lowerGreek` (owner decision 240); any other custom sequence keeps
+ * the name `custom`, which the model lacks.
+ */
+function numFmtName(el: XmlElement | undefined): string | undefined {
+  const v = val(el);
+  if (v !== 'custom' || !el) return v;
+  const sequence = attr(el, NS.w, 'format') ?? '';
+  return /^α\s*,\s*β\s*,\s*γ/u.test(sequence) ? 'lowerGreek' : 'custom';
+}
+
 const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
+
+/** A placeholder or one character the grammar of a level text allows (the pattern of the model). */
+const LEVEL_TEXT_TOKEN =
+  // eslint-disable-next-line no-control-regex -- the control characters are what the pattern leaves out
+  /%[1-9]|[^%\\{}\u0000-\u001F\u007F-\u009F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
+
+/**
+ * A level text as the grammar of 03 §4.1 holds it (owner decision 240): the placeholders `%1` to
+ * `%9` and literal text of any characters but `%`, controls, `\`, `{`, `}` and bidirectional
+ * overrides, at most 64 characters. What the grammar refuses and what is past 64 characters are
+ * left out.
+ */
+export function levelText(raw: string): string {
+  let out = '';
+  let length = 0;
+  for (const token of raw.match(LEVEL_TEXT_TOKEN) ?? []) {
+    const size = token.startsWith('%') ? 2 : 1;
+    if (length + size > 64) break;
+    out += token;
+    length += size;
+  }
+  return out;
+}
 
 export class NumberingImport {
   readonly defs: JsonNode[] = [];
@@ -192,10 +228,10 @@ export class NumberingImport {
         this.count('a bullet outside the published list becomes the nearest one');
       value['bulletChar'] = mapped;
     } else if (format !== 'none') {
-      const cleaned = (rawText.match(/%[1-9]|[.()§ -]/gu) ?? []).join('').slice(0, 64);
+      const cleaned = levelText(rawText);
       if (cleaned !== rawText)
         this.count(
-          'a level text with characters the grammar lacks is cut to its placeholders and punctuation',
+          'a level text with a percent sign that is not a placeholder, a control character or more than 64 characters is cut',
         );
       value['text'] = cleaned;
     }

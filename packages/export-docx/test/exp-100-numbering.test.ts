@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeLabels, styleTable, type JsonNode, type TreeNode } from '@docedit/model';
 import { importDocx } from '../src/index.ts';
+import { levelText } from '../src/import-numbering.ts';
 import { writeDocx } from '../src/writer.ts';
 import { corpusFiles, readFile } from './corpus.ts';
 import { writerDocs } from './writer-docs.ts';
@@ -88,13 +89,51 @@ describe('Word numbering becomes numbering definitions and paragraph numbering (
     ]);
   });
 
-  it('says what the grammar of the level text cannot hold', async () => {
+  it('keeps the letters of a level text and the Greek sequence of poi/Numbering.docx (owner decision 240)', async () => {
     const r = await importDocx(file('poi/Numbering.docx'));
-    expect(r.warnings.some((w) => w.startsWith('numbering: ') && w.includes('level text'))).toBe(
-      true,
+    const levels = defsOf(r.envelope).flatMap(
+      (d) => d.attrs!['levels'] as Array<{ format: string; text: string }>,
     );
+    expect(levels.map((l) => l.text)).toContain('NEW-%1-FORMAT');
+    expect(levels.some((l) => l.format === 'lowerGreek' && l.text === '%1.')).toBe(true);
+    // Nothing in this file is cut or turned into decimal any more.
     expect(
-      r.warnings.some((w) => w.startsWith('numbering: ') && w.includes('becomes decimal')),
-    ).toBe(true);
+      r.warnings.filter(
+        (w) => w.startsWith('numbering: ') && (w.includes('level text') || w.includes('decimal')),
+      ),
+    ).toEqual([]);
+    const labels = labelsOf(r.envelope);
+    expect(labels).toContain('NEW-1-FORMAT');
+    expect(labels.some((l) => /^[α-ω]\.$/u.test(l))).toBe(true);
+  });
+
+  it('reads a level text as the grammar holds it: placeholders and text, no percent sign or control', () => {
+    expect(levelText('Article %1')).toBe('Article %1');
+    expect(levelText('第%1条 §%2.%3')).toBe('第%1条 §%2.%3');
+    expect(levelText('100% of %1\u0007')).toBe('100 of %1');
+    expect(levelText('%')).toBe('');
+    expect(levelText('{a}\\b‮')).toBe('ab');
+    expect(levelText('a'.repeat(100))).toBe('a'.repeat(64));
+    // A placeholder is never cut in half at the limit.
+    expect(levelText(`${'a'.repeat(63)}%1`)).toBe('a'.repeat(63));
+  });
+
+  it('writes literal text and the Greek format of a level, and reads them back with the same labels', async () => {
+    const docs = await writerDocs();
+    const d = docs.find((x) => x.name === 'numbering')!;
+    const outline = defsOf(d.envelope).find((n) => n.attrs!['id'] === 'Outline')!;
+    const levels = outline.attrs!['levels'] as Array<Record<string, unknown>>;
+    levels[0] = { ...levels[0]!, format: 'lowerGreek', text: 'Article %1 §' };
+    levels[1] = { ...levels[1]!, text: 'NEW-%1-FORMAT %2)' };
+    const before = labelsOf(d.envelope);
+    expect(before.slice(1, 4)).toEqual(['Article α §', 'NEW-α-FORMAT a)', '•']);
+    const written = await writeDocx(d.envelope, d.assets);
+    const back = await importDocx(written.bytes);
+    expect(labelsOf(back.envelope)).toEqual(before);
+    expect(
+      back.warnings.filter(
+        (w) => w.startsWith('numbering: ') && (w.includes('level text') || w.includes('decimal')),
+      ),
+    ).toEqual([]);
   });
 });

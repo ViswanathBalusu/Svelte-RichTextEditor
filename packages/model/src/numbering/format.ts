@@ -7,7 +7,27 @@ import type { FootnoteFormat } from '../cascade/styles.ts';
 
 /** The level formats of 03 §4.1. */
 export type NumberFormat =
-  'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'bullet' | 'none';
+  | 'decimal'
+  | 'lowerLetter'
+  | 'upperLetter'
+  | 'lowerRoman'
+  | 'upperRoman'
+  | 'lowerGreek'
+  | 'bullet'
+  | 'none';
+
+/** The 24 lower-case Greek letters of Word's custom sequence "α, β, γ, ...", without final sigma. */
+export const GREEK_LOWER: readonly string[] = [...'αβγδεζηθικλμνξοπρστυφχψω'];
+
+/**
+ * Lower-case Greek letters in the way `letters` writes Latin ones: α to ω, then αα to ωω, then ααα.
+ * That is the rule the model applies to every letter format; Word's own rule past the 24th letter was
+ * not measured, so the repeat is the same as for Latin letters (03 §7.1).
+ */
+export function greekLetters(value: number): string {
+  const letter = GREEK_LOWER[(value - 1) % GREEK_LOWER.length]!;
+  return letter.repeat(Math.floor((value - 1) / GREEK_LOWER.length) + 1);
+}
 
 /** The bullet of a `bullet` level whose `bulletChar` is null. */
 export const DEFAULT_BULLET = '•';
@@ -69,6 +89,8 @@ export function formatNumber(value: number, format: string, bulletChar?: string 
       return n < 1 ? String(n) : roman(n);
     case 'upperRoman':
       return n < 1 ? String(n) : roman(n).toUpperCase();
+    case 'lowerGreek':
+      return n < 1 ? String(n) : greekLetters(n);
     default:
       return String(n);
   }
