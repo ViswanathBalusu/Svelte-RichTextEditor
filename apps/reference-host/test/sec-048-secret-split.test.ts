@@ -158,8 +158,26 @@ describe('SEC-048 criterion 2: the mounts of compose.json', () => {
 
 const CLI = process.env['DOCEDIT_CONTAINER_CLI'] || 'podman';
 const IMAGE = 'docker.io/library/alpine:3';
-const cgroups =
-  process.env['DOCEDIT_CONTAINER_CGROUPS'] === 'disabled' ? ['--cgroups=disabled'] : [];
+/**
+ * Cgroups are off when DOCEDIT_CONTAINER_CGROUPS=disabled, or when Podman is remote (a Podman
+ * machine, as on Windows and macOS), whose cgroup tree has no delegated controllers: `podman run`
+ * then fails with "controller `pids` is not available". The same rule as infra/test-env.ps1.
+ * What is lost: Podman's default pids limit (and any memory or CPU limit) is not applied. This
+ * test asserts none of them. It asserts the user, the capabilities, the network, the mounts and
+ * the environment, and `--cap-drop`, `--user`, `--network` and `no-new-privileges` do not need
+ * cgroups.
+ */
+function cgroupsOff(): boolean {
+  const setting = process.env['DOCEDIT_CONTAINER_CGROUPS'];
+  if (setting === 'disabled') return true;
+  if (setting === 'enabled') return false;
+  const r = spawnSync(CLI, ['info', '--format', '{{.Host.ServiceIsRemote}}'], {
+    encoding: 'utf8',
+    timeout: 120_000,
+  });
+  return r.status === 0 && r.stdout.trim() === 'true';
+}
+const cgroups = cgroupsOff() ? ['--cgroups=disabled'] : [];
 const exec = promisify(execFile);
 const run = (args: string[]) => exec(CLI, args, { encoding: 'utf8', timeout: 600_000 });
 const podmanReady = spawnSync(CLI, ['image', 'exists', IMAGE], { timeout: 120_000 }).status === 0;
