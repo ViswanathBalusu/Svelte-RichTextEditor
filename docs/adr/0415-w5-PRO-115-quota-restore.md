@@ -1,6 +1,8 @@
 # ADR 0415: How the kit puts a tenant's quotas back (PRO-115)
 
-Status: proposed (lane w5, 2026-11-18). The owner has not decided this.
+Status: proposed (lane w5, 2026-11-18). Decision 3 was answered by owner decision 267 (docs/owner-decisions-2026-11-26.md): PUT /quotas accepts 
+ull to clear a limit. Decision 2 no longer applies; the kit restores 
+ull. The service clears the row (migration 0103 grants the delete).
 
 ## Context
 

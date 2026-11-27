@@ -134,9 +134,8 @@ async function withQuota(
     await fn();
   } finally {
     const restore: Record<string, number | null> = {};
-    // PUT /quotas takes whole numbers only (a dimension cannot be cleared), so a dimension the
-    // tenant had not set goes back as the largest whole number: no quota in practice (ADR 0415).
-    for (const k of Object.keys(patch)) restore[k] = values[k] ?? Number.MAX_SAFE_INTEGER;
+    // A dimension the tenant had not set goes back as null: no limit (owner decision 267).
+    for (const k of Object.keys(patch)) restore[k] = values[k] ?? null;
     expectStatus(await set(restore), 200, 'PUT /quotas, restoring the values');
   }
 }

@@ -91,7 +91,6 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           { storage: -1 },
           { storage: 2.5 },
           { storage: '5' },
-          { storage: null },
           { bandwidth: 1 },
           ['storage'],
         ]) {

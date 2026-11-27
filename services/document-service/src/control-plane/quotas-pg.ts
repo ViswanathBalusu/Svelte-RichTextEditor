@@ -68,6 +68,18 @@ export class PgQuotaStore {
     return v;
   }
 
+  /** Clears one dimension of a tenant's quotas: it reads as `null` again, no limit (owner decision 267). */
+  async clear(tenant: string, dimension: unknown): Promise<void> {
+    if (!isUuid(tenant) || !(await this.#known(tenant))) throw new QuotaError('no such tenant');
+    if (!isQuotaDimension(dimension)) throw new QuotaError('the quota dimension is not known');
+    await inTenant(this.#pool, tenant, (c) =>
+      c.query(`DELETE FROM ${TENANT_QUOTAS_TABLE} WHERE tenant_id = $1 AND dimension = $2`, [
+        tenant,
+        dimension,
+      ]),
+    );
+  }
+
   /** The quotas of a tenant; every dimension is present and `null` when no value is set. */
   async get(tenant: string): Promise<QuotaSettings> {
     const out = empty();
