@@ -25,9 +25,19 @@
   <p class="notice problem" role="alert">{form.problem}</p>
 {/if}
 <ul class="people" aria-label="Seeded people">
-  {#each data.people as person (person.sub)}
+  {#each data.people as person, i (person.sub)}
     <li>
-      <strong>{person.name}</strong>
+      <div class="person-head">
+        <span class="avatar" data-tone={i % 4} aria-hidden="true"
+          >{person.name
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((word) => word[0]!.toUpperCase())
+            .join('')}</span
+        >
+        <strong>{person.name}</strong>
+      </div>
       <div class="muted">{person.about}</div>
       <form method="POST" action="?/signin">
         <input type="hidden" name="sub" value={person.sub} />

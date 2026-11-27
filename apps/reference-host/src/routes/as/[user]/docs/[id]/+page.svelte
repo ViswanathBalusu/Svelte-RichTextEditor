@@ -168,7 +168,8 @@
   {#if lastFlush}<span class="muted">Last flush: {lastFlush}</span>{/if}
 </div>
 
-<doc-editor bind:this={editor} endpoint={data.endpoint} toolbar="compact" locale="en-GB">
+<!-- The ribbon layout (ADR 0490): tabs of labelled groups, the page on a grey canvas. -->
+<doc-editor bind:this={editor} endpoint={data.endpoint} toolbar="ribbon" locale="en-GB">
   <span slot="title" data-testid="title-slot">{data.doc.title}</span>
 </doc-editor>
 
