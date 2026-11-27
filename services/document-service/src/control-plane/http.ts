@@ -33,22 +33,52 @@ export const REQUEST_ID_HEADER = 'DEP-Request-Id';
 export const MAX_LIMIT = 200;
 export const DEFAULT_LIMIT = 50;
 
-/** Reads a JSON body of at most `maxBytes`; undefined when there is none. */
+/**
+ * How much of a refused body is read and thrown away, and for how long. A server that answers 413
+ * and closes the socket while the client is still uploading makes the client see a reset instead
+ * of the answer (RFC 9110 §15.5.14). The discard is bounded, so a refusal stays cheap. These are
+ * design values of this service, not figures of the specification.
+ */
+export const REFUSED_BODY_DISCARD_BYTES = 32 * 1024 * 1024;
+export const REFUSED_BODY_DISCARD_MS = 5_000;
+
+/**
+ * Reads a JSON body of at most `maxBytes`; undefined when there is none. A body above the limit
+ * is read to its end and dropped (within the discard cap and time), then refused with `too_large`,
+ * so the client has finished sending when the 413 goes out. Past the cap the request is destroyed.
+ */
 export async function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<unknown> {
   const declared = Number(req.headers['content-length'] ?? NaN);
-  if (Number.isFinite(declared) && declared > maxBytes)
-    throw new ApiError('too_large', `the body is larger than ${maxBytes} bytes`);
+  let over = Number.isFinite(declared) && declared > maxBytes;
   const chunks: Buffer[] = [];
   let size = 0;
-  for await (const chunk of req) {
-    const b = chunk as Buffer;
-    size += b.length;
-    if (size > maxBytes) {
-      req.destroy();
-      throw new ApiError('too_large', `the body is larger than ${maxBytes} bytes`);
+  let timer: NodeJS.Timeout | undefined;
+  const startDiscard = (): void => {
+    timer = setTimeout(() => req.destroy(), REFUSED_BODY_DISCARD_MS);
+  };
+  if (over) startDiscard();
+  try {
+    for await (const chunk of req) {
+      const b = chunk as Buffer;
+      size += b.length;
+      if (!over && size > maxBytes) {
+        over = true;
+        chunks.length = 0;
+        startDiscard();
+      }
+      if (over) {
+        if (size > REFUSED_BODY_DISCARD_BYTES) req.destroy();
+        continue;
+      }
+      chunks.push(b);
     }
-    chunks.push(b);
+  } catch (e) {
+    // Destroyed by the cap or the timer: the refusal still goes out if the socket allows it.
+    if (!over) throw e;
+  } finally {
+    clearTimeout(timer);
   }
+  if (over) throw new ApiError('too_large', `the body is larger than ${maxBytes} bytes`);
   if (size === 0) return undefined;
   const type = String(req.headers['content-type'] ?? '')
     .split(';')[0]!
