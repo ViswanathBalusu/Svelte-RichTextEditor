@@ -41,7 +41,7 @@ describe.skipIf(unavailable !== null)('setCdmVersion over PostgreSQL (BE-094)', 
     expect((await s.docs.get(ref))!.cdmVersion).toBe(2);
     expect(await s.docs.setCdmVersion(ref, 1, 2)).toBe(false);
 
-    await s.docs.remove(ref, {});
+    await s.docs.remove(ref, { actor: 'alice' });
     await expect(s.docs.setCdmVersion(ref, 2, 3)).rejects.toThrow(/no document/);
     await expect(
       s.docs.setCdmVersion({ tenant: p.tenant, doc: crypto.randomUUID() }, 1, 2),
