@@ -84,6 +84,13 @@ function playwrightKey(key: string): string {
 
 const painter = (page: Page) => page.locator('.de-toolbar [data-command-id="format.painter"]');
 
+/**
+ * The shell learns of a new selection a moment after the remote call returns, and a key for a command
+ * that is still disabled is refused. Wait for the button to be enabled before pressing the key.
+ */
+const painterEnabled = (page: Page) =>
+  expect(painter(page)).not.toHaveAttribute('aria-disabled', 'true');
+
 /** Presses the key with focus in the text and expects exactly this core command to have run. */
 const coreCommand =
   (name: string) =>
@@ -116,6 +123,7 @@ const CHECKS: Readonly<Record<string, (page: Page, h: Remote, key: string) => Pr
   'format.italic': coreCommand('italic'),
   'format.painter': async (page, h, key) => {
     await h.setSelection({ empty: false, marks: ['bold'] });
+    await painterEnabled(page);
     await focusSurface(page);
     await page.keyboard.press(key);
     await expect(painter(page)).toHaveAttribute('aria-pressed', 'true');
@@ -153,6 +161,7 @@ const CHECKS: Readonly<Record<string, (page: Page, h: Remote, key: string) => Pr
   // The painter's own keys: armed first from the toolbar, then the key with focus in the text.
   'shell.applyFormat': async (page, h, key) => {
     await h.setSelection({ empty: false, marks: ['bold'] });
+    await painterEnabled(page);
     await painter(page).click();
     await expect(painter(page)).toHaveAttribute('aria-pressed', 'true');
     await h.setSelection({ empty: false, marks: [] });
@@ -163,6 +172,7 @@ const CHECKS: Readonly<Record<string, (page: Page, h: Remote, key: string) => Pr
   },
   'shell.cancel': async (page, h, key) => {
     await h.setSelection({ empty: false, marks: ['bold'] });
+    await painterEnabled(page);
     await painter(page).click();
     await expect(painter(page)).toHaveAttribute('aria-pressed', 'true');
     await focusSurface(page);
