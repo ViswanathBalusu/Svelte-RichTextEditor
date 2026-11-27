@@ -56,6 +56,9 @@ describe.skipIf(unavailable !== null)(
     const tenant = randomUUID();
     const keyId = randomUUID();
     const secret = randomBytes(32).toString('base64url');
+    const otherTenant = randomUUID();
+    const otherKeyId = randomUUID();
+    const otherSecret = randomBytes(32).toString('base64url');
     const dbName = `docedit_w5_pro_115_${randomBytes(6).toString('hex')}`;
     let service: Service | null = null;
     let report: KitReport | null = null;
@@ -105,6 +108,19 @@ describe.skipIf(unavailable !== null)(
               ],
               origins: [KIT_ORIGIN],
             },
+            {
+              // A second tenant, for the cross-tenant scenarios of the kit (UX-076).
+              id: otherTenant,
+              name: 'w5 PRO-115 second tenant',
+              apiKeys: [
+                {
+                  id: otherKeyId,
+                  secretSha256: createHash('sha256').update(otherSecret, 'utf8').digest('hex'),
+                  label: 'w5-pro-115-other',
+                },
+              ],
+              origins: ['https://other.pro-115.example'],
+            },
           ],
         }),
       );
@@ -152,6 +168,7 @@ describe.skipIf(unavailable !== null)(
       report = await runKit({
         discovery: `${service.url}/.well-known/dep`,
         credential: `dsk_${tenant}_${keyId}_${secret}`,
+        otherCredential: `dsk_${otherTenant}_${otherKeyId}_${otherSecret}`,
         origin: KIT_ORIGIN,
         testMode: false,
         profiles: ['authz'],

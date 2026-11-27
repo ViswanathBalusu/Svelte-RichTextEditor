@@ -123,6 +123,11 @@ describe('no ID reference is set from script (FE-108 criterion 2)', () => {
   // (The PDF viewer's page is a document of its own, in a frame, and is not part of any root.)
   const LIST_OWNER_FILE = 'engine/src/view/list-view.ts';
   const LIST_OWNER_CALL = "el.setAttribute('aria-owns', ids);";
+  // FE-093 criterion 3: the painter puts a visually hidden label next to a form-field control in the
+  // same overlay and points the control's aria-labelledby at it. Both are children of one overlay, so
+  // the reference never crosses a root. That one call is allowed, and nothing else in the file.
+  const CONTROL_LABEL_FILE = 'painter/src/painter.ts';
+  const CONTROL_LABEL_CALL = "control.setAttribute('aria-labelledby', label.id);";
   function scripts(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
       const full = join(dir, name);
@@ -150,7 +155,13 @@ describe('no ID reference is set from script (FE-108 criterion 2)', () => {
         // run names its items in `aria-owns`. Owner and items are siblings in the editing surface,
         // so the reference never crosses a root. That one call is allowed, and nothing else in
         // the file.
-        return set.test(rel === LIST_OWNER_FILE ? text.replaceAll(LIST_OWNER_CALL, '') : text);
+        const allowed =
+          rel === LIST_OWNER_FILE
+            ? LIST_OWNER_CALL
+            : rel === CONTROL_LABEL_FILE
+              ? CONTROL_LABEL_CALL
+              : null;
+        return set.test(allowed === null ? text : text.replaceAll(allowed, ''));
       })
       .map(({ rel }) => rel);
     expect(hits).toEqual([]);
@@ -159,5 +170,10 @@ describe('no ID reference is set from script (FE-108 criterion 2)', () => {
   it('allows the list owner call only where it is, and it is still there', () => {
     const text = readFileSync(join(SRC, '..', '..', LIST_OWNER_FILE), 'utf8');
     expect(text.split(LIST_OWNER_CALL).length - 1).toBe(1);
+  });
+
+  it('allows the control label call only where it is, and it is still there', () => {
+    const text = readFileSync(join(SRC, '..', '..', CONTROL_LABEL_FILE), 'utf8');
+    expect(text.split(CONTROL_LABEL_CALL).length - 1).toBe(1);
   });
 });
