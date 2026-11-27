@@ -141,6 +141,18 @@ export function coreCommands(): Entry[] {
       aliases: ['editHeader'],
       run: ({ core }) => core.run('editHeader'),
     },
+    // The footer is reached as the header is: through its panel (FE-066 criterion 6; FE-057).
+    {
+      id: 'page.footer',
+      label: 'command.page.footer',
+      icon: 'footer',
+      group: 'page',
+      enabled: 'hasFooter',
+      changesContent: false,
+      capability: 'headers-and-footers',
+      needs: 'editFooter',
+      run: ({ core }) => named(core, 'editFooter'),
+    },
     // Phase 1b: registered only when the core declares what they need.
     {
       id: 'format.applyStyle',

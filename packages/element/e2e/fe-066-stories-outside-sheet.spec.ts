@@ -1,8 +1,8 @@
 /**
  * FE-066 criterion 6, in part (lane w1): a document with a header and a footer story is shown in
  * the web view without either story in the continuous sheet, and the header is reached through its
- * panel with the shell's own command (`page.header`). The footer has no command yet (FE-057), so
- * this file shows only that it is not drawn in the sheet.
+ * panel with the shell's own command (`page.header`); the footer is reached the same way with
+ * `page.footer`, which opens the footer and not the header.
  *
  * Run from the repository root with
  *   pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-066-stories-outside-sheet.spec.ts --retries=0
@@ -14,7 +14,7 @@ const HEADER = 'Running header of the contract';
 const FOOTER = 'Running footer of the contract';
 const BODY = 'Body paragraph of the contract.';
 
-test('FE-066 header and footer stories are not in the sheet; the header opens in its panel', async ({
+test('FE-066 header and footer stories are not in the sheet; each opens in its panel', async ({
   page,
 }) => {
   await openEmbed(page);
@@ -112,13 +112,18 @@ test('FE-066 header and footer stories are not in the sheet; the header opens in
   );
   expect(boxes).toEqual([0, 0]);
 
+  // A command of the shell: in the toolbar row, or in the overflow menu when the row is narrow.
+  const runCommand = async (id: string): Promise<void> => {
+    const inRow = page.locator(`doc-editor .de-toolbar > [data-command-id="${id}"]`);
+    if (await inRow.isVisible()) await inRow.click();
+    else {
+      await page.locator('doc-editor [data-command-id="toolbar.more"]').click();
+      await page.locator(`doc-editor [role="menu"] [data-command-id="${id}"]`).click();
+    }
+  };
+
   // The header is reached through its panel, opened with the shell's command.
-  const inRow = page.locator('doc-editor .de-toolbar > [data-command-id="page.header"]');
-  if (await inRow.isVisible()) await inRow.click();
-  else {
-    await page.locator('doc-editor [data-command-id="toolbar.more"]').click();
-    await page.locator('doc-editor [role="menu"] [data-command-id="page.header"]').click();
-  }
+  await runCommand('page.header');
   const panel = page.locator('doc-editor .de-sub-editor');
   await expect(panel).toBeVisible();
   await expect(panel).toContainText(HEADER);
@@ -130,6 +135,11 @@ test('FE-066 header and footer stories are not in the sheet; the header opens in
     ),
   ).toBe(true);
 
-  // No command of the shell opens the footer (FE-057 has not built it).
-  expect(await page.locator('doc-editor [data-command-id*="footer" i]').count()).toBe(0);
+  // The footer has its command (FE-066 criterion 6): the panel shows the footer and not the header.
+  await runCommand('page.footer');
+  await expect(panel).toContainText(FOOTER);
+  await expect(panel).not.toContainText(HEADER);
+  const afterFooter = await sheet.innerText();
+  expect(afterFooter).not.toContain(FOOTER);
+  expect(afterFooter).not.toContain(HEADER);
 });
