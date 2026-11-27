@@ -24,6 +24,9 @@ export type DocRole = "viewer" | "commenter" | "suggester" | "editor" | "owner" 
 /** A role a region grant may give (07 §2). */
 export type RegionRole = "viewer" | "commenter" | "suggester" | "editor";
 
+/** An operation of `structure` that a region grant may carry: `region.retitle` or `defs.add` (07 §2; ADR 0424). */
+export type GrantStructureOperation = "region.retitle" | "defs.add";
+
 /** An output restriction from the `restrict` claim (05 §3.1; 13 §5). */
 export type Restriction = "no-export" | "no-copy" | "no-print";
 
@@ -546,13 +549,15 @@ export interface RegionInfo {
   editors?: RegionEditors;
 }
 
-/** A region grant: document, region, principal, role, optional expiry (07 §1). */
+/** A region grant: document, region, principal, role, optional expiry, optional `structure` list (07 §1; ADR 0424). */
 export interface RegionGrant {
   region: string;
   /** `user:<sub>`, `group:<id>`, `everyone` or `role:<id>` (07 §1). */
   principal: string;
   role: RegionRole;
   expiresAt?: string | null;
+  /** Parts of `structure` this grant conveys: `region.retitle`, `defs.add` or both. Valid only with the role `editor`; a client that does not know the member still reads the role (ADR 0424). */
+  structure?: GrantStructureOperation[];
 }
 
 /** The region grants of a document (05 §6.2). Once a PATCH has returned, no commit can be stored under the old revision (04 G7). */

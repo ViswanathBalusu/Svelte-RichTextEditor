@@ -144,9 +144,18 @@ describe('SEC-048 criterion 2: the mounts of compose.json', () => {
     expect(secretVolumes('reference-host')).toEqual(['secrets-host']);
     expect(secretVolumes('seed')).toEqual(['secrets-host']);
     expect(secretVolumes('export-worker')).toEqual([]);
-    for (const name of ['document-service', 'reference-host', 'seed'])
+    for (const name of ['document-service', 'reference-host'])
       for (const m of mounts(name).filter((m) => m.name.startsWith('secrets-')))
         expect(m.readOnly).toBe(true);
+  });
+
+  it("lets the seed write only the host's role volume, for the subscription's secret (UX-105)", () => {
+    // The seed acts as the host. The service issues the secret of the host's webhook subscription
+    // when the seed registers it, and the seed keeps it in the host's role directory, where the
+    // host reads it at start. No other part may write a secret volume.
+    expect(mounts('seed').filter((m) => !m.readOnly && m.name.startsWith('secrets-'))).toEqual([
+      { name: 'secrets-host', path: '/secrets/role-host', readOnly: false },
+    ]);
   });
 
   it('keeps the secrets out of the volume the parts share', () => {

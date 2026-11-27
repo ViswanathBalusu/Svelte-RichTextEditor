@@ -79,6 +79,16 @@
         "editor"
       ]
     },
+    "GrantStructureOperation": {
+      "title": "GrantStructureOperation",
+      "description": "An operation of `structure` that a region grant may carry: `region.retitle` or `defs.add` (07 §2; ADR 0424).",
+      "$comment": "07 §2",
+      "type": "string",
+      "enum": [
+        "region.retitle",
+        "defs.add"
+      ]
+    },
     "Restriction": {
       "title": "Restriction",
       "description": "An output restriction from the `restrict` claim (05 §3.1; 13 §5).",
@@ -2174,7 +2184,7 @@
     },
     "RegionGrant": {
       "title": "RegionGrant",
-      "description": "A region grant: document, region, principal, role, optional expiry (07 §1).",
+      "description": "A region grant: document, region, principal, role, optional expiry, optional `structure` list (07 §1; ADR 0424).",
       "$comment": "07 §1",
       "type": "object",
       "properties": {
@@ -2201,6 +2211,14 @@
               "type": "null"
             }
           ]
+        },
+        "structure": {
+          "description": "Parts of `structure` this grant conveys: `region.retitle`, `defs.add` or both. Valid only with the role `editor`; a client that does not know the member still reads the role (ADR 0424).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GrantStructureOperation"
+          },
+          "uniqueItems": true
         }
       },
       "required": [

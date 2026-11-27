@@ -185,6 +185,30 @@ export interface EgressOptions {
    * one is followed like any other target.
    */
   allow?: readonly string[];
+  /**
+   * Demo stack only (DOCEDIT_DEMO_WEBHOOK_ALLOW, UX-105; ADR 0471): exact `address:port` pairs
+   * (IPv6 as `[address]:port`) that are reached although the policy refuses their address. Narrower
+   * than `allow`: the port must match too, so the other services of the same address (the service's
+   * own port, PostgreSQL, the object store) stay refused. A name is never allowed this way, and a
+   * redirect is checked again like any other target.
+   */
+  allowEndpoints?: readonly string[];
+}
+
+/** The port of a URL, with the scheme's default when the URL names none. */
+function portOf(url: URL): number {
+  if (url.port !== '') return Number(url.port);
+  return url.protocol === 'https:' ? 443 : 80;
+}
+
+/** Splits `address:port` or `[address]:port`; null when it is not an IP literal with a port. */
+export function parseEndpoint(text: string): { address: string; port: number } | null {
+  const m = /^(?:\[([^\]]+)\]|([^:[\]]+)):([0-9]{1,5})$/.exec(text);
+  if (m === null) return null;
+  const address = m[1] ?? m[2] ?? '';
+  const port = Number(m[3]);
+  if (isIP(address) === 0 || port < 1 || port > 65535) return null;
+  return { address, port };
 }
 
 /** Sends a delivery through the policy above. Each redirect target is checked as a new request. */
@@ -193,6 +217,7 @@ export class EgressProxy implements Transport {
   readonly #connector: Connector;
   readonly #maxRedirects: number;
   readonly #allow: readonly string[];
+  readonly #allowEndpoints: readonly { address: string; port: number }[];
 
   constructor(options: EgressOptions) {
     if (!Number.isSafeInteger(options.maxRedirects) || options.maxRedirects < 0)
@@ -201,6 +226,12 @@ export class EgressProxy implements Transport {
     this.#connector = options.connector;
     this.#maxRedirects = options.maxRedirects;
     this.#allow = options.allow ?? [];
+    this.#allowEndpoints = (options.allowEndpoints ?? []).map((text) => {
+      const parsed = parseEndpoint(text);
+      if (parsed === null)
+        throw new RangeError('an allowed endpoint is address:port or [address]:port');
+      return parsed;
+    });
   }
 
   async deliver(request: {
@@ -258,6 +289,11 @@ export class EgressProxy implements Transport {
     const hostClass = classifyHost(url.hostname);
     let addresses: readonly string[];
     if (isIP(host) !== 0 && this.#allow.some((a) => sameAddress(a, host)))
+      return { ok: true, address: host };
+    if (
+      isIP(host) !== 0 &&
+      this.#allowEndpoints.some((e) => sameAddress(e.address, host) && e.port === portOf(url))
+    )
       return { ok: true, address: host };
     if (hostClass !== 'name') {
       // An IP literal, `localhost` or an empty host: decided without asking the resolver.
