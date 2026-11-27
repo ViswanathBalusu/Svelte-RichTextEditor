@@ -29,13 +29,16 @@ The service does not make backups and ships no backup schedule. A purge removes 
 
 > content is gone from every backup at the latest at *purge time + the retention of your oldest backup that holds the document*.
 
-The operator fills in these values for the deployment, and keeps them where the privacy notice can cite them:
+The operator sets the backup schedule and the backup retention (owner decision 277). The product fixes the rule above, not the figures: each deployment fills in its own, and keeps them where the privacy notice can cite them.
 
-| Value | Where it comes from |
-|---|---|
-| Backup frequency | the operator's schedule |
-| Retention of backups | the operator's schedule |
-| Time to age out after a purge | purge time plus the backup retention |
+| Value | Where it comes from | This deployment |
+|---|---|---|
+| Backup frequency | the operator's schedule | (operator fills in) |
+| Retention of backups | the operator's schedule | (operator fills in) |
+| Retention of non-current object versions | the bucket's lifecycle rule | (operator fills in) |
+| Time to age out after a purge | purge time plus the longest of the two retentions above | (operator fills in) |
+
+To work the last row out: take the purge time of a document (its delete time plus the purge period, 30 days by default), and add the longest time any copy is kept, whether in a database backup or in an older object version. The result is the time by which no copy of the content is left.
 
 A request to erase content before that time needs the operator to expire or rewrite the backups. A restored backup brings purged documents back: after any restore the purge job must run again, and the operator must re-apply the deletions made since the backup was taken.
 
