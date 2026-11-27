@@ -5,11 +5,16 @@
  * run against every target; a scenario whose feature the target does not announce is skipped with
  * that reason (the mock backend has no assets or exports). `profiles/perm.ts` lists them.
  *
- * Not packaged here: row 7 (an asset is resolved only on a document it is attached to), which needs
- * an asset worker that checks the upload and a commit that attaches the image, and a user token that
- * carries service claims (the kit holds no signing key and cannot forge a token). Both stay in
- * `tests/security/test/permission-matrix.test.ts` and
- * `services/document-service/test/control-plane/prm-057-row7-asset-read.test.ts`.
+ * Row 7 (`asset-read`) needs a service whose uploads are checked: an object store and an asset
+ * worker. A run against a service without them selects the other scenarios with `scenarios` (the
+ * run of `packages/tck/test/prm-057-matrix.test.ts` on in-memory storage does); the run on the
+ * S3-compatible store of the test environment includes it
+ * (`prm-057-asset-read.pg.test.ts` in the document service's tests).
+ *
+ * Row 13 in the kit refuses a user token whose header and claims were rewritten to name a service
+ * identity (the kit holds no signing key, so the original signature stays and no longer matches).
+ * A token that the service itself signed with service claims is tested only in
+ * `tests/security/test/permission-matrix.test.ts`, which holds the service's key.
  */
 import { DOC_ROLES } from '@docedit/authority';
 import { check, equal, isObject } from '../assert.ts';
@@ -18,13 +23,14 @@ import {
   nodeById,
   nodeSize,
   posBefore,
+  posIn,
   setAttr,
   textOf,
   type JsonNode,
 } from '../documents.ts';
 import { scenario, type ScenarioDef } from '../scenario.ts';
-import { PNG } from './jobs.ts';
-import { acked, join, openChannel, problemOf, rejected } from './support.ts';
+import { ASSET_EVENT_WAIT_MS, PNG, awaitAssetEvent, upload } from './jobs.ts';
+import { acked, claimsOf, join, openChannel, problemOf, rejected } from './support.ts';
 
 type Def = Omit<ScenarioDef, 'id'> & { id: string };
 const doc = (def: Def) => scenario('perm-doc', def);
@@ -158,6 +164,28 @@ export const PERM_DOC_MATRIX: ScenarioDef[] = [
           );
         }
       }
+      // A user token whose header and claims were rewritten to name a service identity, with the
+      // signature it had: the signature no longer covers it, so the token is refused.
+      const { token: owner } = await ctx.token('owner', { [d]: 'owner' });
+      const { header, payload } = claimsOf(owner);
+      const part = (o: unknown) => Buffer.from(JSON.stringify(o), 'utf8').toString('base64url');
+      const rewritten = [
+        part({ ...header, typ: 'dep-svc+jwt' }),
+        part({ ...payload, scope: 'service', svc: true, iss: 'host-backend' }),
+        owner.split('.')[2],
+      ].join('.');
+      for (const [method, path] of [
+        ['GET', '/documents'],
+        ['GET', '/audit'],
+      ] as const) {
+        const res = await ctx.service.as(rewritten, method, path);
+        check(
+          res.status === 401 || res.status === 403,
+          `${method} ${path} with a user token rewritten to claim a service identity`,
+          '401 or 403',
+          `HTTP ${res.status} ${res.text.slice(0, 120)}`,
+        );
+      }
       const ok = await ctx.service.as(ctx.target.config.credential, 'GET', '/documents');
       check(ok.status === 200, 'the service credential lists documents', 200, `HTTP ${ok.status}`);
     },
@@ -193,6 +221,83 @@ export const PERM_DOC_MATRIX: ScenarioDef[] = [
           `HTTP ${res.status} ${res.text.slice(0, 160)}`,
         );
       }
+    },
+  }),
+  doc({
+    id: 'asset-read',
+    title:
+      'row 7: a viewer of the document an asset is attached to resolves it to a signed URL; a caller with no view on that document is refused',
+    spec: '07 §12 row 7; 05 §6.2; PRM-057',
+    needs: { features: ['assets'] },
+    timeoutMs: ASSET_EVENT_WAIT_MS + 60_000,
+    covers: {
+      operations: ['POST /documents/{id}/assets/resolve'],
+      events: ['asset.ready'],
+      errors: ['forbidden'],
+    },
+    async run(ctx) {
+      const d = await ctx.document();
+      const other = await ctx.document();
+      // An editor uploads an image, waits until the check has passed and attaches it to the body.
+      const e = await join(ctx, 'uploader', d, 'editor');
+      const from = e.wire.mark();
+      const aid = await upload(ctx, e.token, d, PNG, 'image/png');
+      await awaitAssetEvent(ctx, e, d, 'asset.ready', aid, from);
+      await acked(e.wire, e.ch, {
+        base: e.content.seq,
+        steps: [
+          {
+            stepType: 'replace',
+            from: posIn(e.content.doc, IDS.intro),
+            to: posIn(e.content.doc, IDS.intro),
+            slice: {
+              content: [{ type: 'image', attrs: { asset: aid, width: 100, height: 100 } }],
+            },
+          },
+        ] as never,
+      });
+      const urlOf = (json: unknown): string | undefined =>
+        (json as { assets?: Array<{ asset: string; url: string }> }).assets?.find(
+          (u) => u.asset === aid,
+        )?.url;
+      // A viewer of the attached document reads it.
+      const { token: viewer } = await ctx.token('viewer', { [d]: 'viewer' });
+      const ok = await ctx.service.as(viewer, 'POST', `/documents/${d}/assets/resolve`, {
+        body: { assets: [aid] },
+      });
+      equal(ok.status, 200, 'a viewer resolves the asset of the document');
+      check(
+        /^https?:\/\//.test(urlOf(ok.json) ?? ''),
+        'the viewer gets a signed URL for the asset',
+        'an http or https URL',
+        ok.json,
+      );
+      // A caller with a role on another document only has no view on this one.
+      const { token: outsider } = await ctx.token('outsider', { [other]: 'owner' });
+      const refused = await ctx.service.as(outsider, 'POST', `/documents/${d}/assets/resolve`, {
+        body: { assets: [aid] },
+      });
+      equal(
+        problemOf(refused, 'a resolve without view').code,
+        'forbidden',
+        'a resolve without view on the document',
+      );
+      check(
+        !JSON.stringify(refused.json).includes('http'),
+        'a refused resolve carries no URL',
+        'no URL',
+        refused.json,
+      );
+      // The same asset asked for through the other document is not resolved for its owner.
+      const through = await ctx.service.as(outsider, 'POST', `/documents/${other}/assets/resolve`, {
+        body: { assets: [aid] },
+      });
+      check(
+        through.status >= 400 || urlOf(through.json) === undefined,
+        'an asset is not resolved through a document it is not attached to',
+        'a refusal or no URL',
+        through.json,
+      );
     },
   }),
 ];
