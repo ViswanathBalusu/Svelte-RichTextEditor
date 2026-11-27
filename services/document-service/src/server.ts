@@ -972,7 +972,11 @@ export async function startService(opts: StartOptions): Promise<Service> {
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
   if (parts.keyService && parts.sealedTenants && parts.sealedTenants.length > 0) {
-    const tenantSeal = new OptInTenantSealStore(parts.objects, parts.keyService, parts.sealedTenants);
+    const tenantSeal = new OptInTenantSealStore(
+      parts.objects,
+      parts.keyService,
+      parts.sealedTenants,
+    );
     await tenantSeal.provision();
     parts.objects = tenantSeal;
   }

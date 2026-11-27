@@ -172,7 +172,12 @@ describe('a gateway outside the home region reads nothing of the document (BE-07
     c = cluster();
     const net = new MemoryBusNetwork(seeded(41));
     const homeRegions = new MemoryHomeRegions();
-    const eu = await c.start('node-eu', net.connect('node-eu'), {}, { traits: { region: 'eu' }, homeRegions });
+    const eu = await c.start(
+      'node-eu',
+      net.connect('node-eu'),
+      {},
+      { traits: { region: 'eu' }, homeRegions },
+    );
     const spy = spyOn(c.mem);
     const us = await c.start(
       'node-us',
@@ -202,7 +207,12 @@ describe('a gateway outside the home region reads nothing of the document (BE-07
     c = cluster();
     const net = new MemoryBusNetwork(seeded(42));
     const homeRegions = new MemoryHomeRegions();
-    const eu2 = await c.start('node-eu2', net.connect('node-eu2'), {}, { traits: { region: 'eu' }, homeRegions });
+    const eu2 = await c.start(
+      'node-eu2',
+      net.connect('node-eu2'),
+      {},
+      { traits: { region: 'eu' }, homeRegions },
+    );
     await homeRegions.assign(eu2.tenant, 'eu', 'operator');
     // A document that rendezvous names node-eu1 once both are live, opened while only eu2 is.
     const doc = await docFor(eu2, 'node-eu1', ['node-eu1', 'node-eu2']);
@@ -210,8 +220,18 @@ describe('a gateway outside the home region reads nothing of the document (BE-07
     expect((await first.open(1, doc)).t).toBe('ch.opened');
     expect((await c.mem.head(eu2.ref(doc))).owner).toBe('node-eu2');
 
-    const eu1 = await c.start('node-eu1', net.connect('node-eu1'), {}, { traits: { region: 'eu' }, homeRegions });
-    const us = await c.start('node-us', net.connect('node-us'), {}, { traits: { region: 'us' }, homeRegions });
+    const eu1 = await c.start(
+      'node-eu1',
+      net.connect('node-eu1'),
+      {},
+      { traits: { region: 'eu' }, homeRegions },
+    );
+    const us = await c.start(
+      'node-us',
+      net.connect('node-us'),
+      {},
+      { traits: { region: 'us' }, homeRegions },
+    );
     const alice = await us.client('alice', { [doc]: 'editor' });
     // The gateway chose node-eu1 by region alone; node-eu1 saw the owner and sent it to node-eu2.
     expect((await alice.open(1, doc)).t).toBe('ch.opened');
