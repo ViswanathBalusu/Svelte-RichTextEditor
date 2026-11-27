@@ -191,7 +191,8 @@ export function checkViewOfContent(content: unknown): ContentView {
         notes.push(inline);
       }
     }
-    for (const link of links) extra.push({ kind: 'link', id, text: link.text });
+    for (const [index, link] of links.entries())
+      extra.push({ kind: 'link', id, text: link.text, index });
     add(
       {
         kind: 'paragraph',

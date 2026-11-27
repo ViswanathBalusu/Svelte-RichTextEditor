@@ -779,6 +779,19 @@ table.de-suggest-gone {
 .de-page-view .de-line {
   tab-size: 36pt;
 }
+/* A form field in the page view is the web view's control, set on the room the line left for it
+   (FE-101 criterion 5; FE-093): it fills that box and takes the size of the text around it. */
+.de-page-view .de-control {
+  cursor: auto;
+}
+.de-page-view .de-control .de-form-field-control {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0 2px;
+  font: inherit;
+}
 /* A page thumbnail of the navigation pane (UX-021) is the same painting, scaled down. */
 .de-thumb-sheet .de-line {
   tab-size: 36pt;

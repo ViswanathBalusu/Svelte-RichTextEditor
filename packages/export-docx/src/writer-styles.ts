@@ -385,6 +385,24 @@ export class NumberingBuilder {
   }
 }
 
+/**
+ * The number format of a level. `lowerGreek` is Word's custom sequence "α, β, γ, ..." (Word 2010 and
+ * later), with `decimal` as the fallback for readers that do not know it (the reverse of the import).
+ */
+function numFmtXml(format: string): string {
+  if (format !== 'lowerGreek') return el('w:numFmt', { 'w:val': format });
+  return el(
+    'mc:AlternateContent',
+    {},
+    el(
+      'mc:Choice',
+      { Requires: 'w14' },
+      el('w:numFmt', { 'w:val': 'custom', 'w:format': 'α, β, γ, ...' }),
+    ),
+    el('mc:Fallback', {}, el('w:numFmt', { 'w:val': 'decimal' })),
+  );
+}
+
 function levelXml(lv: Values, k: number, ctx: LensContext, ns: NamespaceWriter): string {
   const format = String(lv['format'] ?? 'decimal');
   const text = format === 'bullet' ? String(lv['bulletChar'] ?? '•') : String(lv['text'] ?? '');
@@ -407,7 +425,7 @@ function levelXml(lv: Values, k: number, ctx: LensContext, ns: NamespaceWriter):
     'w:lvl',
     { 'w:ilvl': k },
     el('w:start', { 'w:val': typeof lv['start'] === 'number' ? lv['start'] : 1 }),
-    el('w:numFmt', { 'w:val': format }),
+    numFmtXml(format),
     lvlRestart === null ? '' : el('w:lvlRestart', { 'w:val': lvlRestart }),
     lv['legal'] === true ? el('w:isLgl') : '',
     el('w:lvlText', { 'w:val': text }),

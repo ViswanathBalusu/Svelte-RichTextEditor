@@ -92,6 +92,8 @@ The element has three views, selected with the `view` attribute. They are delive
 
 In the `web` view the product must not pretend to show pages. It is presented as "Web layout", and the PDF preview and the `read` view show real pages. Page guides in the web view are optional and are exact only at block starts reported by a compile; between compiles, and inside long paragraphs, they drift, because a continuous sheet cannot account for header and footnote space, keep rules or the typesetter's line breaks.
 
+The `print` view is offered in Chromium, Edge and Safari. In Firefox it stays unavailable for now (owner decision 247, 2026-11-26; ADR 0417): `view="print"` shows the web view with a notice, because the page view measures with canvas on the page thread, the fallback of spike S5 for those three browsers only. It is also not offered on a touch device (FE-113). Form fields in the page view are the web view's controls, placed in the page's overlay over the room the line leaves for them (FE-093, FE-101).
+
 ## 8. Web view
 
 The web view relies on ProseMirror's support for editing inside a shadow root. ProseMirror reads the selection through `Selection.getComposedRanges()` on Safari, and on Firefox it patches `ShadowRoot.prototype.getSelection`, which is a side effect visible to the host page; both set the minimum browser versions in section 12. Headers, footers and footnotes are edited in panels through the sub-editors of section 5.2. Form fields are node views that contain native controls.

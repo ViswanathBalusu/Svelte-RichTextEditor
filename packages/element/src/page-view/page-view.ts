@@ -33,7 +33,7 @@ import type { ItemProviders } from '../../../layout/src/items.ts';
 import { pageStatus, type PageStatus } from '../../../layout/src/readonly-view.ts';
 import type { LayoutTree } from '../../../layout/src/tree.ts';
 import { applyPageKey, pageKeyOf } from '../../../layout/src/page-keys.ts';
-import { type PaintSource } from '../../../painter/src/painter.ts';
+import { type InlineBoxPlace, type PaintSource } from '../../../painter/src/painter.ts';
 import { paintSelection } from '../../../painter/src/selection-paint.ts';
 import { mountPageWindow, type PageWindow } from '../../../painter/src/window.ts';
 import { shortcutName, SHELL_SHORTCUTS } from '../shortcuts.ts';
@@ -289,6 +289,17 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
     for (const section of flow.sections)
       for (const b of section.blocks)
         if (b.kind === 'box' && b.what === 'placeholder') placeholders.set(b.id, b.title ?? null);
+    // A field control that has focus keeps it over the repaint (FE-101 criterion 5).
+    const rootNode = root.getRootNode() as Document | ShadowRoot;
+    const focusedField =
+      readOnly || !(rootNode.activeElement instanceof Element)
+        ? null
+        : (rootNode.activeElement.closest('.de-control[data-field]') as HTMLElement | null);
+    const focusedControl = focusedField === null ? null : rootNode.activeElement;
+    const caretAt =
+      focusedControl instanceof HTMLInputElement && focusedControl.type === 'text'
+        ? ([focusedControl.selectionStart, focusedControl.selectionEnd] as const)
+        : null;
     // Mount the new window before the old one goes, so the scroll position is kept.
     const old = win;
     const fresh = mountPageWindow(scroller, result.tree, source(text), {
@@ -298,9 +309,34 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
         const title = placeholders.get(box.blockId);
         return title === undefined ? null : placeholder(doc, title, box.height);
       },
+      // The form fields are the web view's own controls, over the room the layout left (FE-093).
+      // A read-only page view (a version) draws no controls: its core refuses every change.
+      ...(readOnly
+        ? {}
+        : {
+            inlineControl: (place: InlineBoxPlace): HTMLElement | null => {
+              const control = handle.fieldControl(place.id);
+              if (control) control.style.fontSize = `${place.heightPt}pt`;
+              return control;
+            },
+          }),
     });
     win = fresh;
     old?.dispose();
+    if (!readOnly) {
+      handle.keepFieldControls(text.fieldIds());
+      if (focusedControl instanceof HTMLElement && rootNode.activeElement !== focusedControl) {
+        focusedControl.focus({ preventScroll: true });
+        const from = caretAt?.[0];
+        const to = caretAt?.[1];
+        if (
+          typeof from === 'number' &&
+          typeof to === 'number' &&
+          focusedControl instanceof HTMLInputElement
+        )
+          focusedControl.setSelectionRange(from, to);
+      }
+    }
     tops = [];
     heights = [];
     let y = 0;

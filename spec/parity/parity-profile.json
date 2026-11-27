@@ -1404,6 +1404,10 @@
       "capability": "headers-and-footers"
     },
     {
+      "id": "page.footer",
+      "capability": "headers-and-footers"
+    },
+    {
       "id": "format.applyStyle",
       "capability": "styles"
     },

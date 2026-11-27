@@ -131,6 +131,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `mode.view` | mode | modes |  |  |
 | `navigate.nextEditableRegion` | review | regions-and-permissions |  |  |
 | `page.closeStory` | story | headers-and-footers |  |  |
+| `page.footer` | page | headers-and-footers |  |  |
 | `page.header` | page | headers-and-footers |  | `editHeader` |
 | `proofing.next` | review | spelling-and-grammar | `Alt-F7` |  |
 | `proofing.previous` | review | spelling-and-grammar | `Alt-Shift-F7` |  |

@@ -23,6 +23,7 @@ import type {
   Unsubscribe,
 } from '@docedit/protocol';
 import type { AltRequest } from './alt-text.ts';
+import type { BlockFix } from './block-fix-types.ts';
 import type { ReadView } from './read-value.ts';
 import type { TrimReport } from './trim.ts';
 import type { Clock } from './sync/session.ts';
@@ -52,6 +53,7 @@ export type CommandName =
   | 'selectAll'
   | 'insertFootnote'
   | 'editHeader'
+  | 'editFooter'
   | 'undo'
   | 'redo'
   | 'paragraphStyle'
@@ -550,6 +552,7 @@ export type CoreQueryName =
   | 'isItalic'
   | 'canInsertFootnote'
   | 'hasHeader'
+  | 'hasFooter'
   | 'canInsertField'
   // PRM-033 and FE-044 criterion 5: the selection's whole body blocks may become a region.
   | 'canMarkRegion'
@@ -1035,7 +1038,8 @@ export interface DocumentApi {
    * Why `query(name)` answered false, as a reason code the shell turns into its own words
    * (`reason.query.<code>`); null when the query is true or has no reason to give. For
    * `canMarkRegion`: `suggestion` (FE-044 criterion 5), `locked`, `nested`, `structure` or `blocks`.
-   * For `hasHeader`: `structure` when the user may not change headers and footers (07 §7; PRM-030).
+   * For `hasHeader` and `hasFooter`: `structure` when the user may not change headers and footers
+   * (07 §7; PRM-030).
    */
   queryReason(name: string): string | null;
 
@@ -1087,6 +1091,8 @@ export interface DocumentApi {
   showReferences(): boolean;
   /** Stores the alternative text of the first picture of the asset that has none; false when it cannot (FE-132). */
   setImageAlt(asset: string, alt: string): boolean;
+  /** Repairs one issue of the accessibility checker in a block, through the scope guard; false when it cannot (UX-067). */
+  fixBlock(id: string, fix: BlockFix): boolean;
   focus(): void;
   destroy(): void;
 

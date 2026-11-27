@@ -281,12 +281,34 @@ describe('numbering definitions (CDM-019)', () => {
     );
   });
 
-  it('accepts templates of %1 to %9 and the punctuation . ( ) - § and space, and nothing else', () => {
-    for (const text of ['%1.', '(%1)', '%1.%2.%3', '§ %1', '%1-%2', ''])
+  it('accepts templates of %1 to %9 and literal text, and refuses a stray percent sign, controls and TeX specials (owner decision 240)', () => {
+    for (const text of [
+      '%1.',
+      '(%1)',
+      '%1.%2.%3',
+      '§ %1',
+      '%1-%2',
+      '',
+      'Article %1',
+      'NEW-%1-FORMAT',
+      '第%1条',
+      '%1:',
+    ])
       expect(invariants(addDefs(exampleDoc(), numbering('num1', [level({ text })]))), text).toEqual(
         [],
       );
-    for (const text of ['%0', '%a', 'Article %1', '%1\\', '{%1}', '%1:', '%%1'])
+    for (const text of [
+      '%0',
+      '%a',
+      '%',
+      '%1\\',
+      '{%1}',
+      '%%1',
+      '100%',
+      '%1‮',
+      '%1\u0007',
+      'a'.repeat(65),
+    ])
       expect(codes(addDefs(exampleDoc(), numbering('num1', [level({ text })]))), text).toEqual([
         'attribute_invalid',
       ]);
