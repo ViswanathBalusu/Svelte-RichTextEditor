@@ -6,7 +6,8 @@
  * Every script under `/lib/` that the page requests from the import on is read in full. The base
  * table must be among them, and no pseudo-locale table (src/i18n/pseudo.ts in the shell) may be:
  * each pseudo table uses a character the base table never uses (U+1E7C and U+1E7D for `en-XA`,
- * U+202E for `ar-XB`), searched for in its literal and its escaped form.
+ * U+202E for `ar-XB`), searched for in its literal and its escaped form (the text of a pattern
+ * that names them does not count).
  *
  * The positive control: after the element's `locale` attribute is set to `en-XA`, a chunk loaded
  * for it carries one of those characters.
@@ -16,7 +17,10 @@
 import { expect, test } from '@playwright/test';
 import { openLib } from './embed-helpers.ts';
 
-const PSEUDO_MARKER = /Ṽ|ṽ|‮|\\u1e7[cd]|\\u202e/i;
+// A literal character, or a single-escaped one. A double-escaped one (a backslash before the
+// backslash) is the text of a pattern, as in the engine's check for bidirectional controls in
+// identifiers (U+202A to U+202E), and is not a pseudo-locale table.
+const PSEUDO_MARKER = /Ṽ|ṽ|‮|(?<!\\)\\u(?:1e7[cd]|202e)/i;
 
 interface Fetched {
   url: string;
