@@ -1111,6 +1111,7 @@ export class Room {
         fieldsChangedSinceBase: this.fieldsChangedAfter(s.base),
         serverAuthored: s.serverAuthored,
         origin: s.origin,
+        isRetired: (id) => this.isRetired(id),
         ...(gate ? { fieldEnabled: gate.enabled } : {}),
         definitionUse: {
           before: () => index.definitionUse(docBefore),
@@ -1220,7 +1221,9 @@ export class Room {
       revision: this.perms.revision,
       cdm: this.cdm,
       engine: ENGINE,
-      retired: inv.value.removedRegions,
+      // A removed region's identifier and a removed definition's scope key are both retired (I3;
+      // ADR 0424): neither returns by `defs.add` or by wrapping a region again.
+      retired: [...inv.value.removedRegions, ...verdict.diff.definitionsRemoved],
       claimed: verdict.claimedSuggestionIds,
       base: s.base,
       rebased,
@@ -1248,6 +1251,15 @@ export class Room {
     // 9. Persist (group commit: one write in flight per room).
     this.startWrite(fx);
     return fx;
+  }
+
+  /**
+   * Whether an earlier commit, stored or still pending, retired this identifier: a region
+   * identifier, or the scope key of a removed definition (`defs:style_def/<id>`; ADR 0424).
+   */
+  private isRetired(id: string): boolean {
+    if (this.retired.has(id)) return true;
+    return this.pending().some((p) => p.stored.retired.includes(id));
   }
 
   private invariantContext(migration?: { def?: CdmDefinition }) {
@@ -1613,7 +1625,7 @@ export class Room {
       revision: this.perms.revision,
       cdm: migration?.cdm ?? this.cdm,
       engine: ENGINE,
-      retired: inv.value.removedRegions,
+      retired: [...inv.value.removedRegions, ...verdict.diff.definitionsRemoved],
       claimed: verdict.claimedSuggestionIds,
       base: this.tentativeSeq,
       rebased: false,

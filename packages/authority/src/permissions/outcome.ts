@@ -46,6 +46,14 @@ export interface OutcomeInput {
   /** The registered modules (PRM-010). Omitted: `STANDARD_RULES`, that is P4 and P7. */
   rules?: OutcomeRules;
   /**
+   * Identifiers retired by earlier commits, as the room holds them (07 §3). Region identifiers are
+   * node identifiers; a removed definition is retired as its scope key (`defs:style_def/<id>`),
+   * which no node identifier can equal. `defs.add` refuses a retired definition (ADR 0424;
+   * PRM-069). A function, so that a commit that adds no definition pays nothing. Omitted: none is
+   * retired.
+   */
+  isRetired?: (id: string) => boolean;
+  /**
    * The definitions each region uses before and after the commit (07 §5.3), from the room's
    * index (PRM-016). Omitted: computed from the documents when a definition changed.
    */
@@ -233,10 +241,30 @@ export function outcomeCheck(input: OutcomeInput): OutcomeVerdict {
     else deny(scope, `${v.reason} (${rule.id})`);
   };
 
+  // `defs.add` (ADR 0424; PRM-069): a grant that lists it lets its holder insert a new `style_def`,
+  // and nothing else among the definitions. The definitions node changes only by that insertion
+  // (`doc` is in `changed` because the order of definitions grows), the style is new, and no
+  // earlier commit used its identifier. The grants are read only when a definition was added: a
+  // commit that needs no `structure` pays no lookup (PRM-016).
+  const addedStyles = new Set(
+    diff.definitionsAdded.filter((d) => d.type === 'style_def').map((d) => d.scope),
+  );
+  const defsAddAllows = (scope: string): boolean => {
+    if (!addedStyles.size || !access.structureGrants.defsAdd) return false;
+    if (scope === 'doc') return diff.docOnlyByAddedDefinitions;
+    return addedStyles.has(scope) && !input.isRetired?.(scope);
+  };
+  const defsAddReason = (scope: string): string | null => {
+    if (!addedStyles.has(scope)) return null;
+    return access.structureGrants.defsAdd
+      ? `\`defs.add\` cannot reuse ${scope}: an earlier commit removed it (ADR 0424)`
+      : operationNeeds('defs.add');
+  };
   for (const scope of diff.changed) {
     if (scope === 'doc' || scope.startsWith('defs:') || scope.startsWith('story:')) {
       if (!hasStructure) {
-        deny(scope, `${operationNeeds(structureOperation(scope))}`);
+        if (defsAddAllows(scope)) continue;
+        deny(scope, defsAddReason(scope) ?? operationNeeds(structureOperation(scope)));
         continue;
       }
       if (scope.startsWith('story:') && everyone) {
@@ -278,9 +306,23 @@ export function outcomeCheck(input: OutcomeInput): OutcomeVerdict {
   if (diff.regionTitleChanged.length) structural.push('region.retitle');
   if (diff.sectionBreaksChanged) structural.push('section_break.change');
   if (structural.length) {
+    // `region.retitle` through a grant (ADR 0424; PRM-069): when every region whose title changes
+    // is one the user holds the grant and `edit` for, the rename needs neither `structure` nor
+    // `edit` in the body. Any other operation of the same commit is judged as before, so a commit
+    // that mixes the two is refused whole.
+    const retitleByGrant =
+      !access.docRole.has('structure') &&
+      diff.regionTitleChanged.length > 0 &&
+      diff.regionTitleChanged.every(
+        (id) => access.structureGrants.retitle.has(id) && regionCaps(id).has('edit'),
+      );
+    const needing = retitleByGrant
+      ? structural.filter((op) => op !== 'region.retitle')
+      : structural;
     if (!access.docRole.has('structure'))
-      for (const op of structural) deny('body', `${operationNeeds(op)}`);
-    if (!access.body.has('edit')) deny('body', 'structural changes need `edit` in the body (P2)');
+      for (const op of needing) deny('body', `${operationNeeds(op)}`);
+    if (needing.length && !access.body.has('edit'))
+      deny('body', 'structural changes need `edit` in the body (P2)');
     for (const id of diff.regionTitleChanged)
       if (!regionCaps(id).has('edit'))
         deny(`region:${id}`, '`region.retitle` needs `edit` in the region (P2)');
