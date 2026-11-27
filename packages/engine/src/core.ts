@@ -2076,6 +2076,7 @@ export class DocumentCore implements DocumentApi {
       .sort();
     const lang = marksAt(state).find((m) => m.type.name === 'lang')?.attrs['value'];
     const charStyle = marksAt(state).find((m) => m.type.name === 'charStyle')?.attrs['style'];
+    const size = marksAt(state).find((m) => m.type.name === 'fontSize')?.attrs['value'];
     let tableStyle: string | null = null;
     for (let d = $from.depth; d > 0 && tableStyle === null; d--) {
       const node = $from.node(d);
@@ -2093,6 +2094,7 @@ export class DocumentCore implements DocumentApi {
       styleId: style,
       charStyleId: typeof charStyle === 'string' ? charStyle : null,
       tableStyleId: tableStyle,
+      fontSize: typeof size === 'number' ? size : null,
     };
   }
 
@@ -3057,7 +3059,12 @@ export class DocumentCore implements DocumentApi {
       case 'listLevelDown':
       case 'restartNumbering':
       case 'continueNumbering':
-        return listCommand(name, args, (pos) => this.canEdit(this.#scopeAt(pos)));
+        return listCommand(
+          name,
+          args,
+          (pos) => this.canEdit(this.#scopeAt(pos)),
+          (doc) => (this.canEdit('doc') && this.canEdit('defs') ? numberingInsertPos(doc) : null),
+        );
       case 'selectAll':
         return selectAllInBody;
       case 'copyFormat':

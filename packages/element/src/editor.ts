@@ -10,6 +10,8 @@
  */
 import {
   type AssetImageLookup,
+  type CommandArgs,
+  type CommandName,
   EditorCore,
   type ConnectionState,
   type EditMode,
@@ -90,6 +92,22 @@ import { attachStyles, type StylePath } from './styles.ts';
 
 /** The modes the element's switcher offers (UX-015; the shell's `mode.*` commands). */
 const SHELL_MODES: readonly EditorMode[] = ['edit', 'review', 'view'];
+
+/**
+ * The core's own commands that the ribbon's Home tab runs by name, with their arguments (a size, a
+ * colour, a highlight, a list kind): `runNamed` hands them to the core as they are.
+ */
+const DIRECT_FORMATS: readonly string[] = [
+  'underline',
+  'strike',
+  'clearFormatting',
+  'fontSize',
+  'color',
+  'highlight',
+  'applyList',
+  'listLevelUp',
+  'listLevelDown',
+];
 
 export interface MountOptions {
   root: ShadowRoot;
@@ -617,8 +635,13 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'changeStyle',
         'deleteStyle',
         'insertCitation',
+        ...DIRECT_FORMATS,
       ],
       runNamed: (name, args) => {
+        // The Home tab's character and list commands (the ribbon): the core's own named commands,
+        // each with the arguments it checks itself (a size, a colour, a list kind).
+        if (DIRECT_FORMATS.includes(name))
+          return core.run(name as CommandName, (args ?? {}) as CommandArgs);
         if (name === 'showReferences') return core.showReferences();
         // FE-134: `insertCaption` numbers the figure, table or selected equation the selection is on;
         // `insertCrossReference` takes the dialog's `{ target, format }` and inserts a `ref` field.

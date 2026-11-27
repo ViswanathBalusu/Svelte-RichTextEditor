@@ -109,9 +109,11 @@ export function listCommand(
   name: ListCommandName,
   args: CommandArgs,
   writable: (pos: number) => boolean,
+  insertAt: InsertAt,
 ): Command | null {
   switch (name) {
     case 'applyList':
+      if (args.listKind !== undefined) return listKindCommand(args.listKind, writable, insertAt);
       return args.numberingId === undefined ? null : applyList(args.numberingId, writable);
     case 'removeList':
       return removeList(writable);
@@ -124,6 +126,80 @@ export function listCommand(
     case 'continueNumbering':
       return continueNumbering(writable);
   }
+}
+
+type ListKind = NonNullable<CommandArgs['listKind']>;
+
+/**
+ * Where the document takes a new numbering definition, or null when this user may not add one: it
+ * changes the document's definitions and their order, which the guard allows to those who may change
+ * structure (07 §7).
+ */
+export type InsertAt = (doc: PMNode) => number | null;
+
+/** The identifier of the first definition of the document of this kind: its first level is a bullet, or decimal. */
+function definitionOfKind(doc: PMNode, kind: ListKind): string | null {
+  const wanted = kind === 'bullet' ? 'bullet' : 'decimal';
+  let found: string | null = null;
+  doc.firstChild?.forEach((def) => {
+    const levels = def.attrs['levels'] as ReadonlyArray<{ format?: unknown }> | null;
+    if (found === null && def.type.name === 'numbering_def' && levels?.[0]?.format === wanted)
+      found = def.attrs['id'] as string;
+  });
+  return found;
+}
+
+/** The definition a document gets with its first list of a kind: nine levels, as a paste makes them. */
+function newDefinition(kind: ListKind): Record<string, unknown> {
+  const bullets = kind === 'bullet';
+  return {
+    id: nodeId(),
+    levels: Array.from({ length: MAX_LEVEL + 1 }, (_, i) => ({
+      format: bullets ? 'bullet' : ['decimal', 'lowerLetter', 'lowerRoman'][i % 3],
+      text: bullets ? '' : `%${i + 1}.`,
+      start: 1,
+      indentLeft: 720 + i * 360,
+      hanging: 360,
+      ...(bullets ? { bulletChar: '•◦▪'[i % 3] } : {}),
+    })),
+  };
+}
+
+/**
+ * A bulleted or a numbered list, as the Home tab's two buttons make it. The paragraphs already in a
+ * list of this kind leave it (the button toggles); else they join a definition of the kind that the
+ * document has, or the document gets one, in the same transaction.
+ */
+function listKindCommand(
+  kind: ListKind,
+  writable: (pos: number) => boolean,
+  insertAt: InsertAt,
+): Command {
+  return (state, dispatch) => {
+    const targets = targetsOf(state, writable);
+    if (targets.length === 0) return false;
+    const existing = definitionOfKind(state.doc, kind);
+    if (existing !== null) {
+      const inKind = targets.every(({ node }) => listOf(node)?.numberingId === existing);
+      return (inKind ? removeList(writable) : applyList(existing, writable))(state, dispatch);
+    }
+    const at = insertAt(state.doc);
+    if (at === null) return false;
+    if (!dispatch) return true;
+    const definition = state.schema.nodes['numbering_def']!.create(newDefinition(kind));
+    const tr = state.tr.insert(at, definition);
+    const listId = nodeId();
+    for (const { node, pos } of targets) {
+      const level = Math.min(listOf(node)?.level ?? 0, MAX_LEVEL);
+      tr.setNodeAttribute(tr.mapping.map(pos), 'numbering', {
+        numberingId: definition.attrs['id'] as string,
+        listId,
+        level,
+      });
+    }
+    dispatch(tr.scrollIntoView());
+    return true;
+  };
 }
 
 function applyList(numberingId: string, writable: (pos: number) => boolean): Command {
