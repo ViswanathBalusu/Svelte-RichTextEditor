@@ -56,7 +56,7 @@ describe('OPERATIONS carries `perRegion` on exactly two operations (PRM-068, cri
     // Every operation is accounted for in one list or the other.
     expect(new Set([...unflagged, ...REGION_STRUCTURE_OPERATIONS]).size).toBe(OPERATIONS.length);
     // `fill` is a capability, not an operation, so it has no entry to flag.
-    expect(OPERATIONS.some((o) => o.id === 'fill')).toBe(false);
+    expect(OPERATIONS.some((o) => (o.id as string) === 'fill')).toBe(false);
   });
 });
 
