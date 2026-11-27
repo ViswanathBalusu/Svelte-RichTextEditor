@@ -264,8 +264,8 @@
 \def\DE@mainlang{english}
 \newcommand*\DEbidi{\DE@biditrue}
 \newcommand*\DEbabel[2]{%
-  \ifDE@bidi \RequirePackage[shorthands=off,bidi=basic]{babel}%
-  \else \RequirePackage[shorthands=off]{babel}\fi
+  \ifDE@bidi \PassOptionsToPackage{bidi=basic}{babel}\fi
+  \RequirePackage[shorthands=off]{babel}%
   \def\DE@mainlang{#1}%
   \babelprovide[import=#2, main]{#1}%
   \ifDE@bidi \babelprovide[import=ar]{arabic}\fi}

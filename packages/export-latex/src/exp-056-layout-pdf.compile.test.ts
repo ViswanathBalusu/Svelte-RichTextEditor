@@ -84,15 +84,82 @@ function pageText(pdf: Uint8Array, page: number, dir: string): string | null {
   return r.stdout;
 }
 
+/** The words that every line starts with (the running head), or none when fewer than three. */
+function commonWordPrefix(lines: string[]): string[] {
+  const split = lines.map((l) => l.split(/\s+/).filter((w) => w !== ''));
+  const first = split[0];
+  if (!first || split.length < 3) return [];
+  let n = 0;
+  while (n < first.length && split.every((s) => s[n] === first[n])) n++;
+  return n >= 3 ? first.slice(0, n) : [];
+}
+
+/** The page text without its first line, when that line starts with the running head. */
+function withoutHead(text: string, head: string[], applies: boolean): string {
+  if (!applies || head.length === 0) return text;
+  const lines = text.split('\n');
+  const first = (lines[0] ?? '').split(/\s+/).filter((w) => w !== '');
+  return head.every((w, i) => first[i] === w) ? lines.slice(1).join('\n') : text;
+}
+
+interface PageStart {
+  n: number;
+  starts: { blockId: string; offset: number } | null | undefined;
+}
+
+/**
+ * The pages whose reported start does not match the PDF. Each message names the document and the
+ * page. `checked` counts the pages that were compared.
+ */
+function startMismatches(
+  documentName: string,
+  pages: readonly PageStart[],
+  body: unknown,
+  textOf: (page: number) => string | null,
+  head: string[],
+): { mismatches: string[]; checked: number } {
+  const mismatches: string[] = [];
+  let checked = 0;
+  for (const page of pages) {
+    const where = `${documentName} page ${page.n}`;
+    const starts = page.starts;
+    if (!starts) {
+      mismatches.push(`${where}: no block start`);
+      continue;
+    }
+    const block = findBlock(body, starts.blockId);
+    if (!block) {
+      mismatches.push(`${where}: block ${starts.blockId} is not in the document`);
+      continue;
+    }
+    const text = blockText(block).slice(starts.offset);
+    // A list of contents, figures or tables is generated: its block has no text of the document, and
+    // a page can open in the middle of it. Such a page opens with an entry of the list, and the
+    // entries of a list of figures or tables begin with the label (Figure, Table).
+    const generated = block['type'] === 'toc';
+    const label = String((block['attrs'] as Record<string, unknown> | undefined)?.['of'] ?? '');
+    const expected = generated ? (label === '' ? [] : [label]) : words(text).slice(0, 3);
+    const pdf = textOf(page.n);
+    if (pdf === null) {
+      mismatches.push(`${where}: pdftotext cannot read the page`);
+      continue;
+    }
+    const top = words(withoutHead(pdf, head, page.n > 1)).slice(0, 6);
+    if (expected.length === 0) continue;
+    if (!expected.some((w) => top.includes(w)))
+      mismatches.push(
+        `${where}: expected ${JSON.stringify(expected)} at the top of the page, found ${JSON.stringify(top)}`,
+      );
+    checked++;
+  }
+  return { mismatches, checked };
+}
 describe.skipIf(!ready)(
   'EXP-056 criterion 1: the first block and offset of each page match the PDF text that begins it',
   () => {
-    // Skipped, not deleted: `pages-20` holds Chinese, Japanese and Korean text, and the sandbox image
-    // has no CJK face, so LuaTeX stops with "Missing character" (U+6587) and writes no PDF. Every
-    // multi-page corpus document holds CJK text. Turn it back on when EXP-026 (the glyph check) or
-    // the font manifest covers CJK. The timeout is that of the other compile tests: the default of
-    // 60 s ended the reviewer's run (2026-11-13) before any page was checked.
-    it.skip('checks every page of the pages-20 corpus document against its layout.json start (skipped: no CJK face in the sandbox image, EXP-026)', async () => {
+    // pages-20 holds Chinese, Japanese and Korean text; the image has the Noto CJK face since
+    // owner decision 228, so it compiles. The timeout is that of the other long compile tests.
+    it('checks every page of the pages-20 corpus document against its layout.json start', async () => {
       const corpus = await loadDocument('pages-20');
       const assets: Record<string, { sha256: string; mediaType: string; bytes: Uint8Array }> = {};
       for (const a of corpus.assets)
@@ -128,37 +195,31 @@ describe.skipIf(!ready)(
       const body =
         (envelope.doc.content as Record<string, unknown>[]).find((n) => n['type'] === 'body') ??
         envelope.doc;
-      const mismatches: string[] = [];
-      let checked = 0;
-      for (const page of layout.pages) {
-        const starts = page.starts;
-        if (!starts) {
-          mismatches.push(`page ${page.n}: no block start`);
-          continue;
-        }
-        const block = findBlock(body, starts.blockId);
-        if (!block) {
-          mismatches.push(`page ${page.n}: block ${starts.blockId} is not in the document`);
-          continue;
-        }
-        const text = blockText(block).slice(starts.offset);
-        const expected = words(text).slice(0, 3);
-        const pdf = pageText(c.compile.pdf, page.n, dir);
-        if (pdf === null) {
-          mismatches.push(`page ${page.n}: pdftotext cannot read the page`);
-          continue;
-        }
-        const top = words(pdf).slice(0, 6);
-        if (expected.length === 0) continue;
-        const found = expected.some((w) => top.includes(w));
-        if (!found)
-          mismatches.push(
-            `page ${page.n}: expected ${JSON.stringify(expected)} at the top of the page, found ${JSON.stringify(top)}`,
-          );
-        checked++;
-      }
-      expect(mismatches).toEqual([]);
-      expect(checked).toBe(layout.pages.length);
-    }, 300_000);
+      // Every page after the first starts with the running head of the document (a header line that
+      // begins with the same words on each page); it is not the text that the layout reports.
+      const firstLines = layout.pages
+        .slice(1)
+        .map((p) => (pageText(c.compile.pdf!, p.n, dir) ?? '').split('\n')[0] ?? '');
+      const head = commonWordPrefix(firstLines);
+      const pdf = c.compile.pdf;
+      const result = startMismatches(
+        'pages-20',
+        layout.pages,
+        body,
+        (n) => pageText(pdf, n, dir),
+        head,
+      );
+      expect(result.mismatches).toEqual([]);
+      expect(result.checked).toBe(layout.pages.length);
+
+      // A mismatch fails the test and names the document and the page (criterion 4): page 7 is given
+      // the start of page 9.
+      const wrong = layout.pages.map((p) =>
+        p.n === 7 ? { ...p, starts: layout.pages[8]!.starts } : p,
+      );
+      const bad = startMismatches('pages-20', wrong, body, (n) => pageText(pdf, n, dir), head);
+      expect(bad.mismatches).toHaveLength(1);
+      expect(bad.mismatches[0]).toMatch(/^pages-20 page 7: expected /u);
+    }, 900_000);
   },
 );
