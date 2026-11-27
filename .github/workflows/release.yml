@@ -102,6 +102,32 @@ jobs:
           path: dist/release/*/reports/
           if-no-files-found: ignore
 
+  docs-site:
+    # FND-013: the documentation site of this release (apps/docs-site). It is kept as a workflow
+    # artifact and published nowhere: where it is hosted is not decided. To add the release to a
+    # site that already holds earlier ones, put that site's folder at dist/site before the build.
+    name: Documentation site
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the site of this release (VitePress and TypeDoc)
+        run: pnpm --filter @docedit/docs-site site --version "${{ needs.prepare.outputs.version }}" --site "${GITHUB_WORKSPACE}/dist/site"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-site
+          path: dist/site/
+          if-no-files-found: error
+
   images:
     name: Image ${{ matrix.image.id }} (built twice and compared, bill of materials)
     needs: prepare

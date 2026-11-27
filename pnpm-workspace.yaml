@@ -13,5 +13,12 @@ minimumReleaseAgeExclude:
   - playwright@1.65.0
   - '@playwright/test@1.65.0'
 
-# Dependencies run no install scripts unless they are listed here (supply-chain hygiene, SEC epic).
+# Dependencies run no install scripts unless they are listed here as true (supply-chain hygiene, SEC
+# epic). esbuild 0.21.5 comes with VitePress 1 of the documentation site (FND-013). Its install script
+# only checks the binary that its platform package already provides, so it stays off. It is named
+# because pnpm 12 fails an install that has a script nobody has decided on. The empty
+# `onlyBuiltDependencies` list stays: tests/security checks it.
+allowBuilds:
+  esbuild: false
+
 onlyBuiltDependencies: []

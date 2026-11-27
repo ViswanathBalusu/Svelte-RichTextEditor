@@ -1,0 +1,3 @@
+# The staged content, the generated API documentation and the built site are rebuilt on every run.
+# They sit in dist/, which the repository-wide scans skip.
+dist/
