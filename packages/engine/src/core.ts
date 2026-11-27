@@ -1049,6 +1049,8 @@ export class DocumentCore implements DocumentApi {
    */
   #historyAligned = true;
   #requires: string[];
+  /** The `requires` the service last gave (open, reload or reset); a feature added only here is taken back if the room refuses it (UX-056 criterion 4). */
+  #serviceRequires: readonly string[];
   #session: SyncSession | null = null;
   /** The journal could not write (FE-008): unconfirmed work is not protected, so it reads unsaved. */
   #journalFailed = false;
@@ -1242,6 +1244,7 @@ export class DocumentCore implements DocumentApi {
     this.#deferRemote = config.deferRemoteWhileComposing ?? true;
     this.#journalHeld = config.journalHoldsWork === true;
     this.#requires = [...config.doc.requires];
+    this.#serviceRequires = [...config.doc.requires];
     const doc = readEnvelope(config.doc, this.#schema);
     this.#sync = initialState(doc);
     this.#state = EditorState.create({
@@ -5536,6 +5539,7 @@ one or original. It is a
           }),
         ];
         this.recovered.set({ count: items.length, items });
+        if (e.items.some((i) => i.reason === 'conflict')) this.#retakeExtensions();
         return;
       }
       case 'report':
@@ -5552,6 +5556,22 @@ one or original. It is a
         this.#publishSync();
         return;
     }
+  }
+
+  /**
+   * After the room refused a commit with `conflict`: if this copy added `extensions` to its
+   * `requires` for a custom block (the room does so with the first block, 03 §11.1) and no such node is
+   * left in the document, the feature is taken back, so that a copy and a fragment do not claim it
+   * (UX-056 criterion 4). The service's own list is not changed here.
+   */
+  #retakeExtensions(): void {
+    if (!this.#requires.includes('extensions') || this.#serviceRequires.includes('extensions')) return;
+    let used = false;
+    this.#state.doc.descendants((n) => {
+      if (n.type.name === 'extension_block' || n.type.name === 'extension_inline') used = true;
+      return !used;
+    });
+    if (!used) this.#requires = this.#requires.filter((f) => f !== 'extensions');
   }
 
   /** Tells presence how the confirmed document moved, so that peers' positions are mapped (SYN-036). */
@@ -5610,7 +5630,10 @@ one or original. It is a
 
   /** A reload or reset: a new state, undo history included (04 §8, §9). */
   #replace(effect: Extract<Effect, { kind: 'replace' }>): void {
-    if (effect.requires) this.#requires = [...effect.requires];
+    if (effect.requires) {
+      this.#requires = [...effect.requires];
+      this.#serviceRequires = [...effect.requires];
+    }
     const old = this.#state;
     const doc = effect.doc;
     const caret = Math.min(old.selection.from, doc.content.size);
