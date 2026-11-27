@@ -23,6 +23,7 @@ export const EN_GB_CHECKER_PANE = {
   'checker.explain.link-text.empty': 'The link has no text.',
   'checker.explain.link-text.generic': 'The link text is generic, such as "click here".',
   'checker.explain.contrast': 'The contrast is {ratio} to 1; at least 4.5 to 1 is needed.',
+  'checker.export.alt-text': 'The PDF export reports {count} pictures without alternative text.',
   'checker.block': 'Block {id}',
   'checker.go': 'Go to this block',
   'checker.fixable': 'You can fix this here.',
