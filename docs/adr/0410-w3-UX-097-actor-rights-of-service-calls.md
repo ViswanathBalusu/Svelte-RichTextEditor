@@ -1,6 +1,6 @@
 # 0410 UX-097: the rights of the user a service call names
 
-**Status:** proposed (2026-11-18, lane w3). Needs the owner's word and the security review that owner decision 174 still requires.
+**Status:** option 2 chosen by the owner on 2026-11-26 (docs/owner-decisions-2026-11-26.md, decision 261). Built as described under Outcome.
 
 ## Context
 
@@ -30,3 +30,7 @@ None is taken. The spec's text today is option 1; its consequence for criterion 
 ## Consequences
 
 UX-097 criterion 4 stays unticked until the owner chooses. The conformance kit's scenario for the bound (a named user who lacks the right is refused) waits for the same choice (UX-096 criterion 5).
+
+## Outcome (2026-11-27)
+
+Option 2. A server-authored commit is checked in the room as the named user with the capabilities of an owner (room-host.ts, requesterOf), so it is refused where no role could allow it. Tests: services/document-service/test/control-plane/ux-097-actor-rights.test.ts (a prefill into an approved region, a prefill into a region leased to someone else, accepted for the lease holder; a replacement that changes an approved region). The refusal is conflict (409). A prefill that the room refuses is no longer written to the commit audit trail. 05 section 3.2 says so.
