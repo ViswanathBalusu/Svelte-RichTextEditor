@@ -26,6 +26,7 @@ import type {
   Backend,
   Content,
   ExportJob,
+  HistoryPort,
   ResolveUsers,
   SearchPrincipals,
 } from '@docedit/protocol';
@@ -1084,6 +1085,8 @@ export class DocEditorElement extends Base {
       ...this.#signingSource(docId),
       // The comment threads go through the backend's comments port, when it has one (UX-028).
       ...this.#threadsSource(docId),
+      // The history pane goes through the backend's history port, when it has one (UX-097).
+      ...this.#historySource(docId),
       // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
       drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
       mathFontsUrl: this.#config.katexFontsUrl,
@@ -1430,6 +1433,17 @@ export class DocEditorElement extends Base {
         },
       },
     };
+  }
+
+  /**
+   * The history pane's source (08 §4), when the session's backend has the history port and announced
+   * the feature; otherwise nothing, and the shell has no history pane.
+   */
+  #historySource(docId: string): { history?: { port: HistoryPort; docId: string } } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.history || !hasPort(backend, 'history')) return {};
+    return { history: { port: backend.history, docId } };
   }
 
   /**
