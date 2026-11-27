@@ -18,6 +18,14 @@
  * On a machine where Compose cannot start the file (a WSL Podman machine), stack.ps1 starts the
  * same definitions: PostgreSQL and the store as containers, the Node.js services as processes.
  *
+ * Started by Compose: with `DOCEDIT_DEMO_COMPOSE=1` the stack is the one `podman compose` (a Compose
+ * provider, here podman-compose of infra/tools/podman-compose) started from the same file. Its
+ * containers are named `<project>_<service>_1`, its data is in volumes, so `DOCEDIT_DEMO_DATA` names a
+ * folder holding copies of `tenants.json` and `setup.json` (volume `stack-data`) and `secrets.json`
+ * (volume `secrets-operator`), and the restart test runs the command lines of
+ * `DOCEDIT_DEMO_COMPOSE_DOWN` and `DOCEDIT_DEMO_COMPOSE_UP` instead of stack.ps1. The compile
+ * container test needs the worker as a process of this host and is skipped in that mode.
+ *
  * Criterion 4 is not shown here. The last test inspects the container in which the stack's export
  * worker compiles a job, and that container has no network; the worker itself is a process of the
  * host under stack.ps1 and has the host's network. Which of the two "the export worker container"
@@ -55,6 +63,7 @@ function settings(): Record<string, string> {
 }
 
 const live = process.env['DOCEDIT_DEMO_STACK'] === '1';
+const compose = live && process.env['DOCEDIT_DEMO_COMPOSE'] === '1';
 const restart = live && process.env['DOCEDIT_DEMO_STACK_RESTART'] === '1';
 if (!live)
   console.warn(
@@ -87,10 +96,16 @@ async function rest(
 }
 
 const containerState = (service: string): string =>
-  execFileSync(cli, ['inspect', '--format', '{{.State.Status}}', `${project}-${service}`], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
+  execFileSync(
+    cli,
+    [
+      'inspect',
+      '--format',
+      '{{.State.Status}}',
+      compose ? `${project}_${service}_1` : `${project}-${service}`,
+    ],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  ).trim();
 
 const servicePool = () =>
   createPool({
@@ -157,6 +172,16 @@ function childCommandLines(pid: number): string[] {
 }
 
 function stack(command: string): void {
+  if (compose) {
+    const line = process.env[`DOCEDIT_DEMO_COMPOSE_${command.toUpperCase()}`];
+    if (!line) throw new Error(`DOCEDIT_DEMO_COMPOSE_${command.toUpperCase()} is not set`);
+    const c = spawnSync(line, { encoding: 'utf8', shell: true, env: process.env });
+    if (c.status !== 0)
+      throw new Error(
+        `compose ${command} failed (${c.status}): ${(c.stderr || c.stdout).slice(-600)}`,
+      );
+    return;
+  }
   const r = spawnSync(
     'pwsh',
     ['-NoProfile', '-File', fileURLToPath(new URL('scripts/stack.ps1', appDir)), command],
@@ -231,72 +256,76 @@ describe.skipIf(!live)('the stack of apps/reference-host/compose.json, running (
     }
   });
 
-  it('compiles a job in a container that has no network (the compile container, not the worker process)', async () => {
-    const workerPid = Number(readFileSync(`${dataDir}/pids/export-worker.pid`, 'utf8').trim());
-    expect(Number.isSafeInteger(workerPid)).toBe(true);
-    const { machine } = sandboxRoute();
-    const watcher = machine
-      ? spawn(
-          cli,
-          [
-            'machine',
-            'ssh',
-            machine,
-            `echo ${Buffer.from(WATCH).toString('base64')} | base64 -d | sh`,
-          ],
-          { stdio: ['ignore', 'pipe', 'ignore'] },
-        )
-      : spawn('sh', ['-c', WATCH], { stdio: ['ignore', 'pipe', 'ignore'] });
-    let seen = '';
-    watcher.stdout.setEncoding('utf8').on('data', (chunk: string) => {
-      seen += chunk;
-    });
-    try {
-      // The loop is in place before the job is queued.
-      for (let i = 0; i < 600 && !seen.includes('watching'); i++) await sleep(100);
-      expect(seen).toContain('watching');
+  it.skipIf(compose)(
+    'compiles a job in a container that has no network (the compile container, not the worker process)',
+    async () => {
+      const workerPid = Number(readFileSync(`${dataDir}/pids/export-worker.pid`, 'utf8').trim());
+      expect(Number.isSafeInteger(workerPid)).toBe(true);
+      const { machine } = sandboxRoute();
+      const watcher = machine
+        ? spawn(
+            cli,
+            [
+              'machine',
+              'ssh',
+              machine,
+              `echo ${Buffer.from(WATCH).toString('base64')} | base64 -d | sh`,
+            ],
+            { stdio: ['ignore', 'pipe', 'ignore'] },
+          )
+        : spawn('sh', ['-c', WATCH], { stdio: ['ignore', 'pipe', 'ignore'] });
+      let seen = '';
+      watcher.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+        seen += chunk;
+      });
+      try {
+        // The loop is in place before the job is queued.
+        for (let i = 0; i < 600 && !seen.includes('watching'); i++) await sleep(100);
+        expect(seen).toContain('watching');
 
-      const doc = (await rest('POST', '/documents', { content: documentWithRegions() })).json[
-        'id'
-      ] as string;
-      const queued = await rest('POST', `/documents/${doc}/exports`, { target: 'pdf' });
-      expect(queued.status).toBe(202);
-      let job = queued.json;
-      let name: string | null = null;
-      let commandLine = '';
-      while (!['completed', 'failed', 'cancelled'].includes(job['state'])) {
-        // The worker of this stack starts the container: the command is a child of its process.
-        if (!name)
-          for (const line of childCommandLines(workerPid)) {
-            const m = /--name=(docedit-job-[0-9a-f]+)/.exec(line);
-            if (m) {
-              name = m[1]!;
-              commandLine = line;
+        const doc = (await rest('POST', '/documents', { content: documentWithRegions() })).json[
+          'id'
+        ] as string;
+        const queued = await rest('POST', `/documents/${doc}/exports`, { target: 'pdf' });
+        expect(queued.status).toBe(202);
+        let job = queued.json;
+        let name: string | null = null;
+        let commandLine = '';
+        while (!['completed', 'failed', 'cancelled'].includes(job['state'])) {
+          // The worker of this stack starts the container: the command is a child of its process.
+          if (!name)
+            for (const line of childCommandLines(workerPid)) {
+              const m = /--name=(docedit-job-[0-9a-f]+)/.exec(line);
+              if (m) {
+                name = m[1]!;
+                commandLine = line;
+              }
             }
-          }
-        await sleep(150);
-        job = (await rest('GET', `/exports/${job['id']}`)).json;
-      }
-      expect(job['state']).toBe('completed');
-      expect(name, 'the worker started no compile container').not.toBeNull();
-      expect(commandLine).toContain('--network=none');
-      if (machine) expect(commandLine).toContain(`machine ssh ${machine}`);
+          await sleep(150);
+          job = (await rest('GET', `/exports/${job['id']}`)).json;
+        }
+        expect(job['state']).toBe('completed');
+        expect(name, 'the worker started no compile container').not.toBeNull();
+        expect(commandLine).toContain('--network=none');
+        if (machine) expect(commandLine).toContain(`machine ssh ${machine}`);
 
-      // Inspected while it ran, where it ran: no network, a read-only root, no capabilities, and
-      // the unprivileged user of the image.
-      await sleep(1500);
-      const line = seen.split(/\r?\n/).find((l) => l.startsWith(`container|${name}|`));
-      expect(line, `the loop did not see ${name}`).toBeDefined();
-      const [, , network, readOnly, user, capabilities, image] = line!.split('|');
-      expect(network).toBe('none');
-      expect(readOnly).toBe('true');
-      expect(user).toBe('10001:10001');
-      expect(capabilities).toBe('[]');
-      expect(image).toBe(s['DOCEDIT_EXPORT_IMAGE']);
-    } finally {
-      watcher.kill();
-    }
-  }, 300_000);
+        // Inspected while it ran, where it ran: no network, a read-only root, no capabilities, and
+        // the unprivileged user of the image.
+        await sleep(1500);
+        const line = seen.split(/\r?\n/).find((l) => l.startsWith(`container|${name}|`));
+        expect(line, `the loop did not see ${name}`).toBeDefined();
+        const [, , network, readOnly, user, capabilities, image] = line!.split('|');
+        expect(network).toBe('none');
+        expect(readOnly).toBe('true');
+        expect(user).toBe('10001:10001');
+        expect(capabilities).toBe('[]');
+        expect(image).toBe(s['DOCEDIT_EXPORT_IMAGE']);
+      } finally {
+        watcher.kill();
+      }
+    },
+    300_000,
+  );
 
   it.skipIf(!restart)(
     'keeps documents and their history when the stack is stopped and started on the same volumes (criterion 5)',
