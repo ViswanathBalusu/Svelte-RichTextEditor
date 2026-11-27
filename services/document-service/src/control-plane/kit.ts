@@ -53,7 +53,7 @@ import type { TenantSettingService } from './tenant-settings.ts';
 import type { TenantRegistry } from './tenants.ts';
 import type { SearchHit, SearchQuery } from './search-index.ts';
 import type { CompileBudget } from './exp-009-compile-budget.ts';
-import type { BulkSendBudget } from './bulk-send.ts';
+import type { BulkSendBudget } from './bulk-send-budget.ts';
 import type { LiveQuotas, QuotaSource } from './live-quotas.ts';
 import type { PolicyHookGate } from './policy-hook-client.ts';
 import type { JobQueue } from './jobs/queue.ts';
