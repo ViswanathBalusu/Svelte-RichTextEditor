@@ -45,6 +45,8 @@ import {
 import { NodeHasher } from './hash.ts';
 import { NumberingImport } from './import-numbering.ts';
 import { importSources } from './import-sources.ts';
+import { MathConvertError } from './math.ts';
+import { ommlToLatex } from './math-omml.ts';
 import { parseCitationInstruction, residualTree } from './writer-citations.ts';
 import { payloadDigests } from './integrity.ts';
 import { valuesToMarks } from './marks.ts';
@@ -161,6 +163,13 @@ export interface ImportOptions {
   validate?: boolean;
   /** Font substitution (EXP-106): the ordered manifest (tenant entries first) and the default family. */
   fonts?: { manifest?: readonly FontManifestEntry[]; defaultFamily?: string };
+  /**
+   * The math gate of 09 §6.3 (`mathGateReason` of `@docedit/export-latex`: a reason, or null when the
+   * LaTeX passes). Office math is made an equation only when a gate is given and passes the LaTeX
+   * the converter wrote, so no unvalidated TeX is stored in a `latex` attribute (EXP-105). Without a
+   * gate every equation stays preserved content, as before.
+   */
+  mathGate?: (latex: string, display: boolean) => string | null;
 }
 
 export interface TreeStat {
@@ -947,7 +956,10 @@ class Importer {
     );
 
     if (this.opts.validate !== false) {
-      const result = validate(envelope, { attachedAssets: this.assets.ids() });
+      const result = validate(envelope, {
+        attachedAssets: this.assets.ids(),
+        ...(this.opts.mathGate ? { mathGate: this.opts.mathGate } : {}),
+      });
       if (!result.valid) {
         const first = result.violations
           .slice(0, 5)
@@ -1150,6 +1162,96 @@ class Importer {
     if (marks.length) this.count(this.stats.markedAtoms, 'citation');
     if (marks.some((m) => m.type === 'ins' || m.type === 'del')) this.stats.suggestions.atoms++;
     return withMarks(node, marks);
+  }
+
+  /**
+   * The LaTeX of Office math: converted by the converter of this package (EXP-054, decision 234),
+   * then passed through the math gate, so that no unvalidated TeX is stored (EXP-105 criterion 2).
+   * `{ why }` names the reason when it is not converted or the gate refuses it; null when there is
+   * no gate (nothing is converted then) or the equation is empty.
+   */
+  convertMath(el: XmlElement, display: boolean): { latex: string } | { why: string } | null {
+    const gate = this.opts.mathGate;
+    if (!gate) return null;
+    let latex: string;
+    try {
+      latex = ommlToLatex(el);
+    } catch (e) {
+      if (!(e instanceof MathConvertError)) throw e;
+      return { why: `it cannot be converted: ${e.message}` };
+    }
+    if (!latex) return null;
+    const reason = gate(latex, display);
+    return reason === null
+      ? { latex }
+      : { why: `the converted LaTeX fails the math gate: ${reason}` };
+  }
+
+  /** The warning for an equation that stays as Word has it (EXP-105 criterion 3). */
+  mathWarning(block: string | null, why: string): void {
+    this.warnings.push(
+      `an equation (block ${block ?? 'unknown'}) was not made editable and is kept as Word has it: ${why}`,
+    );
+  }
+
+  /** Inline Office math as an `equation` that keeps its original element as its origin (EXP-105). */
+  async equation(el: XmlElement, pc: PartCtx, marks: JsonMark[]): Promise<JsonNode | null> {
+    const converted = this.convertMath(el, false);
+    if (!converted) return null;
+    if ('why' in converted) {
+      this.mathWarning(this.block_, converted.why);
+      return null;
+    }
+    const node: JsonNode = { type: 'equation', attrs: { latex: converted.latex } };
+    if (this.preserve) {
+      const fragment = await this.fragment(
+        { xml: pc.bytes.slice(el.start, el.end), el },
+        'equation',
+        pc,
+        'none',
+      );
+      node.attrs!['origin'] = { fragment, hash: await modelledHash(node) };
+      this.preserveUsed = true;
+    }
+    this.count(this.stats.nodes, 'equation');
+    if (marks.some((m) => m.type === 'ins' || m.type === 'del')) this.stats.suggestions.atoms++;
+    return withMarks(node, marks);
+  }
+
+  /**
+   * A paragraph that holds one `m:oMathPara` and nothing else is an `equation_block`. The block
+   * keeps its place in the source map, so while it is unedited the paragraph is copied, and once
+   * edited only the math element is replaced (EXP-105 criteria 2 and 4).
+   */
+  async equationBlock(
+    p: XmlElement,
+    pc: PartCtx,
+  ): Promise<{ node: JsonNode; sectPr: XmlElement | null } | { why: string } | null> {
+    if (!this.opts.mathGate) return null;
+    const kids = elements(p).filter((k) => nameOf(k) !== W_PPR);
+    const para = kids[0];
+    if (kids.length !== 1 || !para || nameOf(para) !== M_OMATHPARA) return null;
+    const pPr = child(p, NS.w, 'pPr');
+    if (pPr && child(pPr, NS.w, 'sectPr')) return null;
+    const converted = this.convertMath(para, true);
+    if (!converted) return null;
+    if ('why' in converted) return converted;
+    const id = nodeId();
+    this.block_ = id;
+    const node: JsonNode = {
+      type: 'equation_block',
+      attrs: { id, latex: converted.latex, numbered: false },
+    };
+    const target: NodeSource = {
+      part: pc.part,
+      start: p.start,
+      end: p.end,
+      hash: '',
+      mathRange: [para.start, para.end],
+    };
+    this.source(node, target);
+    this.count(this.stats.nodes, 'equation_block');
+    return { node, sectPr: null };
   }
 
   /** Records a node the importer added without a source element: listed in `synthetic`, hashed in `derived`. */
@@ -1596,7 +1698,10 @@ class Importer {
         this.stats.fallbacks.trackedParagraphs++;
         label = 'tracked change';
       } else {
+        const equation = await this.equationBlock(el, pc);
+        if (equation && 'node' in equation) return equation;
         const p = await this.paragraph(el, pc);
+        if (equation && p) this.mathWarning(String(p.node.attrs?.['id']), equation.why);
         if (p) return p;
         this.stats.fallbacks.paragraphToBlock++;
       }
@@ -1991,6 +2096,13 @@ class Importer {
         const cited = await this.citation(c, pc, marks);
         if (cited) {
           out.push(cited);
+          continue;
+        }
+      }
+      if (name === M_OMATH) {
+        const equation = await this.equation(c, pc, marks);
+        if (equation) {
+          out.push(equation);
           continue;
         }
       }

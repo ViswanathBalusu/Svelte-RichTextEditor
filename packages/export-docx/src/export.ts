@@ -68,6 +68,8 @@ import {
   isRaw,
   mergeContainer,
 } from './props.ts';
+import { MathConvertError } from './math.ts';
+import { latexToOmml } from './math-omml.ts';
 import { sharedTrees } from './share.ts';
 import {
   CITATION_CONTROL_BASE,
@@ -665,9 +667,43 @@ class Writer {
       }
       case 'preserved_block':
         return [await this.preservedBlock(node, local ? src : undefined, po, plan)];
+      case 'equation_block':
+        // Unedited: the paragraph as it was. Edited: its math element is replaced and the rest of
+        // the paragraph (its properties) is kept (EXP-105).
+        if (local && (await this.unchanged(node, src)))
+          return [po.bytes.subarray(src!.start, src!.end)];
+        return this.equationBlock(node, src, po);
       default:
         throw new ExportError(`the patching writer cannot write a ${node.type} block yet`);
     }
+  }
+
+  /** The Office math of a LaTeX source, or its source text in a run when the converter does not take it. */
+  mathXml(latex: string, display: boolean, po: PartOut, block: string): string {
+    try {
+      return latexToOmml(latex, display);
+    } catch (e) {
+      if (!(e instanceof MathConvertError)) throw e;
+      this.warnings.push(
+        `an equation that cannot be converted to Office math is written as its LaTeX source (block ${block}: ${e.message})`,
+      );
+      return `<${po.wp}:r><${po.wp}:t xml:space="preserve">${escapeText(latex)}</${po.wp}:t></${po.wp}:r>`;
+    }
+  }
+
+  /** An edited or new display equation (EXP-105; the converter is that of EXP-096). */
+  equationBlock(node: JsonNode, src: NodeSource | undefined, po: PartOut): Chunk[] {
+    const id = String(node.attrs?.['id']);
+    const math = this.mathXml(String(node.attrs?.['latex'] ?? ''), true, po, id);
+    if (src?.mathRange && src.part === po.part)
+      return [
+        po.bytes.subarray(src.start, src.mathRange[0]),
+        math,
+        po.bytes.subarray(src.mathRange[1], src.end),
+      ];
+    return [
+      `<${po.wp}:p><${po.wp}:pPr><${po.wp}:jc ${po.wp}:val="center"/></${po.wp}:pPr>${math}</${po.wp}:p>`,
+    ];
   }
 
   /** `src` is given when the block's original element is in this part, so it can be copied. */
@@ -915,6 +951,7 @@ class Writer {
       if (node.type === 'image') out.push(await this.image(node, po, local));
       else if (node.type === 'preserved_inline') out.push(this.preservedInline(node, po, local));
       else if (node.type === 'citation') out.push(await this.citation(node, po, local));
+      else if (node.type === 'equation') out.push(await this.equation(node, po, local));
       else throw new ExportError(`the patching writer cannot write a ${node.type} inline node yet`);
       i++;
     }
@@ -980,6 +1017,26 @@ class Writer {
     return f.meta.wrap === 'run'
       ? `<${po.wp}:r>${this.rPr(node.marks, po, local)}${xml}</${po.wp}:r>`
       : xml;
+  }
+
+  /**
+   * Inline math: the original Office math while unedited (SR-M10), the converter's output once the
+   * LaTeX was edited, or the source text in a run when the converter does not take it (EXP-105).
+   */
+  async equation(node: JsonNode, po: PartOut, local: Map<string, string>): Promise<string> {
+    const origin = this.originOf(node);
+    if (origin && (await modelledHash(node)) === origin.hash)
+      return this.placeFragment(origin.fragment, po, node);
+    const latex = String(node.attrs?.['latex'] ?? '');
+    try {
+      return latexToOmml(latex, false);
+    } catch (e) {
+      if (!(e instanceof MathConvertError)) throw e;
+      this.warnings.push(
+        `an equation that cannot be converted to Office math is written as its LaTeX source (${e.message})`,
+      );
+      return `<${po.wp}:r>${this.rPr(node.marks, po, local)}<${po.wp}:t xml:space="preserve">${escapeText(latex)}</${po.wp}:t></${po.wp}:r>`;
+    }
   }
 
   /**

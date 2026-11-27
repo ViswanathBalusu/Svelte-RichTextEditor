@@ -129,6 +129,17 @@ export function latexToOmmlInline(latex: string): string {
 // ---------------------------------------------------------------------------------------------
 // Office math to tree.
 
+/** Other characters Word and other writers use for the accents of the table (read, never written). */
+const ACCENT_ALIASES: Readonly<Record<string, string>> = {
+  '̅': '̄',
+  '¯': '̄',
+  ˆ: '̂',
+  '˜': '̃',
+  '˙': '̇',
+  '¨': '̈',
+  '→': '⃗',
+};
+
 const flag = (e: XmlElement | undefined): boolean => {
   if (!e) return false;
   const v = attr(e, OMML_NS, 'val');
@@ -200,15 +211,16 @@ class Reader {
       }
       case 'sSub':
       case 'sSup':
-      case 'sSubSup':
-        return [
-          {
-            k: 'script',
-            base: this.body(this.child(e, 'e')),
-            sub: e.local === 'sSup' ? null : this.body(this.child(e, 'sub')),
-            sup: e.local === 'sSub' ? null : this.body(this.child(e, 'sup')),
-          },
-        ];
+      case 'sSubSup': {
+        // Word leaves empty placeholders for a script that was never typed: no script then.
+        const filled = (n: MathNode): MathNode | null =>
+          n.k === 'row' && n.items.length === 0 ? null : n;
+        const base = this.body(this.child(e, 'e'));
+        const sub = e.local === 'sSup' ? null : filled(this.body(this.child(e, 'sub')));
+        const sup = e.local === 'sSub' ? null : filled(this.body(this.child(e, 'sup')));
+        if (!sub && !sup) return base.k === 'row' ? base.items : [base];
+        return [{ k: 'script', base, sub, sup }];
+      }
       case 'nary': {
         const op = this.pr(e, 'naryPr', 'chr') ?? '∫';
         const spec = NARY_OF.get(op);
@@ -244,7 +256,8 @@ class Reader {
         ];
       }
       case 'acc': {
-        const mark = this.pr(e, 'accPr', 'chr') ?? '̂';
+        const raw = this.pr(e, 'accPr', 'chr') ?? '̂';
+        const mark = ACCENT_ALIASES[raw] ?? raw;
         if (!(mark in ACCENT_NAME)) this.fail('an accent that is not on the list');
         return [{ k: 'accent', mark, base: this.body(this.child(e, 'e')) }];
       }
@@ -324,7 +337,10 @@ class Reader {
         )
           num += chars[++i];
         out.push({ k: 'mn', text: num });
-      } else if (LETTER_NAME.has(c) || FROM_DOUBLE_STRUCK.has(c)) out.push({ k: 'mi', text: c });
+      } else if (c === ' ') out.push({ k: 'mo', text: ' ' });
+      else if (c === '-') out.push({ k: 'mo', text: '−' });
+      else if (c === '*') out.push({ k: 'mo', text: '∗' });
+      else if (LETTER_NAME.has(c) || FROM_DOUBLE_STRUCK.has(c)) out.push({ k: 'mi', text: c });
       else if (isOperatorChar(c)) out.push({ k: 'mo', text: c });
       else this.fail(`the character ${JSON.stringify(c)} is not on the list`);
     }

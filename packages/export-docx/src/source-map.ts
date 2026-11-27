@@ -28,6 +28,8 @@ export interface NodeSource {
   sectPrRange?: [number, number];
   /** Shape of the original element the writer keeps when it regenerates it: `no-tblPr` for a table without properties. */
   flags?: string[];
+  /** For an `equation_block`: the byte range of the paragraph's `m:oMathPara`, replaced when the equation is edited (EXP-105). */
+  mathRange?: [number, number];
 }
 
 export interface DefSource {

@@ -887,7 +887,8 @@ export function print(n: MathNode): string {
       if (n.sup) out += `^${braced(n.sup)}`;
       const body = print(n.body);
       if (!body) return out;
-      return glue([out, n.body.k === 'row' && n.body.items.length > 1 ? `{${body}}` : body]);
+      // A space after the operator and its limits: `\sum_{i=1}^n i`, not `^ni`.
+      return `${out} ${n.body.k === 'row' && n.body.items.length > 1 ? `{${body}}` : body}`;
     }
     case 'fence': {
       if (n.body.k === 'matrix') {
