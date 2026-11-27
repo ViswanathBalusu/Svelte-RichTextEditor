@@ -151,13 +151,13 @@ function suite(title: string, make: () => DocxImporter) {
       for (const a of [...byType('image/png'), ...byType('image/jpeg')]) {
         expect(a.width, a.id).toBeGreaterThan(0);
         expect(a.height, a.id).toBeGreaterThan(0);
-        const stored = await h.service.assets.getFinal(h.tenant, a.sha256!);
+        const stored = await h.service.assets.getFinal(h.tenant, a.sha256 ?? '');
         expect(stored, a.id).not.toBeNull();
       }
       expect(byType('image/png').length).toBeGreaterThan(0);
       expect(byType('image/jpeg').length).toBeGreaterThan(0);
       // A type the worker does not take (Windows metafiles) is kept as brought, as before.
-      const metafiles = ready.filter((a) => /x-(wmf|emf)/.test(a.contentType));
+      const metafiles = ready.filter((a) => /x-(wmf|emf)/.test(a.contentType ?? ''));
       expect(metafiles.length).toBeGreaterThan(0);
       for (const a of metafiles) expect(a.width).toBeNull();
       // Each is attached to the document from the import commit on.
