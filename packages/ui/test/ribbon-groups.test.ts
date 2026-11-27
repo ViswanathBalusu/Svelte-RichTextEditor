@@ -13,9 +13,10 @@ import {
   type CommandEntry,
   type CommandView,
 } from '../src/commands/index.ts';
-import { RIBBON_TABS, ribbonIconName, ribbonTabs } from '../src/shell/ribbon-groups.ts';
+import { RIBBON_TABS, ribbonTabs } from '../src/shell/ribbon-groups.ts';
 import { toolbarCommands } from '../src/shell/toolbar-groups.ts';
-import { BUILT_IN_ICONS, RIBBON_ICONS, parseIcon } from '../src/icons/icons.ts';
+import { BUILT_IN_ICONS, parseIcon } from '../src/icons/icons.ts';
+import { RIBBON_ICONS, ribbonIconName } from '../src/icons/ribbon-icons.ts';
 import { toolbarMode } from '../src/shell/settings.ts';
 import { EDIT, FakeCore, VIEW } from './support/fake-core.ts';
 

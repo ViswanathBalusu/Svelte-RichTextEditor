@@ -17,6 +17,7 @@ import { EN_GB_PDF_PANE } from './late/pdfPane.ts';
 import { EN_GB_PERMISSIONS_PANE } from './late/permissionsPane.ts';
 import { EN_GB_RECOVERED_PANE } from './late/recoveredPane.ts';
 import { EN_GB_REVIEW_PANE } from './late/reviewPane.ts';
+import { EN_GB_RIBBON_TOOLBAR } from './late/ribbonToolbar.ts';
 import { EN_GB_ROLES_PANE } from './late/rolesPane.ts';
 import { EN_GB_RULES_PANE } from './late/rulesPane.ts';
 import { EN_GB_SHORTCUTS_PANE } from './late/shortcutsPane.ts';
@@ -40,6 +41,7 @@ export const EN_GB = {
   ...EN_GB_PERMISSIONS_PANE,
   ...EN_GB_RECOVERED_PANE,
   ...EN_GB_REVIEW_PANE,
+  ...EN_GB_RIBBON_TOOLBAR,
   ...EN_GB_ROLES_PANE,
   ...EN_GB_RULES_PANE,
   ...EN_GB_SHORTCUTS_PANE,

@@ -891,39 +891,12 @@
 }
 
 /*
- * The ribbon layout (`toolbar="ribbon"`, ADR 0490): a title bar (the header), tabs, groups of
- * commands with a caption under each, the page centred on a grey canvas, and a quiet status bar.
- * Every rule below is scoped to `[data-toolbar='ribbon']` or to `.de-ribbon`, so the compact and the
- * full layouts keep the look they had. The look is this product's own, not a copy of any vendor's.
- * Selected, pressed and disabled states keep a shape (a bar, a border, dashes) as well as a colour.
+ * The ribbon layout (`toolbar="ribbon"`, ADR 0490): tabs, groups of commands with a caption under
+ * each, and the commands with an icon over the label; then a title bar (the header), the page centred
+ * on a grey canvas, and a quiet status bar. Every rule is scoped to `.de-ribbon` or to
+ * `[data-toolbar='ribbon']`, so the compact and the full layouts keep the look they had. The look is
+ * this product's own, not a copy of any vendor's.
  */
-.de-shell[data-toolbar='ribbon'] .de-header {
-  gap: var(--_de-space-2) var(--_de-space-4);
-  padding-block: var(--_de-space-3);
-}
-
-.de-shell[data-toolbar='ribbon'] .de-header-title {
-  font-size: 1.15em;
-}
-
-.de-shell[data-toolbar='ribbon'] .de-action {
-  min-block-size: 2.25em;
-  padding-inline: 0.9em;
-}
-
-/* The main action of the title bar. */
-.de-shell[data-toolbar='ribbon'] .de-action[data-command-id='document.share'] {
-  border-color: var(--_de-accent);
-  background: var(--_de-accent);
-  color: var(--_de-accent-text);
-  font-weight: 600;
-}
-
-.de-shell[data-toolbar='ribbon'] .de-action[data-command-id='document.share']:hover {
-  background: var(--_de-accent);
-  filter: brightness(0.92);
-}
-
 .de-ribbon {
   background: var(--_de-chrome);
 }
@@ -967,7 +940,6 @@
 }
 
 .de-ribbon .de-toolbar-panel {
-  display: flex;
   flex-wrap: wrap;
   align-items: stretch;
   gap: var(--_de-space-2) 0;
@@ -1010,11 +982,10 @@
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
   gap: 0.2em;
   min-inline-size: 3.6em;
+  max-inline-size: 7.5em;
   min-block-size: 3.4em;
-  padding-block: 0.35em;
   padding-inline: 0.4em;
   border-color: transparent;
   background: transparent;
@@ -1045,12 +1016,26 @@
   inline-size: 1.7em;
   block-size: 1.7em;
   margin: 0;
-  vertical-align: baseline;
 }
 
-.de-ribbon .de-tool-label {
-  max-inline-size: 7em;
-  overflow-wrap: anywhere;
+.de-shell[data-toolbar='ribbon'] .de-header {
+  padding-block: var(--_de-space-3);
+}
+
+.de-shell[data-toolbar='ribbon'] .de-header-title {
+  font-size: 1.15em;
+}
+
+/* The main action of the title bar. */
+.de-shell[data-toolbar='ribbon'] .de-action[data-command-id='document.share'] {
+  border-color: var(--_de-accent);
+  background: var(--_de-accent);
+  color: var(--_de-accent-text);
+  font-weight: 600;
+}
+
+.de-shell[data-toolbar='ribbon'] .de-action[data-command-id='document.share']:hover {
+  filter: brightness(0.92);
 }
 
 /* The ruler is a strip of the same chrome as the tabs. */
@@ -1075,13 +1060,7 @@
   box-shadow: var(--_de-shadow);
 }
 
-.de-shell[data-toolbar='ribbon'] :is(.de-panel, .de-pane) {
-  border-radius: var(--_de-radius);
-  box-shadow: var(--_de-shadow);
-}
-
 .de-shell[data-toolbar='ribbon'] .de-status {
-  gap: var(--_de-space-2) var(--_de-space-4);
   padding-block: 0.35em;
   background: var(--_de-chrome);
   color: var(--_de-text-muted);

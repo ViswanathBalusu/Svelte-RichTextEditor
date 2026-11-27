@@ -7,11 +7,17 @@
   and footer, field) has a tab of its own only while the selection is in or on that object; it
   appears and goes without moving focus. Nothing is hidden in a menu: a group that does not fit
   wraps to another row. The look and the grouping are this product's own and provisional (13 §3, §13).
+
+  The ribbon, its icons and its strings load on demand, so the first interactive editor does not carry
+  them (13 §9). Its rules are in shell.css, scoped to .de-ribbon.
 -->
 <script lang="ts">
   import { tick } from 'svelte';
   import type { CommandView } from '../commands/types.ts';
   import { useShell } from '../context.ts';
+  import '../i18n/late/ribbonToolbar.ts';
+  import type { StringKey } from '../i18n/en-GB.ts';
+  import { RIBBON_ICONS, ribbonIconName } from '../icons/ribbon-icons.ts';
   import { live } from '../live.ts';
   import { ribbonTabs } from '../shell/ribbon-groups.ts';
   import { toolbarCommands } from '../shell/toolbar-groups.ts';
@@ -30,6 +36,39 @@
   const tr = $derived(shell.strings.current);
   const id = `${shell.idPrefix}-ribbon`;
 
+  const TAB_KEYS: Readonly<Record<string, StringKey>> = {
+    home: 'ribbon.tab.home',
+    insert: 'ribbon.tab.insert',
+    layout: 'ribbon.tab.layout',
+    references: 'ribbon.tab.references',
+    review: 'ribbon.tab.review',
+    view: 'ribbon.tab.view',
+  };
+
+  const GROUP_KEYS: Readonly<Record<string, StringKey>> = {
+    edit: 'ribbon.group.edit',
+    font: 'ribbon.group.font',
+    paragraph: 'ribbon.group.paragraph',
+    copyFormat: 'ribbon.group.copyFormat',
+    insert: 'ribbon.group.insert',
+    tables: 'ribbon.group.tables',
+    fields: 'ribbon.group.fields',
+    regions: 'ribbon.group.regions',
+    headerFooter: 'ribbon.group.headerFooter',
+    document: 'ribbon.group.document',
+    notes: 'ribbon.group.notes',
+    captions: 'ribbon.group.captions',
+    citations: 'ribbon.group.citations',
+    comments: 'ribbon.group.comments',
+    tracking: 'ribbon.group.tracking',
+    proofing: 'ribbon.group.proofing',
+    workflow: 'ribbon.group.workflow',
+    protection: 'ribbon.group.protection',
+    views: 'ribbon.group.views',
+    zoom: 'ribbon.group.zoom',
+    panes: 'ribbon.group.panes',
+  };
+
   const tabs = $derived(
     ribbonTabs(toolbarCommands(snapshot.current.commands, selection.current.contexts)),
   );
@@ -40,29 +79,37 @@
 
   let tablist: HTMLElement | undefined = $state();
 
+  /** The name of a registry group, as the full layout names it. */
   function groupName(name: string): string {
     const key = `group.${name}`;
     return tr.has(key) ? tr.text(key) : tr.t('group.other');
   }
 
   function tabLabel(tab: { id: string; ownGroup: boolean }): string {
-    if (tab.ownGroup) return groupName(tab.id);
-    const key = `ribbon.tab.${tab.id}`;
-    return tr.has(key) ? tr.text(key) : tr.t('group.other');
+    const key = tab.ownGroup ? undefined : TAB_KEYS[tab.id];
+    return key ? tr.t(key) : groupName(tab.id);
   }
 
-  function captionOf(tab: { ownGroup: boolean }, key: string): string {
-    if (tab.ownGroup) return groupName(key);
-    const own = `ribbon.group.${key}`;
-    return tr.has(own) ? tr.text(own) : groupName(key);
+  function captionOf(tab: { ownGroup: boolean }, group: string): string {
+    const key = tab.ownGroup ? undefined : GROUP_KEYS[group];
+    return key ? tr.t(key) : groupName(group);
   }
 
   const panelGroups = $derived(
     active
-      ? active.groups.map((g) => ({ key: g.key, label: captionOf(active, g.key), commands: g.commands }))
+      ? active.groups.map((g) => ({
+          key: g.key,
+          label: captionOf(active, g.key),
+          commands: g.commands,
+        }))
       : [],
   );
   const panelItems = $derived<readonly CommandView[]>(panelGroups.flatMap((g) => g.commands));
+  const ribbon = $derived({
+    groups: panelGroups,
+    icon: ribbonIconName,
+    drawings: RIBBON_ICONS,
+  });
 
   function tabId(name: string): string {
     return `${id}-tab-${name.replace(/\W/g, '-')}`;
@@ -143,7 +190,7 @@
         <Toolbar
           {onEscape}
           items={panelItems}
-          groups={panelGroups}
+          {ribbon}
           label={tr.t('toolbar.group.label', { group: tabLabel(active) })}
           standalone={false}
         />

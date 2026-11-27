@@ -15,7 +15,7 @@
   import Icon from './Icon.svelte';
   import { boundKeys } from '../shortcuts/table.ts';
   import { useSuspension } from '../shell/suspension.ts';
-  import { ribbonIconName } from '../shell/ribbon-groups.ts';
+  import type { IconDrawing } from '../icons/icons.ts';
   import { toolbarCommands } from '../shell/toolbar-groups.ts';
   import { fittingItems, nextIndex } from '../shell/toolbar-layout.ts';
 
@@ -29,13 +29,21 @@
     /** True for the compact toolbar: it carries the `toolbar` part and is a landmark (UX-023). */
     standalone?: boolean;
     /**
-     * The ribbon layout (ADR 0490): the commands of `items`, in the same order, in labelled groups.
-     * Nothing overflows into a menu there; the groups wrap onto another row instead.
+     * The ribbon layout (ADR 0490): the commands of `items`, in the same order, in labelled groups,
+     * each with an icon over its label. Nothing overflows into a menu there; the groups wrap onto
+     * another row instead.
      */
-    groups?: ReadonlyArray<{ key: string; label: string; commands: readonly CommandView[] }> | undefined;
+    ribbon?: RibbonProps | undefined;
   }
 
-  let { onEscape, items: given, label, standalone = true, groups }: Props = $props();
+  interface RibbonProps {
+    groups: ReadonlyArray<{ key: string; label: string; commands: readonly CommandView[] }>;
+    icon: (item: CommandView) => string | undefined;
+    drawings: Readonly<Record<string, IconDrawing>>;
+  }
+
+  let { onEscape, items: given, label, standalone = true, ribbon }: Props = $props();
+  const groups = $derived(ribbon?.groups);
   const suspended = useSuspension();
 
   const shell = useShell()!;
@@ -297,9 +305,9 @@
     title={item.enabled || !item.reasonKey ? undefined : tr.text(item.reasonKey)}
     onclick={() => run(item)}
     {@attach remember(item)}
-    ><Icon name={groups ? (ribbonIconName(item) ?? item.entry.icon) : item.entry.icon} ribbon={!!groups} />{#if groups}<span
+    >{#if ribbon}<Icon name={ribbon.icon(item)} extra={ribbon.drawings} /><span
         class="de-tool-label">{tr.text(item.entry.label)}</span
-      >{:else}{tr.text(item.entry.label)}{/if}</button
+      >{:else}<Icon name={item.entry.icon} />{tr.text(item.entry.label)}{/if}</button
   >
 {/snippet}
 

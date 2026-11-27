@@ -45,6 +45,7 @@ export const LATE_KEY_HEADS: readonly string[] = [
   'permissions',
   'recovered',
   'review',
+  'ribbon',
   'roles',
   'rule',
   'ruler',

@@ -122,26 +122,3 @@ export function ribbonTabs(commands: readonly CommandView[]): RibbonTab[] {
   }
   return tabs;
 }
-
-/**
- * The icon for a command that names none, so that every button of the ribbon has a drawing. A name
- * the command's entry gives wins; these are the built-in commands that give none.
- */
-const ICON_BY_ID: ReadonlyArray<readonly [RegExp, string]> = [
-  [/^table\./, 'table'],
-  [/^insert\.caption$/, 'caption'],
-  [/^insert\.crossReference$/, 'cross-reference'],
-  [/^insert\.citation$/, 'citation'],
-  [/^format\.paragraph$/, 'paragraph'],
-  [/^workflow\.send$/, 'send'],
-  [/^history\.nameVersion$/, 'version'],
-  [/^proofing\.next$/, 'spell-next'],
-  [/^proofing\.previous$/, 'spell-previous'],
-  [/^document\.import$/, 'import'],
-];
-
-export function ribbonIconName(command: CommandView): string | undefined {
-  if (command.entry.icon) return command.entry.icon;
-  for (const [pattern, name] of ICON_BY_ID) if (pattern.test(command.id)) return name;
-  return undefined;
-}
