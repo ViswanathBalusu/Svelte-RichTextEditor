@@ -7,7 +7,7 @@
 // raised. A time-stamp authority that is down leaves the workflow `completed`, with an alert (an
 // error log line and a counter); the scheduled step's function seals it when the authority is back.
 // Memory storage and, when the test environment is up, PostgreSQL in Podman.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -124,6 +124,29 @@ const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 const RETAIN_MS = 365 * 24 * 3600 * 1000;
 
 /** Whether `pdftotext` (poppler) can be started: the command reads the certificate's text with it. */
+/**
+ * Runs a command without blocking the event loop. The service under test runs in this process: a
+ * blocking `spawnSync` of several seconds lets the service close its idle keep-alive sockets while
+ * the client still holds them, and the next request fails with ECONNRESET.
+ */
+function spawnAsync(
+  command: string,
+  args: string[],
+  options: { cwd: string },
+): Promise<{ status: number | null; stdout: string }> {
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(command, args, { cwd: options.cwd, windowsHide: true });
+    let stdout = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.resume();
+    child.on('error', rejectRun);
+    child.on('close', (status) => resolveRun({ status, stdout }));
+  });
+}
+
 function pdftotextAvailable(): boolean {
   return spawnSync('pdftotext', ['-v'], { windowsHide: true }).error === undefined;
 }
@@ -786,11 +809,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const dir = mkdtempSync(join(tmpdir(), 'frw055-'));
         try {
           const root = resolve(import.meta.dirname, '../../..', '..');
-          const run = (bundleText: string, pdfBytes: Uint8Array, extra: string[] = []) => {
+          const run = async (bundleText: string, pdfBytes: Uint8Array, extra: string[] = []) => {
             writeFileSync(join(dir, 'bundle.json'), bundleText);
             writeFileSync(join(dir, 'sealed.pdf'), pdfBytes);
             writeFileSync(join(dir, 'anchor.json'), JSON.stringify(anchor));
-            const r = spawnSync(
+            const r = await spawnAsync(
               process.execPath,
               [
                 'services/signing-service/scripts/verify-final.ts',
@@ -802,11 +825,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
                 join(dir, 'anchor.json'),
                 ...extra,
               ],
-              { cwd: root, encoding: 'utf8', windowsHide: true },
+              { cwd: root },
             );
             return { code: r.status, report: JSON.parse(r.stdout) as Report };
           };
-          const good = run(bundle.text, pdf);
+          const good = await run(bundle.text, pdf);
           expect(good.code, JSON.stringify(good.report)).toBe(0);
           expect(good.report.status).toBe('intact');
           expect(good.report.anchorMatches).toBe(true);
@@ -825,7 +848,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           });
 
           // The certificate is left out on request, and then the report says so.
-          const left = run(bundle.text, pdf, ['--skip-certificate']);
+          const left = await run(bundle.text, pdf, ['--skip-certificate']);
           expect(left.code).toBe(0);
           expect(left.report.certificate.status).toBe('skipped');
 
@@ -835,7 +858,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           await waitFor('finalised', async () => (await stateOf(other.ref)) === 'finalised');
           const otherPdf = (await sealed.read(other.ref.tenant, other.doc, other.workflowId))!
             .bytes;
-          const wrong = run(bundle.text, otherPdf);
+          const wrong = await run(bundle.text, otherPdf);
           expect(wrong.code).toBe(1);
           expect(wrong.report.seal.ok).toBe(true);
           expect(wrong.report.certificate.status).toBe('differs');
@@ -849,12 +872,12 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           );
 
           // A PDF with no certificate pages: absent, and the command fails.
-          const plain = run(bundle.text, classicPdf());
+          const plain = await run(bundle.text, classicPdf());
           expect(plain.code).toBe(1);
           expect(plain.report.certificate.status).toBe('absent');
 
           // No tool to read the text: the command stops, and says what to do (exit 3).
-          const noTool = spawnSync(
+          const noTool = await spawnAsync(
             process.execPath,
             [
               'services/signing-service/scripts/verify-final.ts',
@@ -865,7 +888,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
               '--pdftotext',
               join(dir, 'no-such-tool'),
             ],
-            { cwd: root, encoding: 'utf8', windowsHide: true },
+            { cwd: root },
           );
           expect(noTool.status).toBe(3);
           expect(noTool.stdout).toContain('--skip-certificate');
@@ -875,7 +898,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           // One byte of the sealed PDF changed: the seal is broken.
           const flipped = new Uint8Array(pdf);
           flipped[20] = (flipped[20] as number) ^ 1;
-          const badPdf = run(bundle.text, flipped);
+          const badPdf = await run(bundle.text, flipped);
           expect(badPdf.code).toBe(1);
           expect(badPdf.report.seal.ok).toBe(false);
 
@@ -883,7 +906,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           const altered = JSON.parse(bundle.text);
           const item = altered.evidence.items[0];
           item.canonical = item.canonical.replace('"p1"', '"p2"');
-          const badItem = run(JSON.stringify(altered), pdf);
+          const badItem = await run(JSON.stringify(altered), pdf);
           expect(badItem.code).toBe(1);
           expect(badItem.report.evidence.failedEvidence).toContain(item.id);
         } finally {

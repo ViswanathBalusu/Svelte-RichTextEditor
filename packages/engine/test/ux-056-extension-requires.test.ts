@@ -92,7 +92,10 @@ describe('UX-056 criterion 4: the first block adds `extensions`; a client withou
     const service = newService();
     const content = contractDocument();
     const docId = service.createDocument(content);
-    const ann = await joinWith(service, docId, 'ann', 'editor', [...content.requires, 'extensions']);
+    const ann = await joinWith(service, docId, 'ann', 'editor', [
+      ...content.requires,
+      'extensions',
+    ]);
     const old = await joinWith(service, docId, 'old', 'editor', [...content.requires]);
     expect(insert(ann.core).ok).toBe(true);
     await until(() => ann.core.problem.get() !== null, 'the refusal');
@@ -104,7 +107,10 @@ describe('UX-056 criterion 4: the first block adds `extensions`; a client withou
     expect(service.document(docId)!.content().requires).not.toContain('extensions');
     expect(blocksOn(service, docId)).toBe(0);
     await until(() => ann.core.recovered.get().count === 1, 'the recovered item');
-    expect(ann.core.recovered.get().items[0]).toMatchObject({ reason: 'conflict', kind: 'rejected' });
+    expect(ann.core.recovered.get().items[0]).toMatchObject({
+      reason: 'conflict',
+      kind: 'rejected',
+    });
     // This copy does not keep claiming the feature it was refused.
     expect(ann.core.requires).not.toContain('extensions');
     for (const m of [ann, old]) {
