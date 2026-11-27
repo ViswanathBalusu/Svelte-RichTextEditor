@@ -352,15 +352,6 @@ importers:
 
   packages/element:
     dependencies:
-      '@angular/compiler':
-        specifier: 21.2.26
-        version: 21.2.26
-      '@angular/core':
-        specifier: 21.2.26
-        version: 21.2.26(@angular/compiler@21.2.26)(rxjs@7.8.2)
-      '@angular/platform-browser':
-        specifier: 21.2.26
-        version: 21.2.26(@angular/common@21.2.26(@angular/core@21.2.26(@angular/compiler@21.2.26)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.26(@angular/compiler@21.2.26)(rxjs@7.8.2))
       '@docedit/backend-dep':
         specifier: workspace:*
         version: link:../backend-dep
@@ -382,40 +373,37 @@ importers:
       '@docedit/ui':
         specifier: workspace:*
         version: link:../ui
-      '@sveltejs/kit':
-        specifier: 3.1.1
-        version: 3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.6(@types/node@22.20.5)(yaml@2.9.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.6(@types/node@22.20.5)(yaml@2.9.1))
-      '@types/react':
-        specifier: 19.3.3
-        version: 19.3.3
-      '@types/react-dom':
-        specifier: 19.3.0
-        version: 19.3.0(@types/react@19.3.3)
-      react:
-        specifier: 19.3.1
-        version: 19.3.1
-      react-dom:
-        specifier: 19.3.1
-        version: 19.3.1(react@19.3.1)
-      rxjs:
-        specifier: 7.8.2
-        version: 7.8.2
       svelte:
         specifier: 5.57.3
         version: 5.57.3(@typescript-eslint/types@8.72.1)
-      vue:
-        specifier: 3.5.46
-        version: 3.5.46(typescript@6.0.3)
     devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.26
+        version: 21.2.26
+      '@angular/core':
+        specifier: 21.2.26
+        version: 21.2.26(@angular/compiler@21.2.26)(rxjs@7.8.2)
+      '@angular/platform-browser':
+        specifier: 21.2.26
+        version: 21.2.26(@angular/common@21.2.26(@angular/core@21.2.26(@angular/compiler@21.2.26)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.26(@angular/compiler@21.2.26)(rxjs@7.8.2))
       '@axe-core/playwright':
         specifier: 4.14.0
         version: 4.14.0(playwright-core@1.65.0)
       '@docedit/backend-mock':
         specifier: workspace:*
         version: link:../backend-mock
+      '@sveltejs/kit':
+        specifier: 3.1.1
+        version: 3.1.1(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.6(@types/node@22.20.5)(yaml@2.9.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.6(@types/node@22.20.5)(yaml@2.9.1))
       '@sveltejs/vite-plugin-svelte':
         specifier: 7.3.1
         version: 7.3.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.6(@types/node@22.20.5)(yaml@2.9.1))
+      '@types/react':
+        specifier: 19.3.3
+        version: 19.3.3
+      '@types/react-dom':
+        specifier: 19.3.0
+        version: 19.3.0(@types/react@19.3.3)
       katex:
         specifier: 0.19.1
         version: 0.19.1
@@ -425,12 +413,24 @@ importers:
       pdfjs-dist:
         specifier: 6.5.438
         version: 6.5.438
+      react:
+        specifier: 19.3.1
+        version: 19.3.1
+      react-dom:
+        specifier: 19.3.1
+        version: 19.3.1(react@19.3.1)
+      rxjs:
+        specifier: 7.8.2
+        version: 7.8.2
       svelte-check:
         specifier: 4.7.8
         version: 4.7.8(picomatch@4.0.7)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)
       vite:
         specifier: 8.3.6
         version: 8.3.6(@types/node@22.20.5)(yaml@2.9.1)
+      vue:
+        specifier: 3.5.46
+        version: 3.5.46(typescript@6.0.3)
 
   packages/engine:
     dependencies:
