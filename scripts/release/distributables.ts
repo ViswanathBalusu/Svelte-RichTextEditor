@@ -58,7 +58,8 @@ export const DISTRIBUTABLES: readonly Distributable[] = [
     dir: 'services/document-service',
     kind: 'service',
     containerfile: 'services/document-service/Containerfile',
-    context: null,
+    // The repository root; `Containerfile.dockerignore` next to the Containerfile narrows it.
+    context: '.',
     image: 'docedit-document-service',
     serviceInImage: true,
   },

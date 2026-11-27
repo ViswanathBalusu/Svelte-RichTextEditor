@@ -1,0 +1,33 @@
+# Build context of the document service image: everything is left out except what the Containerfile
+# copies.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!services/document-service/package.json
+!services/document-service/src/**
+!services/document-service/migrations/**
+!services/asset-worker/package.json
+!services/asset-worker/src/**
+!packages/authority/package.json
+!packages/authority/src/**
+!packages/authority/fixtures/**
+!packages/corpus/package.json
+!packages/corpus/src/**
+!packages/export-latex/package.json
+!packages/export-latex/src/**
+!packages/export-latex/class/**
+!packages/history/package.json
+!packages/history/src/**
+!packages/history/fixtures/**
+!packages/model/package.json
+!packages/model/src/**
+!packages/model/fixtures/**
+!packages/protocol/package.json
+!packages/protocol/src/**
+!packages/rules/package.json
+!packages/rules/src/**
+!spec/**
+**/node_modules
+**/*.test.ts
