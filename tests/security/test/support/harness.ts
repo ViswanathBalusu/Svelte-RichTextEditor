@@ -173,6 +173,9 @@ export interface TestTenant {
   issuer?: string;
 }
 
+/** The keep-alive timeout of the server `startHarness` starts: well above the client's idle time. */
+const KEEP_ALIVE_MS = 55_000;
+
 export interface CallResult {
   status: number;
   headers: Headers;
@@ -249,11 +252,12 @@ export function clientFor(
   now: () => number,
 ): Pick<Target, 'userToken' | 'mintToken' | 'serviceJwt' | 'call' | 'createDocument'> {
   const call: Target['call'] = async (method, path, o = {}) => {
-    // One connection for each call. A pooled keep-alive connection that has sat idle while the
-    // event loop was busy (SEC-028 measures a loop under attack, for longer than the server's
-    // 5 second keep-alive timeout) can be closed by the server as the next call is sent on it,
-    // which fails with ECONNRESET and says nothing about the service under test.
-    const headers: Record<string, string> = { connection: 'close', ...(o.headers ?? {}) };
+    // Calls share pooled keep-alive connections, as a real client does: one connection for each
+    // call opens thousands of sockets in one file (SEC-005 sends about 7,400) and exhausts the
+    // ephemeral ports of Windows. The stale-socket reset that SEC-028 saw is avoided on the
+    // server side instead: `startHarness` gives its server a keep-alive timeout far above the
+    // client's idle time (see `KEEP_ALIVE_MS`).
+    const headers: Record<string, string> = { ...(o.headers ?? {}) };
     if (o.token) headers['Authorization'] = `Bearer ${o.token}`;
     let body: string | undefined = o.raw;
     if (o.body !== undefined) {
@@ -480,6 +484,14 @@ export async function startHarness(storage: Storage, opts: HarnessOptions = {}):
     // Windows does not connect to 0.0.0.0; the same listener answers on 127.0.0.1.
     (service as { url: string }).url = service.url.replace('//0.0.0.0:', '//127.0.0.1:');
   }
+  // The client and the server run on one event loop. When SEC-028 blocks that loop for longer
+  // than the server's keep-alive timeout (Node.js: 5 s), the server's timer and the client's
+  // (undici: 4 s, or the server's hint minus a second) are both overdue when the loop runs
+  // again, and the server may close an idle pooled socket as the client sends on it:
+  // ECONNRESET, which says nothing about the service. A timeout far above any block makes the
+  // client's own timer the only one that expires, so the client drops the socket before it
+  // reuses it.
+  service.server.keepAliveTimeout = KEEP_ALIVE_MS;
   const serviceId = service.url;
   const a: TestTenant = await registerTenant(service.parts.registry, 'https://app-a.example.test');
   const b: TestTenant = await registerTenant(service.parts.registry, 'https://app-b.example.test');
