@@ -216,6 +216,19 @@ export interface JobQueue {
    * count yet. Never a job of another tenant.
    */
   workerTime(tenant: string, kinds: readonly string[], from: number, to: number): Promise<number>;
+  /**
+   * The number of elements of the array at the member `member` of the payload, summed over the
+   * tenant's jobs of `kind` that were created at or after `from` and before `to`, both in Unix ms
+   * (FRW-063: the recipient rows of a month). A job counts whatever its state; a payload with no
+   * array at the member counts 0. Never a job of another tenant.
+   */
+  payloadItems(
+    tenant: string,
+    kind: string,
+    member: string,
+    from: number,
+    to: number,
+  ): Promise<number>;
 }
 
 /** Defaults of the queue, settings rather than measurements (ADR 0036). */
@@ -622,5 +635,22 @@ export class MemoryJobQueue implements JobQueue {
       )
         ms += j.workerMs ?? 0;
     return ms;
+  }
+
+  async payloadItems(
+    tenant: string,
+    kind: string,
+    member: string,
+    from: number,
+    to: number,
+  ): Promise<number> {
+    let n = 0;
+    for (const j of this.#jobs.values()) {
+      if (j.tenant !== tenant || j.kind !== kind || j.createdAt < from || j.createdAt >= to)
+        continue;
+      const items = j.payload[member];
+      if (Array.isArray(items)) n += items.length;
+    }
+    return n;
   }
 }

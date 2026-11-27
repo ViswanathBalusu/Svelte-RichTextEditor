@@ -6,7 +6,8 @@
  * no user and no content. The figures are the largest value reached in the month for the rate and
  * concurrency dimensions (connections, open documents, commits in a window, room CPU
  * milliseconds in a window, export jobs at once), the compile minutes used in the month (read from
- * the job queue, so they hold for every node), and the storage: the stored bytes now for the
+ * the job queue, so they hold for every node), the recipient rows of bulk sends submitted in the
+ * month (also read from the job queue), and the storage: the stored bytes now for the
  * current month, the last value recorded in the month for an earlier one.
  *
  * Proposed, not decided by the owner (docs/adr/0431-w3-UX-078-usage-and-quota-kind.md): the
@@ -19,7 +20,7 @@ import type { QuotaDimension } from './quotas.ts';
 import { monthOf } from './month.ts';
 
 /** The dimensions whose figure is a peak or a level recorded by the node. */
-export type RecordedDimension = Exclude<QuotaDimension, 'exportMinutes'>;
+export type RecordedDimension = Exclude<QuotaDimension, 'exportMinutes' | 'bulkSendRows'>;
 
 /** Where the gate and the routes report what they decided. */
 export interface UsageRecorder {
@@ -68,6 +69,8 @@ export interface UsageSources {
   storedBytes?: (tenant: string) => Promise<number>;
   /** The compile minutes a tenant used in the month containing the Unix time `at`. */
   minutesUsed?: (tenant: string, at: number) => Promise<number>;
+  /** The recipient rows of the bulk sends a tenant submitted in the month containing `at`. */
+  bulkRowsUsed?: (tenant: string, at: number) => Promise<number>;
   now: () => number;
 }
 
@@ -80,6 +83,7 @@ export interface TenantUsage {
   storage: number;
   exportConcurrency: number;
   exportMinutes: number;
+  bulkSendRows: number;
 }
 
 const MONTH = /^([0-9]{4})-(0[1-9]|1[0-2])$/;
@@ -109,6 +113,7 @@ export class UsageService {
     let storage = peaks.read(tenant, m, 'storage');
     if (m === current && this.#s.storedBytes) storage = await this.#s.storedBytes(tenant);
     const minutes = this.#s.minutesUsed ? await this.#s.minutesUsed(tenant, at) : 0;
+    const bulkRows = this.#s.bulkRowsUsed ? await this.#s.bulkRowsUsed(tenant, at) : 0;
     return {
       month: m,
       connections: whole(peaks.read(tenant, m, 'connections')),
@@ -118,6 +123,7 @@ export class UsageService {
       storage: whole(storage),
       exportConcurrency: whole(peaks.read(tenant, m, 'exportConcurrency')),
       exportMinutes: whole(minutes),
+      bulkSendRows: whole(bulkRows),
     };
   }
 }

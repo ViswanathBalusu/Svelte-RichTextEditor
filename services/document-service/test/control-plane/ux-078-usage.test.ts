@@ -12,6 +12,7 @@ import { documentWithRegions, startHarness, type Harness } from './support.ts';
 const JUNE_10 = Date.UTC(2026, 5, 10, 12);
 const JULY_2 = Date.UTC(2026, 6, 2, 9);
 const FIGURES = [
+  'bulkSendRows',
   'commitRate',
   'connections',
   'exportConcurrency',
@@ -60,6 +61,7 @@ describe('the usage figures (unit)', () => {
       storage: 4096,
       exportConcurrency: 0,
       exportMinutes: 91,
+      bulkSendRows: 0,
     });
     expect((await usage.read('t2')).connections).toBe(1);
     expect((await usage.read('t3')).connections).toBe(0);
@@ -145,6 +147,7 @@ describe('GET /usage in the composed service', () => {
       storage: earlier.json.storage,
       exportConcurrency: 0,
       exportMinutes: 0,
+      bulkSendRows: 0,
     });
 
     for (const bad of ['?month=2026-13', '?month=June', '?month=2026-01&month=2026-02', '?x=1']) {

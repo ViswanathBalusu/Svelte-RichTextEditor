@@ -15,6 +15,10 @@
  *   `i` has an identifier derived from the job and `i`, so a row that was made already is reported
  *   as made and never made twice.
  * - Both routes need a service credential, as instantiation does.
+ * - The recipient rows a tenant submits in a UTC calendar month are limited by the quota
+ *   `bulkSendRows` (owner decision 265): a request that would take the month's rows past it is
+ *   refused with `quota_exceeded` and a `Retry-After` to the start of next month, before any job is
+ *   queued. The rows used are read from the job queue, so they hold on every node.
  */
 import { createHash } from 'node:crypto';
 import { formatTimestamp } from '@docedit/model';
@@ -27,6 +31,9 @@ import { createFromTemplate, pinTemplate, type FromTemplateBody } from './templa
 import { JobFailure, type JobHandler } from './jobs/runner.ts';
 import type { JobRecord } from './jobs/queue.ts';
 import { json, type HandlerDeps, type Kit } from './kit.ts';
+import { monthBounds, secondsToNextMonth } from './exp-009-compile-budget.ts';
+import type { QuotaSource } from './live-quotas.ts';
+import type { JobQueue } from './jobs/queue.ts';
 import { type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 
@@ -37,6 +44,49 @@ export const BULK_SEND_KIND = 'workflow.bulk_send';
  * not a figure of the spec and not a tenant quota (see the ADR).
  */
 export const BULK_SEND_MAX_ROWS = 1_000;
+
+export interface BulkSendRefusal {
+  /** The `Retry-After` of the refusal, in seconds. */
+  retryAfterS: number;
+  usedRows: number;
+  budgetRows: number;
+}
+
+/**
+ * The monthly limit on the recipient rows of a tenant's bulk sends (the quota `bulkSendRows`; owner
+ * decision 265: rows per calendar month in UTC, like other usage). The rows used are the rows of
+ * the bulk-send jobs created in the month, as the queue holds them, whatever their state: a row
+ * that fails still was submitted. A limit that is not set (`null`) is no limit.
+ */
+export class BulkSendBudget {
+  readonly #quotas: QuotaSource | null;
+  readonly #queue: JobQueue;
+
+  constructor(quotas: QuotaSource | null, queue: JobQueue) {
+    this.#quotas = quotas;
+    this.#queue = queue;
+  }
+
+  /** The rows a tenant has submitted in the UTC month containing `now`. */
+  usedRows(tenant: string, now: number): Promise<number> {
+    const { from, to } = monthBounds(now);
+    return this.#queue.payloadItems(tenant, BULK_SEND_KIND, 'rows', from, to);
+  }
+
+  /** The monthly limit of a tenant in rows, or `null` when none is set. */
+  budgetRows(tenant: string): number | null {
+    return this.#quotas?.get(tenant).bulkSendRows ?? null;
+  }
+
+  /** `null` when a request of `rows` rows may go ahead; otherwise the refusal to give. */
+  async refusal(tenant: string, rows: number, now: number): Promise<BulkSendRefusal | null> {
+    const budget = this.budgetRows(tenant);
+    if (budget === null) return null;
+    const used = await this.usedRows(tenant, now);
+    if (used + rows <= budget) return null;
+    return { retryAfterS: secondsToNextMonth(now), usedRows: used, budgetRows: budget };
+  }
+}
 
 const ROW_MEMBERS = [
   'participants',
@@ -105,6 +155,20 @@ export function bulkSendRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('forbidden', 'bulk sends are a service-credential resource (12 §9)');
   };
 
+  // The check of the quota and the queueing of the job are one step for a tenant on this node, so
+  // two requests of one tenant do not both pass the check on the same month's figure. Across nodes
+  // the figure is the queue's, and a race between nodes can pass the limit by one request.
+  const tails = new Map<string, Promise<unknown>>();
+  const inTurn = <T>(tenant: string, step: () => Promise<T>): Promise<T> => {
+    const run = (tails.get(tenant) ?? Promise.resolve()).then(step, step);
+    const tail = run.catch(() => undefined);
+    tails.set(tenant, tail);
+    void tail.then(() => {
+      if (tails.get(tenant) === tail) tails.delete(tenant);
+    });
+    return run;
+  };
+
   const createBulkSend: Handler = async (ctx) => {
     serviceOnly(ctx);
     const body = (await ctx.body()) as {
@@ -131,13 +195,25 @@ export function bulkSendRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('validation_failed', 'a row is not valid', { violations });
     // The template and the pinned seq are checked now, once; the rows are checked by the job.
     const pinned = await pinTemplate(k, ctx, body.template, body.templateSeq);
-    const job = await d.queue.enqueue(ctx.caller.tenant, {
-      kind: BULK_SEND_KIND,
-      createdBy: ctx.caller.actor,
-      // A retry would make no second document (the identifiers derive from the job), but it would
-      // report the first run's rows again as made: one attempt keeps the report true.
-      maxAttempts: 1,
-      payload: { template: pinned.template.id, seq: pinned.atSeq, rows: body.rows },
+    const tenant = ctx.caller.tenant;
+    const job = await inTurn(tenant, async () => {
+      // The tenant's monthly limit on recipient rows (decision 265): refused before any job.
+      await d.quotaSource?.load?.(tenant);
+      const spent = await d.bulkSendBudget?.refusal(tenant, body.rows.length, d.now());
+      if (spent)
+        throw new ApiError(
+          'quota_exceeded',
+          'the tenant would pass its recipient rows for this month',
+          { retryAfterS: spent.retryAfterS, quota: 'bulkSendRows' },
+        );
+      return d.queue.enqueue(tenant, {
+        kind: BULK_SEND_KIND,
+        createdBy: ctx.caller.actor,
+        // A retry would make no second document (the identifiers derive from the job), but it would
+        // report the first run's rows again as made: one attempt keeps the report true.
+        maxAttempts: 1,
+        payload: { template: pinned.template.id, seq: pinned.atSeq, rows: body.rows },
+      });
     });
     d.onJobQueued?.();
     return json(202, wire(job), { Location: `${k.rest}/bulk-sends/${job.id}` });

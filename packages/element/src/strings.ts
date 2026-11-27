@@ -95,6 +95,7 @@ export const EN: Strings = {
       storage: 'storage',
       exportConcurrency: 'simultaneous exports',
       exportMinutes: 'export minutes',
+      bulkSendRows: 'bulk send recipients',
     },
     otherTitle: 'The document could not be opened',
     otherMessage: 'Something went wrong while opening the document.',

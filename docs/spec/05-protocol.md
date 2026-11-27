@@ -253,7 +253,7 @@ One registry covers every surface. REST problems use the same codes in their `co
 | `conflict`, `field_invalid` | sync, REST | no | 12 |
 | `busy` | sync | yes | Resubmit after the pending answer |
 | `too_large` | all | no | Split or report |
-| `rate_limited`, `quota_exceeded` | all | yes, after `retryAfterMs` or `Retry-After` | Back off; tell the user for quotas, naming the kind of quota: `quota` (`connections`, `openDocuments`, `commitRate`, `roomCpuBudget`, `storage`, `exportConcurrency`, `exportMinutes`) on the socket `error`, on `sync.reject` and in the REST problem (owner decision 110) |
+| `rate_limited`, `quota_exceeded` | all | yes, after `retryAfterMs` or `Retry-After` | Back off; tell the user for quotas, naming the kind of quota: `quota` (`connections`, `openDocuments`, `commitRate`, `roomCpuBudget`, `storage`, `exportConcurrency`, `exportMinutes`, `bulkSendRows`) on the socket `error`, on `sync.reject` and in the REST problem (owner decision 110) |
 | `slow_consumer` | channel close | yes | Resume |
 | `precondition_failed`, `validation_failed`, `pending_suggestions`, `workflow_active`, `idempotency_mismatch` | REST | no | Fix the request |
 | `unavailable`, `internal` | all | yes | Back off |
