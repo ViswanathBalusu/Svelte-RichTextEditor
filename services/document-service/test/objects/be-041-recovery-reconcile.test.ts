@@ -8,7 +8,12 @@ import type { JsonEnvelope } from '@docedit/model';
 import { afterEach, describe, expect, it } from 'vitest';
 import { baseDoc, posInside } from '../../../../packages/authority/test/fixtures.ts';
 import { MemoryAudit } from '../../src/data-plane/memory-ports.ts';
-import { affectedAmong, rebuild, runIncarnation } from '../../src/data-plane/recovery.ts';
+import {
+  affectedAmong,
+  newIncarnation,
+  rebuild,
+  runIncarnation,
+} from '../../src/data-plane/recovery.ts';
 import { ObjectCheckpointStore } from '../../src/objects/checkpoints.ts';
 import { OptInTenantSealStore } from '../../src/objects/opt-in-seal-store.ts';
 import { ObjectSegmentStore } from '../../src/objects/segments.ts';
@@ -63,7 +68,7 @@ describe('database recovery against sealed objects (BE-041 criterion 4, BE-078)'
       objectKeys.segment(tenant, doc, 1, 3),
       enc.encode('segment bytes, in plain words'),
     );
-    const logs = p.stores.logs as unknown as Parameters<typeof rebuild>[0]['logs'];
+    const logs = p.stores.logs as Parameters<typeof newIncarnation>[0]['logs'];
     const stores = { logs, checkpoints, segments };
     const hashAt1 = (await rebuild(stores, ref, 1)).hash;
     (p.stores.logs as MemoryStore).rewindForTest(ref, 1);
