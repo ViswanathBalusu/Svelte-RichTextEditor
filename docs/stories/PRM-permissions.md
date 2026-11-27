@@ -1496,12 +1496,14 @@ As an owner, I want to decide whether someone who may edit only regions can be g
 **Acceptance criteria**
 
 - [x] Given the options (keep `structure` at document level only; make part of it grantable per region), when the owner decides, then the decision is recorded with its effect on the role table (PRM-001), P2 (PRM-011), definition protection (PRM-012) and region-only editors (PRM-030).
-- [ ] Given a decision to grant part of `structure`, when stories are written, then they define which operations, how grants express them and how the outcome check evaluates them.
+- [x] Given a decision to grant part of `structure`, when stories are written, then they define which operations, how grants express them and how the outcome check evaluates them.
 - [ ] Given a decision to keep it as is, when the limitation is documented, then the integration guide says a region-only editor cannot add a new style or a different page setup.
 
 **Evidence (lane w9, 2026-11-25, criterion 1):** the owner decided on 2026-11-15, decision 128 in `docs/owner-decisions-2026-11-15.md` ("Grantable per region", reversing ADR 0033 item 4; decision 220 repeats it). `docs/adr/0424-w9-PRM-063-structure-per-region.md` records it with its effect on the role table (PRM-001), P2 (PRM-011), definition protection (PRM-012) and region-only editors (PRM-030), in "Decision" section 4. ADR 0033 item 4 now points to it.
 
-**Notes:** Lane w9 (2026-11-26): rechecked against `docs/owner-decisions-2026-11-15.md`; nothing new applies. Decisions 196 to 220 accepted the defaults of proposals that existed on 2026-11-18, and ADR 0424 was written after them, so its two questions (page setup per region; removing an added style) are still the owner's. Nothing new could be ticked and no code was needed. Lane w9 (2026-11-25): criterion 1 ticked on decision 128 and the ADR. Criterion 2 stays unticked: the ADR (proposed) says which operations (`region.retitle`, `defs.add`), how a grant expresses them (a closed `structure` list on an `editor` grant) and how P2 evaluates them, and names three stories to write; those stories are not added to the epic here, because new story ids need the coverage table and the backlog the integrator regenerates, and two points in the ADR wait for the owner. Criterion 3 does not apply: its condition ("a decision to keep it as is") does not hold after decision 128; it stays unticked rather than ticked for a case that did not happen. **Earlier notes:** Phase inferred: it affects the 1b role table and region-only editors. Proposed on 2026-11-06 in ADR 0033 item 4 with the specification's default, `structure` at document level only, and its effects; waits for the owner. The integration guide does not exist yet. Round 4 (lane authority-2, 2026-11-13): no criterion ticked, because the decision is the owner's. Checked: `ROLE_CAPABILITIES` in `src/permissions/model.ts` gives `structure` to `editor` and `owner` at document level only, and `validateRegionGrant` refuses a region grant of `structure` or `manage`; ADR 0146 (Round 4) records this. Lane w4 (2026-11-17): the owner's answers of 2026-11-15 (`docs/owner-decisions-2026-11-15.md`) do not cover this question, and `docs/owner-decisions-pending.md` row 28 still lists it; it stays open with the proposal of ADR 0033 item 4 and nothing is ticked.
+**Evidence (lane w9, 2026-11-27, criterion 2):** owner decision 279 of 2026-11-26 (`docs/owner-decisions-2026-11-26.md`: a region-only editor may rename the region and add styles, and may not change page setup or remove a style) answers both questions of ADR 0424, which is now accepted. The three stories it names are written in the "Structure per region" section of this file: PRM-068 (grant model: operations, grant member, validation, schema), PRM-069 (outcome check: P2 and PRM-012 read the grant, with an oracle test) and PRM-070 (access object, permissions pane, style controls, integration guide). Between them they define which operations (`region.retitle`, `defs.add`), how grants express them (a closed `structure` list on an `editor` grant) and how the outcome check evaluates them (ADR 0424, section 3).
+
+**Notes:** Lane w9 (2026-11-27): decision 279 applies; criterion 2 ticked on the stories above. Building them is PRM-068 to PRM-070, not this story. Criterion 3 stays unticked because its condition (a decision to keep `structure` at document level) does not hold. The coverage table at the end of this file lists the new stories; the backlog and traceability files are the integrator's to regenerate. Lane w9 (2026-11-26): rechecked against `docs/owner-decisions-2026-11-15.md`; nothing new applies. Decisions 196 to 220 accepted the defaults of proposals that existed on 2026-11-18, and ADR 0424 was written after them, so its two questions (page setup per region; removing an added style) are still the owner's. Nothing new could be ticked and no code was needed. Lane w9 (2026-11-25): criterion 1 ticked on decision 128 and the ADR. Criterion 2 stays unticked: the ADR (proposed) says which operations (`region.retitle`, `defs.add`), how a grant expresses them (a closed `structure` list on an `editor` grant) and how P2 evaluates them, and names three stories to write; those stories are not added to the epic here, because new story ids need the coverage table and the backlog the integrator regenerates, and two points in the ADR wait for the owner. Criterion 3 does not apply: its condition ("a decision to keep it as is") does not hold after decision 128; it stays unticked rather than ticked for a case that did not happen. **Earlier notes:** Phase inferred: it affects the 1b role table and region-only editors. Proposed on 2026-11-06 in ADR 0033 item 4 with the specification's default, `structure` at document level only, and its effects; waits for the owner. The integration guide does not exist yet. Round 4 (lane authority-2, 2026-11-13): no criterion ticked, because the decision is the owner's. Checked: `ROLE_CAPABILITIES` in `src/permissions/model.ts` gives `structure` to `editor` and `owner` at document level only, and `validateRegionGrant` refuses a region grant of `structure` or `manage`; ADR 0146 (Round 4) records this. Lane w4 (2026-11-17): the owner's answers of 2026-11-15 (`docs/owner-decisions-2026-11-15.md`) do not cover this question, and `docs/owner-decisions-pending.md` row 28 still lists it; it stays open with the proposal of ADR 0033 item 4 and nothing is ticked.
 
 ### PRM-064 Decide a size quota for region-only editors
 
@@ -1590,23 +1592,85 @@ As a maintainer, I want one function that gives each connection the regions and 
 
 **Notes:** Criterion 3 is met for the triggers the authority can see: grants, leases, region states, the workflow flag and the document state move the revision, and `ProjectionGateway.finish` derives every class again on that move; expiry (`Room.expire`, PRM-007) and a refreshed token (`auth.refresh`, which carries a document role or group membership) set the gateway's replaced flag. The workflow flag stands in for a workflow transition until FRW ships the transitions (phase 2); a group membership reaches the authority only through a refreshed token, not a directory push, which is the control plane's (PRO).
 
+## Structure per region (ADR 0424)
+
+Added on 2026-11-27 (lane w9) after owner decision 279 (`docs/owner-decisions-2026-11-26.md`): a person who may edit only one region may rename it and add styles, and may not change page setup or remove a style. The three stories below are the ones named in ADR 0424, "Stories to write". They are not built yet.
+
+### PRM-068 Grant renaming and adding styles on a region grant
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Owner |
+
+**Spec:** 07 §2, §3, §17; ADR 0424 (sections 1 and 2); decision 279 · **Requirements:** R3 · **Depends on:** PRM-001, PRM-018
+
+As an owner, I want to let a person who may edit only one region rename it and add styles, so that region-only editors are not stuck.
+
+**Acceptance criteria**
+
+- [ ] Given `OPERATIONS` (PRM-001), when the table is read, then exactly `region.retitle` and `defs.add` carry a `perRegion` flag, and `manage`, `fill`, page setup (`section_break.change`, `doc.change`), existing definitions (`defs.change`, `story.change`) and `region.create`, `region.delete`, `region.split`, `region.merge`, `region.move` do not.
+- [ ] Given a region grant with the role `editor` and a `structure` list holding `region.retitle`, `defs.add` or both, when it is validated, then it is accepted; with any other role, an unknown identifier, an operation without the flag, or a duplicate, it is refused with the reason named.
+- [ ] Given the grant list and its `If-Match` revision (PRM-018), when a grant with a `structure` list is written and read back, then the list is stored as given, an older client that ignores the member still sees the role, and `ROLE_CAPABILITIES` is unchanged (document-level `structure` of `editor` and `owner` stays as it is).
+- [ ] Given the schema in `packages/protocol/src/definition/resources.ts`, when `pnpm generate` runs, then `spec/` carries the optional member and the generated check passes.
+
+**Notes:** decision 279 settles ADR 0424 questions 1 and 2: the list has these two operations only, and removing a style stays with `structure` at document level. Writing these stories ticks PRM-063 criterion 2; building them is separate.
+
+### PRM-069 Check renaming and adding styles against the grant in the outcome check
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Maintainer |
+
+**Spec:** 07 §5.2 (P2), §5.3; ADR 0424 (section 3); decision 279 · **Requirements:** R3 · **Depends on:** PRM-011, PRM-012, PRM-016, PRM-068
+
+As a maintainer, I want P2 and definition protection to read the grant for these two operations, so that a region-only editor can use them and nothing more.
+
+**Acceptance criteria**
+
+- [ ] Given a region grant that lists `region.retitle` and `edit` in that region, when the user changes only that region's `title`, then the commit is accepted; without the listing, without `edit` there, for another region's title, or with an expired grant, it is refused with `permission_denied`.
+- [ ] Given a grant that lists `defs.add`, when the user adds a new `style_def` whose identifier no earlier commit used, then the commit is accepted; a step that changes or removes an existing definition, or reuses a retired identifier, is refused as before (PRM-012), and removing a style they added is refused.
+- [ ] Given a commit that mixes an allowed operation with one that is not (a page setup change, a region created or removed, a policy flip), when it is checked, then it is refused whole.
+- [ ] Given a revoked grant, when a commit based on a revision before the revocation is checked, then the grants as they stood at the commit's base apply (04 G7), and a commit based after it is refused.
+- [ ] Given every role and principal pair, when a property test runs, then the verdict agrees with an independent oracle written from 07 and ADR 0424, and steps that need no `structure` pay no grant lookup (PRM-016).
+
+**Notes:** page setup and a landscape page per region are not offered (decision 279).
+
+### PRM-070 Show renaming and adding styles to region-only editors
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Editor |
+
+**Spec:** 07 §7; ADR 0424 (sections 2 and 4); decision 279 · **Requirements:** R3 · **Depends on:** PRM-027, PRM-030, PRM-035, PRM-068, PRM-069
+
+As a person who may edit only one region, I want to rename it and add a style when the owner allows it, so that I am not blocked, and to see nothing I may not use.
+
+**Acceptance criteria**
+
+- [ ] Given a grant that lists `region.retitle`, when the access object is built, then the scope `region:<id>` holds `structure` and the pane offers the rename; without the listing the control is absent and the refusal text of `permissions.rename.noStructure` still applies.
+- [ ] Given a grant that lists `defs.add`, when the access object is built, then it carries the scope `defs` holding `structure.add`, and the style controls offer "new style" and no change or removal of an existing style.
+- [ ] Given the permissions pane (PRM-035) and a user with `manage`, when they edit a region grant of the role `editor`, then they see two checkboxes (rename the region, add styles); for other roles the checkboxes are not shown.
+- [ ] Given the integration guide, when it describes region-only editors, then it says what they can do (apply styles, rename, add styles when granted) and cannot do (change page setup, remove or change a style, create or remove regions).
+
+**Notes:** the integration guide does not exist yet; the last criterion waits for it.
+
 ## Coverage
 
 | Spec 07 section | Stories |
 |---|---|
 | Introduction (version 1 restricts changing; reading is restricted by projection, ADR 0019) | PRM-004, PRM-057, PRM-066, PRM-067 |
 | §1 Concepts | PRM-001, PRM-004, PRM-018, PRM-023 |
-| §2 Roles | PRM-001, PRM-011, PRM-018, PRM-033, PRM-034 |
+| §2 Roles | PRM-001, PRM-011, PRM-018, PRM-033, PRM-034, PRM-068 |
 | §3 Where permission data lives | PRM-002, PRM-003, PRM-018, PRM-021 |
 | §4 Effective capabilities | PRM-004, PRM-005, PRM-006, PRM-007, PRM-023, PRM-043, PRM-047 |
 | §5 Enforcement by the authority | PRM-009 |
 | §5.1 The outcome check | PRM-008, PRM-009, PRM-017 |
-| §5.2 Rules P1 to P6, `trackChanges` | PRM-010, PRM-011, PRM-013, PRM-014, PRM-015 |
+| §5.2 Rules P1 to P6, `trackChanges` | PRM-010, PRM-011, PRM-013, PRM-014, PRM-015, PRM-069 |
 | §5.2 Rules P7 to P9 | none: owned by FRW (12 §4.2); PRM-010 provides the seam |
 | §5.3 Definitions that affect protected regions | PRM-012, PRM-047, PRM-050 |
 | §5.4 Cost | PRM-016 |
 | §6 Comments | PRM-037, PRM-038, PRM-039, PRM-040 |
-| §7 Behaviour in the editor | PRM-024, PRM-026, PRM-027, PRM-028, FE-037, PRM-030, PRM-031, PRM-032, PRM-033, PRM-034, PRM-035, PRM-036, PRM-048 |
+| §7 Behaviour in the editor | PRM-024, PRM-026, PRM-027, PRM-028, FE-037, PRM-030, PRM-031, PRM-032, PRM-033, PRM-034, PRM-035, PRM-036, PRM-048, PRM-070 |
 | §8 History visibility | PRM-041, PRM-042 |
 | §9 Live changes, revocation and races | PRM-019, PRM-020, PRM-021, PRM-022, PRM-024, FE-010 |
 | §10 Leases | PRM-043, PRM-044, PRM-045 |
@@ -1616,7 +1680,7 @@ As a maintainer, I want one function that gives each connection the regions and 
 | §14 Audit | PRM-051, PRM-052, PRM-053 |
 | §15 DOCX mapping | EXP-104, EXP-094 |
 | §16 Threat cases | PRM-059, PRM-060 |
-| §17 Open issues | PRM-061, PRM-062, PRM-063, PRM-064 (read restrictions and the policy engine are Notes: see Open questions) |
+| §17 Open issues | PRM-061, PRM-062, PRM-063, PRM-064 (PRM-068 to PRM-070 build the answer to PRM-063) (read restrictions and the policy engine are Notes: see Open questions) |
 
 ## Open questions
 
