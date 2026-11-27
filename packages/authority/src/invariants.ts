@@ -23,6 +23,8 @@ export interface InvariantContext {
   retiredRegionIds: ReadonlySet<string>;
   attachedAssets?: ReadonlySet<string>;
   mathGate?: ValidationContext['mathGate'];
+  /** The model definition the document is checked against; CDM 1 when absent. */
+  def?: ValidationContext['def'];
 }
 
 export interface InvariantOutcome {
@@ -161,6 +163,7 @@ export function checkInvariants(
       `step ${boundary.step} removes one boundary of region ${boundary.region} but not the other (P3)`,
     );
   const ctxV: ValidationContext = { retiredRegionIds: ctx.retiredRegionIds };
+  if (ctx.def) ctxV.def = ctx.def;
   if (ctx.attachedAssets) ctxV.attachedAssets = ctx.attachedAssets;
   if (ctx.mathGate) {
     ctxV.mathGate = ctx.mathGate;

@@ -3,15 +3,24 @@
  * itself, and a channel is refused with `unsupported_cdm` unless the component's version is the
  * version the document is stored at.
  *
- * The service here supports CDM 1 and 2 (`settings.cdm`). No CDM 2 exists in the model package
- * yet, so a document "at version 2" is created straight in the stores, with a version 2 envelope
- * as its first checkpoint; nothing is migrated to make it. That is what the criteria need: the
- * channel decision reads the stored version. The operator's migration itself (criteria 2 and 3) is
- * not built; see the story's Notes.
+ * The service here supports CDM 1 and 2 (`settings.cdm`), with the test-only version 2. A document
+ * "at version 2" is created straight in the stores, with a version 2 envelope as its first
+ * checkpoint; nothing is migrated to make it. That is what the criteria need: the channel decision
+ * reads the stored version. The operator's migration (criteria 2 and 3) is in
+ * be-094-operator-migration.test.ts.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { uuid7, type JsonEnvelope } from '@docedit/model';
+import { serveCdm2 } from './cdm2-test-only.ts';
 import { basePermissions, startPlane, type Plane } from './support.ts';
+
+// The service reads a document in the schema of its version, so version 2 must be served (BE-094;
+// ADR 0435). It is the test-only version 2 of owner decisions 75 and 76.
+let unserve: () => void;
+beforeAll(() => {
+  unserve = serveCdm2();
+});
+afterAll(() => unserve());
 
 let planes: Plane[] = [];
 afterEach(async () => {

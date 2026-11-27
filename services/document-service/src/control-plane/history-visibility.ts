@@ -298,5 +298,6 @@ export function withEffectiveHistoryVisibility(
       return { ...r, record: await one(r.record) };
     },
     remove: async (ref, opts) => one(await inner.remove(ref, opts)),
+    setCdmVersion: (ref, from, to) => inner.setCdmVersion(ref, from, to),
   };
 }

@@ -136,8 +136,11 @@ export interface GatewayStats {
 
 export class ProjectionGateway {
   private readonly room: Room;
-  private readonly fschema: Schema;
-  private readonly pschema: Schema;
+  /** The room's schema, which changes when a migration snapshot commit is stored (BE-094). */
+  private get fschema(): Schema {
+    return this.room.schema;
+  }
+  private pschema: Schema;
   private readonly visibility: Visibility;
   private readonly full = new Map<number, Node>();
   /** The parsed steps of every step commit the gateway has followed. */
@@ -183,7 +186,6 @@ export class ProjectionGateway {
     },
   ) {
     this.room = room;
-    this.fschema = fschema;
     this.pschema = pschema;
     this.visibility = visibility;
     this.revision = room.permissions.revision;
@@ -216,6 +218,14 @@ export class ProjectionGateway {
           this.full.set(this.head, fschema.nodeFromJSON(o.msg.content.doc));
       }
     }
+  }
+
+  /**
+   * The projection schema of the model version a migration snapshot commit moves the room to
+   * (BE-094). Called before the commit is submitted; the full schema follows the room.
+   */
+  setProjectionSchema(pschema: Schema): void {
+    this.pschema = pschema;
   }
 
   /** The number of visibility classes the gateway projects for (SR-M7: work per commit). */

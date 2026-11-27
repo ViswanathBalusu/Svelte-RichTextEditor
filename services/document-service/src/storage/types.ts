@@ -330,6 +330,13 @@ export interface DocumentStore {
   ): Promise<{ record: DocumentRecord; perms: PermissionState | null }>;
   /** Soft delete: sets `deletedAt` and raises the metadata revision; the data stays (HIS-029). */
   remove(ref: DocRef, opts: DocumentChangeOptions): Promise<DocumentRecord>;
+  /**
+   * Moves the document from model version `from` to `to` (BE-094; ADR 0435). Only the migration
+   * runner calls it, and only after the snapshot commit that holds the migrated content and the
+   * checkpoint it references are stored. Changes nothing, and returns false, when the document is
+   * not at `from`; throws DocumentNotFoundError for a missing or deleted document.
+   */
+  setCdmVersion(ref: DocRef, from: number, to: number): Promise<boolean>;
 }
 
 /**
