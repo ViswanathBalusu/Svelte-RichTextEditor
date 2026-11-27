@@ -61,7 +61,7 @@ const steps: Step[] = [
   {
     name: 'test',
     command:
-      'pnpm exec vitest run --project node' +
+      'pnpm exec vitest run --project node --project measure' +
       (changed === undefined ? '' : ` --changed ${changed}`),
   },
 ].filter((s) => (only.length === 0 || only.includes(s.name)) && !skip.includes(s.name));

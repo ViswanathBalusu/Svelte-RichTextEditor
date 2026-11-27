@@ -20,7 +20,8 @@
  *
  * The victims are three editors, each in a room of its own, two of them in another tenant. Each
  * sends one small commit, waits for its `sync.ack`, pauses 20 ms and sends the next, for MEASURE_MS,
- * first alone (the baseline) and then during the attack. The service and the timed clients share
+ * first alone (the baseline) and then during the attack; they are connected and in their rooms
+ * before each measurement starts. The service and the timed clients share
  * one process and one event loop; loopback, memory storage. The run is made twice (SETTINGS): with
  * the service's default settings, which configure no admission budget, and with a budget for each
  * connection. The figures are for those settings and are printed by the test, with the event-loop
@@ -83,36 +84,53 @@ describe.each(SETTINGS)('SEC-028 criterion 1: expensive commits, $name', (settin
   const contentOf = async (tenant: TestTenant, doc: string) =>
     (await h.call('GET', `/v1/documents/${doc}/content`, { token: tenant.apiKey })).json as Json;
 
-  /** One victim: small commits one after another for `ms`; the latencies in milliseconds. */
-  async function victim(tenant: TestTenant, sub: string, ms: number): Promise<number[]> {
+  /**
+   * One victim: an editor that is connected, has said hello and has opened its room. `run` sends
+   * small commits one after another for `ms` and gives the latencies in milliseconds. Setup is
+   * apart from the measurement because SEC-028 measures the acknowledgement of commits in rooms
+   * that are already open. The wait for `hello` is the test client's own five-second limit, not a
+   * figure of the criterion, and an attack that stalls the process would fail it.
+   */
+  async function victim(tenant: TestTenant, sub: string) {
     const doc = await h.createDocument(tenant, documentWithRegions());
     const c = await WireClient.connect(h.wsUrl, { origin: tenant.origin });
     try {
       await c.hello(await h.mintToken(tenant, sub, { [doc]: 'editor' }));
       await c.open(1, doc);
-      const content = await contentOf(tenant, doc);
-      const pos = inside(loadDoc(content['doc']), 'pIntro0000000001');
-      let base = content['seq'] as number;
-      const out: number[] = [];
-      const until = performance.now() + ms;
-      while (performance.now() < until) {
-        const t0 = performance.now();
-        const r = await c.submit(1, { id: uuid7(), base, steps: [insertText(pos, 'v')] }, 30_000);
-        out.push(performance.now() - t0);
-        expect(r.t, JSON.stringify(r.d)).toBe('sync.ack');
-        base = (r.d as { seq: number }).seq;
-        await new Promise((done) => setTimeout(done, 20));
-      }
-      return out;
-    } finally {
+    } catch (e) {
       c.terminate();
+      throw e;
     }
+    const content = await contentOf(tenant, doc);
+    const pos = inside(loadDoc(content['doc']), 'pIntro0000000001');
+    let base = content['seq'] as number;
+    return {
+      close: () => c.terminate(),
+      async run(ms: number): Promise<number[]> {
+        const out: number[] = [];
+        const until = performance.now() + ms;
+        while (performance.now() < until) {
+          const t0 = performance.now();
+          const r = await c.submit(1, { id: uuid7(), base, steps: [insertText(pos, 'v')] }, 30_000);
+          out.push(performance.now() - t0);
+          expect(r.t, JSON.stringify(r.d)).toBe('sync.ack');
+          base = (r.d as { seq: number }).seq;
+          await new Promise((done) => setTimeout(done, 20));
+        }
+        return out;
+      },
+    };
   }
 
-  const victims = async (ms: number): Promise<number[]> =>
-    (await Promise.all([victim(h.a, 'vera', ms), victim(h.b, 'bea', ms), victim(h.b, 'ben', ms)]))
-      .flat()
-      .sort((x, y) => x - y);
+  /** Three editors in three rooms, connected before any measurement. */
+  async function editors() {
+    const made = await Promise.all([victim(h.a, 'vera'), victim(h.b, 'bea'), victim(h.b, 'ben')]);
+    return {
+      close: () => made.forEach((v) => v.close()),
+      measure: async (ms: number): Promise<number[]> =>
+        (await Promise.all(made.map((v) => v.run(ms)))).flat().sort((x, y) => x - y),
+    };
+  }
 
   /** An attacker that owns a new document made from `base`. */
   async function attacker(
@@ -189,7 +207,10 @@ describe.each(SETTINGS)('SEC-028 criterion 1: expensive commits, $name', (settin
 
     const attackers = [maxSteps, maxRebase, depth, hugeAttributes, replaceAround, oneMebibyte];
 
-    const baseline = await victims(3000);
+    const first = await editors();
+    const baseline = await first.measure(3000).finally(first.close);
+    // Connected before the attack starts: the measurement is of commits, not of the handshake.
+    const second = await editors();
 
     const worker = new Worker(new URL('./support/sec-028-attack-worker.ts', import.meta.url), {
       workerData: { wsUrl: h.wsUrl, maxFrame: MAX_FRAME, attackers } satisfies AttackInput,
@@ -217,12 +238,13 @@ describe.each(SETTINGS)('SEC-028 criterion 1: expensive commits, $name', (settin
       // Let every attacker be in its loop before the measurement starts.
       await new Promise((done) => setTimeout(done, 1000));
       loop.enable();
-      during = await victims(MEASURE_MS);
+      during = await second.measure(MEASURE_MS);
       loop.disable();
       const report = next<AttackerReport[]>('its report');
       worker.postMessage('stop');
       reports = await report;
     } finally {
+      second.close();
       await worker.terminate();
     }
 
