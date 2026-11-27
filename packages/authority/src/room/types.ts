@@ -51,7 +51,10 @@ export interface StoredCommit {
   revision: number;
   cdm: number;
   engine: string;
-  /** Region identifiers this commit removed; retired for good (I3). */
+  /**
+   * Region identifiers this commit removed, and the scope keys of the definitions it removed
+   * (`defs:style_def/<id>`); retired for good (I3; ADR 0424).
+   */
   retired: string[];
   /** Suggestion identifiers first used by this commit (P4). */
   claimed: string[];

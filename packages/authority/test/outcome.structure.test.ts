@@ -251,6 +251,22 @@ describe('the operations of `structure` and `manage`, listed once (PRM-001, crit
       () => [new AttrStep(1, 'trackChanges', 'everyone')],
       doc,
     ]);
+    // A new style needs `defs.add` (ADR 0424): without it, only `structure` adds one.
+    cases.push([
+      'defs.add',
+      MORE.rita,
+      (d) => {
+        const at = posOf(d, 'LegalBody');
+        const style = schema.nodes['style_def']!.create({
+          id: 'Fresh',
+          kind: 'paragraph',
+          name: 'Fresh',
+          basedOn: 'Normal',
+        });
+        return [new ReplaceStep(at, at, new Slice(Fragment.from(style), 0, 0))];
+      },
+      doc,
+    ]);
     const enforced = new Set<string>();
     for (const [op, user, make, base] of cases) {
       const v = verdictOf(user, base, make);
@@ -261,7 +277,7 @@ describe('the operations of `structure` and `manage`, listed once (PRM-001, crit
     }
     // Every operation enforced on commits is exercised; the others are the control plane's (07 §12).
     for (const o of OPERATIONS) {
-      if (o.where === 'commit' && !['region.split', 'region.merge', 'defs.add'].includes(o.id))
+      if (o.where === 'commit' && !['region.split', 'region.merge'].includes(o.id))
         expect(enforced, o.id).toContain(o.id);
     }
   });
