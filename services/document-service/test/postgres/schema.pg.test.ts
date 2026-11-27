@@ -238,6 +238,7 @@ describe.skipIf(unavailable !== null)('schema (PostgreSQL)', () => {
       'expires_at',
       'created_by',
       'created_at',
+      'structure',
     ]);
   });
 

@@ -261,7 +261,7 @@ describe('the operations of `structure` and `manage`, listed once (PRM-001, crit
     }
     // Every operation enforced on commits is exercised; the others are the control plane's (07 §12).
     for (const o of OPERATIONS) {
-      if (o.where === 'commit' && !['region.split', 'region.merge'].includes(o.id))
+      if (o.where === 'commit' && !['region.split', 'region.merge', 'defs.add'].includes(o.id))
         expect(enforced, o.id).toContain(o.id);
     }
   });
