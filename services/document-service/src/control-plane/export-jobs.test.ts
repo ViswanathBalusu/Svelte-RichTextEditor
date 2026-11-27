@@ -18,7 +18,7 @@ import { configFromEnv } from '../config.ts';
 import { startService } from '../server.ts';
 import { objectKeys } from '../objects/store.ts';
 import type { DocRef } from '../storage/types.ts';
-import { PREVIEW_KIND, exportRequestKey } from './exports.ts';
+import { EXPORT_KIND, PREVIEW_KIND, exportRequestKey } from './exports.ts';
 import { checkQueueProof, QUEUE_PROOF_MEMBER } from './job-proof.ts';
 import { signJws } from './jwt.ts';
 import { JobFailure, type JobHandler } from './jobs/runner.ts';
@@ -514,6 +514,62 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(asked.status).toBe(202);
         expect(await h.parts.queue.latestFor(h.tenant, doc, PREVIEW_KIND)).not.toBeNull();
         await reach(editor, asked.json.id as string, ['completed']);
+      },
+    );
+
+    it.skipIf(skip)(
+      'starts no compile of any kind when a document changes and page-break reconciliation is off for the tenant (EXP-008 criterion 5)',
+      async () => {
+        expect(await h.parts.tenantSettings!.pageBreakReconciliation(h.tenant)).toBe(false);
+        const doc = await h.createDocument({ content: documentWithRegions() });
+        const editor = h.userToken({ [doc]: 'editor' });
+        // The same commit of two characters as criterion 1, with the tenant's setting off.
+        const ref: DocRef = { tenant: h.tenant, doc };
+        const epoch = await h.parts.ownership.claim(ref, 'test-node');
+        const head = await h.parts.logs.head(ref);
+        const perms = await h.parts.grants.current(ref);
+        const handled = ran.length;
+        const at = introPosition();
+        const commit: StoredCommit = {
+          seq: head.seq + 1,
+          id: uuid7(),
+          kind: 'steps',
+          steps: [
+            {
+              stepType: 'replace',
+              from: at,
+              to: at,
+              slice: { content: [{ type: 'text', text: 'hi' }] },
+            },
+          ] as StoredCommit['steps'],
+          user: 'editor',
+          session: 'session-export-reconcile-off',
+          time: h.now(),
+          origin: 'input',
+          scopes: ['body'],
+          revision: perms.revision,
+          cdm: 1,
+          engine: 'pm-steps/1',
+          retired: [],
+          claimed: [],
+        };
+        const appended = await h.parts.logs.append(ref, {
+          epoch,
+          revision: perms.revision,
+          fromSeq: head.seq + 1,
+          commits: [commit],
+        });
+        expect(appended.status).toBe('ok');
+        await sleep(200);
+        expect(await h.parts.queue.latestFor(h.tenant, doc, PREVIEW_KIND)).toBeNull();
+        expect(await h.parts.queue.latestFor(h.tenant, doc, EXPORT_KIND)).toBeNull();
+        expect(ran.length).toBe(handled);
+        // A line-level compile, the kind reconciliation would start, is refused while it is off.
+        const lines = await post(doc, editor, { profile: 'preview', layout: 'lines' });
+        expect(lines.status).toBe(403);
+        await sleep(200);
+        expect(ran.length).toBe(handled);
+        expect(await h.parts.queue.latestFor(h.tenant, doc, EXPORT_KIND)).toBeNull();
       },
     );
 
