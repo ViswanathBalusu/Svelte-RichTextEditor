@@ -21,6 +21,7 @@ import {
   dataDir,
   endpoints,
   ensureSecrets,
+  secretsDir,
   seedTenant,
   setting,
   stackSettings,
@@ -33,7 +34,7 @@ const e = endpoints(s);
 const tenant = seedTenant();
 await mkdir(dir, { recursive: true });
 
-const secrets = await ensureSecrets(tenant.id, dir);
+const secrets = await ensureSecrets(tenant.id, dir, secretsDir());
 
 const target: S3Target = {
   endpoint: e.s3Url,

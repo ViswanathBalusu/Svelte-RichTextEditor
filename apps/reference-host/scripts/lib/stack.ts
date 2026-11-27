@@ -9,7 +9,7 @@
 import { generateKeyPairSync, randomBytes, randomUUID, type JsonWebKey } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hashSecret } from '@docedit/document-service';
 
@@ -80,14 +80,87 @@ export interface Secrets {
 
 export const SECRETS_FILE = 'secrets.json';
 
+/**
+ * What one long-running part is given (SEC-048 criterion 2; owner decision 107): the document
+ * service holds its signing key, view key and cursor secret; the reference host (and the seed run,
+ * which acts as the host) holds the API key and the host's signing key; the export worker holds no
+ * generated secret. `secrets.json` is the operator's complete record and no part of the stack
+ * reads it at run time.
+ */
+export type ServiceSecrets = Pick<
+  Secrets,
+  'x-note' | 'serviceSigning' | 'viewKey' | 'cursorSecret'
+>;
+export type HostSecrets = Pick<Secrets, 'x-note' | 'apiKey' | 'hostSigning'>;
+export type SecretRole = 'service' | 'host';
+
+/** The part of the secrets one role is given. */
+export function secretsFor(role: 'service', secrets: Secrets): ServiceSecrets;
+export function secretsFor(role: 'host', secrets: Secrets): HostSecrets;
+export function secretsFor(role: SecretRole, secrets: Secrets): ServiceSecrets | HostSecrets {
+  const note = secrets['x-note'];
+  return role === 'service'
+    ? {
+        'x-note': note,
+        serviceSigning: secrets.serviceSigning,
+        viewKey: secrets.viewKey,
+        cursorSecret: secrets.cursorSecret,
+      }
+    : { 'x-note': note, apiKey: secrets.apiKey, hostSigning: secrets.hostSigning };
+}
+
+/**
+ * The directory that holds the secret files: DOCEDIT_DEMO_SECRETS, or the data directory. In the
+ * containers of compose.json it is `/secrets`, and each long-running container mounts only its own
+ * role's directory there; setup mounts all of them. Without it (stack.ps1 starts the parts as
+ * processes of one user) the role directories sit next to `secrets.json`.
+ */
+export function secretsDir(env: NodeJS.ProcessEnv = process.env): string {
+  return resolve(env['DOCEDIT_DEMO_SECRETS'] || dataDir(env));
+}
+
+/** The file of one role: `<secrets directory>/role-<role>/secrets.json`. */
+export function roleSecretsFile(role: SecretRole, root = secretsDir()): string {
+  return join(root, `role-${role}`, SECRETS_FILE);
+}
+
 export async function readSecrets(dir = dataDir()): Promise<Secrets> {
   return JSON.parse(await readFile(join(dir, SECRETS_FILE), 'utf8')) as Secrets;
 }
 
+export async function readRoleSecrets(role: 'service', root?: string): Promise<ServiceSecrets>;
+export async function readRoleSecrets(role: 'host', root?: string): Promise<HostSecrets>;
+export async function readRoleSecrets(
+  role: SecretRole,
+  root?: string,
+): Promise<ServiceSecrets | HostSecrets>;
+export async function readRoleSecrets(
+  role: SecretRole,
+  root = secretsDir(),
+): Promise<ServiceSecrets | HostSecrets> {
+  return JSON.parse(await readFile(roleSecretsFile(role, root), 'utf8')) as
+    ServiceSecrets | HostSecrets;
+}
+
+async function writeSecretFile(path: string, value: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const temp = `${path}.${process.pid}.tmp`;
+  await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await rename(temp, path);
+}
+
+/** Writes each role's file under `root`, from the complete record. */
+export async function writeRoleSecrets(secrets: Secrets, root = secretsDir()): Promise<void> {
+  await writeSecretFile(roleSecretsFile('service', root), secretsFor('service', secrets));
+  await writeSecretFile(roleSecretsFile('host', root), secretsFor('host', secrets));
+}
+
 /** The secrets of this data directory, generated the first time. */
-export async function ensureSecrets(tenant: string, dir = dataDir()): Promise<Secrets> {
+export async function ensureSecrets(tenant: string, dir = dataDir(), root = dir): Promise<Secrets> {
   try {
-    return await readSecrets(dir);
+    const existing = await readSecrets(root);
+    await writeRoleSecrets(existing, root);
+    return existing;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
   }
@@ -113,10 +186,8 @@ export async function ensureSecrets(tenant: string, dir = dataDir()): Promise<Se
     viewKey: randomBytes(32).toString('base64'),
     cursorSecret: randomBytes(32).toString('base64url'),
   };
-  await mkdir(dir, { recursive: true });
-  const temp = join(dir, `${SECRETS_FILE}.${process.pid}.tmp`);
-  await writeFile(temp, `${JSON.stringify(secrets, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
-  await rename(temp, join(dir, SECRETS_FILE));
+  await writeSecretFile(join(root, SECRETS_FILE), secrets);
+  await writeRoleSecrets(secrets, root);
   return secrets;
 }
 
@@ -223,9 +294,14 @@ export type Role = 'service' | 'host' | 'worker';
 export function roleEnv(
   role: Role,
   s: Settings,
-  secrets: Secrets,
+  secrets: Partial<Secrets>,
   dir = dataDir(),
 ): Record<string, string> {
+  const need = <K extends keyof Secrets>(key: K): Secrets[K] => {
+    const v = secrets[key];
+    if (v === undefined) throw new Error(`the ${role} part is not given ${key}`);
+    return v as Secrets[K];
+  };
   const e = endpoints(s);
   const tenant = seedTenant();
   switch (role) {
@@ -237,10 +313,10 @@ export function roleEnv(
         DOCEDIT_SERVICE_ID: setting(s, 'DOCEDIT_DEMO_SERVICE_ID'),
         DOCEDIT_DATABASE_URL: e.serviceDatabaseUrl,
         ...s3Env(s),
-        DOCEDIT_SIGNING_JWK: JSON.stringify(secrets.serviceSigning),
+        DOCEDIT_SIGNING_JWK: JSON.stringify(need('serviceSigning')),
         DOCEDIT_TENANTS_FILE: join(dir, 'tenants.json'),
-        DOCEDIT_VIEW_KEY: secrets.viewKey,
-        DOCEDIT_CURSOR_SECRET: secrets.cursorSecret,
+        DOCEDIT_VIEW_KEY: need('viewKey'),
+        DOCEDIT_CURSOR_SECRET: need('cursorSecret'),
         DOCEDIT_NODE_ID: `${setting(s, 'DOCEDIT_DEMO_PROJECT')}-service-1`,
       };
     case 'host':
@@ -248,10 +324,10 @@ export function roleEnv(
         DOCEDIT_HOST_ENDPOINT: e.serviceUrl,
         DOCEDIT_SERVICE_ID: setting(s, 'DOCEDIT_DEMO_SERVICE_ID'),
         DOCEDIT_HOST_TENANT: tenant.id,
-        DOCEDIT_HOST_API_KEY: secrets.apiKey.credential,
+        DOCEDIT_HOST_API_KEY: need('apiKey').credential,
         DOCEDIT_HOST_TOKENS: setting(s, 'DOCEDIT_DEMO_TOKENS'),
         DOCEDIT_HOST_TOKEN_SECONDS: setting(s, 'DOCEDIT_DEMO_TOKEN_SECONDS'),
-        DOCEDIT_HOST_SIGNING_JWK: JSON.stringify(secrets.hostSigning),
+        DOCEDIT_HOST_SIGNING_JWK: JSON.stringify(need('hostSigning')),
         DOCEDIT_HOST_ISSUER: HOST_ISSUER,
         DOCEDIT_HOST_DATA: dir,
         DOCEDIT_HOST_SEED: SEED_DIR,

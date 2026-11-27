@@ -12,7 +12,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { dataDir, readSecrets, roleEnv, stackSettings, type Role } from './lib/stack.ts';
+import { readRoleSecrets, roleEnv, stackSettings, type Role } from './lib/stack.ts';
 
 const role = process.argv[2] as Role | undefined;
 if (role !== 'service' && role !== 'host' && role !== 'worker') {
@@ -21,10 +21,14 @@ if (role !== 'service' && role !== 'host' && role !== 'worker') {
 }
 
 const s = stackSettings();
-const secrets = await readSecrets(dataDir()).catch(() => {
-  console.error('No stack secrets yet: run scripts/setup.ts (or stack.ps1 up) first.');
-  process.exit(2);
-});
+// Each part reads its own role's file only (SEC-048 criterion 2); the export worker has none.
+const secrets =
+  role === 'worker'
+    ? {}
+    : await readRoleSecrets(role).catch(() => {
+        console.error('No stack secrets yet: run scripts/setup.ts (or stack.ps1 up) first.');
+        process.exit(2);
+      });
 for (const [k, v] of Object.entries(roleEnv(role, s, secrets))) process.env[k] = v;
 
 const require = createRequire(import.meta.url);

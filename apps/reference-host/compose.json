@@ -75,13 +75,18 @@
       "labels": { "org.docedit.env": "demo" }
     },
     "setup": {
-      "x-note": "One-shot: secrets (generated, demo-only), the bucket and its CORS rules, the database, the service role, the migrations and the tenant registration (scripts/setup.ts).",
+      "x-note": "One-shot: secrets (generated, demo-only), the bucket and its CORS rules, the database, the service role, the migrations and the tenant registration (scripts/setup.ts). The only part that mounts every secret volume: the operator's complete record (secrets-operator) and one volume per role (SEC-048 criterion 2; owner decision 107). The other parts mount their own role's volume and nothing else; the export worker mounts none.",
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
       "build": { "context": "../..", "dockerfile": "apps/reference-host/containers/Containerfile" },
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack" },
-      "volumes": ["stack-data:/stack"],
+      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "volumes": [
+        "stack-data:/stack",
+        "secrets-operator:/secrets",
+        "secrets-service:/secrets/role-service",
+        "secrets-host:/secrets/role-host"
+      ],
       "command": ["node", "apps/reference-host/scripts/setup.ts"],
       "depends_on": {
         "postgres": { "condition": "service_healthy" },
@@ -94,8 +99,8 @@
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack" },
-      "volumes": ["stack-data:/stack:ro"],
+      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "volumes": ["stack-data:/stack:ro", "secrets-service:/secrets/role-service:ro"],
       "command": ["node", "apps/reference-host/scripts/run.ts", "service"],
       "depends_on": {
         "setup": { "condition": "service_completed_successfully" }
@@ -118,8 +123,8 @@
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack" },
-      "volumes": ["stack-data:/stack"],
+      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "volumes": ["stack-data:/stack", "secrets-host:/secrets/role-host:ro"],
       "command": ["node", "apps/reference-host/scripts/seed.ts"],
       "depends_on": {
         "document-service": { "condition": "service_healthy" }
@@ -131,8 +136,8 @@
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack" },
-      "volumes": ["stack-data:/stack"],
+      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "volumes": ["stack-data:/stack", "secrets-host:/secrets/role-host:ro"],
       "command": ["node", "apps/reference-host/scripts/run.ts", "host"],
       "depends_on": {
         "seed": { "condition": "service_completed_successfully" }
@@ -186,5 +191,13 @@
       "labels": { "org.docedit.env": "demo" }
     }
   },
-  "volumes": { "pg-data": {}, "s3-data": {}, "s3-versions": {}, "stack-data": {} }
+  "volumes": {
+    "pg-data": {},
+    "s3-data": {},
+    "s3-versions": {},
+    "stack-data": {},
+    "secrets-operator": {},
+    "secrets-service": {},
+    "secrets-host": {}
+  }
 }
