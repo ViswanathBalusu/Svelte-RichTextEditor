@@ -39,13 +39,21 @@ export function toAccess(
   asOfSeq: number,
   user: (stored: string) => string = (u) => u,
 ): Access {
-  const scopes: Record<string, Access['caps']> = {
+  const scopes: Record<string, Access['scopes'][string]> = {
     doc: ordered(a.structureScopes),
     body: ordered(a.body),
-    defs: ordered(a.structureScopes),
+    // `structure.add`: a grant that lists `defs.add` lets the holder add a style (ADR 0424; PRM-070).
+    defs: [
+      ...ordered(a.structureScopes),
+      ...(a.structureGrants.defsAdd ? ['structure.add' as const] : []),
+    ],
   };
   for (const s of stories) scopes[`story:${s}`] = ordered(a.structureScopes);
-  for (const [id, caps] of a.regions) scopes[`region:${id}`] = ordered(caps);
+  // `structure` on a region scope: a grant that lists `region.retitle` lets the holder rename it.
+  for (const [id, caps] of a.regions)
+    scopes[`region:${id}`] = ordered(
+      a.structureGrants.retitle.has(id) ? new Set([...caps, 'structure' as const]) : caps,
+    );
   const leases: Access['leases'] = {};
   for (const l of perms.leases)
     if (l.expiresAt > a.at)

@@ -878,7 +878,15 @@ export interface RegionGrant {
   readonly principal: string;
   readonly role: RegionRole;
   readonly expiresAt?: string | null;
+  /**
+   * The parts of `structure` a grant of the role `editor` gives on top of editing (ADR 0424;
+   * PRM-068): renaming the region and adding styles. Absent means none.
+   */
+  readonly structure?: readonly GrantStructureOperation[];
 }
+
+/** The two operations of `structure` that a region grant may list (ADR 0424). */
+export type GrantStructureOperation = 'region.retitle' | 'defs.add';
 
 export interface GrantsSnapshot {
   readonly etag: string;

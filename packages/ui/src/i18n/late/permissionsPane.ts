@@ -19,6 +19,9 @@ export const EN_GB_PERMISSIONS_PANE = {
   'permissions.rename.noStructure':
     'Only people who can change the structure of the document can rename a region.',
   'permissions.rename.noEdit': 'You cannot edit this region, so you cannot rename it.',
+  'permissions.structure.legend': 'Besides editing, this person may',
+  'permissions.structure.rename': 'Rename the region',
+  'permissions.structure.addStyles': 'Add styles',
   'permissions.grants': 'People and groups with a role',
   'permissions.grants.none': 'Nobody has a role on this region.',
   'permissions.add': 'Give a role',

@@ -2990,12 +2990,7 @@ export class DocumentCore implements DocumentApi {
     if (name === 'renameRegion')
       return args.region === undefined || args.title === undefined
         ? null
-        : renameRegion(
-            args.region,
-            args.title,
-            (this.#accessValue?.caps.includes('structure') ?? false) &&
-              this.canEdit(`region:${args.region}`),
-          );
+        : renameRegion(args.region, args.title, this.#mayRetitle(args.region));
     if (name === 'setRegionPolicy')
       return args.region === undefined || args.policy === undefined
         ? null
@@ -4141,9 +4136,7 @@ one or original. It is a
       // A rename says why it is unavailable (PRM-034 criterion 5): a lock first, then the rights
       // `region.retitle` needs, `structure` and `edit` in the region (07 §2).
       if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
-      const permitted =
-        (this.#accessValue?.caps.includes('structure') ?? false) &&
-        this.canEdit(`region:${args.region}`);
+      const permitted = this.#mayRetitle(args.region);
       if (!permitted) return { enabled: false, active: false, reason: 'no-access' };
     }
     const command = this.#command(name, args);
@@ -4229,8 +4222,11 @@ one or original. It is a
     const access = this.#accessValue;
     // Adding or removing a definition also changes the order of `defs`, which is the `doc` scope (the
     // authority's scope diff); renaming a style touches its own definition only.
+    // A grant that lists `defs.add` lets its holder add a style and nothing else (ADR 0424; PRM-070).
+    const addOnly = op === 'create' && (access?.scopes['defs']?.includes('structure.add') ?? false);
     if (
       access &&
+      !addOnly &&
       !(
         access.caps.includes('structure') &&
         this.canEdit('defs') &&
@@ -4256,6 +4252,18 @@ one or original. It is a
       if (refusal) return { ok: false, reason: refusal, regions };
     }
     return { ok: true, regions };
+  }
+
+  /**
+   * Whether the user may change the title of a region: `structure` in the document, or in the region
+   * scope where a grant lists `region.retitle` (ADR 0424; PRM-070), and `edit` in the region.
+   */
+  #mayRetitle(region: string): boolean {
+    const access = this.#accessValue;
+    const structure =
+      (access?.caps.includes('structure') ?? false) ||
+      (access?.scopes[`region:${region}`]?.includes('structure') ?? false);
+    return structure && this.canEdit(`region:${region}`);
   }
 
   /** Records a refused style edit as the guard records one, naming `defs` and the regions. */
