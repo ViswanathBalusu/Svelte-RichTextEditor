@@ -685,6 +685,33 @@ export const QUEUE_CHECKS: QueueCheck[] = [
       assert.equal(await h.queue.activeCount(h.otherTenant, kind), 1);
     },
   },
+  {
+    name: 'payloadItems sums the array at a payload member over the jobs of a kind and tenant created in a period',
+    async run(h) {
+      const kind = newKind();
+      const made = [
+        await put(h, kind, { payload: { rows: [1, 2, 3] } }),
+        await put(h, kind, { payload: { rows: [{ a: 1 }] } }),
+        // A payload with no array at the member, a member that is not an array, another kind and
+        // another tenant's job are not counted.
+        await put(h, kind, { payload: { other: [1, 2, 3, 4] } }),
+        await put(h, kind, { payload: { rows: 'three' } }),
+      ];
+      await put(h, newKind(), { payload: { rows: [1, 2] } });
+      await put(h, kind, { payload: { rows: [1, 2, 3, 4, 5] } }, h.otherTenant);
+      // The queue's own clock stamps the jobs, so the period is taken from them.
+      const before = Math.min(...made.map((j) => j.createdAt));
+      const after = Math.max(...made.map((j) => j.createdAt)) + 1;
+      const wide = after + 60_000;
+      assert.equal(await h.queue.payloadItems(h.tenant, kind, 'rows', before, wide), 4);
+      assert.equal(await h.queue.payloadItems(h.tenant, kind, 'rows', 0, wide), 4);
+      // Another tenant's job of the kind is counted for that tenant only.
+      assert.equal(await h.queue.payloadItems(h.otherTenant, kind, 'rows', 0, wide + 3_600_000), 5);
+      // The period is half open: before the jobs, or from the end of the last one, nothing counts.
+      assert.equal(await h.queue.payloadItems(h.tenant, kind, 'rows', 0, before), 0);
+      assert.equal(await h.queue.payloadItems(h.tenant, kind, 'rows', after, wide), 0);
+    },
+  },
 ];
 
 /** Runs every check and returns `name: first line of the failure` for those that failed. */

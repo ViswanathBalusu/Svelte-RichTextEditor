@@ -307,6 +307,7 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
         'storage',
         'exportConcurrency',
         'exportMinutes',
+        'bulkSendRows',
       ],
       {
         doc: 'The kind of quota a refusal names: the dimensions of the tenant quotas (06 §12; owner decision 110).',
