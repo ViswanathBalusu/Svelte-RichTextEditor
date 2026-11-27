@@ -40439,7 +40439,7 @@
       {
         "id": "cvWHfm5iMYECu8rM",
         "input": {
-          "text": "a)\tA quiet signal offsets each draft.",
+          "text": "b)\tA quiet signal offsets each draft.",
           "runs": [
             {
               "length": 2,
@@ -40476,7 +40476,7 @@
             }
           ]
         },
-        "runChecksums": [1832101985, 3917851434, 1645540262],
+        "runChecksums": [1309523822, 3917851434, 1645540262],
         "lines": [
           {
             "from": 0,
