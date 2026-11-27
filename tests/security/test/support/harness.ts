@@ -249,7 +249,11 @@ export function clientFor(
   now: () => number,
 ): Pick<Target, 'userToken' | 'mintToken' | 'serviceJwt' | 'call' | 'createDocument'> {
   const call: Target['call'] = async (method, path, o = {}) => {
-    const headers: Record<string, string> = { ...(o.headers ?? {}) };
+    // One connection for each call. A pooled keep-alive connection that has sat idle while the
+    // event loop was busy (SEC-028 measures a loop under attack, for longer than the server's
+    // 5 second keep-alive timeout) can be closed by the server as the next call is sent on it,
+    // which fails with ECONNRESET and says nothing about the service under test.
+    const headers: Record<string, string> = { connection: 'close', ...(o.headers ?? {}) };
     if (o.token) headers['Authorization'] = `Bearer ${o.token}`;
     let body: string | undefined = o.raw;
     if (o.body !== undefined) {
