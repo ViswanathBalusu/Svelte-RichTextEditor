@@ -1,6 +1,6 @@
 # 0424 PRM-063: part of `structure` grantable per region
 
-**Status:** the decision is the owner's (decision 128 of 2026-11-15, `docs/owner-decisions-2026-11-15.md`: "Grantable per region"; decision 220 repeats that ADR 0033 item 4 is reversed). The design below is proposed. It needs the owner's word on the two points under Questions before any story is built. Written 2026-11-25, lane w9.
+**Status:** accepted. Decision 128 of 2026-11-15 (`docs/owner-decisions-2026-11-15.md`: "Grantable per region"; decision 220 repeats that ADR 0033 item 4 is reversed) made the choice. Decision 279 of 2026-11-26 (`docs/owner-decisions-2026-11-26.md`) answers both questions below: a region-only editor may rename the region and add styles, and may not change page setup or remove a style. The design stands as written. Written 2026-11-25, lane w9; accepted 2026-11-27. The stories are PRM-068 to PRM-070 in `docs/stories/PRM-permissions.md`.
 
 ## Context
 
@@ -8,7 +8,7 @@ Until now `structure` was document level only (07 §2; ADR 0033 item 4; ADR 0146
 
 Decision 128 reverses that: part of `structure` can be granted per region. It does not say which part, how a grant says it, or how the outcome check reads it. This record proposes the answers.
 
-## Decision (proposed)
+## Decision
 
 ### 1. Which operations
 
@@ -71,6 +71,8 @@ A change that mixes an allowed operation with one that is not is refused whole. 
 - The matrix (07 §12) row 10 stays as it is for grants; the new grant member is part of the same `manage` operation.
 
 ## Questions for the owner
+
+Both answered by decision 279: (1) the two operations only, no page setup or landscape page per region; (2) no, removing a style stays with `structure` at document level.
 
 1. Is the list of two operations (`region.retitle`, `defs.add`) the part of `structure` you want grantable, or should a page setup or a landscape page per region be in version 1 (it reaches the text around the region)?
 2. Should a user with `defs.add` be able to remove the style they added, if no one has applied it yet? The proposal says no: removal stays with `structure` at document level.
