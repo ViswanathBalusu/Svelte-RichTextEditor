@@ -5,7 +5,7 @@
 # `pnpm --filter @docedit/layout-kernel build`.
 [workspace]
 resolver = "2"
-members = ["layout-kernel"]
+members = ["layout-kernel", "sea-segmenter"]
 
 [workspace.package]
 version = "0.0.0"

@@ -484,3 +484,4 @@ export * from './batch.ts';
 export * from './paragraph.ts';
 export * from './hyphenation.ts';
 export * from './segmentation.ts';
+export * from './southeast-asian.ts';

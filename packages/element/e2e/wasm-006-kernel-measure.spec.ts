@@ -166,7 +166,7 @@ test.describe('shaping from the font file (WASM-006)', () => {
             s.fontFamily = `"${faceAlias}"`;
             s.fontSize = `${sizePt}pt`;
             // The painter's pinned text settings (packages/painter/src/painter.ts, FE-090).
-            s.fontKerning = 'auto';
+            s.fontKerning = 'normal';
             s.fontVariantLigatures = 'normal';
             // Unhinted advances, as the painter's pins have them (PAINT_TEXT_PINS.textRendering).
             s.textRendering = 'geometricPrecision';

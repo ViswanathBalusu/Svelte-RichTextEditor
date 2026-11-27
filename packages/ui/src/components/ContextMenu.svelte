@@ -18,7 +18,8 @@
   import { live } from '../live.ts';
   import Icon from './Icon.svelte';
   import { boundKeys } from '../shortcuts/table.ts';
-  import { contextMenuGroups, placeMenu } from '../shell/toolbar-groups.ts';
+  import { contextMenuGroups } from '../shell/toolbar-groups.ts';
+  import { placeOverlay } from '../shell/overlay-position.ts';
   import type { ProofingFindingView } from '../core-api.ts';
   import { offeredFindingActions } from '../proofing/finding-actions.ts';
 
@@ -68,7 +69,8 @@
 
   let menu: HTMLElement | undefined = $state();
   let index = $state(0);
-  let placement = $state({ inlineStart: 0, blockStart: 0 });
+  /** Where Floating UI put the menu; the menu stays hidden until it has been placed. */
+  let placement: { left: number; top: number } | null = $state(null);
 
   function itemsIn(): HTMLElement[] {
     return menu ? [...menu.querySelectorAll<HTMLElement>('[data-menu-item]')] : [];
@@ -87,32 +89,20 @@
     // so the attribute is removed and the menu is shown by its own CSS (FE-020 criterion 2).
     if (typeof popover.showPopover === 'function') popover.showPopover();
     else node.removeAttribute('popover');
-    const rect = node.getBoundingClientRect();
     const rtl = getComputedStyle(node).direction === 'rtl';
     const p = untrack(() => point);
-    const intended = placeMenu(
-      p,
-      { width: rect.width, height: rect.height },
-      { width: innerWidth, height: innerHeight },
-      rtl,
-    );
-    placement = intended;
-    void tick().then(() => {
-      // A `fixed` menu without the top layer is placed against its containing block, which an
-      // ancestor with a transform, filter or containment can move. The offset is measured once
-      // and taken out, so the menu stays where placeMenu put it (FE-020 criterion 2).
-      const at = node.getBoundingClientRect();
-      const dx = rtl ? at.right - (innerWidth - intended.inlineStart) : at.left - intended.inlineStart;
-      const dy = at.top - intended.blockStart;
-      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-        placement = {
-          inlineStart: Math.round(intended.inlineStart + (rtl ? dx : -dx)),
-          blockStart: Math.round(intended.blockStart - dy),
-        };
-      }
-      focusItem(0);
+    let current = true;
+    // Floating UI places the menu at the point, flipped or shifted to stay in view (FE-020
+    // criterion 3). It works out the containing block of a `fixed` menu without the top layer.
+    void placeOverlay(node, p, rtl).then((at) => {
+      if (!current) return;
+      placement = at;
+      void tick().then(() => {
+        if (current) focusItem(0);
+      });
     });
     return () => {
+      current = false;
       try {
         popover.hidePopover?.();
       } catch {
@@ -187,8 +177,9 @@
   aria-label={tr.t('menu.context.label')}
   lang={tr.locale}
   dir={tr.dir}
-  style:inset-inline-start={`${placement.inlineStart}px`}
-  style:inset-block-start={`${placement.blockStart}px`}
+  style:left={placement ? `${placement.left}px` : undefined}
+  style:top={placement ? `${placement.top}px` : undefined}
+  style:visibility={placement ? undefined : 'hidden'}
   onkeydown={onKeydown}
 >
   {#if finding && findingItemCount > 0}

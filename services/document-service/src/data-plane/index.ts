@@ -219,6 +219,7 @@ class DepDataPlane implements DataPlane {
             grants: deps.grants,
             leases: deps.leases,
             homeRegions: deps.homeRegions,
+            region: deps.traits?.region ?? null,
             ...(deps.forwarding ? { settings: deps.forwarding } : {}),
             now: deps.now,
             metrics: this.metricsRegistry,

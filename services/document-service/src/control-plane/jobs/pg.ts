@@ -368,6 +368,29 @@ export class PgJobQueue implements JobQueue {
     );
   }
 
+  payloadItems(
+    tenant: string,
+    kind: string,
+    member: string,
+    from: number,
+    to: number,
+  ): Promise<number> {
+    return inTenant(
+      this.#pool,
+      tenant,
+      async (c) => {
+        const r = await c.query<{ n: string }>(
+          `SELECT coalesce(sum(jsonb_array_length(payload -> $3)), 0)::text AS n FROM jobs
+            WHERE tenant_id = $1 AND kind = $2 AND created_at >= $4 AND created_at < $5
+              AND jsonb_typeof(payload -> $3) = 'array'`,
+          [tenant, kind, member, new Date(from).toISOString(), new Date(to).toISOString()],
+        );
+        return Number(r.rows[0]?.n ?? '0');
+      },
+      { readOnly: true },
+    );
+  }
+
   setLimit(tenant: string, kind: string, maxRunning: number | null): Promise<void> {
     checkLimit(kind, maxRunning);
     return inTenant(this.#pool, tenant, async (c) => {

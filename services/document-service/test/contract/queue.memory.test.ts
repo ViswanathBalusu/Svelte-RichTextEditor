@@ -96,6 +96,15 @@ class Delegating implements JobQueue {
   workerTime(tenant: string, kinds: readonly string[], from: number, to: number): Promise<number> {
     return this.inner.workerTime(tenant, kinds, from, to);
   }
+  payloadItems(
+    tenant: string,
+    kind: string,
+    member: string,
+    from: number,
+    to: number,
+  ): Promise<number> {
+    return this.inner.payloadItems(tenant, kind, member, from, to);
+  }
   depth(): Promise<QueueDepth[]> {
     return this.inner.depth();
   }

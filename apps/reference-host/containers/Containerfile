@@ -21,7 +21,8 @@ COPY . .
 RUN pnpm install --frozen-lockfile \
   && pnpm --filter @docedit/element build \
   && pnpm --filter @docedit/reference-host build \
-  && mkdir -p /stack && chown node:node /stack
+  && mkdir -p /stack /secrets/role-service /secrets/role-host \
+  && chown -R node:node /stack /secrets
 
 USER node
 ENV DOCEDIT_DEMO_DATA=/stack

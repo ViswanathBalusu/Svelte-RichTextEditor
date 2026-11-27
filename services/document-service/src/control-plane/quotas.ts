@@ -1,7 +1,8 @@
 /**
  * Tenant quota settings (UX-078 criterion 1; 13 §10; 06 §12). A quota is one value per dimension and
  * tenant. The dimensions are the ones 06 section 12 lists: connections, open documents, commit rate,
- * room CPU budget, storage, export concurrency and export minutes. A value must be a finite,
+ * room CPU budget, storage, export concurrency and export minutes, and the recipient rows of bulk
+ * sends in a calendar month (owner decision 265; FRW-063). A value must be a finite,
  * non-negative number. No default value is set here: an unset dimension reads as `null`, because
  * the spec gives no figures.
  *
@@ -17,6 +18,7 @@ export const QUOTA_DIMENSIONS = [
   'storage',
   'exportConcurrency',
   'exportMinutes',
+  'bulkSendRows',
 ] as const;
 
 export type QuotaDimension = (typeof QUOTA_DIMENSIONS)[number];

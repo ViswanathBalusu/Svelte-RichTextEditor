@@ -311,6 +311,8 @@ export const EN_GB_CORE = {
     'The simultaneous exports quota of this workspace is reached. Ask the administrator to raise it.',
   'notice.quota.exportMinutes':
     'The export minutes quota of this workspace is reached. Ask the administrator to raise it.',
+  'notice.quota.bulkSendRows':
+    'The bulk send recipients quota of this workspace is reached for this month. Ask the administrator to raise it.',
   'notice.trimmed.kept':
     'Part of that deletion was kept: you cannot change some of the text it covered.',
   'notice.rejected.permission': {

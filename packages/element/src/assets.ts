@@ -134,6 +134,7 @@ const QUOTA_KINDS: readonly QuotaKind[] = [
   'storage',
   'exportConcurrency',
   'exportMinutes',
+  'bulkSendRows',
 ];
 
 /** The engine's assets port over the backend's, for the document `docId`. */

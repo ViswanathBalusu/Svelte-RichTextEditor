@@ -11,13 +11,14 @@
 -- of docedit_protect (BE-011), and read and written by PgQuotaStore only inside inTenant, so one
 -- tenant never reads or writes another tenant's quotas. The foreign key refuses a row for a tenant
 -- that is not registered. Amended before any release shipped it (releases.json lists 0001 to 0007
--- only), so no database outside a test one has the earlier `tenant text` shape.
+-- only), so no database outside a test one has the earlier `tenant text` shape. Amended again for
+-- the dimension `bulkSendRows` (FRW-063; owner decision 265), on the same ground.
 
 create table tenant_quotas (
   tenant_id   uuid not null references tenants (id),
   dimension   text not null check (dimension in (
     'connections', 'openDocuments', 'commitRate', 'roomCpuBudget',
-    'storage', 'exportConcurrency', 'exportMinutes'
+    'storage', 'exportConcurrency', 'exportMinutes', 'bulkSendRows'
   )),
   value       double precision not null check (value >= 0 and value < 'Infinity'),
   updated_at  timestamptz not null default now(),

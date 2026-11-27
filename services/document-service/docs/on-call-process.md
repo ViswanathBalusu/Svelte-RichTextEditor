@@ -10,7 +10,11 @@ and names the story whose measurement sets the threshold. Nothing here is a meas
 
 ## 1. Roles
 
-These are roles, not people. The owner fills them.
+These are roles, not people. Decision 276 of `docs/owner-decisions-2026-11-26.md` sets the cover: a named
+rota covers business hours. The rota is a list of named people kept by the owner, one primary and one
+secondary for each week. This process does not promise cover outside business hours; an alert that fires
+outside them waits for the start of the next business day unless the rota names someone for it. The owner
+fills the names and defines business hours for the hosted service (time zone and days).
 
 | Role | What it does |
 |---|---|
@@ -59,8 +63,9 @@ the story named in the row before launch, and record it here.
 | Database or standby loss | The database's own monitoring, not the service's | Loss of the primary or the synchronous standby. Recovery within 15 minutes is the target (06 §9). | 1 | Primary, secondary and the owner |
 | Backup or restore rehearsal failing | The rehearsal record (BE-082) and the backup audit (BE-096) | Any failure | 3 | Ticket |
 
-Pages go to the primary. A page that is not acknowledged within the time the owner sets goes to the
-secondary, and after that to the owner. The times are the owner's to set and are not fixed here.
+Pages go to the primary named on the rota (decision 276), during business hours. A page that is not
+acknowledged within the time the owner sets goes to the secondary, and after that to the owner. The
+times are the owner's to set and are not fixed here.
 
 ## 4. Responding to an incident
 
@@ -131,7 +136,8 @@ function and does not act on the content.
 
 ## 8. What is not decided here
 
-- Who fills the roles, the paging tool, and the times for acknowledging and for first messages: the owner.
+- Decided (276, 2026-11-26): a named rota covers business hours. Not decided: the names on the rota, the
+  hours themselves, the paging tool, and the times for acknowledging and for first messages: the owner.
 - The thresholds marked "to be set" in section 3: they need the measurements of BE-080, BE-084 and BE-085.
 - The legal duties on a data incident: counsel.
 - The self-hosted mode has no on-call of this kind. Its operators run their own (BE-083, BE-095).

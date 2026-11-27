@@ -32,6 +32,7 @@
     "test:e2e": "playwright test -c playwright.config.ts"
   },
   "dependencies": {
+    "@floating-ui/dom": "1.8.0",
     "svelte": "5.57.3"
   },
   "devDependencies": {

@@ -5,6 +5,7 @@
 #
 #   build.sh test          native tests, formatting, clippy, and the check for system libraries
 #   build.sh build OUTDIR  wasm32-unknown-unknown, wasm-bindgen, wasm-opt; writes the package files
+#   build.sh build-sea OUTDIR  the same for the module of Thai, Lao, Khmer and Burmese (WASM-016)
 #
 # Two builds of one commit give byte-identical files: the target directory is fresh or fixed, no
 # path of the machine enters the output (remapped), no timestamp is written, and every tool is
@@ -55,38 +56,47 @@ case "${1:-}" in
     cargo test --locked
     no_system_libraries
     ;;
-  build)
-    out="${2:?usage: build.sh build OUTDIR}"
+  build|build-sea)
+    # `build` is the layout kernel. `build-sea` is the module of Thai, Lao, Khmer and Burmese
+    # dictionaries (WASM-016), which a page fetches only when a document uses those scripts.
+    if [ "$1" = build-sea ]; then
+      crate=docedit-sea-segmenter
+      stem=docedit_sea_segmenter
+    else
+      crate=docedit-layout-kernel
+      stem=docedit_layout_kernel
+    fi
+    out="${2:?usage: build.sh build OUTDIR | build-sea OUTDIR}"
     no_system_libraries
-    cargo build --locked --release --target wasm32-unknown-unknown -p docedit-layout-kernel
-    raw="$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/docedit_layout_kernel.wasm"
+    cargo build --locked --release --target wasm32-unknown-unknown -p "$crate"
+    raw="$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/$stem.wasm"
     rm -rf "$out"
     mkdir -p "$out"
     # `web` gives an ES module with `initSync` and `init`, which Node.js and every browser load.
-    wasm-bindgen --target web --typescript --out-dir "$out" --out-name docedit_layout_kernel "$raw"
+    wasm-bindgen --target web --typescript --out-dir "$out" --out-name $stem "$raw"
     # The features rustc 1.89 emits for wasm32-unknown-unknown, and no more. `--all-features` also
     # switches on newer encodings (compact imports) that Node.js 22 and the browsers do not read.
     wasm-opt -Oz --enable-sign-ext --enable-mutable-globals --enable-nontrapping-float-to-int \
       --enable-bulk-memory --enable-reference-types --enable-multivalue \
       --strip-debug --strip-producers \
-      -o "$out/docedit_layout_kernel_bg.wasm.opt" "$out/docedit_layout_kernel_bg.wasm"
-    mv "$out/docedit_layout_kernel_bg.wasm.opt" "$out/docedit_layout_kernel_bg.wasm"
+      -o "$out/${stem}_bg.wasm.opt" "$out/${stem}_bg.wasm"
+    mv "$out/${stem}_bg.wasm.opt" "$out/${stem}_bg.wasm"
     # What was built, with no date and no path, so that the file is the same on every build.
-    wasm_sha=$(sha256sum "$out/docedit_layout_kernel_bg.wasm" | cut -d' ' -f1)
-    wasm_bytes=$(wc -c < "$out/docedit_layout_kernel_bg.wasm" | tr -d ' ')
+    wasm_sha=$(sha256sum "$out/${stem}_bg.wasm" | cut -d' ' -f1)
+    wasm_bytes=$(wc -c < "$out/${stem}_bg.wasm" | tr -d ' ')
     {
       printf '{\n'
-      printf '  "crate": "docedit-layout-kernel",\n'
+      printf '  "crate": "%s",\n' "$crate"
       printf '  "crateVersion": "%s",\n' "$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
       printf '  "rustc": "%s",\n' "$(rustc --version)"
       printf '  "wasmBindgen": "%s",\n' "$(wasm-bindgen --version)"
       printf '  "wasmOpt": "%s",\n' "$(wasm-opt --version)"
-      printf '  "wasm": { "file": "docedit_layout_kernel_bg.wasm", "bytes": %s, "sha256": "%s" }\n' "$wasm_bytes" "$wasm_sha"
+      printf '  "wasm": { "file": "%s_bg.wasm", "bytes": %s, "sha256": "%s" }\n' "$stem" "$wasm_bytes" "$wasm_sha"
       printf '}\n'
     } > "$out/build.json"
     ;;
   *)
-    echo "usage: build.sh test | build OUTDIR" >&2
+    echo "usage: build.sh test | build OUTDIR | build-sea OUTDIR" >&2
     exit 2
     ;;
 esac

@@ -1159,6 +1159,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
         storage: opt(nullable(int({ min: 0 })), 'Storage a tenant may use.'),
         exportConcurrency: opt(nullable(int({ min: 0 })), 'Export jobs a tenant may run at once.'),
         exportMinutes: opt(nullable(int({ min: 0 })), 'Export minutes a tenant may use.'),
+        bulkSendRows: opt(
+          nullable(int({ min: 0 })),
+          'Recipient rows of bulk sends a tenant may submit in a calendar month, UTC.',
+        ),
       },
       {
         doc: 'The quota values of a tenant; a dimension is null when no value is set (UX-078; 06 section 12).',
@@ -1225,6 +1229,7 @@ export const REST_SHAPES: readonly NamedShape[] = [
         ),
         exportConcurrency: req(int({ min: 0 }), 'The most export jobs run at once in the month.'),
         exportMinutes: req(int({ min: 0 }), 'Export minutes used in the month.'),
+        bulkSendRows: req(int({ min: 0 }), 'Recipient rows of bulk sends submitted in the month.'),
       },
       {
         doc: 'The usage of a tenant in one calendar month, UTC (UX-076; decision 69).',
