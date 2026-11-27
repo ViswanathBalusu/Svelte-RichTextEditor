@@ -453,7 +453,7 @@ export class HostedRoom {
       // A commit that adds a feature to `requires` is accepted when every attached client announced
       // it, and the grown list is stored with the commit and in the document's record (03 §11.1;
       // CDM-047; UX-107).
-      requiresGrowth: true,
+      requiresGrowth: 'steps',
       ...(init.threads?.length ? { threads: init.threads } : {}),
       log: init.log,
       snapshotContent: snapshotDoc,

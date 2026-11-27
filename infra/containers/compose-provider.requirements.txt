@@ -1,0 +1,21 @@
+# The Compose provider of `podman compose` (owner decision 230; downloads approved on 2026-11-27):
+# podman-compose from PyPI, pinned to an exact version with the SHA-256 of each file. Install it in
+# a virtual environment outside the repository:
+#
+#   python -m venv "$env:LOCALAPPDATA/docedit/compose-venv"
+#   & "$env:LOCALAPPDATA/docedit/compose-venv/Scripts/python.exe" -m pip install --require-hashes -r infra/containers/compose-provider.requirements.txt
+#   $env:PODMAN_COMPOSE_PROVIDER = "$env:LOCALAPPDATA/docedit/compose-venv/Scripts/podman-compose.exe"
+#
+# The hashes below are of the files PyPI served on 2026-11-27 for CPython 3.11 on Windows (x86-64),
+# the machine of lane w3: the pure-Python wheels, which are the same everywhere, and the PyYAML wheel
+# of this platform. A runner on another platform adds the SHA-256 of the PyYAML file it is served
+# (pip names it in the error of --require-hashes) before it uses this file.
+#
+# Sizes: podman_compose-1.6.0-py3-none-any.whl 53,722 B; python_dotenv-1.2.4-py3-none-any.whl
+# 23,266 B; pyyaml-6.0.4-cp311-cp311-win_amd64.whl 161,819 B. Source: https://pypi.org/ (pip).
+podman-compose==1.6.0 \
+    --hash=sha256:98e48af25d44c10ecef948163bfcca002e32aa8bbb7e66593fbd4faff7270c30
+python-dotenv==1.2.4 \
+    --hash=sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc
+pyyaml==6.0.4 \
+    --hash=sha256:0db75f402e99c25239003a499c214a61947b4ef5312af34711d4c63e5c179318
