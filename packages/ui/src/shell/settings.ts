@@ -7,7 +7,8 @@
 import type { ReadView } from '../core-api.ts';
 import type { PageTheme, ThemeSetting } from './theme.ts';
 
-export type ToolbarMode = 'compact' | 'full' | 'none';
+/** `ribbon` is a proposed value (ADR 0490): tabs of labelled groups, like an office word processor. */
+export type ToolbarMode = 'compact' | 'full' | 'ribbon' | 'none';
 export type HeaderMode = 'default' | 'none';
 
 export interface ShellSettings {
@@ -29,7 +30,9 @@ export const DEFAULT_SETTINGS: ShellSettings = {
 
 /** Reads an attribute value; anything unknown keeps the default (05 §1 rule 3, by analogy). */
 export function toolbarMode(value: string | null | undefined): ToolbarMode {
-  return value === 'full' || value === 'none' || value === 'compact' ? value : 'compact';
+  return value === 'full' || value === 'ribbon' || value === 'none' || value === 'compact'
+    ? value
+    : 'compact';
 }
 
 export function headerMode(value: string | null | undefined): HeaderMode {

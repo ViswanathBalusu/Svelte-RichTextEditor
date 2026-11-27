@@ -50,6 +50,12 @@
   --_de-role-commenter: var(--de-role-commenter, #0b5cad);
   --_de-role-suggester: var(--de-role-suggester, #8a4600);
   --_de-role-editor: var(--de-role-editor, #116329);
+  /* The ribbon layout only (ADR 0490): the strip behind the tabs and the status bar, the canvas the
+     page lies on, and the accent of the main action with the text on it. */
+  --_de-chrome: var(--de-chrome, #f6f8fa);
+  --_de-canvas: var(--de-canvas, #e8ecf0);
+  --_de-accent: var(--de-accent, #0969da);
+  --_de-accent-text: var(--de-accent-text, #ffffff);
   display: flex;
   flex-direction: column;
   min-block-size: 20em;
@@ -78,6 +84,10 @@
   --_de-focus: var(--de-focus, #8ec5ff);
   --_de-shadow: var(--de-shadow, 0 2px 8px rgb(0 0 0 / 0.5));
   --_de-match: var(--de-match, #5c4b00);
+  --_de-chrome: var(--de-chrome, #1b1f24);
+  --_de-canvas: var(--de-canvas, #0f1215);
+  --_de-accent: var(--de-accent, #79b8ff);
+  --_de-accent-text: var(--de-accent-text, #0d1117);
   --_de-role-viewer: var(--de-role-viewer, #a9b1bb);
   --_de-role-commenter: var(--de-role-commenter, #79b8ff);
   --_de-role-suggester: var(--de-role-suggester, #f0b072);
@@ -107,6 +117,10 @@
   --_de-sheet: var(--de-sheet, #ffffff);
   --_de-page-text: var(--de-page-text, #000000);
   --_de-match: var(--de-match, #ffff00);
+  --_de-chrome: var(--de-chrome, #ffffff);
+  --_de-canvas: var(--de-canvas, #ffffff);
+  --_de-accent: var(--de-accent, #00006b);
+  --_de-accent-text: var(--de-accent-text, #ffffff);
   --_de-role-viewer: var(--de-role-viewer, #000000);
   --_de-role-commenter: var(--de-role-commenter, #000000);
   --_de-role-suggester: var(--de-role-suggester, #000000);
@@ -874,6 +888,204 @@
 
 .de-toolbar-panel {
   border-block-start: 1px solid var(--_de-border);
+}
+
+/*
+ * The ribbon layout (`toolbar="ribbon"`, ADR 0490): a title bar (the header), tabs, groups of
+ * commands with a caption under each, the page centred on a grey canvas, and a quiet status bar.
+ * Every rule below is scoped to `[data-toolbar='ribbon']` or to `.de-ribbon`, so the compact and the
+ * full layouts keep the look they had. The look is this product's own, not a copy of any vendor's.
+ * Selected, pressed and disabled states keep a shape (a bar, a border, dashes) as well as a colour.
+ */
+.de-shell[data-toolbar='ribbon'] .de-header {
+  gap: var(--_de-space-2) var(--_de-space-4);
+  padding-block: var(--_de-space-3);
+}
+
+.de-shell[data-toolbar='ribbon'] .de-header-title {
+  font-size: 1.15em;
+}
+
+.de-shell[data-toolbar='ribbon'] .de-action {
+  min-block-size: 2.25em;
+  padding-inline: 0.9em;
+}
+
+/* The main action of the title bar. */
+.de-shell[data-toolbar='ribbon'] .de-action[data-command-id='document.share'] {
+  border-color: var(--_de-accent);
+  background: var(--_de-accent);
+  color: var(--_de-accent-text);
+  font-weight: 600;
+}
+
+.de-shell[data-toolbar='ribbon'] .de-action[data-command-id='document.share']:hover {
+  background: var(--_de-accent);
+  filter: brightness(0.92);
+}
+
+.de-ribbon {
+  background: var(--_de-chrome);
+}
+
+.de-ribbon .de-tabs {
+  gap: 0;
+  padding-block: 0;
+  padding-inline: var(--_de-space-3);
+}
+
+.de-ribbon .de-tab {
+  min-block-size: 2.5em;
+  padding-inline: 1em;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.de-ribbon .de-tab:hover {
+  background: var(--_de-control-hover);
+}
+
+/* The selected tab joins the panel below it: the panel's surface, a bar under the name, bold. */
+.de-ribbon .de-tab[aria-selected='true'] {
+  background: var(--_de-surface);
+  font-weight: 600;
+  box-shadow: inset 0 -3px 0 var(--_de-accent);
+}
+
+/* A contextual tab: italic, in the suggester colour, with a bar over its name. */
+.de-ribbon .de-tab[data-contextual] {
+  color: var(--_de-role-suggester);
+  font-style: italic;
+  font-weight: 600;
+  border-block-start: 3px solid var(--_de-role-suggester);
+}
+
+.de-ribbon .de-tabpanel {
+  background: var(--_de-surface);
+  border-block-start: 1px solid var(--_de-border);
+}
+
+.de-ribbon .de-toolbar-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--_de-space-2) 0;
+  padding-block: var(--_de-space-2);
+  padding-inline: var(--_de-space-3);
+  background: transparent;
+  border: 0;
+}
+
+.de-ribbon-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--_de-space-1);
+  padding-inline: var(--_de-space-2);
+}
+
+.de-ribbon-group + .de-ribbon-group {
+  border-inline-start: 1px solid var(--_de-border);
+}
+
+.de-ribbon-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  max-inline-size: 30em;
+}
+
+.de-ribbon-caption {
+  color: var(--_de-text-muted);
+  font-size: 0.75em;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* A command: its icon over its label. Without an icon the label stands alone. */
+.de-ribbon .de-tool {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.2em;
+  min-inline-size: 3.6em;
+  min-block-size: 3.4em;
+  padding-block: 0.35em;
+  padding-inline: 0.4em;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.85em;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: center;
+}
+
+.de-ribbon .de-tool[hidden] {
+  display: none;
+}
+
+.de-ribbon .de-tool:hover {
+  background: var(--_de-control-hover);
+}
+
+.de-ribbon .de-tool[aria-pressed='true'] {
+  background: var(--_de-control-active);
+  border-color: var(--_de-control-active-border);
+}
+
+.de-ribbon .de-tool[aria-disabled='true'] {
+  border-color: var(--_de-border);
+}
+
+.de-ribbon .de-tool .de-icon {
+  inline-size: 1.7em;
+  block-size: 1.7em;
+  margin: 0;
+  vertical-align: baseline;
+}
+
+.de-ribbon .de-tool-label {
+  max-inline-size: 7em;
+  overflow-wrap: anywhere;
+}
+
+/* The ruler is a strip of the same chrome as the tabs. */
+.de-shell[data-toolbar='ribbon'] .de-ruler {
+  background: var(--_de-chrome);
+}
+
+/* The canvas: grey, with the page on it, centred, as a sheet with a shadow. */
+.de-shell[data-toolbar='ribbon'] .de-workspace {
+  justify-content: center;
+  padding-block: var(--_de-space-4) calc(var(--_de-space-4) * 1.5);
+  background: var(--_de-canvas);
+}
+
+.de-shell[data-toolbar='ribbon'] .de-page {
+  flex: 1 1 24em;
+  max-inline-size: 52em;
+  min-block-size: 36em;
+  padding-block: 3.5em;
+  padding-inline: clamp(1em, 5%, 4.5em);
+  border-color: var(--_de-border);
+  box-shadow: var(--_de-shadow);
+}
+
+.de-shell[data-toolbar='ribbon'] :is(.de-panel, .de-pane) {
+  border-radius: var(--_de-radius);
+  box-shadow: var(--_de-shadow);
+}
+
+.de-shell[data-toolbar='ribbon'] .de-status {
+  gap: var(--_de-space-2) var(--_de-space-4);
+  padding-block: 0.35em;
+  background: var(--_de-chrome);
+  color: var(--_de-text-muted);
+  font-size: 0.8em;
 }
 
 /* Menus: the context menu (UX-008) is shown in the top layer, placed at the pointer or caret. */
@@ -1836,4 +2048,23 @@
 .de-reaction[aria-pressed='true'] {
   background: var(--_de-control-active);
   border-color: var(--_de-control-active-border);
+}
+
+/* The ribbon layout (ADR 0490) in forced colours: the selected tab, the groups and the pressed commands keep a shape in system colours. */
+@media (forced-colors: active) {
+  .de-ribbon .de-tab[aria-selected='true'] {
+    border-block-end: 3px solid Highlight;
+  }
+
+  .de-ribbon-group + .de-ribbon-group {
+    border-inline-start-color: CanvasText;
+  }
+
+  .de-ribbon .de-tool[aria-pressed='true'] {
+    border-color: Highlight;
+  }
+
+  .de-shell[data-toolbar='ribbon'] .de-action[data-command-id='document.share'] {
+    border-color: ButtonText;
+  }
 }

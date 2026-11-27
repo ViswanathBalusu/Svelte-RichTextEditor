@@ -15,6 +15,7 @@
   import Icon from './Icon.svelte';
   import { boundKeys } from '../shortcuts/table.ts';
   import { useSuspension } from '../shell/suspension.ts';
+  import { ribbonIconName } from '../shell/ribbon-groups.ts';
   import { toolbarCommands } from '../shell/toolbar-groups.ts';
   import { fittingItems, nextIndex } from '../shell/toolbar-layout.ts';
 
@@ -27,9 +28,14 @@
     label?: string | undefined;
     /** True for the compact toolbar: it carries the `toolbar` part and is a landmark (UX-023). */
     standalone?: boolean;
+    /**
+     * The ribbon layout (ADR 0490): the commands of `items`, in the same order, in labelled groups.
+     * Nothing overflows into a menu there; the groups wrap onto another row instead.
+     */
+    groups?: ReadonlyArray<{ key: string; label: string; commands: readonly CommandView[] }> | undefined;
   }
 
-  let { onEscape, items: given, label, standalone = true }: Props = $props();
+  let { onEscape, items: given, label, standalone = true, groups }: Props = $props();
   const suspended = useSuspension();
 
   const shell = useShell()!;
@@ -71,7 +77,7 @@
 
   /** Measures what is visible and decides how many commands fit (UX-006, criterion 5). */
   function layout(): void {
-    if (!toolbar) return;
+    if (!toolbar || groups) return;
     const list = untrack(() => items);
     const count = untrack(() => visibleCount);
     list.forEach((item, i) => {
@@ -269,7 +275,33 @@
   function shortcuts(item: CommandView): string | undefined {
     return ariaShortcuts(boundKeys(item.id, item.entry.keys), apple);
   }
+
+  /** The place of a command in `items`, which the roving tab stop and the focus use. */
+  const indexOf = $derived(new Map(items.map((item, i) => [item.id, i] as const)));
 </script>
+
+{#snippet tool(item: CommandView, i: number)}
+  <button
+    type="button"
+    class="de-tool"
+    class:de-group-start={!groups && i > 0 && items[i - 1]!.entry.group !== item.entry.group}
+    data-command={aliasOf(item)}
+    data-command-id={item.id}
+    data-group={item.entry.group}
+    hidden={i >= shown.length}
+    tabindex={i === current ? 0 : -1}
+    aria-pressed={item.active === null ? undefined : item.active}
+    aria-disabled={item.enabled ? undefined : 'true'}
+    aria-describedby={item.enabled ? undefined : reasonId(item)}
+    aria-keyshortcuts={shortcuts(item)}
+    title={item.enabled || !item.reasonKey ? undefined : tr.text(item.reasonKey)}
+    onclick={() => run(item)}
+    {@attach remember(item)}
+    ><Icon name={groups ? (ribbonIconName(item) ?? item.entry.icon) : item.entry.icon} ribbon={!!groups} />{#if groups}<span
+        class="de-tool-label">{tr.text(item.entry.label)}</span
+      >{:else}{tr.text(item.entry.label)}{/if}</button
+  >
+{/snippet}
 
 <div
   bind:this={toolbar}
@@ -286,25 +318,22 @@
   onkeydown={onKeydown}
   onfocusin={onFocusin}
 >
-  {#each items as item, i (item.id)}
-    <button
-      type="button"
-      class="de-tool"
-      class:de-group-start={i > 0 && items[i - 1]!.entry.group !== item.entry.group}
-      data-command={aliasOf(item)}
-      data-command-id={item.id}
-      data-group={item.entry.group}
-      hidden={i >= shown.length}
-      tabindex={i === current ? 0 : -1}
-      aria-pressed={item.active === null ? undefined : item.active}
-      aria-disabled={item.enabled ? undefined : 'true'}
-      aria-describedby={item.enabled ? undefined : reasonId(item)}
-      aria-keyshortcuts={shortcuts(item)}
-      title={item.enabled || !item.reasonKey ? undefined : tr.text(item.reasonKey)}
-      onclick={() => run(item)}
-      {@attach remember(item)}><Icon name={item.entry.icon} />{tr.text(item.entry.label)}</button
-    >
-  {/each}
+  {#if groups}
+    {#each groups as group (group.key)}
+      <div class="de-ribbon-group" role="group" aria-label={group.label} data-ribbon-group={group.key}>
+        <div class="de-ribbon-tools">
+          {#each group.commands as item (item.id)}
+            {@render tool(item, indexOf.get(item.id) ?? 0)}
+          {/each}
+        </div>
+        <span class="de-ribbon-caption" aria-hidden="true">{group.label}</span>
+      </div>
+    {/each}
+  {:else}
+    {#each items as item, i (item.id)}
+      {@render tool(item, i)}
+    {/each}
+  {/if}
   <button
     bind:this={moreButton}
     type="button"

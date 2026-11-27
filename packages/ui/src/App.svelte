@@ -1691,6 +1691,7 @@
   dir={tr.dir}
   data-theme={theme}
   data-page-theme={mode.pageTheme}
+  data-toolbar={mode.toolbar === 'ribbon' ? 'ribbon' : undefined}
 >
   {#if mode.header !== 'none'}
     <Header title={props.title} />
@@ -1698,6 +1699,10 @@
   {#if mode.toolbar === 'full'}
     {#await import('./components/FullToolbar.svelte') then { default: FullToolbar }}
       <FullToolbar onEscape={() => core.focus()} />
+    {/await}
+  {:else if mode.toolbar === 'ribbon'}
+    {#await import('./components/RibbonToolbar.svelte') then { default: RibbonToolbar }}
+      <RibbonToolbar onEscape={() => core.focus()} />
     {/await}
   {:else if mode.toolbar !== 'none'}
     <Toolbar onEscape={() => core.focus()} />

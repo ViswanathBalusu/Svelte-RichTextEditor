@@ -1,0 +1,147 @@
+/**
+ * The ribbon layout of the toolbar (`toolbar="ribbon"`; ADR 0490; 13 §3): tabs, each with labelled
+ * groups of commands, the way an office word processor lays them out. It reads the same registry
+ * entries as the compact and the full layouts and adds nothing to the registry: a command is placed
+ * by its id when `PLACES` names it, else by the `group` its entry names. Each command is in exactly
+ * one group of one tab, and none is dropped (an unknown id or group still gets a place).
+ *
+ * - The tabs are Home, Insert, Layout, References, Review and View, in that order, and only those
+ *   with commands are shown.
+ * - A contextual group (`table`, `picture`, `story`, `field`) is a tab of its own, after the task
+ *   tabs, and is shown only while the selection is in or on that object, as in the full layout.
+ * - A group a host or an extension adds has a tab of its own too, labelled like the full layout's.
+ */
+import type { CommandView } from '../commands/types.ts';
+import { isContextual } from './toolbar-groups.ts';
+
+export const RIBBON_TABS = ['home', 'insert', 'layout', 'references', 'review', 'view'] as const;
+export type RibbonTabId = (typeof RIBBON_TABS)[number];
+
+export interface RibbonGroup {
+  /** Names the group's caption (`ribbon.group.<key>`), or the registry group of a tab of its own. */
+  readonly key: string;
+  readonly commands: readonly CommandView[];
+}
+
+export interface RibbonTab {
+  /** One of `RIBBON_TABS`, or the registry group of a contextual or added group. */
+  readonly id: string;
+  /** True for a tab that has a name of its own in the registry (a contextual or added group). */
+  readonly ownGroup: boolean;
+  readonly contextual: boolean;
+  readonly groups: readonly RibbonGroup[];
+}
+
+interface Place {
+  readonly tab: RibbonTabId;
+  readonly group: string;
+}
+
+/** Where commands go by id, first match wins; a RegExp matches the whole id. */
+const PLACES: ReadonlyArray<readonly [RegExp, Place]> = [
+  [/^edit\./, { tab: 'home', group: 'edit' }],
+  [/^format\.(painter|applyFormat)$/, { tab: 'home', group: 'copyFormat' }],
+  [/^format\.(paragraph|applyStyle)$/, { tab: 'home', group: 'paragraph' }],
+  [/^format\.language$/, { tab: 'review', group: 'proofing' }],
+  [/^format\./, { tab: 'home', group: 'font' }],
+  [/^table\./, { tab: 'insert', group: 'tables' }],
+  [/^insert\.field\./, { tab: 'insert', group: 'fields' }],
+  [/^insert\.region$/, { tab: 'insert', group: 'regions' }],
+  [/^insert\.footnote$/, { tab: 'references', group: 'notes' }],
+  [/^insert\.(caption|crossReference)$/, { tab: 'references', group: 'captions' }],
+  [/^insert\.citation$/, { tab: 'references', group: 'citations' }],
+  [/^view\.sources$/, { tab: 'references', group: 'citations' }],
+  [/^page\./, { tab: 'layout', group: 'headerFooter' }],
+  [/^document\./, { tab: 'layout', group: 'document' }],
+  [/^review\.comment$/, { tab: 'review', group: 'comments' }],
+  [/^review\.markup\./, { tab: 'review', group: 'tracking' }],
+  [/^proofing\./, { tab: 'review', group: 'proofing' }],
+  [/^view\.checker$/, { tab: 'review', group: 'proofing' }],
+  [/^(workflow|history)\./, { tab: 'review', group: 'workflow' }],
+  [/^(navigate\.|view\.permissions$)/, { tab: 'review', group: 'protection' }],
+  [/^view\.layout\./, { tab: 'view', group: 'views' }],
+  [/^view\.zoom/, { tab: 'view', group: 'zoom' }],
+];
+
+/** The place of a command in a task group's tab when no id rule names it. */
+const BY_GROUP: Readonly<Record<string, Place>> = {
+  edit: { tab: 'home', group: 'edit' },
+  format: { tab: 'home', group: 'font' },
+  insert: { tab: 'insert', group: 'insert' },
+  page: { tab: 'layout', group: 'headerFooter' },
+  review: { tab: 'review', group: 'tracking' },
+  view: { tab: 'view', group: 'panes' },
+};
+
+/** The place of a command in the task tabs, or null for a group that has a tab of its own. */
+export function ribbonPlace(command: CommandView): Place | null {
+  // A contextual group is its own tab, whatever the command's id says.
+  if (isContextual(command.entry.group)) return null;
+  for (const [pattern, place] of PLACES) if (pattern.test(command.id)) return place;
+  return Object.hasOwn(BY_GROUP, command.entry.group) ? BY_GROUP[command.entry.group]! : null;
+}
+
+/** The ribbon for the commands the toolbars show (`toolbarCommands`): tabs in order, groups in order. */
+export function ribbonTabs(commands: readonly CommandView[]): RibbonTab[] {
+  const task = new Map<RibbonTabId, Map<string, CommandView[]>>();
+  const own = new Map<string, CommandView[]>();
+  for (const command of commands) {
+    const place = ribbonPlace(command);
+    if (place === null) {
+      const list = own.get(command.entry.group) ?? [];
+      list.push(command);
+      own.set(command.entry.group, list);
+      continue;
+    }
+    const groups = task.get(place.tab) ?? new Map<string, CommandView[]>();
+    const list = groups.get(place.group) ?? [];
+    list.push(command);
+    groups.set(place.group, list);
+    task.set(place.tab, groups);
+  }
+  const tabs: RibbonTab[] = [];
+  for (const id of RIBBON_TABS) {
+    const groups = task.get(id);
+    if (!groups) continue;
+    tabs.push({
+      id,
+      ownGroup: false,
+      contextual: false,
+      groups: [...groups].map(([key, list]) => ({ key, commands: list })),
+    });
+  }
+  // Contextual groups after the task tabs, then any other group, each as its own tab.
+  const rest = [...own].sort(([a], [b]) => Number(!isContextual(a)) - Number(!isContextual(b)));
+  for (const [group, list] of rest) {
+    tabs.push({
+      id: group,
+      ownGroup: true,
+      contextual: isContextual(group),
+      groups: [{ key: group, commands: list }],
+    });
+  }
+  return tabs;
+}
+
+/**
+ * The icon for a command that names none, so that every button of the ribbon has a drawing. A name
+ * the command's entry gives wins; these are the built-in commands that give none.
+ */
+const ICON_BY_ID: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^table\./, 'table'],
+  [/^insert\.caption$/, 'caption'],
+  [/^insert\.crossReference$/, 'cross-reference'],
+  [/^insert\.citation$/, 'citation'],
+  [/^format\.paragraph$/, 'paragraph'],
+  [/^workflow\.send$/, 'send'],
+  [/^history\.nameVersion$/, 'version'],
+  [/^proofing\.next$/, 'spell-next'],
+  [/^proofing\.previous$/, 'spell-previous'],
+  [/^document\.import$/, 'import'],
+];
+
+export function ribbonIconName(command: CommandView): string | undefined {
+  if (command.entry.icon) return command.entry.icon;
+  for (const [pattern, name] of ICON_BY_ID) if (pattern.test(command.id)) return name;
+  return undefined;
+}
