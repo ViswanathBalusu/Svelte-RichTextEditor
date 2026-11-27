@@ -13,7 +13,8 @@
  * Decisions, recorded in docs/adr/0120-layout-backlog-batch.md (proposed):
  * - `spaceBefore` is applied at the top of a page too; the spec does not say to suppress it.
  * - A line taller than the page body, or a box taller than it, is placed alone and reported in
- *   `overflowed`; the spec does not say what happens.
+ *   `overflowed`; the spec does not say what happens. A table taller than a page body in a
+ *   multi-column run spans pages and is reported there too (owner decision 250, FE-085).
  * - A page whose header and footer leave no room for the body is shipped empty, once, before the
  *   first body line: the body starts on the next page, as the LaTeX class does (owner decision 77,
  *   CDM-045). The line is then placed on a page with the same geometry, at the body's top.
@@ -177,11 +178,12 @@ export interface PinOptions {
   /** The page starts, in page order. A start is a block start or, inside a paragraph, a line start. */
   readonly pages: readonly PagePin[];
   /**
-   * How far, in points, the content between a pinned start and the next typeset start may run below
-   * the page body before the pin is dropped. 02 §9.7 says "small" and gives no value, so there is no
-   * default: the caller passes the tenant's setting.
+   * How far the content between a pinned start and the next typeset start may run below the page
+   * body before the pin is dropped. A number is a length in points. `'line'`, the default, is one
+   * line: the height of the tallest body line of that page (owner decision 248: a page start counts
+   * as equal to the PDF's when it is within one line).
    */
-  readonly tolerance: number;
+  readonly tolerance?: number | 'line';
 }
 
 /** What reconciliation did with the pins (FE-100 criteria 2 and 3). */
@@ -581,7 +583,15 @@ function* reconciledSteps(
     const page = trial.pass.pinPages.get(i);
     return page === undefined ? 0 : (trial.pass.pageOverflow[page] ?? 0);
   });
-  const judgements = judgePins(matched, overflow, pins.tolerance);
+  const tolerance = pins.tolerance ?? 'line';
+  const judgements = matched.map((pin, i) => {
+    const page = trial.pass.pinPages.get(i);
+    const allowed =
+      tolerance === 'line'
+        ? tallestLine(page === undefined ? undefined : trial.pages[page])
+        : tolerance;
+    return judgePins([pin], [overflow[i] as number], allowed)[0]!;
+  });
   const dropped = (i: number): boolean => judgements[i]?.decision === 'dropped';
   const final = judgements.some((_, i) => dropped(i))
     ? yield* settleSteps(
@@ -608,6 +618,15 @@ function* reconciledSteps(
     pageCountSettled: final.settled,
     reconciliation: { judgements, unmatched, estimated: [...estimated].sort((a, b) => a - b) },
   });
+}
+
+/** The height of the tallest line of the paragraphs on a page, in points: "one line" (decision 248). */
+function tallestLine(page: PaginatedPage | undefined): number {
+  let tallest = 0;
+  for (const fragment of page?.fragments ?? [])
+    if (fragment.kind === 'paragraph')
+      for (const line of fragment.lines) tallest = Math.max(tallest, line.height);
+  return tallest;
 }
 
 /** The pages of the last pass of `settle`, with that pass. */
@@ -1100,9 +1119,12 @@ function* layoutPassSteps(
     let started = false;
     // FE-085 criterion 4: in a multi-column run a table does not span pages (03 §10). When the rest
     // of this page cannot hold the whole table, and a page can, the table starts on a new page.
-    // A table taller than a page still spans pages (reported through `overflowed`, as before).
+    // A table taller than a page spans pages and is flagged in `overflowed` (owner decision 250).
+    const totalHeight = rows.reduce((sum, r) => sum + r.height, 0);
+    if (cur.geo.cols > 1 && totalHeight > cur.geo.body + EPS && !overflowed.includes(item.blockId))
+      overflowed.push(item.blockId);
     if (cur.geo.cols > 1 && !held() && !pageEmpty()) {
-      const total = rows.reduce((sum, r) => sum + r.height, 0);
+      const total = totalHeight;
       let left = 0;
       for (let c = cur.column; c < cur.geo.cols; c++)
         left += Math.max(0, colH() - (cur.colUsed[c] ?? 0));

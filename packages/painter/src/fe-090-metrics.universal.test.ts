@@ -1,13 +1,12 @@
 /**
  * FE-090, criterion 4: the painter's CSS uses the ligature and kerning settings that the measurer
  * measured with. The measurer is the element's default provider, `canvasTextMeasurer`
- * (packages/element/src/canvas-measure.ts), which measures with canvas `measureText` at the
- * default `fontKerning` (`auto`) and the default ligatures. The test runs that real measurer and
- * compares its advances with the painted text, for ligature-rich and kerning-heavy samples, in
- * each browser (Chromium, Firefox and WebKit; `pnpm vitest run --project browser
- * packages/painter/src/fe-090-metrics.universal.test.ts`). In Chromium the kerning-heavy samples
- * are left out: no CSS value paints canvas `auto` kerning there (FE-090 Notes). In Node.js there
- * is no DOM and the suite is skipped.
+ * (packages/element/src/canvas-measure.ts), which sets canvas `fontKerning` to `normal` and leaves the
+ * ligatures at their default; the painter's CSS is `font-kerning: normal` (owner decision 249). The
+ * test runs that real measurer and compares its advances with the painted text, for ligature-rich and
+ * kerning-heavy samples, in each browser (Chromium, Firefox and WebKit; `pnpm vitest run --project
+ * browser packages/painter/src/fe-090-metrics.universal.test.ts`). In Node.js there is no DOM and the
+ * suite is skipped.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { canvasTextMeasurer } from '../../element/src/canvas-measure.ts';
@@ -30,12 +29,7 @@ const SAMPLES = [
   'AV To Wa Ty Yo',
   'Hello, world. 0123456789',
 ];
-/** The samples whose width depends on pair kerning. */
-const KERNED = new Set(['AVATAR Wave Yes', 'AV To Wa Ty Yo']);
-
 const hasDom = typeof document !== 'undefined';
-/** Chromium (and Edge): canvas `auto` kerning matches no CSS `font-kerning` value there. */
-const chromium = hasDom && /Chrome\//.test(navigator.userAgent);
 
 function tree(): { tree: LayoutTree; texts: Record<string, string> } {
   const texts: Record<string, string> = {};
@@ -83,10 +77,8 @@ describe.skipIf(!hasDom)('painter metrics match the measurer (FE-090, criterion 
     host = null;
   });
 
-  it('pins the painted font-kerning and font-variant-ligatures to the canvas defaults', () => {
-    // The canvas defaults the measurer leaves in place (it sets only `font`).
-    const ctx = document.createElement('canvas').getContext('2d')!;
-    expect(ctx.fontKerning).toBe(PAINT_TEXT_PINS.fontKerning);
+  it('pins the painted font-kerning to normal, as the measurer does, and the ligatures', () => {
+    expect(PAINT_TEXT_PINS.fontKerning).toBe('normal');
     const { tree: t, texts } = tree();
     const el = document.createElement('div');
     el.style.width = '600px';
@@ -123,7 +115,6 @@ describe.skipIf(!hasDom)('painter metrics match the measurer (FE-090, criterion 
     expect(spans.length).toBe(SAMPLES.length);
     spans.forEach((span, i) => {
       const text = SAMPLES[i]!;
-      if (chromium && KERNED.has(text)) return;
       const painted = span.getBoundingClientRect().width;
       // The measurer answers in points; the painted width is in CSS pixels.
       const measured = measurer.advance(font, text) * PX_PER_PT;
@@ -133,38 +124,5 @@ describe.skipIf(!hasDom)('painter metrics match the measurer (FE-090, criterion 
         `"${text}": painted ${painted}px, measured ${measured}px`,
       ).toBeLessThanOrEqual(0.5);
     });
-  });
-
-  // The open problem, kept visible: in Chromium the kerned samples paint narrower than canvas
-  // `auto` measures them. When this fails, the gap has closed and FE-090's Notes need revisiting.
-  it.runIf(chromium)('in Chromium, kerned text still paints off the canvas measure', (ctx) => {
-    // The gap was measured on Windows. On Linux (hosted CI, and a Playwright container with DejaVu
-    // Fonts) canvas uto and CSS kerning paint the same in the face serif gives: gaps of 0.008 px
-    // and 0 px. There is no problem to keep visible there.
-    if (/Linux/.test(navigator.userAgent))
-      ctx.skip('canvas and CSS kerning agree in the serif of Linux');
-    const { tree: t, texts } = tree();
-    const el = document.createElement('div');
-    el.style.width = '600px';
-    document.body.appendChild(el);
-    host = el;
-    const { pages } = paintTree(el, t, {
-      lineText: (block, from, to) => texts[block]!.slice(from, to),
-      fontFamily: PAINT_FAMILY,
-      fontSizePt: SIZE_PT,
-    });
-    const measurer = canvasTextMeasurer();
-    const font = { family: FAMILY, sizePt: SIZE_PT, bold: false, italic: false };
-    const spans = [...pages[0]!.querySelectorAll<HTMLElement>('.de-text')];
-    const gaps = SAMPLES.map((text, i) => ({
-      text,
-      gap: Math.abs(
-        spans[i]!.getBoundingClientRect().width - measurer.advance(font, text) * PX_PER_PT,
-      ),
-    })).filter((g) => KERNED.has(g.text));
-    expect(
-      gaps.some((g) => g.gap > 0.5),
-      JSON.stringify(gaps),
-    ).toBe(true);
   });
 });

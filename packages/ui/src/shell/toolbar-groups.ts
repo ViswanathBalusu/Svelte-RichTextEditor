@@ -87,27 +87,3 @@ export function contextMenuGroups(
     .map(({ c }) => c);
   return toolbarGroups(items);
 }
-
-export interface Placement {
-  /** Distance from the inline start of the viewport (left in LTR, right in RTL). */
-  readonly inlineStart: number;
-  readonly blockStart: number;
-}
-
-/**
- * Where to put a menu of `size` at a point of the viewport so that it stays inside it: flipped to
- * the other side of the point when there is no room.
- */
-export function placeMenu(
-  point: { x: number; y: number },
-  size: { width: number; height: number },
-  viewport: { width: number; height: number },
-  rtl: boolean,
-): Placement {
-  const fromStart = rtl ? viewport.width - point.x : point.x;
-  let inline = fromStart;
-  if (inline + size.width > viewport.width) inline = Math.max(0, fromStart - size.width);
-  let block = point.y;
-  if (block + size.height > viewport.height) block = Math.max(0, point.y - size.height);
-  return { inlineStart: Math.round(inline), blockStart: Math.round(block) };
-}

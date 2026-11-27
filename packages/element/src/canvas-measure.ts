@@ -7,7 +7,8 @@
  * a canvas exists: a page's main thread, or a worker with `OffscreenCanvas`.
  *
  * Every length the caller sees is in points. Canvas works in CSS pixels at 96 per inch, so one point
- * is 4/3 pixel. A family is a font alias (FE-061), never a CSS list of families; the generic `serif`
+ * is 4/3 pixel. Kerning is pinned to `normal`, the value the painter's CSS uses (`PAINT_TEXT_PINS` in
+ * packages/painter/src/painter.ts), so a line is measured with the kerning it is painted with. A family is a font alias (FE-061), never a CSS list of families; the generic `serif`
  * is appended only as the browser's own fallback for an alias that is not loaded.
  */
 
@@ -41,6 +42,8 @@ interface Metrics {
 
 interface Context2D {
   font: string;
+  /** Canvas kerning; a context that lacks it ignores the write. */
+  fontKerning?: string;
   measureText(text: string): Metrics;
 }
 
@@ -70,6 +73,9 @@ export function canvasMeasurerAvailable(): boolean {
 export function canvasTextMeasurer(): CanvasTextMeasurer {
   const ctx = newContext();
   if (!ctx) throw new Error('canvasTextMeasurer: no canvas is available here');
+  // Canvas `auto` kerns less than CSS in Chromium; `normal` agrees with the painter in all three
+  // browsers (FE-090 criterion 4; owner decision 249).
+  ctx.fontKerning = 'normal';
   const css = (font: CanvasFontKey): string => {
     const family = font.family.replace(/["\\]/g, '');
     const style = `${font.italic ? 'italic ' : ''}${font.bold ? 'bold ' : ''}`;
