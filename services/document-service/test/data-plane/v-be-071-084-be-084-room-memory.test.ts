@@ -20,8 +20,14 @@ import v8 from 'node:v8';
 import vm from 'node:vm';
 import type { JsonEnvelope } from '@docedit/model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { BASE_JSON, REQUIRES } from '../../../../packages/authority/test/fixtures.ts';
-import { startPlane, type Plane } from './support.ts';
+import {
+  BASE_JSON,
+  REQUIRES,
+  posInside,
+  schema,
+} from '../../../../packages/authority/test/fixtures.ts';
+import { insertText } from './client.ts';
+import { startPlane, until, type Plane } from './support.ts';
 
 v8.setFlagsFromString('--expose-gc');
 const gc = vm.runInNewContext('gc') as () => void;
@@ -38,11 +44,16 @@ function heapUsed(): number {
   return process.memoryUsage().heapUsed;
 }
 
+/** A paragraph id of exactly 16 characters, as invariant I11 requires. */
+function paragraphId(i: number): string {
+  return `p${i.toString(36).padStart(15, '0')}`;
+}
+
 /** A document of `paragraphs` paragraphs of PARAGRAPH_CHARS characters, as CDM JSON. */
 function docJson(paragraphs: number): JsonEnvelope['doc'] {
   const content = Array.from({ length: paragraphs }, (_, i) => ({
     type: 'paragraph',
-    attrs: { id: `p${i.toString(36).padStart(16, '0')}` },
+    attrs: { id: paragraphId(i) },
     content: [{ type: 'text', text: `${i} ${PARAGRAPH_TEXT}`.repeat(4).slice(0, PARAGRAPH_CHARS) }],
   }));
   return {
@@ -139,4 +150,89 @@ describe('BE-084 room memory, opened and closed by the room host (V-BE-071-084)'
     }
     expect(p.errors).toEqual([]);
   }, 600_000);
+
+  // Criterion 1, the part the first test leaves out: a channel is open, commits have been applied
+  // through it (so the room holds the commit log tail, the position maps of the steps and the
+  // tentative state), and the heap is read again. The client of the test runs in the same process;
+  // what it received is cleared before each reading so that it is not counted as the room's.
+  // Takes about three minutes (the near-16 MiB size spends half a minute on each commit), so it runs
+  // only when `DOCEDIT_MEASURE=1` is set: `$env:DOCEDIT_MEASURE = '1'; pnpm exec vitest run ...`.
+  it.skipIf(process.env['DOCEDIT_MEASURE'] !== '1')(
+    'measures the growth of an open room with a channel and applied commits',
+    async () => {
+      // A commit on a document near 16 MiB takes seconds here (it is the whole-document work of the
+      // authority) and stalls the event loop, so that size is given a few commits only.
+      const commitsFor = (label: string) => (label === 'near 16 MiB' ? 4 : 300);
+      const pos = posInside(schema.nodeFromJSON(docJson(1)), paragraphId(0));
+      const perParagraph = JSON.stringify(docJson(1000)).length / 1000;
+      const sizes: Array<[string, number]> = [
+        ['short', 10],
+        ['about 20 pages', 20 * (PAGE_CHARS / PARAGRAPH_CHARS)],
+        ['about 100 pages', 100 * (PAGE_CHARS / PARAGRAPH_CHARS)],
+        ['near 16 MiB', Math.floor((15.5 * MIB) / perParagraph)],
+      ];
+      const records: Array<Record<string, number | string>> = [];
+      for (const [label, paragraphs] of sizes) {
+        const COMMITS = commitsFor(label);
+        const doc = await storeDocument(paragraphs);
+        const client = await p.client('alice', { [doc]: 'owner' });
+        // Drops what the client holds (the snapshot sent on open, raw frames) but keeps the entries,
+        // so that the client's own bookkeeping of taken messages stays valid.
+        const clear = () => {
+          client.log.forEach((m, i) => {
+            const { t, re } = m;
+            client.log[i] = { t, ...(re !== undefined ? { re } : {}) };
+          });
+          client.frames.length = 0;
+        };
+        const before = heapUsed();
+        const opened = await client.open(1, doc);
+        expect(opened.t).not.toBe('ch.error');
+        clear();
+        const open = heapUsed();
+        const t0 = performance.now();
+        let base = 0;
+        for (let i = 0; i < COMMITS; i++) {
+          const ack = await client.submit(
+            1,
+            { base, steps: [insertText(pos, 'x'.repeat(20))] },
+            120_000,
+          );
+          expect(ack.t).toBe('sync.ack');
+          base++;
+          if (i % 50 === 49) clear();
+        }
+        const commitMs = performance.now() - t0;
+        clear();
+        const committed = heapUsed();
+        const estimated = p.plane.host.get(p.ref(doc))!.estimatedBytes;
+        client.close();
+        await until(() => p.plane.host.get(p.ref(doc))?.idle === true, 5000, 'the room to be idle');
+        expect(await p.plane.host.get(p.ref(doc))!.closeIdle()).toBe(true);
+        clear();
+        const closed = heapUsed();
+        records.push({
+          label,
+          paragraphs,
+          commits: COMMITS,
+          openWithChannelMiB: Number(((open - before) / MIB).toFixed(2)),
+          afterCommitsMiB: Number(((committed - before) / MIB).toFixed(2)),
+          perCommitKiB: Number(((committed - open) / COMMITS / 1024).toFixed(2)),
+          returnedMiB: Number(((committed - closed) / MIB).toFixed(2)),
+          estimatedMiB: Number((estimated / MIB).toFixed(2)),
+          msPerCommit: Number((commitMs / COMMITS).toFixed(2)),
+        });
+      }
+      for (const r of records) console.log(`BE-084 commits ${JSON.stringify(r)}`);
+      for (const r of records) {
+        expect(r['openWithChannelMiB']).toBeGreaterThan(0);
+        // Commits add state; the room does not shrink while it applies them.
+        expect(Number(r['afterCommitsMiB'])).toBeGreaterThanOrEqual(
+          Number(r['openWithChannelMiB']) - 0.5,
+        );
+      }
+      expect(p.errors).toEqual([]);
+    },
+    900_000,
+  );
 });
