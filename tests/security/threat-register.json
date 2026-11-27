@@ -842,12 +842,13 @@
       "provenBy": "SEC-043",
       "phase": "2",
       "status": "partly-proven",
-      "tests": ["language-check.test.ts"],
+      "tests": [
+        "language-check.test.ts",
+        "packages/authority/test/workflow.asserted-authentication.test.ts",
+        "packages/export-latex/src/frw-050-certificate.test.ts",
+        "services/document-service/src/workflow/certificate-facts.test.ts"
+      ],
       "open": [
-        {
-          "criterion": 2,
-          "what": "the certificate of completion and the evidence record presenting the host's claims as assertions recorded as given"
-        },
         {
           "criterion": 3,
           "what": "counsel's review of the wording recorded before launch"

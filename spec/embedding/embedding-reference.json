@@ -1051,6 +1051,12 @@
       "type": "boolean",
       "default": "false",
       "summary": "Draws page guides in the web view where the last completed export's layout.json started a page (02 section 7; FE-068). Off by default; a guide is exact only at block starts and drifts between compiles."
+    },
+    {
+      "name": "readPages",
+      "type": "boolean",
+      "default": "false",
+      "summary": "With view=\"read\", paints the layout engine's read-only pages (no editing surface, no input bridge) instead of showing the typeset PDF (02 section 7; FE-095). Off by default. Where the browser cannot offer the page view, the PDF read view is shown."
     }
   ]
 }
