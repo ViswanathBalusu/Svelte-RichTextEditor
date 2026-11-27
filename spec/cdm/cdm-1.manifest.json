@@ -5,13 +5,13 @@
   "prosemirrorSchemaHash": "6dd13c18b42c5604ca4e8aaa5a5f7b61984e686878462fc6a4b18926bc1f718a",
   "projectionSchemaHash": "48677063e54013603a232f86ff6032aa79b4123954964df9a2c2542cafc3f4f2",
   "files": {
-    "spec/cdm/cdm-1.schema.json": "7ccb727398c75f90fa38766730c4853529bb424bc20b58efe75a4396a7fcd124",
+    "spec/cdm/cdm-1.schema.json": "d6221c799a532c5d0adb88b08bc510394e77a43d587867a049888d78dcb1d1cd",
     "spec/cdm/cdm-1.prosemirror.json": "cfddf06b4809f111e6627f2b9e22a42a03e6f6d1538b01974135e8413e3588f1",
     "spec/cdm/cdm-1.projection.json": "c9fdbc8eca14b55f312c915f7b54444f46cede63ec1e13a191ef265d5ac4e620",
-    "spec/cdm/cdm-1.attributes.md": "51bf2b52faa41b624b2c2ba7bce40153846d5c578ffc5f0e998d5bd57befe77e",
+    "spec/cdm/cdm-1.attributes.md": "5b2a9802ab09f74110fa1bef46fd87c34f17bcffec2609bb490648d9726b4373",
     "spec/cdm/cdm-1.writer-support.md": "d7dc6d13fc0d8cba98fdf1b3b56338f6292f0aa387e5a85fe9688a29e2bd02a9",
     "spec/cdm/cdm-1.writer-support.json": "a3d9f41255c81d9d6e9e231a738db0ee9a86f3d2efa1ba5d1c8b1799c6e8db67",
     "spec/cdm/cdm-1.violations.json": "42e148c70d22bf15ef2facb577445c6226a3296bda1031cce41fc8c9b62dbd5f",
-    "packages/model/src/generated/types.ts": "880fa673dd920ab095b5b3a67782deb6964d9c1336a6ee764ad7187600b38aa6"
+    "packages/model/src/generated/types.ts": "66149bd476ad4ac5adc43e8bdef67bf5b1b8a958948dcdec08bb4776da15df41"
   }
 }

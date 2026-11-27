@@ -76,18 +76,8 @@ const DIFFERS: Record<string, { reason: string; ok: (mine: Label[], theirs: Labe
         'paragraphs whose tracked change the model cannot express are kept as preserved blocks, which hold no numbering (EXP-093)',
       ok: (mine, theirs) => mine.length < theirs.length && isSubsequence(mine, theirs),
     },
-    'poi/Numbering.docx': {
-      reason:
-        'a level text with letters ("NEW-1-FORMAT") and the Greek number format are outside the grammar of 03 §4.1 (open question, A2): the text is cut to "-1-" and the format becomes decimal',
-      ok: (mine, theirs) =>
-        mine.length === theirs.length &&
-        mine.every(
-          (m, k) =>
-            m.text === theirs[k]!.text ||
-            (m.text === '-1-' && theirs[k]!.text === 'NEW-1-FORMAT') ||
-            (m.kind === 'number' && /^[Ͱ-Ͽ]\.$/u.test(theirs[k]!.text)),
-        ),
-    },
+    // poi/Numbering.docx ("NEW-1-FORMAT" and the Greek sequence) was listed here until owner decision
+    // 240 (2026-11-26) widened the grammar of the level text and added the format `lowerGreek`.
   };
 
 interface WordItem {
