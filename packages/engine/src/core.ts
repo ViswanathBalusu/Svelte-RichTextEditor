@@ -5565,7 +5565,8 @@ one or original. It is a
    * (UX-056 criterion 4). The service's own list is not changed here.
    */
   #retakeExtensions(): void {
-    if (!this.#requires.includes('extensions') || this.#serviceRequires.includes('extensions')) return;
+    if (!this.#requires.includes('extensions') || this.#serviceRequires.includes('extensions'))
+      return;
     let used = false;
     this.#state.doc.descendants((n) => {
       if (n.type.name === 'extension_block' || n.type.name === 'extension_inline') used = true;
