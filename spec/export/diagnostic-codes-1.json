@@ -1,7 +1,7 @@
 {
   "artifact": "export-diagnostic-codes",
   "version": 1,
-  "classVersion": "0.2.21",
+  "classVersion": "0.2.22",
   "codes": [
     {
       "code": "align_distribute",
@@ -600,12 +600,6 @@
       "code": "row_taller_than_page",
       "severity": "warning",
       "message": "A table row is taller than a page.",
-      "origin": "converter"
-    },
-    {
-      "code": "rtl_unsupported",
-      "severity": "warning",
-      "message": "Right-to-left paragraphs are set left to right.",
       "origin": "converter"
     },
     {
