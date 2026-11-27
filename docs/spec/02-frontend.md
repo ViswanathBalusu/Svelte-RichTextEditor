@@ -143,7 +143,7 @@ Rules implemented, in priority order: explicit page and section breaks; `pageBre
 
 ### 9.7 Reconciling with the typeset result
 
-The compile reports where lines and pages really broke (09, section 7). When page-break reconciliation is switched on (level L1 of 09, section 7: opt-in per tenant, from phase 3; 06, section 10), the layout engine adopts the typesetter's breaks for paragraphs that have not been edited since, and uses its own for the rest. If the content between two reported page starts does not fit the editor's page, the page is allowed to overflow slightly; beyond a small tolerance the editor drops that pin and marks the page as estimated until the next compile.
+The compile reports where lines and pages really broke (09, section 7). When page-break reconciliation is switched on (level L1 of 09, section 7: opt-in per tenant, from phase 3; 06, section 10), the layout engine adopts the typesetter's breaks for paragraphs that have not been edited since, and uses its own for the rest. If the content between two reported page starts does not fit the editor's page, the page is allowed to overflow slightly; beyond a tolerance of one line the editor drops that pin and marks the page as estimated until the next compile. A page start on screen counts as equal to the PDF's when it is within one line (owner decision 248).
 
 ### 9.8 Printing
 

@@ -178,11 +178,12 @@ export interface PinOptions {
   /** The page starts, in page order. A start is a block start or, inside a paragraph, a line start. */
   readonly pages: readonly PagePin[];
   /**
-   * How far, in points, the content between a pinned start and the next typeset start may run below
-   * the page body before the pin is dropped. 02 §9.7 says "small" and gives no value, so there is no
-   * default: the caller passes the tenant's setting.
+   * How far the content between a pinned start and the next typeset start may run below the page
+   * body before the pin is dropped. A number is a length in points. `'line'`, the default, is one
+   * line: the height of the tallest body line of that page (owner decision 248: a page start counts
+   * as equal to the PDF's when it is within one line).
    */
-  readonly tolerance: number;
+  readonly tolerance?: number | 'line';
 }
 
 /** What reconciliation did with the pins (FE-100 criteria 2 and 3). */
@@ -582,7 +583,15 @@ function* reconciledSteps(
     const page = trial.pass.pinPages.get(i);
     return page === undefined ? 0 : (trial.pass.pageOverflow[page] ?? 0);
   });
-  const judgements = judgePins(matched, overflow, pins.tolerance);
+  const tolerance = pins.tolerance ?? 'line';
+  const judgements = matched.map((pin, i) => {
+    const page = trial.pass.pinPages.get(i);
+    const allowed =
+      tolerance === 'line'
+        ? tallestLine(page === undefined ? undefined : trial.pages[page])
+        : tolerance;
+    return judgePins([pin], [overflow[i] as number], allowed)[0]!;
+  });
   const dropped = (i: number): boolean => judgements[i]?.decision === 'dropped';
   const final = judgements.some((_, i) => dropped(i))
     ? yield* settleSteps(
@@ -609,6 +618,15 @@ function* reconciledSteps(
     pageCountSettled: final.settled,
     reconciliation: { judgements, unmatched, estimated: [...estimated].sort((a, b) => a - b) },
   });
+}
+
+/** The height of the tallest line of the paragraphs on a page, in points: "one line" (decision 248). */
+function tallestLine(page: PaginatedPage | undefined): number {
+  let tallest = 0;
+  for (const fragment of page?.fragments ?? [])
+    if (fragment.kind === 'paragraph')
+      for (const line of fragment.lines) tallest = Math.max(tallest, line.height);
+  return tallest;
 }
 
 /** The pages of the last pass of `settle`, with that pass. */
