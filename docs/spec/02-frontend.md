@@ -107,7 +107,7 @@ CDM document ──► flow blocks ──► measure ──► break lines ─�
                  and layout semantics (03)                           selection, scrolling
 ```
 
-The layout engine is plain TypeScript with no DOM dependency, so it can run in a worker and in Node.js for tests. Its only browser dependency is text measurement, which is injected. Before any of it is written, spike S7 evaluates driving an existing permissively licensed layout core from CDM flow blocks (11).
+The layout engine is plain TypeScript with no DOM dependency, so it can run in a worker and in Node.js for tests. Its only browser dependency is text measurement, which is injected. Spike S7 evaluated driving an existing permissively licensed layout core from CDM flow blocks (11). The owner decided to keep our own engine and not to fork a core (decision 246 of 2026-11-26), so the engine is written here and sits behind the API of this section.
 
 ### 9.2 Layout tree
 
