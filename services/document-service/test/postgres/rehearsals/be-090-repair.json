@@ -3,65 +3,65 @@
   "document": "services/document-service/docs/repair-procedure.md",
   "runBy": "this test, following the numbered steps of the document; not an operator at a terminal",
   "engine": "PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)",
-  "database": "docedit_t_174c3b9b76a8",
+  "database": "docedit_t_d46e10f9a8aa",
   "where": "PostgreSQL and the S3-compatible store in Podman, the shared test environment (infra/test-env.ps1), 127.0.0.1",
-  "started": "2026-11-27T20:10:13.373Z",
+  "started": "2026-11-27T09:02:20.976Z",
   "steps": [
     {
       "step": "before",
       "says": "Confirm the damage with the recovery procedure",
       "ok": true,
       "detail": "verifyCheckpoint names the checkpoint at seq 2 as different from its replay",
-      "at": "2026-11-27T20:10:13.373Z"
+      "at": "2026-11-27T09:02:20.976Z"
     },
     {
       "step": "1",
       "says": "1. Dry run. Plan the repair. The plan names the head, the checkpoint the replay starts from, the hash",
       "ok": true,
       "detail": "the plan names head 3, checkpoint 0, hash now 081dfb7da7c9, hash after 59ff01f601f4; the log and the outbox are as they were",
-      "at": "2026-11-27T20:10:13.565Z"
+      "at": "2026-11-27T09:02:21.135Z"
     },
     {
       "step": "2",
       "says": "2. Read the plan. If `changes` is false, the document is not broken at its head and nothing is done.",
       "ok": true,
       "detail": "changes is true: the content at the head differs",
-      "at": "2026-11-27T20:10:13.565Z"
+      "at": "2026-11-27T09:02:21.135Z"
     },
     {
       "step": "3",
       "says": "3. Enqueue the repair. This writes one outbox item of kind `snapshot` with reason `repair`, and one",
       "ok": true,
       "detail": "one outbox item of kind snapshot with reason repair, and the audit event repair.enqueued",
-      "at": "2026-11-27T20:10:13.586Z"
+      "at": "2026-11-27T09:02:21.158Z"
     },
     {
       "step": "4",
       "says": "4. Let the room apply the item. The item settles `done` with the sequence number of the repair",
       "ok": true,
       "detail": "the item settled failed with the room's rejection (forbidden, region rTerms000000000A); the log did not move. An item that fails is not retried by hand without a new plan",
-      "at": "2026-11-27T20:10:13.588Z"
+      "at": "2026-11-27T09:02:21.160Z"
     },
     {
       "step": "4",
       "says": "4. Let the room apply the item. The item settles `done` with the sequence number of the repair (after the region left approved)",
       "ok": true,
       "detail": "the item settled done with seq 5, the head plus one; the commit has origin repair and user system",
-      "at": "2026-11-27T20:10:13.863Z"
+      "at": "2026-11-27T09:02:21.397Z"
     },
     {
       "step": "5",
       "says": "5. Check the result. The chain of the log verifies (`verify` without payloads is enough for the",
       "ok": true,
       "detail": "the chain of the log verifies; the content at the new head hashes to the target of the plan; the audit trail holds repair.enqueued for both plans with the operator and the document",
-      "at": "2026-11-27T20:10:13.931Z"
+      "at": "2026-11-27T09:02:21.447Z"
     },
     {
       "step": "6",
       "says": "6. Leave the damaged checkpoint as it is, or set it aside with the recovery tools, as the incident",
       "ok": true,
       "detail": "the checkpoint at seq 2 is still stored, as the incident record would say",
-      "at": "2026-11-27T20:10:13.936Z"
+      "at": "2026-11-27T09:02:21.457Z"
     }
   ],
   "allPassed": true

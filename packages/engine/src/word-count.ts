@@ -36,24 +36,43 @@ export function wordsIn(text: string, seg: Segmenter | null = segmenter()): numb
   return n;
 }
 
+/**
+ * The words in each node, by node. Nodes are immutable and an edit keeps every node it did not
+ * touch, so a count after an edit reads the words of the untouched blocks from here and segments the
+ * text of the edited one only (FE-120: the pass over a 300-page document was about 12 per cent of the
+ * main thread while typing).
+ */
+const wordsOfNode = new WeakMap<PMNode, number>();
+
+function bodyWordsIn(node: PMNode, seg: Segmenter | null): number {
+  const name = node.type.name;
+  // The definitions and the stories (headers, footers) are not the body; footnote text is not counted.
+  if (name === 'defs' || name === 'story' || name === 'footnote') return 0;
+  const known = wordsOfNode.get(node);
+  if (known !== undefined) return known;
+  let n = 0;
+  if (node.isTextblock) {
+    // Text runs only: an inline node (a footnote reference, a field) breaks a word and adds none.
+    let text = '';
+    node.forEach((child) => {
+      text += child.isText ? (child.text ?? '') : ' ';
+    });
+    n = wordsIn(text, seg);
+  } else {
+    node.forEach((child) => {
+      n += bodyWordsIn(child, seg);
+    });
+  }
+  wordsOfNode.set(node, n);
+  return n;
+}
+
 /** The words in the body of a document. */
 export function countBodyWords(doc: PMNode): number {
   const seg = segmenter();
   let n = 0;
-  doc.descendants((node) => {
-    const name = node.type.name;
-    // The definitions and the stories (headers, footers) are not the body; footnote text is not counted.
-    if (name === 'defs' || name === 'story' || name === 'footnote') return false;
-    if (node.isTextblock) {
-      // Text runs only: an inline node (a footnote reference, a field) breaks a word and adds none.
-      let text = '';
-      node.forEach((child) => {
-        text += child.isText ? (child.text ?? '') : ' ';
-      });
-      n += wordsIn(text, seg);
-      return false;
-    }
-    return true;
+  doc.forEach((child) => {
+    n += bodyWordsIn(child, seg);
   });
   return n;
 }

@@ -156,6 +156,33 @@ function defKey(n: Node): { scope: string; id: string | null } {
 
 /** Longest common subsequence membership: which items of `a` (by key) survive in order in `b`. */
 function lcsKeep(a: readonly string[], b: readonly string[]): Set<string> {
+  // The usual commit adds, removes or changes children and moves none: the keys both sides hold
+  // are then in one order, that order is the only longest common subsequence, and it costs one pass
+  // instead of the table below, which grows with the product of the two lengths (SYN-040).
+  const at = new Map<string, number>();
+  for (let j = 0; j < b.length; j++) at.set(b[j]!, j);
+  if (at.size === b.length) {
+    const seen = new Set<string>();
+    const common = new Set<string>();
+    let last = -1;
+    let inOrder = true;
+    for (const key of a) {
+      if (seen.has(key)) {
+        inOrder = false;
+        break;
+      }
+      seen.add(key);
+      const j = at.get(key);
+      if (j === undefined) continue;
+      if (j < last) {
+        inOrder = false;
+        break;
+      }
+      last = j;
+      common.add(key);
+    }
+    if (inOrder) return common;
+  }
   const n = a.length;
   const m = b.length;
   // Classic dynamic programming; body children are counted in thousands at most.
@@ -289,19 +316,36 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
     const aKeys: string[] = [];
     const bOthers: Node[] = [];
     const aOthers: Node[] = [];
-    b.body.forEach((c, _o, i) => {
+    // Only the children between the shared head and the shared tail can differ: a child that both
+    // versions hold as one and the same node, at the same place from either end, is unchanged and
+    // keeps every region and section break around it where it was. The usual commit changes one
+    // child, so the rest of the body is not read (SYN-040).
+    const bodyB = b.body;
+    const bodyA = a.body;
+    let first = 0;
+    const shortest = Math.min(bodyB.childCount, bodyA.childCount);
+    while (first < shortest && bodyB.child(first) === bodyA.child(first)) first++;
+    let endB = bodyB.childCount;
+    let endA = bodyA.childCount;
+    while (endB > first && endA > first && bodyB.child(endB - 1) === bodyA.child(endA - 1)) {
+      endB--;
+      endA--;
+    }
+    for (let i = first; i < endB; i++) {
+      const c = bodyB.child(i);
       bKeys.push(childKey(c, i));
       if (c.type.name === 'region') bRegions.set(String(c.attrs['id']), c);
       else bOthers.push(c);
-    });
-    a.body.forEach((c, _o, i) => {
+    }
+    for (let i = first; i < endA; i++) {
+      const c = bodyA.child(i);
       aKeys.push(childKey(c, i));
       if (c.type.name === 'region') aRegions.set(String(c.attrs['id']), c);
       else aOthers.push(c);
-    });
+    }
 
     // body: the sequence of children with regions as identifiers, other blocks in full.
-    let bodyChanged = bKeys.length !== aKeys.length;
+    let bodyChanged = bodyB.childCount !== bodyA.childCount;
     if (!bodyChanged) {
       for (let i = 0, oi = 0; i < bKeys.length; i++) {
         if (bKeys[i] !== aKeys[i]) {
@@ -332,12 +376,16 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
     else {
       // A section break whose attributes changed.
       const bsb = new Map<string, Node>();
-      b.body.forEach((c) => c.type.name === 'section_break' && bsb.set(String(c.attrs['id']), c));
-      a.body.forEach((c) => {
-        if (c.type.name !== 'section_break') return;
+      for (let i = first; i < endB; i++) {
+        const c = bodyB.child(i);
+        if (c.type.name === 'section_break') bsb.set(String(c.attrs['id']), c);
+      }
+      for (let i = first; i < endA; i++) {
+        const c = bodyA.child(i);
+        if (c.type.name !== 'section_break') continue;
         const x = bsb.get(String(c.attrs['id']));
         if (x && x !== c && !deepEqual(x.attrs, c.attrs)) diff.sectionBreaksChanged = true;
-      });
+      }
     }
 
     // Moves: regions and section breaks present on both sides that are not on the longest common

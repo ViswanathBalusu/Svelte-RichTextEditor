@@ -113,6 +113,28 @@ The element sends `de-auth-required` when the service refuses the token. The glu
 
 `de-share-request` means the person asked to share. Sharing belongs to the host, so the host opens its own share dialog. The editor never changes grants on its own.
 
+### People who may edit only one region
+
+A person whose document role is `viewer` (or `commenter`) and who holds a region grant of the role `editor` edits that region and nothing else. The owner of the document (the role `owner`, with `manage`) decides how far that goes, in the permissions pane or through `PATCH /documents/{id}/grants`. A grant of the role `editor` may carry a `structure` list with two entries (ADR 0424; owner decision 279):
+
+- `region.retitle`: the person may rename that region.
+- `defs.add`: the person may add a new style.
+
+What such a person **can** do:
+
+- Type, format and apply the styles the document already has, inside the region.
+- Rename the region, when the grant lists `region.retitle`. The editor shows the rename control and the access object carries `structure` in the scope `region:<id>`.
+- Add a style, when any of their grants lists `defs.add`. The styles pane offers "New style" and the access object carries `structure.add` in the scope `defs`.
+
+What they **cannot** do, whatever the grant says:
+
+- Change page setup, a header or a footer, or the settings of the document.
+- Change or delete a style, including one they added themselves, or change a numbering definition.
+- Create, remove, split, merge or move a region, or change a region's policy or state.
+- Add a style with the identifier of one that was deleted earlier.
+
+The document service enforces all of this on every commit (`permission_denied`); the editor only hides what it would refuse. The list belongs to the grant: it is valid with the role `editor` alone, ends with the grant (an expiry or a removal stops it at once) and is ignored by clients that do not know the member, which still see the role. Document-level `structure` (the roles `editor` and `owner`) is a separate right and is not changed by it.
+
 ### Leaving the page
 
 Call `flushBeforeNavigation(el, timeoutMs)` before the host navigates away. It waits until nothing the person typed is unconfirmed. If the wait times out, the unconfirmed work stays in the editor's journal and returns when the document is opened again. Older element versions do not offer `flush`; the call then answers `unsupported`.

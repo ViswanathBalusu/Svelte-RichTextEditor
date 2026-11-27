@@ -35,7 +35,8 @@ RUN set -eu; cd /tmp; \
     rm -rf /tmp/*; \
     wasm-bindgen --version; wasm-opt --version
 
-# `git` is not needed: cargo-deny fetches the RustSec advisory database itself, on each run.
+# The image has no `git`, so cargo-deny cannot fetch the RustSec advisory database itself:
+# `packages/layout-kernel/scripts/build.ts` clones it on the host and mounts it (see build.sh).
 RUN set -eu; mkdir /tmp/deny; cd /tmp/deny;     curl -fsSL -o deny.crate "https://static.crates.io/crates/cargo-deny/cargo-deny-${CARGO_DENY_VERSION}.crate";     echo "${CARGO_DENY_SHA256}  deny.crate" | sha256sum -c -;     tar -xzf deny.crate;     cargo install --locked --path "cargo-deny-${CARGO_DENY_VERSION}" --root /usr/local;     cd /; rm -rf /tmp/deny /usr/local/cargo/registry /usr/local/cargo/git;     cargo deny --version
 
 WORKDIR /work/crates

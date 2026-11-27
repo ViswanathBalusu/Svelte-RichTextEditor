@@ -14,6 +14,7 @@
   import { onMount } from 'svelte';
   import { useShell } from '../context.ts';
   import type {
+    GrantStructureOperation,
     GrantsSnapshot,
     PrincipalInfo,
     RegionGrant,
@@ -129,6 +130,9 @@
   let active = $state(-1);
   let chosen = $state.raw<PrincipalInfo | null>(null);
   let role = $state<RegionRole>('editor');
+  /** The parts of `structure` a new editor grant carries (ADR 0424; PRM-070). */
+  let canRename = $state(false);
+  let canAddStyles = $state(false);
   let until = $state('');
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -200,11 +204,17 @@
     event.preventDefault();
     if (!selected || !chosen || !grants) return;
     const expiresAt = until ? new Date(`${until}T23:59:59`).toISOString() : null;
+    // The two parts of `structure` belong to the role `editor` alone (ADR 0424).
+    const parts: GrantStructureOperation[] =
+      role === 'editor'
+        ? [...(canRename ? ['region.retitle' as const] : []), ...(canAddStyles ? ['defs.add' as const] : [])]
+        : [];
     const grant: RegionGrant = {
       region: selected.id,
       principal: chosen.principal,
       role,
       ...(expiresAt ? { expiresAt } : {}),
+      ...(parts.length ? { structure: parts } : {}),
     };
     const rest = grants.grants.filter(
       (g) => !(g.region === grant.region && g.principal === grant.principal),
@@ -212,13 +222,35 @@
     chosen = null;
     query = '';
     until = '';
+    canRename = false;
+    canAddStyles = false;
     void save([...rest, grant]);
+  }
+
+  /** Switches one part of `structure` of an existing editor grant on or off, and saves (ADR 0424). */
+  function setStructure(grant: RegionGrant, op: GrantStructureOperation, on: boolean): void {
+    if (!grants || grant.role !== 'editor') return;
+    const now = new Set(grant.structure ?? []);
+    if (on) now.add(op);
+    else now.delete(op);
+    const { structure: _old, ...rest } = grant;
+    const next: RegionGrant = {
+      ...rest,
+      ...(now.size ? { structure: [...now].sort() } : {}),
+    };
+    void save(
+      grants.grants.map((g) => (g.region === grant.region && g.principal === grant.principal ? next : g)),
+    );
   }
 
   // Rename (PRM-034 criterion 1 and 5): a commit through the core, which needs `structure` and `edit`
   // in the region (07 §2). Without them the control is disabled and the text says which is missing.
+  // structure is the document's, or the scope of this region's where a grant lists `region.retitle`
+  // (ADR 0424; PRM-070): other regions' entries do not count.
   const structure = $derived(
-    permissions ? capabilitiesAnywhere(permissions.current).has('structure') : false,
+    selected !== null &&
+      (permissions?.current?.caps.includes('structure') === true ||
+        permissions?.current?.scopes[`region:${selected.id}`]?.includes('structure') === true),
   );
   const offersRename = $derived(core.commandNames?.includes('renameRegion') ?? false);
   const mayRename = $derived(
@@ -483,6 +515,32 @@
                 {#if grant.expiresAt}
                   <span class="de-hint">{expiryText(grant.expiresAt)}</span>
                 {/if}
+                {#if manage && grant.role === 'editor'}
+                  <!-- Two parts of `structure`, for the role editor only (ADR 0424; PRM-070). -->
+                  <span class="de-structure" data-structure>
+                    <label class="de-check">
+                      <input
+                        type="checkbox"
+                        data-structure-op="region.retitle"
+                        checked={grant.structure?.includes('region.retitle') ?? false}
+                        disabled={saving}
+                        onchange={(e) =>
+                          setStructure(grant, 'region.retitle', e.currentTarget.checked)}
+                      />
+                      {tr.t('permissions.structure.rename')}
+                    </label>
+                    <label class="de-check">
+                      <input
+                        type="checkbox"
+                        data-structure-op="defs.add"
+                        checked={grant.structure?.includes('defs.add') ?? false}
+                        disabled={saving}
+                        onchange={(e) => setStructure(grant, 'defs.add', e.currentTarget.checked)}
+                      />
+                      {tr.t('permissions.structure.addStyles')}
+                    </label>
+                  </span>
+                {/if}
                 {#if manage}
                   <button
                     type="button"
@@ -559,6 +617,19 @@
                 <option value={r}>{tr.t(`role.${r}`)}</option>
               {/each}
             </select>
+            {#if role === 'editor'}
+              <fieldset class="de-structure" data-structure>
+                <legend class="de-hint">{tr.t('permissions.structure.legend')}</legend>
+                <label class="de-check">
+                  <input type="checkbox" data-structure-op="region.retitle" bind:checked={canRename} />
+                  {tr.t('permissions.structure.rename')}
+                </label>
+                <label class="de-check">
+                  <input type="checkbox" data-structure-op="defs.add" bind:checked={canAddStyles} />
+                  {tr.t('permissions.structure.addStyles')}
+                </label>
+              </fieldset>
+            {/if}
             <label class="de-field" for={`${id}-until`}>{tr.t('permissions.expiry')}</label>
             <input id={`${id}-until`} class="de-input" type="date" bind:value={until} />
             <div class="de-dialog-actions">

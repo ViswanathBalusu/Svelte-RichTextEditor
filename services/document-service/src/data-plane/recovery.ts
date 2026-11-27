@@ -18,6 +18,7 @@ import { isSnapshot, type LogCommit } from '@docedit/authority';
 import { uuid7, type JsonEnvelope } from '@docedit/model';
 import type { SegmentRange, SegmentStore } from '../objects/segments.ts';
 import type { Pool } from '../storage/db.ts';
+import { requiresAfter } from '../storage/requires.ts';
 import type {
   AuditStore,
   CheckpointIndex,
@@ -77,7 +78,7 @@ async function replayFrom(
   const e = replayEncode({
     base,
     cdm: cp.envelope.cdm,
-    requires: cp.envelope.requires,
+    requires: requiresAfter(cp.envelope.requires, commits),
     commits: commits.map((c) => (isSnapshot(c) ? [] : c.steps)),
   });
   return { hash: e.hash, replayed: log.length };

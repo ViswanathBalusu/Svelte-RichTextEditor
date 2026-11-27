@@ -45,6 +45,12 @@ export type CloseCode = 4400 | 4401 | 4403 | 4406 | 4408 | 4413 | 4429 | 4500 | 
 /** A set of capabilities. */
 export type Capabilities = Capability[];
 
+/** A capability held in one scope: a capability of 07 §1, or `structure.add` on the scope `defs` (a grant that lists `defs.add`; ADR 0424). */
+export type ScopeCapability = "view" | "comment" | "suggest" | "edit" | "fill" | "structure" | "manage" | "structure.add";
+
+/** A set of capabilities held in one scope. */
+export type ScopeCapabilities = ScopeCapability[];
+
 /** A lease in `access.leases` (05 §5.5; 07 §10). */
 export interface LeaseInfo {
   /** The user who holds the lease: the host's `sub` (D42). */
@@ -73,8 +79,8 @@ export interface Access {
   docRole: DocRole;
   /** Document-level capabilities, including `structure` and `manage`. */
   caps: Capabilities;
-  /** Capabilities per scope. Lists every region of the document; a region not listed is not editable until an access with `asOfSeq` at or after the commit that created it arrives. */
-  scopes: { [key: string]: Capabilities };
+  /** Capabilities per scope. A region scope holds `structure` where a grant lists `region.retitle`; `defs` holds `structure.add` where one lists `defs.add` (ADR 0424). Lists every region of the document; a region not listed is not editable until an access with `asOfSeq` at or after the commit that created it arrives. */
+  scopes: { [key: string]: ScopeCapabilities };
   /** Leases held, by region scope. */
   leases: { [key: string]: LeaseInfo };
   /** Fill permission, or null when it does not apply (12 §4.1). */

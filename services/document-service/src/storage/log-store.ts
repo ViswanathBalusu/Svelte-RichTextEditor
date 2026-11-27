@@ -389,6 +389,7 @@ function toStoredCommit(row: CommitRow, cold?: unknown): LogCommit {
   if (row.rebased !== null) c.rebased = row.rebased;
   if (row.token_jti !== null) c.jti = row.token_jti;
   if (payload.evidence !== undefined) c.evidence = payload.evidence;
+  if (payload.requires !== undefined) c.requires = payload.requires;
   return c;
 }
 
@@ -592,6 +593,15 @@ export class PgLogStore implements LogStore, OwnershipStore {
         req.fromSeq + commits.length - 1,
         hashes[hashes.length - 1],
       ]);
+      // A commit that added a feature to `requires` stores the grown list in the document's record
+      // in the same transaction, so that every read after it sees it (03 §11.1; UX-107). The list
+      // is only ever longer, and the metadata revision moves so that a held ETag is not honoured.
+      const grown = [...commits].reverse().find((c) => c.requires !== undefined)?.requires;
+      if (grown !== undefined)
+        await client.query(
+          'UPDATE documents SET requires = $2, meta_rev = meta_rev + 1 WHERE id = $1',
+          [ref.doc, [...grown]],
+        );
       if (hooks.attachments?.length)
         await client.query(INSERT_DOC_ASSETS, [
           ref.tenant,

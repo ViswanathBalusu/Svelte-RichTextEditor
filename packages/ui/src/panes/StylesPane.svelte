@@ -30,6 +30,7 @@
   const styles = core.styles ? live(core.styles) : null;
   const regionsView = core.regions ? live(core.regions) : null;
   const snapshot = live(shell.registry.view);
+  const permissions = core.permissions ? live(core.permissions) : null;
 
   const KINDS: ReadonlyArray<{ kind: StyleSummary['kind']; key: StringKey }> = [
     { kind: 'paragraph', key: 'styles.kind.paragraph' },
@@ -85,6 +86,17 @@
     const key = `styles.why.${block.reason}` as StringKey;
     return tr.t(key, { count: block.regions.length, regions: regionNames(block.regions) });
   }
+
+  /**
+   * A person whose grant lists `defs.add` may add a style and nothing more (ADR 0424; PRM-070): the
+   * scope `defs` holds `structure.add` and the document-level `structure` is absent. The controls
+   * for changing and deleting an existing style are then not offered at all.
+   */
+  const addOnly = $derived(
+    permissions !== null &&
+      permissions.current?.scopes['defs']?.includes('structure.add') === true &&
+      !permissions.current.caps.includes('structure'),
+  );
 
   const createBlock = $derived(offersEdit ? blockOf('create') : null);
   /** A reason that holds for every style is shown once, where the controls are (criterion 2). */
@@ -205,7 +217,7 @@
                 <span class="de-badge">{tr.t('styles.current')}</span>
               {/if}
             </button>
-            {#if offersEdit}
+            {#if offersEdit && !addOnly}
               <span class="de-style-actions">
                 <button
                   type="button"
@@ -246,6 +258,9 @@
     >
     {#if userBlock}
       <p class="de-hint" id={`${id}-why`} data-styles="why">{whyText(userBlock)}</p>
+    {/if}
+    {#if addOnly}
+      <p class="de-hint" data-styles="add-only">{tr.t('styles.why.addOnly')}</p>
     {/if}
     {#if form}
       <form class="de-style-form" data-form onsubmit={save} aria-labelledby={`${id}-manage`}>
