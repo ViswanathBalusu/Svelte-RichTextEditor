@@ -50,6 +50,13 @@ function announcedListRoutes(): string[] {
   return out.sort();
 }
 
+// The routes that only an operator credential opens (07 §12): a tenant's API key is refused with
+// 403, so this walk, which holds a tenant key, cannot follow them.
+function operatorOnly(path: string): boolean {
+  const security = spec.paths[path]?.['get']?.security ?? [];
+  return security.length > 0 && security.every((alt) => 'operatorCredential' in alt);
+}
+
 // Every list route continues a page with `cursor` (the commit list too, after its first `after`).
 function cursorParam(_path: string): string {
   return 'cursor';
@@ -152,7 +159,12 @@ describe.skipIf(skip !== null)(
       expect(routes.length).toBeGreaterThan(0);
       const pagesOf: Record<string, number> = {};
       const notServed: string[] = [];
+      const needOperator: string[] = [];
       for (const template of routes) {
+        if (operatorOnly(template)) {
+          needOperator.push(template);
+          continue;
+        }
         const path = template.replaceAll('{id}', doc);
         const unpaged = await rest('GET', start(path));
         if (unpaged.status === 404) {
@@ -176,6 +188,8 @@ describe.skipIf(skip !== null)(
       // the data plane (not walked here).
       // /sealing-keys is in the contract (UX-076) and the reference service does not serve it yet.
       expect([...notServed].sort()).toEqual(['/sealing-keys', '/search', '/webhooks']);
+      // The operator's list of tenants (UX-076) needs an operator credential, which this test does not hold, so it is not walked.
+      expect(needOperator).toEqual(['/tenants']);
     });
   },
 );

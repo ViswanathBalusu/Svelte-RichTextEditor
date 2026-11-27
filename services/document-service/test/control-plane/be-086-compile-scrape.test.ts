@@ -17,6 +17,7 @@ import { documentWithRegions, startHarness, type Harness } from './support.ts';
 
 const METRICS_TOKEN = 'be-086-compile-token';
 const INTRO = 'pIntro0000000001';
+const COMPILE_MS = 30;
 const CANARY = 'canary-be086-document-text';
 
 /** The position just inside the paragraph with this identifier. */
@@ -59,6 +60,10 @@ describe('a running node declares the compile time after a compile (BE-086 crite
     let h: Harness | undefined = undefined;
     // A stand-in compile: it writes the output and the log, as the export handler of EXP-123 does.
     const exportHandler: JobHandler = async (job) => {
+      // The meter adds nothing for a compile of zero milliseconds, and the clock counts whole
+      // milliseconds, so a stand-in that returns at once (as it does on a fast Linux runner) never
+      // declares the family. A real compile takes longer; this one takes a few milliseconds too.
+      await new Promise((resolve) => setTimeout(resolve, COMPILE_MS));
       await h!.service.assets.putExport(
         job.tenant,
         job.id,

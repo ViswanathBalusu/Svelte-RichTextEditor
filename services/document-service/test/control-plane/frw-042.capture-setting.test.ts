@@ -133,10 +133,13 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       expect((await c.open(1, doc)).t).toBe('ch.opened');
       for (let i = 0; i < 100; i++) {
         const w = await h.call('GET', `/v1/documents/${doc}/workflow`, { token: owner });
-        if (w.json.state === 'in_progress') return;
+        // The first view moves the workflow to in_progress, and only then writes the evidence row
+        // (participant-view.ts), so the state alone does not say that the row is there yet.
+        if (w.json.state === 'in_progress' && (await rowsOf(doc)).some((x) => x.item === 'viewed'))
+          return;
         await new Promise((r) => setTimeout(r, 50));
       }
-      throw new Error('the workflow did not reach in_progress');
+      throw new Error('the workflow did not reach in_progress with its view recorded');
     }
 
     async function readyAsset(doc: string, tok: string): Promise<string> {
