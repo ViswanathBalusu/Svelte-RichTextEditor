@@ -107,7 +107,7 @@ CDM document ──► flow blocks ──► measure ──► break lines ─�
                  and layout semantics (03)                           selection, scrolling
 ```
 
-The layout engine is plain TypeScript with no DOM dependency, so it can run in a worker and in Node.js for tests. Its only browser dependency is text measurement, which is injected. Before any of it is written, spike S7 evaluates driving an existing permissively licensed layout core from CDM flow blocks (11).
+The layout engine is plain TypeScript with no DOM dependency, so it can run in a worker and in Node.js for tests. Its only browser dependency is text measurement, which is injected. Spike S7 evaluated driving an existing permissively licensed layout core from CDM flow blocks (11). The owner decided to keep our own engine and not to fork a core (decision 246 of 2026-11-26), so the engine is written here and sits behind the API of this section.
 
 ### 9.2 Layout tree
 
@@ -115,7 +115,7 @@ Immutable. Pages contain fragments; fragments contain lines or table rows; every
 
 ### 9.3 Measurement and line breaking
 
-- Text is measured with a canvas `measureText` context. Canvas offers no control over ligatures in any browser and no control over kerning in Safari, so the painter's CSS is pinned to whatever canvas does by default; it is not the other way round. Spike S5 measures the differences and also evaluates computing advances from the font files with HarfBuzz compiled to WebAssembly, which is deterministic across browsers and is what one comparable open-source editor does.
+- Text is measured with a canvas `measureText` context. Canvas offers no control over ligatures in any browser, so the painter's CSS follows what canvas does by default for ligatures. Kerning is set on both sides: the measurer sets canvas `fontKerning` to `normal` and the painter's CSS uses `font-kerning: normal`, so that measured and painted lines match (owner decision 249; canvas `auto` kerning in Chromium matches no CSS value, and canvas `fontKerning` changes the widths in Chromium, Firefox and WebKit, as probed for FE-090). Spike S5 measures the differences and also evaluates computing advances from the font files with HarfBuzz compiled to WebAssembly, which is deterministic across browsers and is what one comparable open-source editor does.
 - Measurements are cached by font alias, size, text and font epoch.
 - The kernel's measurement (ADR 0016; WASM-006) shapes a run in a face from the manifest's file, given the face's alias, a size in twentieths of a point, a language and the painter's OpenType features. It answers with an advance for each UTF-16 code unit, in whole units of 1/1280 pt, which is 64 to the twentieth of a point. An advance is the font's value scaled to the size and rounded half up in integer arithmetic, so it is the same in every runtime. The advance of a cluster is on its first code unit; the other units of the cluster and the second unit of a surrogate pair are 0; the units sum to the run's width. The kernel's cache is keyed by alias, the epoch at which the face was loaded, size, language, features and text.
 - Break opportunities come from a bundled implementation of the Unicode line breaking algorithm, because `Intl.Segmenter` has no line granularity.
@@ -126,7 +126,7 @@ Immutable. Pages contain fragments; fragments contain lines or table rows; every
 
 ### 9.4 Pagination
 
-Rules implemented, in priority order: explicit page and section breaks; `pageBreakBefore`; `keepNext` chains; `keepLines`; widow and orphan control; table rows that split across pages with repeated header rows and `cantSplit`; footnotes placed by iterating until the page content is stable; columns and column balancing; page sections with their own size and orientation. Floating objects with text wrap are out of scope (03, section 13).
+Rules implemented, in priority order: explicit page and section breaks; `pageBreakBefore`; `keepNext` chains; `keepLines`; widow and orphan control; table rows that split across pages with repeated header rows and `cantSplit`; footnotes placed by iterating until the page content is stable; columns and column balancing; page sections with their own size and orientation. In a multi-column section a table that fits a page does not span pages; a table taller than a page spans pages and is flagged as overflowing (owner decision 250). Floating objects with text wrap are out of scope (03, section 13).
 
 ### 9.5 Incremental layout and virtualisation
 
@@ -143,7 +143,7 @@ Rules implemented, in priority order: explicit page and section breaks; `pageBre
 
 ### 9.7 Reconciling with the typeset result
 
-The compile reports where lines and pages really broke (09, section 7). When page-break reconciliation is switched on (level L1 of 09, section 7: opt-in per tenant, from phase 3; 06, section 10), the layout engine adopts the typesetter's breaks for paragraphs that have not been edited since, and uses its own for the rest. If the content between two reported page starts does not fit the editor's page, the page is allowed to overflow slightly; beyond a small tolerance the editor drops that pin and marks the page as estimated until the next compile.
+The compile reports where lines and pages really broke (09, section 7). When page-break reconciliation is switched on (level L1 of 09, section 7: opt-in per tenant, from phase 3; 06, section 10), the layout engine adopts the typesetter's breaks for paragraphs that have not been edited since, and uses its own for the rest. If the content between two reported page starts does not fit the editor's page, the page is allowed to overflow slightly; beyond a tolerance of one line the editor drops that pin and marks the page as estimated until the next compile. A page start on screen counts as equal to the PDF's when it is within one line (owner decision 248).
 
 ### 9.8 Printing
 

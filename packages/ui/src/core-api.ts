@@ -187,7 +187,8 @@ export interface QuotaWaitNotice {
     | 'roomCpuBudget'
     | 'storage'
     | 'exportConcurrency'
-    | 'exportMinutes';
+    | 'exportMinutes'
+    | 'bulkSendRows';
 }
 
 /**

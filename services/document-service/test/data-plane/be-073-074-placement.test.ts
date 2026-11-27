@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { MemoryBusNetwork } from '../../src/data-plane/bus.ts';
 import { MemoryHomeRegions } from '../../src/storage/home-regions.ts';
 import { insertText } from './client.ts';
-import { cluster, intro, seeded, type Cluster } from './forwarding-support.ts';
+import { cluster, docFor, intro, seeded, type Cluster } from './forwarding-support.ts';
 
 let c: Cluster | null = null;
 afterEach(async () => {
@@ -145,5 +145,103 @@ describe('a tenant with a home region is served by the nodes of that region (BE-
     const alice = await nodes['us']!.client('alice', { [doc]: 'editor' });
     expect((await alice.open(1, doc)).t).toBe('ch.opened');
     expect(roomsOf(c!, 'node-eu') + roomsOf(c!, 'node-us')).toBe(1);
+  });
+});
+
+// BE-074 criterion 3 with decision 233 of docs/owner-decisions-2026-11-26.md: "No cross-region
+// read. A gateway routes by region alone, and the receiving node checks the owner" (ADR 0403).
+describe('a gateway outside the home region reads nothing of the document (BE-074, decision 233)', () => {
+  /** The head reads of a node's log store, by document. */
+  function spyOn(mem: Cluster['mem']) {
+    const heads: string[] = [];
+    const logs = new Proxy(mem, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver) as unknown;
+        if (prop === 'head')
+          return (ref: { doc: string }) => {
+            heads.push(ref.doc);
+            return (value as (r: unknown) => unknown).call(target, ref);
+          };
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    return { heads, logs };
+  }
+
+  it('routes by the region alone: the gateway reads no head, and the home region serves the channel', async () => {
+    c = cluster();
+    const net = new MemoryBusNetwork(seeded(41));
+    const homeRegions = new MemoryHomeRegions();
+    const eu = await c.start(
+      'node-eu',
+      net.connect('node-eu'),
+      {},
+      { traits: { region: 'eu' }, homeRegions },
+    );
+    const spy = spyOn(c.mem);
+    const us = await c.start(
+      'node-us',
+      net.connect('node-us'),
+      {},
+      { traits: { region: 'us' }, homeRegions, logs: spy.logs },
+    );
+    await homeRegions.assign(eu.tenant, 'eu', 'operator');
+    const doc = await eu.createDocument();
+    spy.heads.length = 0;
+
+    const alice = await us.client('alice', { [doc]: 'editor' });
+    expect((await alice.open(1, doc)).t).toBe('ch.opened');
+    const ack = await alice.submit(1, { base: 0, steps: [insertText(intro(), 'eu ')] });
+    expect(ack.d).toMatchObject({ seq: 1 });
+
+    // The room is in the home region, and the gateway's own log store was not asked for the head
+    // of the document at any point of the open or the commit.
+    expect(roomsOf(c, 'node-eu')).toBe(1);
+    expect(roomsOf(c, 'node-us')).toBe(0);
+    expect(spy.heads.filter((d) => d === doc)).toEqual([]);
+    expect(us.errors).toEqual([]);
+    expect(eu.errors).toEqual([]);
+  });
+
+  it('follows the node that holds the document when the node it chose is not the owner', async () => {
+    c = cluster();
+    const net = new MemoryBusNetwork(seeded(42));
+    const homeRegions = new MemoryHomeRegions();
+    const eu2 = await c.start(
+      'node-eu2',
+      net.connect('node-eu2'),
+      {},
+      { traits: { region: 'eu' }, homeRegions },
+    );
+    await homeRegions.assign(eu2.tenant, 'eu', 'operator');
+    // A document that rendezvous names node-eu1 once both are live, opened while only eu2 is.
+    const doc = await docFor(eu2, 'node-eu1', ['node-eu1', 'node-eu2']);
+    const first = await eu2.client('bob', { [doc]: 'editor' });
+    expect((await first.open(1, doc)).t).toBe('ch.opened');
+    expect((await c.mem.head(eu2.ref(doc))).owner).toBe('node-eu2');
+
+    const eu1 = await c.start(
+      'node-eu1',
+      net.connect('node-eu1'),
+      {},
+      { traits: { region: 'eu' }, homeRegions },
+    );
+    const us = await c.start(
+      'node-us',
+      net.connect('node-us'),
+      {},
+      { traits: { region: 'us' }, homeRegions },
+    );
+    const alice = await us.client('alice', { [doc]: 'editor' });
+    // The gateway chose node-eu1 by region alone; node-eu1 saw the owner and sent it to node-eu2.
+    expect((await alice.open(1, doc)).t).toBe('ch.opened');
+    expect(roomsOf(c, 'node-eu1')).toBe(0);
+    expect(roomsOf(c, 'node-us')).toBe(0);
+    expect(roomsOf(c, 'node-eu2')).toBe(1);
+    const ack = await alice.submit(1, { base: 0, steps: [insertText(intro(), 'moved ')] });
+    expect(ack.d).toMatchObject({ seq: 1 });
+    expect((await c.mem.head(eu2.ref(doc))).owner).toBe('node-eu2');
+    expect(eu1.errors).toEqual([]);
+    expect(us.errors).toEqual([]);
   });
 });

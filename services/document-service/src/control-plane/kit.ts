@@ -53,6 +53,7 @@ import type { TenantSettingService } from './tenant-settings.ts';
 import type { TenantRegistry } from './tenants.ts';
 import type { SearchHit, SearchQuery } from './search-index.ts';
 import type { CompileBudget } from './exp-009-compile-budget.ts';
+import type { BulkSendBudget } from './bulk-send-budget.ts';
 import type { LiveQuotas, QuotaSource } from './live-quotas.ts';
 import type { PolicyHookGate } from './policy-hook-client.ts';
 import type { JobQueue } from './jobs/queue.ts';
@@ -211,6 +212,8 @@ export interface HandlerDeps {
   search?: { search(tenant: string, q: string, query: SearchQuery): Promise<SearchHit[]> };
   /** The monthly compile-minute budget of tenants (EXP-009). Absent: no budget is checked. */
   compileBudget?: CompileBudget;
+  /** The monthly limit on the recipient rows of bulk sends (FRW-063). Absent: none is checked. */
+  bulkSendBudget?: BulkSendBudget;
   /** The usage figures of GET /usage, and where the routes record what they see (UX-078). */
   usage?: UsageService;
   /** The recorder behind the usage figures. */

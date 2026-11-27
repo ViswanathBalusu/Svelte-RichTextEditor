@@ -1,6 +1,6 @@
 # Spike EXP-097: which parser the DOCX importer builds on
 
-**Status:** spike result, 2026-11-17, lane w2. The recommendation is proposed; the owner has not decided it ([ADR 0383](../adr/0383-w2-EXP-097-docx-parser.md)). Two of the candidates in the usual lists (docx4j and Apache POI) were compared on paper and not run. Section 6 says why.
+**Status:** spike result, 2026-11-17, lane w2. The owner settled the open points on 2026-11-26 (decision 244, `docs/owner-decisions-2026-11-26.md`): the comparison closes with the four readers that were measured, and the recommendation to build stands ([ADR 0383](../adr/0383-w2-EXP-097-docx-parser.md), accepted). Two of the candidates in the usual lists (docx4j and Apache POI) were compared on paper and were not run, by the owner's decision. Section 6 says why.
 
 ## Question
 
@@ -102,7 +102,7 @@ Only the Open XML SDK is a candidate that fits the product's needs on structure 
 
 ## 6. What was not done
 
-- **docx4j and Apache POI were not run.** The machine has no Maven or Gradle, and putting about a dozen jars on a class path by hand means downloading files from outside a package manager. Both are Apache-2.0, alive, and each has one advisory (above); both would need a JVM in the worker, with the costs of section 5 and an extra one, since docx4j reads through JAXB. A run of them would complete criterion 2 of the story; it is the work that remains.
+- **docx4j and Apache POI were not run.** The machine has no Maven or Gradle, and putting about a dozen jars on a class path by hand means downloading files from outside a package manager. Both are Apache-2.0, alive, and each has one advisory (above); both would need a JVM in the worker, with the costs of section 5 and an extra one, since docx4j reads through JAXB. The owner decided (decision 244, 2026-11-26) that they are not measured and that the comparison closes with the four readers already measured, so nothing remains of criterion 2.
 - Pandoc and LibreOffice were not run. They are converters, not readers that keep the original, which puts them outside the question; S11 already used LibreOffice 26.8.3.1 as a check that exported files open.
 - The structure counts come from regular expressions over the XML, so a file that the regular expressions misjudge shifts a count by one or two. The file-level results are in `results.json` for anyone who wants to check one.
 - The importer was measured as it is at this commit, and it improves with the stories that follow (comments, footnotes, hyperlinks); the competitors were measured at their latest versions.
@@ -117,7 +117,7 @@ Only the Open XML SDK is a candidate that fits the product's needs on structure 
 3. mammoth's advisory is the kind of fault this threat model fears (a Word file makes the server read a file), it is reproduced, and its XML parser has 22 advisories; the library also cannot express tracked changes.
 4. The Open XML SDK is the best reader of the four on structure, and it is MIT and maintained, but it is a second runtime, it has no source positions, and an uncatchable stack overflow takes its process down.
 
-Not decided here, and the owner's: whether to add the Open XML SDK as a test-only second reader (section 5), and whether a run of docx4j and POI is worth the cost of a Maven installation. The recommendation is in [ADR 0383](../adr/0383-w2-EXP-097-docx-parser.md).
+Decided by the owner on 2026-11-26: the run of docx4j and POI is not done (decision 244), and the recommendation to build is accepted. Still open and not asked: whether to add the Open XML SDK as a test-only second reader (section 5); it is not a dependency. The recommendation is in [ADR 0383](../adr/0383-w2-EXP-097-docx-parser.md).
 
 ## How to repeat it
 

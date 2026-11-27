@@ -201,6 +201,16 @@ export class ShardedJobQueue implements JobQueue {
     return this.#on(tenant).workerTime(tenant, kinds, from, to);
   }
 
+  async payloadItems(
+    tenant: string,
+    kind: string,
+    member: string,
+    from: number,
+    to: number,
+  ): Promise<number> {
+    return this.#on(tenant).payloadItems(tenant, kind, member, from, to);
+  }
+
   /** Queued and running jobs over every shard, summed by kind and priority. */
   async depth(): Promise<QueueDepth[]> {
     const sums = new Map<string, QueueDepth>();

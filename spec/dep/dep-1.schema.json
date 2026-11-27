@@ -503,7 +503,8 @@
         "roomCpuBudget",
         "storage",
         "exportConcurrency",
-        "exportMinutes"
+        "exportMinutes",
+        "bulkSendRows"
       ]
     },
     "RejectAction": {
@@ -3998,6 +3999,19 @@
               "type": "null"
             }
           ]
+        },
+        "bulkSendRows": {
+          "description": "Recipient rows of bulk sends a tenant may submit in a calendar month, UTC.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
@@ -4129,6 +4143,12 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
+        },
+        "bulkSendRows": {
+          "description": "Recipient rows of bulk sends submitted in the month.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -4139,7 +4159,8 @@
         "roomCpuBudget",
         "storage",
         "exportConcurrency",
-        "exportMinutes"
+        "exportMinutes",
+        "bulkSendRows"
       ]
     },
     "SealingKeyView": {

@@ -2,8 +2,8 @@
  * Page-break reconciliation in the page pass (FE-100 criteria 2 and 3; 02 §9.7): `paginate` with
  * typeset page starts. A pinned page holds its content up to the next typeset start and may overflow
  * by up to the tolerance; beyond it the pin is dropped and the pages of its content are estimated.
- * The overflow is measured on the pass's own layout. The tolerance has no value in the spec, so the
- * tests pass their own; they do not show what a tenant's value should be.
+ * The overflow is measured on the pass's own layout. The tolerance is one line unless the caller gives
+ * a length (owner decision 248); the first tests pass their own lengths, the last ones use the line.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -208,5 +208,38 @@ describe('pinned pagination ends and places every line once', () => {
       ),
       { numRuns: 200 },
     );
+  });
+});
+
+describe('the tolerance is one line unless a length is given (owner decision 248)', () => {
+  it('keeps a pin whose page overflows by less than its tallest line, with no tolerance given', () => {
+    // 5 points over a 100-point page, and the tallest line of the page is 20 points.
+    const items: PageItem[] = [para('A', [20, 20, 20, 20, 20, 5]), para('B', [20, 20])];
+    const result = paginate(items, page(100), { pins: { pages: [pin(1, 'A'), pin(2, 'B')] } });
+    expect(result.reconciliation!.judgements.map((j) => j.decision)).toEqual(['overflows', 'fits']);
+    expect(pagesOf(result.pages)).toEqual([['A:0-60'], ['B:0-20']]);
+    expect(result.pages.some((p) => p.estimated)).toBe(false);
+  });
+
+  it('allows an overflow of exactly one line and drops a pin beyond it', () => {
+    // 20 points over: exactly the tallest line, so the pin stays.
+    const one: PageItem[] = [para('A', [20, 20, 20, 20, 20, 20]), para('B', [20, 20])];
+    const kept = paginate(one, page(100), {
+      pins: { pages: [pin(1, 'A'), pin(2, 'B')], tolerance: 'line' },
+    });
+    expect(kept.reconciliation!.judgements[0]!.decision).toBe('overflows');
+    // 30 points over: more than one line, so the pin is dropped and the page is estimated.
+    const two: PageItem[] = [para('A', [20, 20, 20, 20, 20, 20, 10]), para('B', [20, 20])];
+    const dropped = paginate(two, page(100), { pins: { pages: [pin(1, 'A'), pin(2, 'B')] } });
+    expect(dropped.reconciliation!.judgements.map((j) => j.decision)).toEqual(['dropped', 'fits']);
+    expect(dropped.pages[0]!.estimated).toBe(true);
+  });
+
+  it('a length given by the caller still wins over the line', () => {
+    const items: PageItem[] = [para('A', [20, 20, 20, 20, 20, 5]), para('B', [20, 20])];
+    const result = paginate(items, page(100), {
+      pins: { pages: [pin(1, 'A'), pin(2, 'B')], tolerance: 2 },
+    });
+    expect(result.reconciliation!.judgements[0]!.decision).toBe('dropped');
   });
 });

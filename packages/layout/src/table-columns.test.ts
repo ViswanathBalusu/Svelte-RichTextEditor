@@ -146,9 +146,30 @@ describe('a table in a multi-column section (FE-085 criterion 4)', () => {
       ),
       table('t', [60, 60, 60]),
     ];
-    const { pages } = paginate(items, setup());
+    const { pages, overflowed } = paginate(items, setup());
     expect(pages.length).toBeGreaterThan(1);
     const rows = tablesOf(pages).flatMap((t) => t.frag.rows.map((r) => r.rowId));
     expect(rows).toEqual(['t0', 't1', 't2']);
+    // Owner decision 250: the table spans pages and is flagged.
+    expect(overflowed).toEqual(['t']);
+  });
+
+  it('does not flag a table that a page holds, moved or not (decision 250)', () => {
+    const fits: PageItem[] = [
+      para(
+        'a',
+        Array.from({ length: 14 }, () => 10),
+      ),
+      table('t', [35, 35]),
+    ];
+    expect(paginate(fits, setup()).overflowed).toEqual([]);
+    const alone: PageItem[] = [table('u', [50, 50])];
+    expect(paginate(alone, setup()).overflowed).toEqual([]);
+  });
+
+  it('does not flag a table taller than a page in a single-column section as this rule', () => {
+    // The flag of decision 250 is for multi-column sections; a row that fits the body is not flagged.
+    const items: PageItem[] = [table('t', [60, 60, 60])];
+    expect(paginate(items, setup({ columns: 1, columnGap: 0 })).overflowed).toEqual([]);
   });
 });

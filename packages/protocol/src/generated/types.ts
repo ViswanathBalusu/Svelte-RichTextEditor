@@ -117,7 +117,7 @@ export interface Ack {
 }
 
 /** The kind of quota a refusal names: the dimensions of the tenant quotas (06 §12; owner decision 110). */
-export type QuotaKind = "connections" | "openDocuments" | "commitRate" | "roomCpuBudget" | "storage" | "exportConcurrency" | "exportMinutes";
+export type QuotaKind = "connections" | "openDocuments" | "commitRate" | "roomCpuBudget" | "storage" | "exportConcurrency" | "exportMinutes" | "bulkSendRows";
 
 /** What the client does next (04 §8). */
 export type RejectAction = "rebase" | "drop" | "reload" | "retry";
@@ -1023,6 +1023,8 @@ export interface QuotaSettings {
   exportConcurrency?: number | null;
   /** Export minutes a tenant may use. */
   exportMinutes?: number | null;
+  /** Recipient rows of bulk sends a tenant may submit in a calendar month, UTC. */
+  bulkSendRows?: number | null;
 }
 
 /** A tenant (UX-076; 13 section 10). */
@@ -1069,6 +1071,8 @@ export interface UsageView {
   exportConcurrency: number;
   /** Export minutes used in the month. */
   exportMinutes: number;
+  /** Recipient rows of bulk sends submitted in the month. */
+  bulkSendRows: number;
 }
 
 /** A PDF sealing key of a tenant, public facts only (UX-076). */

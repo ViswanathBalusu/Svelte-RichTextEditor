@@ -15,7 +15,16 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { KERNEL_FILES, createKernel, type KernelGlue, type LayoutKernel } from '../src/index.ts';
+import {
+  KERNEL_FILES,
+  SEA_FILES,
+  createKernel,
+  createSoutheastAsian,
+  type KernelGlue,
+  type LayoutKernel,
+  type SeaGlueSync,
+  type SoutheastAsianBreaker,
+} from '../src/index.ts';
 import type { HyphenationManifest } from '../src/hyphenation.ts';
 
 /** The build of the kernel: `pnpm --filter @docedit/layout-kernel build:wasm` writes it. */
@@ -45,6 +54,31 @@ export async function loadNodeKernel(dist: string = KERNEL_DIST): Promise<Layout
   return createKernel(glue, readKernelWasm(dist));
 }
 let nextInstance = 0;
+
+/** True when `dist/` holds a build of the module of Thai, Lao, Khmer and Burmese (WASM-016). */
+export function southeastAsianIsBuilt(dist: string = KERNEL_DIST): boolean {
+  return existsSync(resolve(dist, SEA_FILES.wasm)) && existsSync(resolve(dist, SEA_FILES.module));
+}
+
+/** The module's file as bytes, as a browser would fetch it. */
+export function readSoutheastAsianWasm(dist: string = KERNEL_DIST): Uint8Array<ArrayBuffer> {
+  return new Uint8Array(readFileSync(resolve(dist, SEA_FILES.wasm)));
+}
+
+/**
+ * Starts the module of Thai, Lao, Khmer and Burmese from the build. Each call imports a fresh copy
+ * of the generated module. The page loads it on demand through `lazySoutheastAsian`; tests call
+ * this directly.
+ */
+export async function loadNodeSoutheastAsian(
+  dist: string = KERNEL_DIST,
+): Promise<SoutheastAsianBreaker> {
+  if (!southeastAsianIsBuilt(dist))
+    throw new Error(`the Southeast Asian module is not built in ${dist}: run build:wasm first`);
+  const href = `${pathToFileURL(resolve(dist, SEA_FILES.module)).href}?instance=${nextInstance++}`;
+  const glue = (await import(href)) as SeaGlueSync;
+  return createSoutheastAsian(glue, readSoutheastAsianWasm(dist));
+}
 
 /** One face of a font manifest, as far as the kernel needs it. */
 export interface ManifestFace {

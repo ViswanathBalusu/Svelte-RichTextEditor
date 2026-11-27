@@ -132,7 +132,9 @@ describe('a service with an opted-in tenant (BE-041)', () => {
     // `parts.objects` is the store the service writes through.
     await s.parts.objects.put(objectKeys.checkpoint(sealedTenant, doc, 1), body);
     await s.parts.objects.put(objectKeys.checkpoint(plainTenant, doc, 1), body);
-    expect(dec.decode((await raw.get(objectKeys.checkpoint(sealedTenant, doc, 1)))!)).not.toBe(PLAIN);
+    expect(dec.decode((await raw.get(objectKeys.checkpoint(sealedTenant, doc, 1)))!)).not.toBe(
+      PLAIN,
+    );
     expect(dec.decode((await raw.get(objectKeys.checkpoint(plainTenant, doc, 1)))!)).toBe(PLAIN);
     expect(await s.parts.objects.get(objectKeys.checkpoint(sealedTenant, doc, 1))).toEqual(body);
   });

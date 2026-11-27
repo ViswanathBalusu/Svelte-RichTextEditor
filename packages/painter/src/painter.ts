@@ -21,12 +21,13 @@ import type {
 import { justifyLine } from '../../layout/src/justify.ts';
 
 /**
- * The text settings the painter's CSS is pinned to (FE-090 criterion 4). Spec 02 §9.3: the CSS
- * follows what canvas `measureText` does by default, not the other way round. The default measurer
- * (`canvasTextMeasurer`, packages/element/src/canvas-measure.ts) leaves `fontKerning` at `auto` and
- * the ligatures at their default, and CSS `font-kerning: auto` paints the same widths in Firefox
- * and WebKit. In Chromium no CSS value reproduces canvas `auto` on kerned pairs (about 0.9 px wide
- * on `AVATAR Wave Yes` at 16 px serif); that is open, see FE-090's Notes.
+ * The text settings the painter's CSS and the measurer share (FE-090 criterion 4). Owner decision
+ * 249: measuring and painting both use normal kerning, so the lines the layout computed are the
+ * lines that are painted. The default measurer (`canvasTextMeasurer`,
+ * packages/element/src/canvas-measure.ts) sets canvas `fontKerning` to `normal` and leaves the
+ * ligatures at their default, and CSS `font-kerning: normal` paints the same widths in Chromium,
+ * Firefox and WebKit. Canvas `auto` is not used: in Chromium no CSS value reproduces it on kerned
+ * pairs (about 0.9 px wide on `AVATAR Wave Yes` at 16 px serif, measured 2026-11-13).
  *
  * `textRendering: geometricPrecision` keeps the advances unhinted. Chromium on Linux (hosted CI,
  * Playwright 1.65, headless) otherwise rounds each glyph advance to a whole pixel, and a line of 40
@@ -35,7 +36,7 @@ import { justifyLine } from '../../layout/src/justify.ts';
  * at fractions of a pixel already, so the value changes nothing there.
  */
 export const PAINT_TEXT_PINS = {
-  fontKerning: 'auto',
+  fontKerning: 'normal',
   fontVariantLigatures: 'normal',
   textRendering: 'geometricPrecision',
 } as const;
@@ -233,8 +234,8 @@ export function paintTree(
     style.padding = '0';
     style.fontFamily = runs?.[0]?.fontFamily ?? source.fontFamily;
     style.fontSize = `${runs?.[0]?.fontSizePt ?? source.fontSizePt}pt`;
-    // Kerning and ligatures follow the canvas defaults the measurer measures with
-    // (`PAINT_TEXT_PINS`; FE-090 criterion 4, spec 02 §9.3).
+    // Kerning and ligatures are the ones the measurer measures with (`PAINT_TEXT_PINS`; FE-090
+    // criterion 4, owner decision 249, spec 02 §9.3).
     style.fontKerning = PAINT_TEXT_PINS.fontKerning;
     style.fontVariantLigatures = PAINT_TEXT_PINS.fontVariantLigatures;
     style.textRendering = PAINT_TEXT_PINS.textRendering;

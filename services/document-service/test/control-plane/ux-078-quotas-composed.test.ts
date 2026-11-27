@@ -16,6 +16,7 @@ const EMPTY = {
   storage: null,
   exportConcurrency: null,
   exportMinutes: null,
+  bulkSendRows: null,
 };
 
 for (const storage of ['memory', 'postgres'] as Storage[]) {

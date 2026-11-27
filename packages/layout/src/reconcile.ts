@@ -14,8 +14,8 @@
  * - whether the content between two reported page starts fits the editor's page: a page may
  *   overflow by up to a tolerance, and beyond that the editor drops the pin and marks the page as
  *   estimated until the next compile;
- * - the tolerance itself has no value in the spec ("small", 02 §9.7 and Open questions), so it is
- *   a required argument with no default. The caller takes it from the tenant's setting.
+ * - the tolerance of the spec ("small", 02 §9.7) is one line (owner decision 248), which `paginate`
+ *   works out per page; this function takes the value for a pin as a length in points.
  *
  * Universal: no DOM and no Node.js API (FND-004). Lengths are in points.
  */
