@@ -141,7 +141,8 @@ describe.skipIf(!hasDom)('painter metrics match the measurer (FE-090, criterion 
     // The gap was measured on Windows. On Linux (hosted CI, and a Playwright container with DejaVu
     // Fonts) canvas uto and CSS kerning paint the same in the face serif gives: gaps of 0.008 px
     // and 0 px. There is no problem to keep visible there.
-    if (/Linux/.test(navigator.userAgent)) ctx.skip('canvas and CSS kerning agree in the serif of Linux');
+    if (/Linux/.test(navigator.userAgent))
+      ctx.skip('canvas and CSS kerning agree in the serif of Linux');
     const { tree: t, texts } = tree();
     const el = document.createElement('div');
     el.style.width = '600px';

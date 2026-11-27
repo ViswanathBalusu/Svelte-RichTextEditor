@@ -40,7 +40,8 @@ describe.skipIf(!isBrowser)('a comparison over a version in the web view (HIS-01
     try {
       // The last paragraph is below every change: if the bars moved the text, it would move.
       // It is looked up each time: drawing the comparison may draw the paragraph again.
-      const last = (): HTMLElement | null => [...host.querySelectorAll<HTMLElement>('p')].at(-1) ?? null;
+      const last = (): HTMLElement | null =>
+        [...host.querySelectorAll<HTMLElement>('p')].at(-1) ?? null;
       expect(last()).not.toBeNull();
       const top = (): number => last()!.getBoundingClientRect().top;
       const before = top();
