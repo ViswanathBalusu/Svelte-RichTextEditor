@@ -94,7 +94,9 @@ export function sandboxArgs(name: string, opts: PodmanSandboxOptions = {}): stri
     `--pids-limit=${l.pids}`,
     `--ulimit=nproc=${l.userProcesses}:${l.userProcesses}`,
     `--ulimit=nofile=${l.openFiles}:${l.openFiles}`,
-    `--ulimit=cpu=${l.wallSeconds}:${l.wallSeconds}`,
+    // A second line behind --timeout, not a rival: CPU time can run ahead of wall time (startup
+    // threads), and a kill by this limit just before the wall limit read as a decode failure in CI.
+    `--ulimit=cpu=${l.wallSeconds + CPU_SLACK_SECONDS}:${l.wallSeconds + CPU_SLACK_SECONDS}`,
     // No path in the container is writable; this is a second line. Zero would stop crun itself,
     // which writes a status file under the job's limits before it starts the process.
     '--ulimit=fsize=1048576:1048576',
@@ -111,6 +113,12 @@ export function sandboxArgs(name: string, opts: PodmanSandboxOptions = {}): stri
   if (opts.command) args.push(...opts.command);
   return args;
 }
+
+/** CPU seconds allowed beyond the wall-clock limit, so that --timeout is always the first to fire. */
+const CPU_SLACK_SECONDS = 5;
+
+/** The exit code of a process ended by SIGXCPU (128 + 24): the CPU limit, which is a time limit. */
+const SIGXCPU_EXIT = 152;
 
 /** Podman's own failures (it could not create or start the container): not the job's content. */
 const ENGINE_EXIT = new Set([125, 126, 127]);
@@ -135,7 +143,9 @@ export function podmanSandbox(opts: PodmanSandboxOptions = {}): Sandbox {
       // A run that went past its output limit was stopped for that reason, whatever its wall time
       // (a flood can take longer to stop than the limit, and that must not read as the time limit).
       const timedOut =
-        r.timedOut || (!r.stdoutOverflow && r.code !== 0 && r.wallMs >= l.wallSeconds * 1000);
+        r.timedOut ||
+        r.code === SIGXCPU_EXIT ||
+        (!r.stdoutOverflow && r.code !== 0 && r.wallMs >= l.wallSeconds * 1000);
       const engineError =
         r.spawnError ??
         (r.code !== null && ENGINE_EXIT.has(r.code) && !timedOut
