@@ -330,7 +330,14 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         },
         h.tenant,
       );
-      expect(done.expired).toContain(doc);
+      expect(done.failed).toEqual([]);
+      // The service has its own `workflow.schedule` job, which `advance` makes due as well, so
+      // either run may do the expiry and the other finds the workflow already expired (the sweep
+      // is written for several instances: only the one that moves the state raises the event).
+      // The test asks for the one event, wherever it came from, and waits for the other run to
+      // finish raising it.
+      for (let i = 0; i < 200 && !(await delivered(doc)).includes('expired'); i++)
+        await new Promise((r) => setTimeout(r, 25));
       await expectOnce(doc, ['sent', 'participant_activated', 'expired']);
     });
 
