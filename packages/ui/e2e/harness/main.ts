@@ -375,6 +375,14 @@ let duringInput = false;
 
 /** The checker's document (UX-066, UX-067): one issue of each kind, and one in region rLegal. */
 let checkerAltFixed = false;
+/** What the fake core's `fixBlock` has applied to the checker's document, and each call it got (UX-067). */
+const checkerFixed = {
+  headerRows: 0,
+  linkText: 'click here',
+  headingStyle: 'Heading3',
+  navyColour: null as string | null,
+};
+const checkerFixCalls: Array<{ id: string; fix: unknown }> = [];
 const checkerSelected: string[] = [];
 /** What the core was asked to do for the preview as a role (FRW-075). */
 const rolePreviewLog: string[] = [];
@@ -429,6 +437,7 @@ function checkerContent(): unknown {
             { type: 'settings', attrs: { lang: 'en-GB', defaultParagraphStyle: 'Normal' } },
             def('Normal', {}),
             def('Heading1', { basedOn: 'Normal', outlineLevel: 1 }),
+            def('Heading2', { basedOn: 'Normal', outlineLevel: 2 }),
             def('Heading3', { basedOn: 'Normal', outlineLevel: 3 }),
             { type: 'page_setup', attrs: { id: 'ps1', width: 11906, height: 16838 } },
           ],
@@ -438,15 +447,22 @@ function checkerContent(): unknown {
           attrs: { pageSetup: 'ps1' },
           content: [
             para('hScope', 'Heading1', [text('Scope')]),
-            para('hTooDeep', 'Heading3', [text('Too deep')]),
+            para('hTooDeep', checkerFixed.headingStyle, [text('Too deep')]),
             para('pLink', null, [
               text('Read the '),
-              text('click here', [{ type: 'link', attrs: { href: 'https://example.com/r' } }]),
+              text(checkerFixed.linkText, [
+                { type: 'link', attrs: { href: 'https://example.com/r' } },
+              ]),
             ]),
             figure('fNoAlt', checkerAltFixed ? 'A chart' : null),
             {
               type: 'table',
-              attrs: { id: 'tNoHeader', style: null, grid: [2000], headerRows: 0 },
+              attrs: {
+                id: 'tNoHeader',
+                style: null,
+                grid: [2000],
+                headerRows: checkerFixed.headerRows,
+              },
               content: [
                 {
                   type: 'table_row',
@@ -462,7 +478,12 @@ function checkerContent(): unknown {
               ],
             },
             para('pNavy', null, [
-              text('Black on navy', [{ type: 'highlight', attrs: { value: 'darkBlue' } }]),
+              text('Black on navy', [
+                { type: 'highlight', attrs: { value: 'darkBlue' } },
+                ...(checkerFixed.navyColour
+                  ? [{ type: 'color', attrs: { value: checkerFixed.navyColour } }]
+                  : []),
+              ]),
             ]),
             {
               type: 'region',
@@ -914,6 +935,21 @@ function mountShell(options: MountOptions = {}): void {
         checkerSelected.push(id);
         return true;
       },
+      // Applies the fix to the document above, as the real core would, and refuses what it would.
+      fixBlock: (id: string, fix: { fix: string; [k: string]: unknown }) => {
+        checkerFixCalls.push({ id, fix });
+        if (id === 'fNoAlt' && fix.fix === 'alt-text') checkerAltFixed = true;
+        else if (id === 'tNoHeader' && fix.fix === 'table-header') checkerFixed.headerRows = 1;
+        else if (id === 'pLink' && fix.fix === 'link-text')
+          checkerFixed.linkText = String(fix.text);
+        else if (id === 'hTooDeep' && fix.fix === 'heading-level')
+          checkerFixed.headingStyle = `Heading${String(fix.level)}`;
+        else if (id === 'pNavy' && fix.fix === 'text-colour')
+          checkerFixed.navyColour = String(fix.colour);
+        else return false;
+        need().core.revision.set(need().core.revision.get() + 1);
+        return true;
+      },
     });
   }
   if (options.assistant) {
@@ -1115,6 +1151,8 @@ const harness = {
   documentContent: () => JSON.stringify(DOCUMENT_CONTENT),
   /** The blocks the checker pane asked the core to select, in order (UX-067 criterion 1). */
   checkerSelected: () => checkerSelected.slice(),
+  /** Each call the pane made to the core's `fixBlock` (UX-067 criterion 2). */
+  checkerFixCalls: () => JSON.parse(JSON.stringify(checkerFixCalls)) as unknown[],
   /** Scripts what the assistant port answers to the next requests (UX-045). */
   setAssistantMode: (mode: AssistantMode) => void (assistantMode = mode),
   /** The assistant requests made so far, with whether each was aborted (UX-045). */

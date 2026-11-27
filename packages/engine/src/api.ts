@@ -23,6 +23,7 @@ import type {
   Unsubscribe,
 } from '@docedit/protocol';
 import type { AltRequest } from './alt-text.ts';
+import type { BlockFix } from './block-fix-types.ts';
 import type { ReadView } from './read-value.ts';
 import type { TrimReport } from './trim.ts';
 import type { Clock } from './sync/session.ts';
@@ -1090,6 +1091,8 @@ export interface DocumentApi {
   showReferences(): boolean;
   /** Stores the alternative text of the first picture of the asset that has none; false when it cannot (FE-132). */
   setImageAlt(asset: string, alt: string): boolean;
+  /** Repairs one issue of the accessibility checker in a block, through the scope guard; false when it cannot (UX-067). */
+  fixBlock(id: string, fix: BlockFix): boolean;
   focus(): void;
   destroy(): void;
 

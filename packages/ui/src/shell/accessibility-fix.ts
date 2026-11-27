@@ -1,8 +1,8 @@
 /**
  * Acting on an accessibility issue (UX-067; 13 section 8). For each issue the shell needs the fix
  * it offers and whether this user may make it. The fix names are the shell's own identifiers for
- * the command or field that repairs the element; the commands behind them are not registered yet
- * (see the story's Notes), so the names are stable promises, not running commands.
+ * the command or field that repairs the element; the checker pane runs each one through the core's
+ * `fixBlock` (`BlockFix` in core-api.ts), which applies the scope guard again.
  *
  * The permission comes from the caller, so this module needs no document model and no core. The
  * caller in the product is `accessibility-run.ts`, which builds `FixAccess` from the core's DEP
