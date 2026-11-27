@@ -8,6 +8,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  denyAllowedLicences,
+  denyConfigProblems,
+  denyIgnoredAdvisories,
+  type AdvisoryException,
   dataReviewProblems,
   lockReviewProblems,
   needsDataReview,
@@ -214,3 +218,95 @@ describe.skipIf(!cargoOk || !existsSync(join(root, 'crates/Cargo.lock')))(
     });
   },
 );
+
+describe('the advisory check (criterion 2; owner decision 281)', () => {
+  const deny = read('crates/deny.toml');
+  const exceptions = (
+    JSON.parse(read('licences/cargo-advisory-exceptions.json')) as {
+      exceptions: AdvisoryException[];
+    }
+  ).exceptions;
+  const record = (over: Partial<AdvisoryException> = {}): AdvisoryException => ({
+    id: 'RUSTSEC-2099-0001',
+    crate: 'example <1.0.0',
+    reason: 'The affected function is not called.',
+    decision: 'WASM-013 test',
+    expires: '2027-01-01',
+    ...over,
+  });
+  const ignoring = (id: string) =>
+    deny.replace('ignore = []', `ignore = [\n  { id = "${id}", reason = "x" }, # comment\n]`);
+
+  it('accepts the configuration in crates/deny.toml against the licence policy', () => {
+    expect(denyConfigProblems(deny, policy.allow, exceptions, TODAY)).toEqual([]);
+    expect(denyAllowedLicences(deny)).toContain('Unicode-3.0');
+    expect(denyIgnoredAdvisories(deny)).toEqual([]);
+  });
+
+  it('fails an ignored advisory that has no record, and one whose record expired', () => {
+    const text = ignoring('RUSTSEC-2099-0001');
+    expect(denyIgnoredAdvisories(text)).toEqual(['RUSTSEC-2099-0001']);
+    expect(denyConfigProblems(text, policy.allow, [], TODAY)[0]).toContain('has no record');
+    expect(denyConfigProblems(text, policy.allow, [record()], TODAY)).toEqual([]);
+    expect(
+      denyConfigProblems(text, policy.allow, [record({ expires: '2026-11-01' })], TODAY)[0],
+    ).toContain('expired');
+    expect(denyConfigProblems(text, policy.allow, [record({ reason: '' })], TODAY)[0]).toContain(
+      'needs crate, reason and decision',
+    );
+  });
+
+  it('fails a record for an advisory that is not ignored', () => {
+    expect(denyConfigProblems(deny, policy.allow, [record()], TODAY)[0]).toContain(
+      'does not ignore it',
+    );
+  });
+
+  it('fails a licence the policy does not allow, a yanked release let through, and another source', () => {
+    expect(
+      denyConfigProblems(deny.replace('"ISC",', '"ISC", "GPL-3.0-only",'), policy.allow, [], TODAY),
+    ).toEqual(['deny.toml allows GPL-3.0-only, which licences/policy.json does not']);
+    expect(
+      denyConfigProblems(
+        deny.replace('yanked = "deny"', 'yanked = "warn"'),
+        policy.allow,
+        [],
+        TODAY,
+      ),
+    ).toEqual(['deny.toml: [advisories] yanked must be "deny"']);
+    expect(
+      denyConfigProblems(
+        deny.replace('unknown-git = "deny"', 'unknown-git = "warn"'),
+        policy.allow,
+        [],
+        TODAY,
+      ),
+    ).toEqual(['deny.toml: [sources] unknown-git must be "deny"']);
+    expect(
+      denyConfigProblems(
+        deny.replace('allow-git = []', 'allow-git = ["https://example.org/x"]'),
+        policy.allow,
+        [],
+        TODAY,
+      ),
+    ).toEqual(['deny.toml: no git source may be allowed']);
+  });
+
+  it('runs on every build: cargo-deny is called, locked, by the tests and by both builds', () => {
+    const script = read('crates/build.sh');
+    expect(script).toMatch(/cargo deny --locked [^\n]*check/);
+    // `advisories` is called in the `test` branch and in the `build|build-sea` branch.
+    const calls = script.split('\n').filter((l) => /^\s+advisories$/.test(l));
+    expect(calls).toHaveLength(2);
+    // A machine without cargo-deny fails instead of skipping the check.
+    expect(script).toMatch(/command -v cargo-deny[\s\S]*exit 1/);
+  });
+
+  it('pins cargo-deny in the builder image: an exact version and the SHA-256 of its crate', () => {
+    const file = read('crates/Containerfile');
+    expect(/^ARG CARGO_DENY_VERSION=\d+\.\d+\.\d+$/m.test(file)).toBe(true);
+    expect(/^ARG CARGO_DENY_SHA256=[0-9a-f]{64}$/m.test(file)).toBe(true);
+    expect(file).toContain('sha256sum -c');
+    expect(file).toContain('cargo install --locked');
+  });
+});

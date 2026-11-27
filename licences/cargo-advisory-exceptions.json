@@ -1,0 +1,4 @@
+{
+  "$comment": "Recorded exceptions to the advisory check of the Rust workspace (WASM-013, criterion 2; owner decision 281). cargo-deny reads `ignore` in crates/deny.toml; each advisory ignored there needs an entry here with the crate, the reason, the decision record and an expiry date (YYYY-MM-DD) after which the check fails again (scripts/kernel-supply-chain.test.ts). Entry shape: { \"id\": \"RUSTSEC-YYYY-NNNN\", \"crate\": \"name version-range\", \"reason\": \"...\", \"decision\": \"record, date\", \"expires\": \"YYYY-MM-DD\" }. None today.",
+  "exceptions": []
+}
