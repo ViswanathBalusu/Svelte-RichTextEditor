@@ -101,6 +101,7 @@ import {
   type NodeLeaseStore,
   type OwnershipStore,
 } from '../storage/types.ts';
+import { requiresAfter } from '../storage/requires.ts';
 import type { EventSink } from '../control-plane/events.ts';
 import { recordOf } from '../workflow/record.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
@@ -449,6 +450,10 @@ export class HostedRoom {
       initial: init.initial,
       initialSeq: init.initialSeq,
       requires: init.record.requires,
+      // A commit that adds a feature to `requires` is accepted when every attached client announced
+      // it, and the grown list is stored with the commit and in the document's record (03 §11.1;
+      // CDM-047; UX-107).
+      requiresGrowth: true,
       ...(init.threads?.length ? { threads: init.threads } : {}),
       log: init.log,
       snapshotContent: snapshotDoc,
@@ -719,10 +724,13 @@ ecentHead, keeping one entry older than the window. */
   open(
     key: string,
     port: ChannelPort,
-    conn: RoomConnection,
+    identity: RoomConnection,
     resume: Resume | undefined,
     stored: PermissionState,
   ): void {
+    // The room asks each attached client for the features it announced when a commit adds one to
+    // `requires` (03 §11.1; CDM-047; UX-107), so the connection carries them.
+    const conn: RoomConnection = { ...identity, features: [...port.features] };
     if (this.#stopped || this.transient)
       throw new Refusal('unavailable', 'the room stopped serving the document');
     if (this.#draining) throw new Refusal('unavailable', 'the node is draining');
@@ -2381,7 +2389,7 @@ export class RoomHost {
           await d.workers.run('materialise', {
             base,
             cdm: cp.envelope.cdm,
-            requires: cp.envelope.requires,
+            requires: requiresAfter(cp.envelope.requires, log.slice(from)),
             commits,
           })
         ).doc

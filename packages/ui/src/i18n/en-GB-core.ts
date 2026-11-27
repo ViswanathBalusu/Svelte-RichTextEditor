@@ -182,6 +182,9 @@ export const EN_GB_CORE = {
   'reason.query.notMovable':
     'Place the caret in a paragraph, a table or another block of the body.',
   'reason.query.noEdit': 'You do not have permission to edit this document.',
+  // Why a form field cannot be inserted into a document that does not use forms yet (UX-107).
+  'reason.query.noForms':
+    'This service does not offer forms, so this document cannot have form fields.',
   'reason.query.no-export':
     'Your access does not allow export. Restrictions deter casual copying and are not a security boundary.',
   'reason.query.no-print':
@@ -890,7 +893,8 @@ export const EN_GB_CORE = {
   'rule.problem.effect': 'Give each effect a field.',
   'rule.problem.otherwiseEffect': 'Give each otherwise effect a field.',
   'rule.refused.read-only': 'You cannot change the rules of this document.',
-  'rule.refused.no-feature': 'This document does not support rules.',
+  'rule.refused.no-feature':
+    'This service does not offer forms, so this document cannot have rules.',
   'rule.refused.duplicate': 'Another rule already has this name.',
   'rule.refused.not-defined': 'This rule is no longer in the document.',
   'rule.refused.no-change': 'Nothing has changed.',

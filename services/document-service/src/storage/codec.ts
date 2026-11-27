@@ -38,6 +38,11 @@ export interface CommitPayload {
    * (`sign` or `rules`) and the hash, nothing else. Absent from every other commit.
    */
   evidence?: { origin: 'sign' | 'rules' | 'decline'; evidenceHash: string };
+  /**
+   * The document's `requires` after a commit that added a feature (03 §11.1; CDM-047; UX-107).
+   * Absent from every other commit, so no earlier payload and no earlier hash changes.
+   */
+  requires?: string[];
 }
 
 /** The hashed metadata of one commit: the fields 08 §2 lists, in canonical form. */
@@ -98,6 +103,8 @@ export function encodeCommit(doc: string, c: LogCommit): EncodedCommit {
   // Likewise only an evidence anchor has this member, so no earlier hash changes.
   if (c.evidence !== undefined)
     payload.evidence = { origin: c.evidence.origin, evidenceHash: c.evidence.evidenceHash };
+  // And only a commit that added a feature to `requires` has this one.
+  if (c.requires !== undefined) payload.requires = [...c.requires];
   const payloadJson = utf8(canonicalize(payload));
   const meta: CommitMetadata = {
     doc,
@@ -140,6 +147,7 @@ export function payloadFromJson(json: unknown): CommitPayload {
   const out: CommitPayload = { steps: value.steps, retired: value.retired, claimed: value.claimed };
   if (value.snapshot) out.snapshot = value.snapshot;
   if (value.evidence) out.evidence = value.evidence;
+  if (value.requires) out.requires = value.requires;
   return out;
 }
 

@@ -243,6 +243,8 @@ describe('the document limit of form fields in the real core (FRW-072 criterion 
     const c = core([]);
     caretAtAfter(c);
     expect(c.query('canInsertField')).toBe(false);
-    expect(c.queryReason('canInsertField')).toBeNull();
+    // Not the limit; since UX-107 it says that the service offers no forms to turn on.
+    expect(c.queryReason('canInsertField')).not.toBe('fieldLimit');
+    expect(c.queryReason('canInsertField')).toBe('noForms');
   });
 });
