@@ -235,6 +235,7 @@ import { errorFields, SILENT, type Logger } from './log.ts';
 import {
   ASSET_JOB_KIND,
   assetJobHandler,
+  importPictureProcessor,
   assetUploads,
   workerObjects,
 } from './objects/asset-pipeline.ts';
@@ -1604,6 +1605,15 @@ export async function startService(opts: StartOptions): Promise<Service> {
       {
         [IMPORT_KIND]: importJobHandler({
           importer: opts.importer,
+          ...(assetWorker
+            ? {
+                pictures: importPictureProcessor({
+                  objects: workerObjects(parts.objects),
+                  sandbox: assetWorker.sandbox,
+                  ...(assetWorker.allowUnsandboxed ? { allowUnsandboxed: true } : {}),
+                }),
+              }
+            : {}),
           assets,
           registry: parts.assetRegistry,
           grants: parts.grants,
@@ -2085,6 +2095,15 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(quotaSource ? { quotaSource } : {}),
     ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),
     ...(opts.importer ? { importsOffered: true, importer: opts.importer } : {}),
+    ...(opts.importer && assetWorker
+      ? {
+          pictures: importPictureProcessor({
+            objects: workerObjects(parts.objects),
+            sandbox: assetWorker.sandbox,
+            ...(assetWorker.allowUnsandboxed ? { allowUnsandboxed: true } : {}),
+          }),
+        }
+      : {}),
   };
   bulkSendDeps = controlDeps;
   const handlers = createHandlers(controlDeps);

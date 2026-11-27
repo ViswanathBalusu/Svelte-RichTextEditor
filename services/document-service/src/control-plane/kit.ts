@@ -72,7 +72,7 @@ import type { CaptureSettingsPort } from '../workflow/capture-settings.ts';
 import type { SealedPdfStore } from '../workflow/sealed-store.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import type { TemplateStore } from '../workflow/template-store.ts';
-import type { DocxImporter } from './import-port.ts';
+import type { DocxImporter, PictureProcessor } from './import-port.ts';
 
 export interface HandlerDeps {
   documents: DocumentStore;
@@ -225,6 +225,8 @@ export interface HandlerDeps {
   importsOffered?: boolean;
   /** The Word importer of this node, for `POST /documents` with an import (EXP-098 criterion 6). */
   importer?: DocxImporter;
+  /** Passes the pictures of an import through the asset worker (EXP-101 criterion 3). Absent: kept as brought. */
+  pictures?: PictureProcessor;
 }
 
 export const json = (

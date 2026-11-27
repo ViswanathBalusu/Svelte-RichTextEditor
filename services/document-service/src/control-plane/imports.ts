@@ -30,7 +30,7 @@ import type { EventSink } from './events.ts';
 import type { NotifyFn } from './exports.ts';
 import { JobFailure, type JobHandler, type JobHooks } from './jobs/runner.ts';
 import type { JobRecord } from './jobs/queue.ts';
-import type { DocxImporter, ImportedDocument } from './import-port.ts';
+import type { DocxImporter, ImportedDocument, PictureProcessor } from './import-port.ts';
 import { json, type HandlerDeps, type Kit } from './kit.ts';
 import { capabilitiesOn, hiddenFrom, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError, type RestCode } from './problems.ts';
@@ -52,6 +52,8 @@ export type { DocxImporter, ImportedDocument } from './import-port.ts';
 
 export interface ImportJobDeps {
   importer: DocxImporter;
+  /** Passes the pictures of an import through the asset worker (EXP-101 criterion 3). */
+  pictures?: PictureProcessor | undefined;
   assets: Pick<AssetStore, 'getFinal' | 'putFinal'>;
   registry: AssetRegistry;
   grants: Pick<GrantStore, 'current' | 'retired'>;
@@ -68,7 +70,12 @@ export interface ImportJobDeps {
  * the caller to remove when the commit fails.
  */
 async function registerImportedAssets(
-  o: { registry: AssetRegistry; assets: Pick<AssetStore, 'putFinal'> },
+  o: {
+    registry: AssetRegistry;
+    assets: Pick<AssetStore, 'putFinal'>;
+    /** The asset worker for pictures (EXP-101 criterion 3); without it the bytes are kept as they are. */
+    pictures?: PictureProcessor | undefined;
+  },
   ref: DocRef,
   imported: ImportedDocument,
   actor: string,
@@ -92,6 +99,37 @@ async function registerImportedAssets(
         now,
       );
       created.push(a.id);
+      // A picture goes through the asset worker, which decodes it and stores the re-encoded file
+      // under its own hash (EXP-101 criterion 3). A type the worker does not accept is kept as it
+      // was brought, as before; a picture the worker refuses fails the import.
+      const picture = o.pictures
+        ? await o.pictures(ref.tenant, a.id, a.bytes, a.contentType)
+        : null;
+      if (picture && !picture.ok)
+        throw new JobFailure(
+          'validation_failed',
+          `a picture of the Word file was refused: ${picture.message}`,
+        );
+      if (picture?.ok) {
+        const settledPicture = await o.registry.settleReady(
+          ref.tenant,
+          a.id,
+          {
+            sha256: picture.sha256,
+            bytes: picture.bytes,
+            contentType: picture.contentType,
+            objectKey: picture.objectKey,
+            width: picture.width,
+            height: picture.height,
+            frames: picture.frames,
+            renditions: picture.renditions.map((r) => ({ ...r })),
+          },
+          now,
+        );
+        if (!settledPicture)
+          throw new JobFailure('internal', 'an imported picture could not be stored');
+        continue;
+      }
       const sha256 = await o.assets.putFinal(ref.tenant, a.bytes, a.contentType);
       const settled = await o.registry.settleReady(
         ref.tenant,
@@ -263,7 +301,10 @@ export async function prepareImport(
  * On a failure the caller removes the document; the attached record is removed here.
  */
 export async function attachAndStore(
-  d: Pick<HandlerDeps, 'assetRegistry' | 'assets' | 'grants' | 'content' | 'dataPlane' | 'now'>,
+  d: Pick<
+    HandlerDeps,
+    'assetRegistry' | 'assets' | 'pictures' | 'grants' | 'content' | 'dataPlane' | 'now'
+  >,
   ref: DocRef,
   actor: string,
   prepared: PreparedImport,
@@ -272,7 +313,7 @@ export async function attachAndStore(
   const src = prepared.source;
   const id = uuid7();
   const brought = await registerImportedAssets(
-    { registry, assets: d.assets },
+    { registry, assets: d.assets, pictures: d.pictures },
     ref,
     prepared.imported,
     actor,

@@ -10,19 +10,26 @@
  */
 import {
   ASSET_JOB_KIND,
+  assetKeys,
   AssetJobError,
   assetUrlExpiry,
   checkDeclaredUpload,
   createAssetWorker,
+  GIF,
+  JPEG,
+  normaliseMime,
+  PNG,
   ObjectTooLarge,
   presignQuarantineUpload,
   S3AssetObjects,
   signAssetUrl,
+  SVG,
   type AssetObjects,
   type AssetOutcome,
   type AssetUrlKeys,
   type Sandbox,
 } from '@docedit/asset-worker';
+import type { PictureProcessor } from '../control-plane/import-port.ts';
 import { settleAsset, type AssetRegistry, type AssetUploads } from '../control-plane/assets.ts';
 import type { NotifyFn } from '../control-plane/exports.ts';
 import { JobFailure, type JobHandler } from '../control-plane/jobs/runner.ts';
@@ -169,5 +176,53 @@ export function assetJobHandler(opts: {
       >);
     opts.stored?.(outcome.tenant, outcome.bytes);
     return { ...outcome } as unknown as Record<string, unknown>;
+  };
+}
+
+/**
+ * The asset worker as the import job uses it for the pictures of a Word file (EXP-101 criterion 3):
+ * the bytes are put in quarantine under the asset's identifier, the worker decodes them in its
+ * sandbox and stores the re-encoded file under its hash, and the outcome is returned for the caller
+ * to settle on the registry row. A type the worker does not take as a picture (Windows metafiles,
+ * for instance) gives `null`, and the caller keeps the bytes as before.
+ */
+export function importPictureProcessor(opts: {
+  objects: AssetObjects;
+  sandbox: Sandbox;
+  allowUnsandboxed?: boolean;
+}): PictureProcessor {
+  const worker = createAssetWorker({
+    objects: opts.objects,
+    sandbox: opts.sandbox,
+    ...(opts.allowUnsandboxed ? { allowUnsandboxed: true } : {}),
+  });
+  const pictureTypes = new Set<string>([PNG, JPEG, GIF, SVG]);
+  return async (tenant, asset, bytes, mime) => {
+    const type = normaliseMime(mime);
+    if (!pictureTypes.has(type)) return null;
+    await opts.objects.put(assetKeys.quarantine(tenant, asset), bytes, { contentType: type });
+    let outcome: AssetOutcome;
+    try {
+      outcome = await worker.handle({
+        tenant,
+        id: asset,
+        payload: { asset, mime: type, size: bytes.length },
+      });
+    } catch (e) {
+      if (e instanceof AssetJobError) throw new JobFailure(e.code, e.message, e.retry);
+      throw e;
+    }
+    if (!outcome.ok) return { ok: false, message: outcome.message };
+    return {
+      ok: true,
+      sha256: outcome.sha256,
+      bytes: outcome.bytes,
+      contentType: outcome.contentType,
+      objectKey: outcome.objectKey,
+      width: outcome.width,
+      height: outcome.height,
+      frames: outcome.frames,
+      renditions: outcome.renditions,
+    };
   };
 }
