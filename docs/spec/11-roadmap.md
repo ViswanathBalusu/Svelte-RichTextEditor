@@ -82,7 +82,7 @@ If the gate says yes, in this order: the layout engine (own or from S7) with the
 | DOCX | Moved to phase 2 on 2026-11-06: the DOCX writer, fields and regions included, ships with import |
 | Workflow | Long-term validation and time-stamp renewal; templates and bulk send; routing rules; the signature provider adapter |
 | Reach | Light editing on mobile browsers; right-to-left and complex-script content; sandboxed extensions; classification labels; discovery export; an administration console |
-| Ecosystem | The authority service as a product; the local backend; the published conformance kit. A second server implementation, and with it the freeze of protocol 1.0, is scheduled when a partner wants to build one |
+| Ecosystem | The authority service as a product; the local backend; the published conformance kit. A second server implementation, and with it the freeze of protocol 1.0, is not scheduled (owner decision 237, 2026-11-26: the roadmap records it, and the freeze stays open); it is scheduled when a partner wants to build one |
 
 Stage 3 of the backend is driven by demand and is not scheduled.
 

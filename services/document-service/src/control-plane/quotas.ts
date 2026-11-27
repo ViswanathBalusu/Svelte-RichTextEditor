@@ -59,6 +59,14 @@ export class MemoryQuotaStore {
     return v;
   }
 
+  /** Clears one dimension of a tenant's quotas: it reads as `null` again, no limit (owner decision 267). */
+  clear(tenant: string, dimension: unknown): void {
+    if (!this.#tenants(tenant)) throw new QuotaError('no such tenant');
+    if (!isQuotaDimension(dimension)) throw new QuotaError('the quota dimension is not known');
+    const { [dimension]: _removed, ...rest } = this.#values.get(tenant) ?? {};
+    this.#values.set(tenant, rest);
+  }
+
   /** The quotas of a tenant; every dimension is present and `null` when no value is set. */
   get(tenant: string): QuotaSettings {
     const current = this.#values.get(tenant) ?? {};

@@ -8,8 +8,8 @@
  * retention policies are (UX-080). The audit is therefore not atomic with the change yet.
  *
  * Decisions, proposed in docs/adr/0330-lane-V-UX-076-090.md, section 6 (the spec gives no contract
- * for the values): the route accepts whole numbers only, although the stores accept any finite
- * number of zero or more; a `PUT` sets the dimensions it names and keeps the others; the entity tag
+ * for the values): the route accepts whole numbers or null only, although the stores accept any
+ * finite number of zero or more (null clears a limit; owner decision 267); a `PUT` sets the dimensions it names and keeps the others; the entity tag
  * is a hash of the settings, so `If-Match` names the settings that were read.
  */
 import { createHash } from 'node:crypto';
@@ -29,6 +29,8 @@ import {
 export interface QuotaAdminStore {
   get(tenant: string): Promise<QuotaSettings> | QuotaSettings;
   set(tenant: string, dimension: QuotaDimension, value: number): Promise<number> | number;
+  /** Clears a dimension: it reads as null again (owner decision 267). */
+  clear(tenant: string, dimension: QuotaDimension): Promise<void> | void;
 }
 
 export interface QuotaAdminDeps {
@@ -52,14 +54,15 @@ export function quotaEtag(settings: QuotaSettings): string {
  * Checks a request body: an object whose keys are quota dimensions and whose values are whole
  * numbers of zero or more. Any other key or value is refused with `validation_failed`.
  */
-export function checkQuotaUpdate(value: unknown): Partial<Record<QuotaDimension, number>> {
+export function checkQuotaUpdate(value: unknown): Partial<Record<QuotaDimension, number | null>> {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
     fail('the quota values are an object');
-  const out: Partial<Record<QuotaDimension, number>> = {};
+  const out: Partial<Record<QuotaDimension, number | null>> = {};
   for (const [key, v] of Object.entries(value)) {
     if (!isQuotaDimension(key)) fail(`the quota dimension ${key} is not known`);
-    if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < 0)
-      fail(`${key} is a whole number, 0 or more`);
+    // null clears the limit: no limit, as the schema allows (owner decision 267).
+    if (v !== null && (typeof v !== 'number' || !Number.isSafeInteger(v) || v < 0))
+      fail(`${key} is a whole number, 0 or more, or null`);
     out[key] = v;
   }
   return out;
@@ -175,7 +178,8 @@ export class QuotaAdminService {
     try {
       for (const d of QUOTA_DIMENSIONS) {
         const v = values[d];
-        if (v !== undefined) await this.#store.set(tenant, d, v);
+        if (v === null) await this.#store.clear(tenant, d);
+        else if (v !== undefined) await this.#store.set(tenant, d, v);
       }
     } catch (e) {
       if (e instanceof QuotaError) throw new ApiError('not_found', e.message);
