@@ -136,6 +136,7 @@ export function composeWebhooks(input: ComposeWebhooksInput): ComposedWebhooks {
       connector: overrides.egress?.connector ?? nodeConnector(settings.timeoutMs),
       maxRedirects: settings.maxRedirects,
       ...(settings.testAllow ? { allow: settings.testAllow } : {}),
+      ...(settings.demoAllow ? { allowEndpoints: settings.demoAllow } : {}),
     });
   const dispatcher = new WebhookDispatcher({
     subscriptions: store,

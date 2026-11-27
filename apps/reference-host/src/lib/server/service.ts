@@ -45,6 +45,14 @@ export interface ServiceClientOptions {
   fetch?: typeof fetch;
 }
 
+/** What `/webhooks` returns about a subscription (never its secret, except once at creation). */
+export interface WebhookSubscription {
+  id: string;
+  url: string;
+  events: string[];
+  activeSecrets: number;
+}
+
 /** 05 §6.1: list resources return at most 200 items per page. */
 export const MAX_PAGE = 200;
 
@@ -207,6 +215,30 @@ export class ServiceClient {
         ...(actor !== undefined ? { actor } : {}),
       })
     ).body;
+  }
+
+  /** `GET /webhooks`: the tenant's subscriptions, without secrets (05 §6.2; service credential). */
+  async listWebhooks(): Promise<WebhookSubscription[]> {
+    return (await this.#call<Page<WebhookSubscription>>('GET', '/webhooks')).body.items;
+  }
+
+  /** `POST /webhooks`: the subscription and its secret, which the service shows only here. */
+  async createWebhook(request: {
+    url: string;
+    events: readonly string[];
+  }): Promise<WebhookSubscription & { secret: string }> {
+    return (
+      await this.#call<WebhookSubscription & { secret: string }>('POST', '/webhooks', {
+        body: request,
+      })
+    ).body;
+  }
+
+  /** `DELETE /webhooks/{id}` (the registrar removes what it replaces, so `If-Match: *`). */
+  async deleteWebhook(id: string): Promise<void> {
+    await this.#call('DELETE', `/webhooks/${encodeURIComponent(id)}`, {
+      headers: { 'If-Match': '*' },
+    });
   }
 
   /** `GET /templates`: the tenant's templates, oldest first (FRW-062). */
