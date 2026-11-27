@@ -25,7 +25,7 @@ Every feature is in one of three tiers. The table is the contract against scope 
 | Area | Contents |
 |---|---|
 | Header | Document title slot, save state, mode switcher, presence avatars, buttons for comments, catch-up and share. The host can hide it and draw its own |
-| Toolbar | Commands grouped by task (for example formatting, inserting, page layout, references, review, view), with contextual groups for tables, pictures, headers and fields. A compact single-row layout and a full layout, both generated from the command registry. The grouping and appearance are this product's own |
+| Toolbar | Commands grouped by task (for example formatting, inserting, page layout, references, review, view), with contextual groups for tables, pictures, headers and fields. A compact single-row layout and a full layout, both generated from the command registry, and a proposed ribbon layout of tabs with labelled groups (ADR 0490). The grouping and appearance are this product's own |
 | Panes | Navigation, styles, comments, review, history, permissions, fields, accessibility checker, assistant, PDF preview, recovered edits |
 | Status bar | Page and word counts, language, classification label, connection and save state, zoom |
 | Modes and views | Modes: `edit`, `review` (suggestions on), `view`, `fill` (12). Views: `web` (continuous layout), `read` (real pages, read-only), `print` (editable pages, phase 3). See 02, section 7 |

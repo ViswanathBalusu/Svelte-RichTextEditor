@@ -6,6 +6,9 @@
 # fonts of the machine, and the fonts of a hosted runner are not those of the container. The spec
 # skips on Linux unless DOCEDIT_PLAYWRIGHT_CONTAINER=1, which this script sets.
 #
+# The ribbon layout's spec (ux-064-ribbon-visual.spec.ts, ADR 0490) runs here too, with its own
+# baselines. To record only those, add `--update-snapshots --grep ribbon`.
+#
 # Usage (from the repository root, the image is pinned by digest in .github/workflows/ci.yml):
 #   podman run --rm --ipc=host -v "$PWD:/work" -w /work <image> sh scripts/ci/visual-in-container.sh
 # To record new baselines, add `--update-snapshots` after the script name: the arguments go to
@@ -21,4 +24,4 @@ pnpm install --frozen-lockfile
 export CI=1
 export DOCEDIT_PLAYWRIGHT_CONTAINER=1
 export DOCEDIT_BROWSERS=chromium,firefox,webkit
-exec pnpm exec playwright test -c packages/ui/playwright.config.ts ux-064-rtl-visual "$@"
+exec pnpm exec playwright test -c packages/ui/playwright.config.ts ux-064-rtl-visual ux-064-ribbon-visual "$@"
