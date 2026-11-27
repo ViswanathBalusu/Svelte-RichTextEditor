@@ -17,7 +17,10 @@ import { leaderCss, nextTabStop, tabWidth, TAB_DRAWN, type TabLayout } from './t
 import { EditorCore } from './web.ts';
 
 const isBrowser = typeof document !== 'undefined';
-const near144 = (x: number): boolean => Math.abs(x - 144) <= 1.5;
+// 2.5 inches, 240 CSS pixels. The first body paragraph is a heading at 32 px, and AB with CDEF in a wide
+// serif (DejaVu Serif on Linux) take 152 px, so a right stop at 1.5 inches (144 px) had no room there.
+const STOP_PX = 240;
+const nearStop = (x: number): boolean => Math.abs(x - STOP_PX) <= 1.5;
 
 const layout = (over: Partial<TabLayout> = {}): TabLayout => ({
   stops: [],
@@ -177,13 +180,13 @@ describe.skipIf(!isBrowser)('the body view draws tabs at the stops (FE-129 crite
     }
   }
 
-  const STOP = 2160; // 1.5 inches, 144 CSS pixels
+  const STOP = STOP_PX * 15; // twips
 
   it('starts the text after a tab at a left stop and draws its leader', async () => {
     await withTab('AB', 'CD', [{ position: STOP, align: 'left', leader: 'dot' }], async (host) => {
       await vi.waitFor(() => expect(find(host).tab.getAttribute(TAB_DRAWN)).toBe('explicit'));
       const { p, tab, origin } = find(host);
-      expect(edges(p, 'CD').left - origin).toSatisfy(near144);
+      expect(edges(p, 'CD').left - origin).toSatisfy(nearStop);
       expect(tab.style.display).toBe('inline-block');
       expect(getComputedStyle(tab).backgroundImage).toContain('radial-gradient');
     });
@@ -196,8 +199,11 @@ describe.skipIf(!isBrowser)('the body view draws tabs at the stops (FE-129 crite
       [{ position: STOP, align: 'right', leader: 'none' }],
       async (host) => {
         await vi.waitFor(() => expect(find(host).tab.hasAttribute(TAB_DRAWN)).toBe(true));
-        const { p, origin } = find(host);
-        expect(edges(p, 'CDEF').right - origin).toSatisfy(near144);
+        // The tab is drawn again when the fonts have loaded or the width settles, so the edge is waited for.
+        await vi.waitFor(() => {
+          const { p, origin } = find(host);
+          expect(edges(p, 'CDEF').right - origin).toSatisfy(nearStop);
+        });
         expect(getComputedStyle(find(host).tab).backgroundImage).toBe('none');
       },
     );
@@ -207,9 +213,11 @@ describe.skipIf(!isBrowser)('the body view draws tabs at the stops (FE-129 crite
       [{ position: STOP, align: 'center', leader: 'none' }],
       async (host) => {
         await vi.waitFor(() => expect(find(host).tab.hasAttribute(TAB_DRAWN)).toBe(true));
-        const { p, origin } = find(host);
-        const { left, right } = edges(p, 'CDEF');
-        expect((left + right) / 2 - origin).toSatisfy(near144);
+        await vi.waitFor(() => {
+          const { p, origin } = find(host);
+          const { left, right } = edges(p, 'CDEF');
+          expect((left + right) / 2 - origin).toSatisfy(nearStop);
+        });
       },
     );
   });
@@ -221,8 +229,10 @@ describe.skipIf(!isBrowser)('the body view draws tabs at the stops (FE-129 crite
       [{ position: STOP, align: 'decimal', leader: 'none' }],
       async (host) => {
         await vi.waitFor(() => expect(find(host).tab.hasAttribute(TAB_DRAWN)).toBe(true));
-        const { p, origin } = find(host);
-        expect(edges(p, '12').right - origin).toSatisfy(near144);
+        await vi.waitFor(() => {
+          const { p, origin } = find(host);
+          expect(edges(p, '12').right - origin).toSatisfy(nearStop);
+        });
       },
     );
   });

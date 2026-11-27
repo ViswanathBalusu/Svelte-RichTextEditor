@@ -291,9 +291,12 @@ describe.skipIf(!isBrowser)('keyboard only (FRW-079 criterion 5)', () => {
         KIND_IDS.checkbox,
         KIND_IDS.choice,
       ];
-      // A date control has parts (day, month, year) that Tab visits before it leaves the control.
+      // A date control has parts (day, month, year, and in some engines a clear and a picker button)
+      // that Tab visits before it leaves the control, so the bound is wider than the parts of one
+      // engine: the hosted WebKit run did not reach the checkbox in 8 presses (the same test passes in
+      // a Playwright 1.65 container).
       const press = async (shift: boolean, want: Element | null) => {
-        for (let n = 0; n < 8; n++) {
+        for (let n = 0; n < 16; n++) {
           await m.user.tab({ shift });
           if (document.activeElement === want) return true;
         }

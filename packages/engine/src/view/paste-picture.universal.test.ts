@@ -52,6 +52,9 @@ function paste(surface: HTMLElement, data: DataTransfer): boolean {
     bubbles: true,
     cancelable: true,
   });
+  // Firefox copies the data of a synthetic event into a new DataTransfer and drops its files (the
+  // event then holds none), so the data is put on the event itself.
+  Object.defineProperty(event, 'clipboardData', { value: data });
   surface.dispatchEvent(event);
   return event.defaultPrevented;
 }
