@@ -44,6 +44,8 @@ import {
 } from './assets.ts';
 import { NodeHasher } from './hash.ts';
 import { NumberingImport } from './import-numbering.ts';
+import { importSources } from './import-sources.ts';
+import { parseCitationInstruction, residualTree } from './writer-citations.ts';
 import { payloadDigests } from './integrity.ts';
 import { valuesToMarks } from './marks.ts';
 import { pname } from './names.ts';
@@ -669,6 +671,9 @@ class Importer {
   /** The vertical merges of the table being read: row spans, and the cells they absorb (EXP-101). */
   private vMerges: VMergePlan = { spans: new Map(), absorbed: new Set() };
   private preserveUsed = false;
+  /** The source definitions read from the bibliography sources part, and their tags (EXP-122). */
+  private readonly sourceDefs: JsonNode[] = [];
+  private readonly sourceByTag = new Map<string, string>();
   readonly ctx: LensContext;
 
   readonly bytes: Uint8Array;
@@ -794,6 +799,9 @@ class Importer {
       }
     }
 
+    // Sources before the body: a citation refers to one by its tag (EXP-122).
+    this.readSources(mainRels, mainPart);
+
     // Numbering before the styles: a style may be numbered (headings).
     const numberingRel = mainRels.list.find((r) => r.type === REL.numbering && !r.external);
     const numberingPart = numberingRel ? resolveTarget(mainPart, numberingRel.target) : null;
@@ -897,6 +905,7 @@ class Importer {
       ...styleDefs,
       ...this.numberingImport.defs,
       ...pageSetups,
+      ...this.sourceDefs,
     ];
     const envelope: JsonEnvelope = {
       cdm: 1,
@@ -1035,6 +1044,112 @@ class Importer {
     this.sm.nodes[String(node.attrs!['id'])] = target;
     this.pending.push({ node, target });
     return target;
+  }
+
+  /**
+   * The bibliography sources part (a custom XML item with a `b:Sources` root) as source definitions.
+   * Each keeps its place in the part, so the writer can copy an unchanged source and rebuild a
+   * changed one (EXP-122, criteria 2 and 3).
+   */
+  readSources(mainRels: Relationships, mainPart: string): void {
+    for (const r of mainRels.list) {
+      if (r.type !== REL.customXml || r.external) continue;
+      const part = resolveTarget(mainPart, r.target);
+      const bytes = this.read(part);
+      if (!bytes) continue;
+      let read: ReturnType<typeof importSources>;
+      try {
+        read = importSources(this.parse(part, bytes).root, this.preserve);
+      } catch (e) {
+        if (!(e instanceof ImportError)) throw e;
+        continue;
+      }
+      if (!read) continue;
+      for (const s of read.sources) {
+        const id = String(s.node.attrs!['id']);
+        // The tag is Word's name for the source; the identifier is a fresh one (nothing is taken
+        // from the file), and the source map says which tag it stands for.
+        const target: DefSource = { part, start: s.start, end: s.end, hash: '', wordId: s.tag };
+        this.sm.defs[id] = target;
+        this.pending.push({ node: s.node, target });
+        this.sourceDefs.push(s.node);
+        this.sourceByTag.set(s.tag, id);
+        this.count(this.stats.nodes, 'source_def');
+        if (s.node.attrs!['preserved']) {
+          this.count(this.stats.nodesWithPreserved, 'source_def');
+          this.preserveUsed = true;
+        }
+      }
+      for (const why of read.skipped)
+        this.warnings.push(`a source was not imported: ${why}; its citations stay as they were`);
+      if (read.sources.length)
+        this.sm.sources = { part, prefixEnd: read.prefixEnd, suffixStart: read.suffixStart };
+      return;
+    }
+  }
+
+  /**
+   * A citation: a content control holding a `CITATION` field of sources the document defines
+   * (EXP-122, criterion 2). The node keeps the original control as its origin while unedited, and
+   * the switches the model has no place for as preserved text (criterion 3). Anything else stays
+   * a preserved content control.
+   */
+  async citation(sdt: XmlElement, pc: PartCtx, marks: JsonMark[]): Promise<JsonNode | null> {
+    if (!this.sourceByTag.size) return null;
+    const pr = child(sdt, NS.w, 'sdtPr');
+    const content = child(sdt, NS.w, 'sdtContent');
+    if (!pr || !content || !child(pr, NS.w, 'citation')) return null;
+    if (elements(pr).some((k) => k.ns !== NS.w || (k.local !== 'id' && k.local !== 'citation')))
+      return null;
+    let state: 'before' | 'code' | 'result' | 'done' = 'before';
+    let instr = '';
+    let cached = '';
+    for (const run of elements(content)) {
+      if (nameOf(run) !== W_R) return null;
+      for (const c of elements(run)) {
+        const n = nameOf(c);
+        if (n === W_RPR) continue;
+        if (n === w('fldChar')) {
+          const type = attr(c, NS.w, 'fldCharType');
+          if (type === 'begin' && state === 'before') state = 'code';
+          else if (type === 'separate' && state === 'code') state = 'result';
+          else if (type === 'end' && (state === 'code' || state === 'result')) state = 'done';
+          else return null;
+        } else if (n === w('instrText') && state === 'code') instr += textContent(c);
+        else if (n === W_T && state === 'result') cached += textContent(c);
+        else return null;
+      }
+    }
+    if (state !== 'done') return null;
+    const parsed = parseCitationInstruction(instr);
+    if (!parsed || !parsed.tags.every((t) => this.sourceByTag.has(t))) return null;
+    const items = parsed.tags.map((tag) => {
+      const item: Record<string, JsonValue> = { source: this.sourceByTag.get(tag)! };
+      if (parsed.locator !== null) {
+        item['locator'] = parsed.locator;
+        item['label'] = 'page';
+      }
+      return item;
+    });
+    const attrs: Record<string, JsonValue> = { items, mode: parsed.mode };
+    if (cached && cached.length <= 1024) attrs['cached'] = cached;
+    const node: JsonNode = { type: 'citation', attrs };
+    if (this.preserve) {
+      const tree = residualTree(parsed.residual);
+      if (tree) attrs['preserved'] = tree as unknown as JsonValue;
+      const fragment = await this.fragment(
+        { xml: pc.bytes.slice(sdt.start, sdt.end), el: sdt },
+        'citation',
+        pc,
+        'none',
+      );
+      attrs['origin'] = { fragment, hash: await modelledHash(node) };
+      this.preserveUsed = true;
+    } else if (parsed.residual) return null;
+    this.count(this.stats.nodes, 'citation');
+    if (marks.length) this.count(this.stats.markedAtoms, 'citation');
+    if (marks.some((m) => m.type === 'ins' || m.type === 'del')) this.stats.suggestions.atoms++;
+    return withMarks(node, marks);
   }
 
   /** Records a node the importer added without a source element: listed in `synthetic`, hashed in `derived`. */
@@ -1871,6 +1986,13 @@ class Importer {
           'Word regenerates them; dropped only from paragraphs that are edited',
         );
         continue;
+      }
+      if (name === w('sdt')) {
+        const cited = await this.citation(c, pc, marks);
+        if (cited) {
+          out.push(cited);
+          continue;
+        }
       }
       if (!this.preserve) continue;
       out.push(this.smallAtom(c, marks) ?? (await this.fragmentAtom(c, pc, 'none', marks)));

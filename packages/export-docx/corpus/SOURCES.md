@@ -119,6 +119,17 @@ All files were downloaded on 2026-11-06 from the repositories' raw-file URLs at 
 | `tbl-having-tables.docx` | 32,010 | `5e23ecb6ec09b5db` | Microsoft Macintosh Word 14.0000 | tables, stored entries |
 | `txt-font-props.docx` | 37,924 | `a5de256a9cd1598d` | Microsoft Macintosh Word 14.0000 | run formatting, stored entries |
 
+## Made for this repository with Microsoft Word (`word/`)
+
+Two small files made on 2026-11-27 by Microsoft Word 16.0, through COM, on the development machine (EXP-122, lane w2). They hold citations and the bibliography sources part, which no file above has. The text and the sources are invented for the test (no real person, publication or third-party text), so there is no source licence to record; they are part of this repository under its licence. The saved packages were scrubbed: the author and the last modifier in `docProps/core.xml` read "Author", and no part holds the machine's user name (checked by reading every part). Word's own revision identifiers (`w:rsid*`) and content-control identifiers are as Word wrote them.
+
+| File | Bytes | SHA-256 | Generator | Features |
+|---|---|---|---|---|
+| `citations.docx` | 15,380 | `caf6bcc520b2cbf5` | Microsoft Office Word 16.0000 | three citation content controls (`w:sdt` with `w:citation`): one source, two sources with `\m`, author suppressed with `\n`; sources part with two sources (a book, a journal article) and the style properties `SelectedStyle`, `StyleName` and `Version`; a `BIBLIOGRAPHY` field over several paragraphs |
+| `citations-rich.docx` | 15,264 | `c74b1d125f6f9377` | Microsoft Office Word 16.0000 | three citation controls with the page switch `\p`, another language `\l 2057` and `\y`, one of them bold; sources part with a book section with a middle name, an editor and a month and day, a report with a corporate author and a URL, and a source of the type `Art`, which the writer has no type for |
+
+Made by `scripts/word-citations/make-citations.ps1` and `make-citations-rich.ps1` (they call `Document.Bibliography.Sources.Add` and `Fields.Add`), then `scrub-author.ps1`. Word writes new revision and content-control identifiers each run, so a new run gives files that differ from these in those values only. To add a file with another feature, make it the same way and scrub the author.
+
 ## Candidates left out
 
 Downloaded and tested (they pass R0 too), but not committed:

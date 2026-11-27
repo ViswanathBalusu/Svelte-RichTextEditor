@@ -69,6 +69,14 @@ import {
   mergeContainer,
 } from './props.ts';
 import { sharedTrees } from './share.ts';
+import {
+  CITATION_CONTROL_BASE,
+  citationControl,
+  citationInstruction,
+  fieldRuns,
+  residualOf,
+  sourceElementXml,
+} from './writer-citations.ts';
 import type { NodeSource, SourceMap } from './source-map.ts';
 import {
   NamespaceWriter,
@@ -197,6 +205,8 @@ class Writer {
   readonly env: JsonEnvelope;
   readonly sm: SourceMap;
   readonly assets: AssetSource;
+  /** The identifier of the last content control written round a citation (EXP-122). */
+  private citationControls = 0;
   /** Nodes regenerated even when unchanged, with their ancestors (the regeneration stress test). */
   private readonly force = new Set<string>();
 
@@ -291,6 +301,7 @@ class Writer {
     await this.mainPart(body);
     for (const story of this.env.doc.content?.filter((n) => n.type === 'story') ?? [])
       await this.story(story);
+    await this.sourcesPart();
     this.writeNewRelationships();
     for (const [part, bytes] of [...this.changed])
       if (!part.endsWith('.rels') && part !== '[Content_Types].xml')
@@ -302,7 +313,9 @@ class Writer {
   /** The prototype writes the body and the stories; it refuses edits to definitions it cannot patch yet. */
   async checkDefinitions(): Promise<void> {
     for (const [id, def] of this.defs) {
-      if (def.type === 'page_setup' || def.type === 'preserved_def') continue;
+      // Sources are written into their own part by sourcesPart().
+      if (def.type === 'page_setup' || def.type === 'preserved_def' || def.type === 'source_def')
+        continue;
       const src = this.sm.defs[id];
       if (!src) {
         if (def.type === 'style_def' && !this.synthetic.has(id))
@@ -446,6 +459,46 @@ class Writer {
 
   setPart(part: string, original: Uint8Array, bytes: Uint8Array): void {
     if (!sameBytes(original, bytes)) this.changed.set(part, bytes);
+  }
+
+  /** The tag Word cites a source by: the one the file had, or the identifier for a source made here. */
+  tagOf(id: string): string {
+    return this.sm.defs[id]?.wordId ?? id;
+  }
+
+  /**
+   * The bibliography sources part (EXP-122, criteria 2 and 3). While no source was added, removed
+   * or edited the part is left as it was. Otherwise it is rebuilt around the original root, which
+   * keeps `SelectedStyle`, `StyleName` and `Version`: an unchanged source is copied from the
+   * original bytes, a changed or new one is written from the model with the elements the model
+   * has no place for (its `preserved` tree).
+   */
+  async sourcesPart(): Promise<void> {
+    const info = this.sm.sources;
+    if (!info) return;
+    const sources = [...this.defs.values()].filter((d) => d.type === 'source_def');
+    const imported = Object.values(this.sm.defs).filter((d) => d.part === info.part).length;
+    let changed = sources.length !== imported;
+    const kept = new Map<JsonNode, { start: number; end: number }>();
+    for (const s of sources) {
+      const src = this.sm.defs[String(s.attrs?.['id'])];
+      if (src && src.part === info.part && (await this.unchanged(s, src)))
+        kept.set(s, { start: src.start, end: src.end });
+      else changed = true;
+    }
+    if (!changed) return;
+    const original = this.read(info.part);
+    const chunks: Chunk[] = [original.subarray(0, info.prefixEnd)];
+    for (const s of sources) {
+      const range = kept.get(s);
+      chunks.push(
+        range
+          ? original.subarray(range.start, range.end)
+          : sourceElementXml(s, this.preservedOf(s), this.tagOf(String(s.attrs?.['id']))),
+      );
+    }
+    chunks.push(original.subarray(info.suffixStart));
+    this.setPart(info.part, original, join(chunks));
   }
 
   // -------------------------------------------------------------------------------------------
@@ -861,6 +914,7 @@ class Writer {
       }
       if (node.type === 'image') out.push(await this.image(node, po, local));
       else if (node.type === 'preserved_inline') out.push(this.preservedInline(node, po, local));
+      else if (node.type === 'citation') out.push(await this.citation(node, po, local));
       else throw new ExportError(`the patching writer cannot write a ${node.type} inline node yet`);
       i++;
     }
@@ -926,6 +980,34 @@ class Writer {
     return f.meta.wrap === 'run'
       ? `<${po.wp}:r>${this.rPr(node.marks, po, local)}${xml}</${po.wp}:r>`
       : xml;
+  }
+
+  /**
+   * A citation: its original content control while unedited; once edited, a new control with the
+   * field written from the model, keeping the switches the model has no place for (EXP-122).
+   */
+  async citation(node: JsonNode, po: PartOut, local: Map<string, string>): Promise<string> {
+    const origin = this.originOf(node);
+    if (origin && (await modelledHash(node)) === origin.hash)
+      return this.placeFragment(origin.fragment, po, node);
+    const a = node.attrs ?? {};
+    const items = (
+      (a['items'] ?? []) as Array<{ source?: string; locator?: string; label?: string }>
+    ).map((i) => (typeof i.source === 'string' ? { ...i, source: this.tagOf(i.source) } : i));
+    const mode = typeof a['mode'] === 'string' ? a['mode'] : 'normal';
+    const text =
+      typeof a['cached'] === 'string' ? a['cached'] : `[${items.map((x) => x.source).join('; ')}]`;
+    const rPr = this.rPr(node.marks, po, local);
+    const instr = citationInstruction(items, mode, residualOf(this.preservedOf(node)));
+    if (!instr) {
+      this.warnings.push('a citation with no source Word can cite is written as its text');
+      return `<${po.wp}:r>${rPr}<${po.wp}:t xml:space="preserve">${escapeText(text)}</${po.wp}:t></${po.wp}:r>`;
+    }
+    return citationControl(
+      CITATION_CONTROL_BASE + ++this.citationControls,
+      fieldRuns(instr, text, rPr, po.wp),
+      po.wp,
+    );
   }
 
   fallbackRun(node: JsonNode, po: PartOut, local: Map<string, string>): string {

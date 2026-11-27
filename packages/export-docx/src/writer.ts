@@ -91,8 +91,11 @@ import {
 } from './writer-comments.ts';
 import {
   BIBLIOGRAPHY_NS,
+  CITATION_CONTROL_BASE,
+  citationControl,
   citationInstruction,
   fieldRuns,
+  residualOf,
   sourcesItemId,
   sourcesPart,
 } from './writer-citations.ts';
@@ -363,6 +366,8 @@ class DirectWriter {
   private readonly slotOverrides = new Map<string, Record<string, string>>();
   /** Identifiers of the source definitions, so a citation of an undefined source is reported (EXP-122). */
   private readonly sourceIds = new Set<string>();
+  /** The identifier of the last content control written round a citation (`w:sdt`). */
+  private citationControls = 0;
   private nextId = 1;
   private nextFootnote = 1;
   private nextDocPr = 1;
@@ -1620,7 +1625,11 @@ class DirectWriter {
             : `[${items.map((x) => x.source).join('; ')}]`;
         const instr = inDel
           ? null
-          : citationInstruction(items, typeof a['mode'] === 'string' ? a['mode'] : 'normal');
+          : citationInstruction(
+              items,
+              typeof a['mode'] === 'string' ? a['mode'] : 'normal',
+              residualOf(a['preserved']),
+            );
         if (!instr) {
           if (!inDel)
             this.warn('a citation with no source Word can cite is written as its text (EXP-122)');
@@ -1629,7 +1638,10 @@ class DirectWriter {
         for (const x of items)
           if (typeof x.source === 'string' && !this.sourceIds.has(x.source))
             this.warn('a citation names a source the document does not define (EXP-122)');
-        return fieldRuns(instr, xmlSafe(text).text, rPr());
+        return citationControl(
+          CITATION_CONTROL_BASE + ++this.citationControls,
+          fieldRuns(instr, xmlSafe(text).text, rPr()),
+        );
       }
       case 'form_field':
         return this.formFieldXml(node, rPr());
