@@ -47,6 +47,7 @@ import {
   type DocumentStats,
   type EditorMode,
   type ExportService,
+  type HistoryPort,
   type LeasesService,
   type RegionSummary,
   type ResolveUsers,
@@ -65,6 +66,7 @@ import { attachWithSwitches, shellWithSwitches, switchedModes } from './feature-
 import type { Connection, StatusDetail } from './events.ts';
 import { fillActionsService } from './fill-actions.ts';
 import { completionService } from './completion.ts';
+import type { HistorySource } from './history-service.ts';
 import { threadsService, type ThreadsSource } from './threads.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
@@ -138,6 +140,11 @@ export interface MountOptions {
    * no comment command.
    */
   threads?: ThreadsSource;
+  /**
+   * The backend's history port and the document, when the backend has it and announced the feature
+   * `history` (08 §4; UX-097 criterion 5). Without it the shell has no `history` port and no history pane.
+   */
+  history?: Omit<HistorySource, 'resolveUsers'>;
   /**
    * The ports of the adoption and signing step (FRW-045, FRW-046): the assets port for the image and
    * the fields port for the sign request. Absent: a signature field is not offered for signing.
@@ -407,6 +414,27 @@ const CONNECTION: Readonly<Record<ConnectionState, Connection>> = {
 /** The most ranges one extension holds at once (UX-053). Proposed default; the spec gives no number. */
 const EXTENSION_MAX_RANGES = 64;
 
+/**
+ * The history port the shell gets: the service that reads the list is loaded with the pane's first
+ * request, so the first interactive bundle does not carry it (FE-002 budget).
+ */
+function lazyHistory(
+  source: Omit<HistorySource, 'resolveUsers'>,
+  changes: ReadView<unknown>,
+  resolveUsers: () => ResolveUsers | null,
+): HistoryPort {
+  let service: Promise<HistoryPort> | undefined;
+  const load = (): Promise<HistoryPort> =>
+    (service ??= import('./history-service.ts').then((m) =>
+      m.historyService({ ...source, resolveUsers }),
+    ));
+  return {
+    list: (q) => load().then((p) => p.list(q)),
+    choices: () => load().then((p) => p.choices()),
+    onChange: (listener) => changes.subscribe(listener),
+    resolveUsers: async (ids) => (await resolveUsers()?.(ids)) ?? ids.map(() => null),
+  };
+}
 export function mountEditor(options: MountOptions): MountedEditor {
   const { root, content, config, viewerUrl } = options;
   // The core refuses a document this build cannot read (03 §2): UnsupportedDocumentError carries
@@ -832,6 +860,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(workflowSend ? { workflowSend } : {}),
       ...(participants ? { participants } : {}),
       ...(threads ? { threads } : {}),
+      // The history pane's list (UX-097 criterion 5): the grouped commits, by author.
+      ...(options.history
+        ? { history: lazyHistory(options.history, core.confirmedSeq, options.resolveUsers) }
+        : {}),
       ...(signing ? { signing } : {}),
       // Finishing the participant's part (FRW-048): the fields are checked, then /complete is called.
       ...(fillActions ? { completion: completionService(fillActions) } : {}),

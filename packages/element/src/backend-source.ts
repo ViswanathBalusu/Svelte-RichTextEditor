@@ -35,7 +35,14 @@ const depBackend: EndpointBackendFactory = async (options) => {
     // pasted pictures, the check-out control of the permissions pane); they are negotiated only
     // where the server announces them (SEC-007; PRM-043).
     features: [
-      ...new Set([...DEFAULT_FEATURES, 'exports', 'assets', 'leases', ...capabilities().features]),
+      ...new Set([
+        ...DEFAULT_FEATURES,
+        'exports',
+        'assets',
+        'leases',
+        'history',
+        ...capabilities().features,
+      ]),
     ],
   });
 };
