@@ -188,8 +188,11 @@ describe.skipIf(skip !== null)(
       // the data plane (not walked here).
       // /sealing-keys is in the contract (UX-076) and the reference service does not serve it yet.
       expect([...notServed].sort()).toEqual(['/sealing-keys', '/search', '/webhooks']);
-      // The operator's list of tenants (UX-076) needs an operator credential, which this test does not hold, so it is not walked.
-      expect(needOperator).toEqual(['/tenants']);
+      // The operator's list of tenants (UX-076) needs an operator credential, which this test does not hold:
+      // nnouncedListRoutes leaves it out, so it is not walked and none is left for the loop to skip.
+      expect(routes).not.toContain('/tenants');
+      expect(operatorOnly('/tenants')).toBe(true);
+      expect(needOperator).toEqual([]);
     });
   },
 );

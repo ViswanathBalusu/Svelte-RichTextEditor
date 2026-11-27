@@ -7,7 +7,7 @@
  * cannot run here (EXP-070).
  */
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -15,10 +15,12 @@ import { doc, para, type J } from '../test/docs.ts';
 import { convert } from './index.ts';
 import { classFiles, compileBundle, imageFonts, pdfText, sandboxReady } from '../test/harness.ts';
 
-const ready = (await sandboxReady()).ok;
 const FONT_DIR = fileURLToPath(
   new URL('../../../services/export-worker/out/fonts-local/', import.meta.url),
 );
+// The tenant's face is a copy of one of the image's, kept in out/ (not in the repository): without it
+// there is nothing to alter, as on a checkout that has not copied the faces out of the image.
+const ready = (await sandboxReady()).ok && existsSync(FONT_DIR);
 
 /** The bytes of a local face with its head table's checkSumAdjustment changed. */
 function tenantFace(file: string): { bytes: Uint8Array; sha256: string; name: string } {
