@@ -284,7 +284,7 @@ export class MockDocument implements ChannelHost {
         seq: head,
         incarnation: this.incarnation,
         cdm: 1,
-        requires: [...this.segment.requires],
+        requires: [...this.room.requiresList],
         doc: this.room.document.toJSON(),
       };
     if (!Number.isSafeInteger(seq) || seq < 0 || seq > head)
@@ -615,7 +615,7 @@ export class MockDocument implements ChannelHost {
         classification: this.classification,
         state: this.state,
         cdm: 1,
-        requires: [...this.segment.requires] as DocumentResource['requires'],
+        requires: [...this.room.requiresList] as DocumentResource['requires'],
         createdAt: formatTimestamp(this.hooks.now()),
       },
       etag: `"m${this.metadataRevision}"`,
