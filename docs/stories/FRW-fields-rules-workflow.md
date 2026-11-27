@@ -2237,6 +2237,8 @@ As a maintainer, I want the owner to decide whether comments stay on while a wor
 
 **Notes:** Comments never change the document, so they are technically harmless; some signing processes want a quiet document. Lane w4, 2026-11-18: criterion 3 stays unticked for one part. FRW-029 is updated (its Notes state the decision; its criterion 3 stands as written and tested) and so is 12 §15, but the conformance profile `workflow` does not exist yet (FRW-068 is blocked, see its Notes), so it cannot be updated. Its one new case, a commenter writes a thread and a reply while the workflow is `in_progress` and both are accepted, is recorded in FRW-068's Notes. Tick this criterion when FRW-068 writes the profile with that case.
 
+**Notes (lane w4, 2026-11-27):** Criterion 3 stays unticked, unchanged. FRW-068 is still blocked (its Notes of today list what was checked again), so the profile `workflow` does not exist and cannot hold the case. Decision 131 is applied and the FRW-029 half is done and tested.
+
 **Notes (lane w4, 2026-11-26):** Criterion 3 stays unticked. FRW-068 is still blocked (its Notes of today list why: the kit cannot act as a participant, and nothing can make a workflow expire from outside), so the profile `workflow` does not exist and cannot hold the case. The FRW-029 half is done and tested. Decision 131 is the only decision this story waited on, and it is applied.
 
 ### FRW-086 Decide how a role writes a long formatted answer in a locked document
