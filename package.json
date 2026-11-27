@@ -18,7 +18,7 @@
     "format": "prettier --write .",
     "deps:check": "depcruise packages services apps --config .dependency-cruiser.cjs",
     "sync": "pnpm --filter @docedit/reference-host exec svelte-kit sync",
-    "test": "pnpm sync && vitest run --project node",
+    "test": "pnpm sync && vitest run --project node --project measure",
     "test:browsers": "vitest run --project browser",
     "test:all": "vitest run",
     "test:e2e": "playwright test",
