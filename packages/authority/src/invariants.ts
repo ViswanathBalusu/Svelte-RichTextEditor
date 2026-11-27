@@ -10,7 +10,12 @@
  * restores the copy's identifier and then joins the copy away), and a copy that receives an
  * identifier of its own leaves the original holding the old one (a split).
  */
-import { validateDoc, type ValidationContext, type Violation } from '@docedit/model/validate';
+import {
+  type CommitValidator,
+  validateDoc,
+  type ValidationContext,
+  type Violation,
+} from '@docedit/model/validate';
 import type { Node } from 'prosemirror-model';
 import { AttrStep, Mapping, ReplaceAroundStep, type Step } from 'prosemirror-transform';
 import { type Result, fail, ok } from './codes.ts';
@@ -25,6 +30,11 @@ export interface InvariantContext {
   mathGate?: ValidationContext['mathGate'];
   /** The model definition the document is checked against; CDM 1 when absent. */
   def?: ValidationContext['def'];
+  /**
+   * The room's incremental validator (ADR 0422; SYN-040): it answers what `validateDoc` answers for
+   * the result, from the nodes the commit changed. Absent: the whole document is validated.
+   */
+  validator?: CommitValidator;
 }
 
 export interface InvariantOutcome {
@@ -170,11 +180,14 @@ export function checkInvariants(
     // Only LaTeX the document did not hold before is gated (09 §6.3; CDM-030): a commit that
     // touches no formula does not call the gate, and a formula stored earlier does not make every
     // later commit to the document fail.
-    ctxV.previous = formulasOf(before);
+    // The validator reads the formulas of the document before itself.
+    if (!ctx.validator) ctxV.previous = formulasOf(before);
   }
   // The rule half of I14 (12 §3.6; FRW-019), through the model's registration point (CDM-013).
   ctxV.invariants = [RULE_INVARIANTS];
-  const result = validateDoc(after, ctx.requires, ctxV);
+  const result = ctx.validator
+    ? ctx.validator.validate(before, after, ctx.requires, ctxV)
+    : validateDoc(after, ctx.requires, ctxV);
   if (!result.valid) {
     const v = result.violations;
     // A wrongly typed field value is `field_invalid`, so the client shows the validation message (12 §4.2 P7).

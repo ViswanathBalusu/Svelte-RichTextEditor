@@ -47,6 +47,8 @@ export const CAPABILITIES = [
 ] as const;
 export const DOC_ROLES = ['viewer', 'commenter', 'suggester', 'editor', 'owner', 'filler'] as const;
 export const REGION_ROLES = ['viewer', 'commenter', 'suggester', 'editor'] as const;
+/** What a scope may hold: the capabilities, and `structure.add` on `defs` for `defs.add` (ADR 0424; PRM-070). */
+export const SCOPE_CAPABILITIES = [...CAPABILITIES, 'structure.add'] as const;
 /** The operations of `structure` a region grant may list (ADR 0424); the authority's table agrees (a test). */
 export const GRANT_STRUCTURE_OPERATIONS = ['region.retitle', 'defs.add'] as const;
 export const RESTRICTIONS = ['no-export', 'no-copy', 'no-print'] as const;
@@ -164,6 +166,17 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
     ),
   ),
   named('Capabilities', arr(ref('Capability'), { unique: true, doc: 'A set of capabilities.' })),
+  named(
+    'ScopeCapability',
+    enm(SCOPE_CAPABILITIES, {
+      doc: 'A capability held in one scope: a capability of 07 §1, or `structure.add` on the scope `defs` (a grant that lists `defs.add`; ADR 0424).',
+      spec: '07 §4',
+    }),
+  ),
+  named(
+    'ScopeCapabilities',
+    arr(ref('ScopeCapability'), { unique: true, doc: 'A set of capabilities held in one scope.' }),
+  ),
 
   // --- Permissions (05 §5.5) --------------------------------------------------------------
   named(
@@ -211,8 +224,8 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
           'Document-level capabilities, including `structure` and `manage`.',
         ),
         scopes: req(
-          map(ref('Capabilities'), { keys: scope() }),
-          'Capabilities per scope. Lists every region of the document; a region not listed is not editable until an access with `asOfSeq` at or after the commit that created it arrives.',
+          map(ref('ScopeCapabilities'), { keys: scope() }),
+          'Capabilities per scope. A region scope holds `structure` where a grant lists `region.retitle`; `defs` holds `structure.add` where one lists `defs.add` (ADR 0424). Lists every region of the document; a region not listed is not editable until an access with `asOfSeq` at or after the commit that created it arrives.',
           { gaps: ['G43'], decisions: ['D11'] },
         ),
         leases: req(map(ref('LeaseInfo'), { keys: scope() }), 'Leases held, by region scope.', {

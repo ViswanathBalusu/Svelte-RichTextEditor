@@ -547,6 +547,8 @@ export const EN_GB_CORE = {
   },
   'styles.why.built-in': 'A built-in style cannot be renamed or deleted.',
   'styles.why.in-use': 'This style is in use, so it cannot be deleted.',
+  'styles.why.addOnly':
+    'You may add a style. Changing or deleting a style needs the right to change the structure of the document.',
   'styles.why.duplicate-name': 'Another style of this kind has that name.',
   'styles.why.bad-name': 'Give the style a name.',
   'styles.why.bad-based-on':
