@@ -6,8 +6,8 @@
  * touched by the ribbon.
  *
  * Baselines are recorded in the Playwright container, as those of the right-to-left spec are
- * (scripts/ci/visual-in-container.sh, with `--update-snapshots --grep ribbon`); none for Windows or
- * macOS yet. On a platform or browser without a stored baseline the test is skipped with that reason
+ * (scripts/ci/visual-in-container.sh, with `--update-snapshots --grep ribbon`; Playwright v1.65.0, Podman,
+ * 2026-11-27); none for Windows or macOS. On a platform or browser without a stored baseline the test is skipped with that reason
  * rather than failing, unless snapshots are being recorded. On Linux it runs only in the container,
  * whose fonts the baselines depend on (`DOCEDIT_PLAYWRIGHT_CONTAINER=1`).
  *
