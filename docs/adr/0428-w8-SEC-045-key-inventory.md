@@ -1,6 +1,6 @@
 # 0428. Counter and stream keys that hold no tenant
 
-**Status:** proposed. Written by lane w8, 2026-11-26, for SEC-045 criterion 5. It is a decision for the owner; nothing here is applied.
+**Status:** accepted (owner decision 268, `docs/owner-decisions-2026-11-26.md`: both kinds of key are accepted as stated exceptions, written into the spec and pinned in a test). Option A applies. The exceptions are written into `docs/spec/10-security.md` section 3.7 and pinned in `tests/security/test/sec-045-w8-key-inventory.test.ts`. Written by lane w8, 2026-11-26, for SEC-045 criterion 5.
 
 ## Context
 
