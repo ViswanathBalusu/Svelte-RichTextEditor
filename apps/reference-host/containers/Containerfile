@@ -15,8 +15,9 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
-# pnpm at the version of package.json's `packageManager`, through Corepack.
-RUN corepack enable
+# pnpm at the version of package.json's `packageManager`; the Corepack of Node.js 22.18 cannot run it
+# (the same line as services/authority-service/Containerfile).
+RUN npm install --global pnpm@12.18.0
 COPY . .
 RUN pnpm install --frozen-lockfile \
   && pnpm --filter @docedit/element build \

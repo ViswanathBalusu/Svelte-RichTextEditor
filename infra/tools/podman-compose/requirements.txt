@@ -1,0 +1,10 @@
+# Compose provider for `podman compose` (owner approval of 2026-11-27: podman-compose from PyPI, pinned, hash checked).
+# Source: https://pypi.org/project/podman-compose/1.6.0/ (GPL-2.0-only; a tool run by developers and CI, not shipped or linked).
+# Hashes are of the files fetched on 2026-11-27: podman_compose-1.6.0-py3-none-any.whl (53722 bytes), python_dotenv-1.2.4-py3-none-any.whl
+# (23266 bytes), pyyaml-6.0.4 for CPython 3.11 on win_amd64 (161819 bytes) and for CPython 3.14 manylinux x86_64 (819491 bytes). Add the
+# hash of another platform's wheel here before installing there.
+# Install: pwsh -NoProfile -File infra/tools/podman-compose/install.ps1
+podman-compose==1.6.0 --hash=sha256:98e48af25d44c10ecef948163bfcca002e32aa8bbb7e66593fbd4faff7270c30
+python-dotenv==1.2.4 --hash=sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc
+pyyaml==6.0.4 --hash=sha256:0db75f402e99c25239003a499c214a61947b4ef5312af34711d4c63e5c179318 --hash=sha256:c604dc2613c417130479cdd6e55c2faa691b6365aa82b3dafddfcecc2eaf1ac7
+
