@@ -241,7 +241,7 @@ The document service sends no e-mail and no text messages. It raises webhooks (`
 ### 8.2 Final PDF
 
 1. Reaching `completed` creates an export at `completedSeq` with field values flattened into the text and with certificate pages appended. The certificate is generated LaTeX built from the evidence through the typed emitters of 09: identifiers, `sentSeq`, `completedSeq`, the chain-head hash, and each participant's events.
-2. Before sealing, the bundle is compiled on two independent workers and the results are compared, which the reproducibility rules of 09 make possible.
+2. Before sealing, the bundle is compiled in two separate single-use sandboxes of one worker and the results are compared, which the reproducibility rules of 09 make possible.
 3. A separate signing service applies a PAdES seal (baseline B-LT or B-LTA) and an RFC 3161 time-stamp. Its keys are in a hardware security module or a cloud key service. LaTeX workers never hold keys.
 4. The sealed bytes are stored immutably. The chain head is written to write-once storage. An evidence bundle (log segment, control commits, evidence record, verification instructions) can be exported for third-party verification.
 5. The sealed PDF is never rewritten. Long-term validation data is added only as incremental updates, and a scheduled job renews time-stamps before they expire.
