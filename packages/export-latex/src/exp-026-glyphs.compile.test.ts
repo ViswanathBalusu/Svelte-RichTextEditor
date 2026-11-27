@@ -63,10 +63,11 @@ describe.skipIf(!ready)(
   () => {
     it('fails the compile when a character the converter let through is missing from every face', async () => {
       const name = 'exp-026-lost-char';
-      // U+4E00 is kept by the converter (U+E000 is dropped from the text before the compile), and no
-      // face of the image has it, so it is lost at compile time.
-      const bundle = await convert(doc(body('before 一 after')), {
-        fonts: await claiming(0x4e00),
+      // U+13000 (an Egyptian hieroglyph) is kept by the converter (U+E000 is dropped from the text before
+      // the compile), and no face of the image has it, so it is lost at compile time. U+4E00 was used
+      // here until the image had the Noto CJK face (owner decision 228).
+      const bundle = await convert(doc(body('before \u{13000} after')), {
+        fonts: await claiming(0x13000),
         classFiles: classFiles(),
         ...OPTIONS(name),
       } as never);
