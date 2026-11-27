@@ -4,7 +4,7 @@
  * below and at the inline start of the point; where that does not fit it flips to the other side,
  * and where neither side fits it is shifted so that it stays inside the viewport.
  */
-import { computePosition, flip, shift, type Placement } from '@floating-ui/dom';
+import type { Placement } from '@floating-ui/dom';
 
 /** The gap kept between an overlay and the edge of the viewport, in CSS pixels. */
 export const OVERLAY_EDGE_PADDING = 4;
@@ -46,6 +46,9 @@ export async function placeOverlay(
   point: OverlayPoint,
   rtl: boolean,
 ): Promise<{ left: number; top: number }> {
+  // Imported when the first overlay opens, so that it is not in the first interactive editor's
+  // size budget (13 §9; FE-002).
+  const { computePosition, flip, shift } = await import('@floating-ui/dom');
   const { first, fallbacks } = placementsFor(rtl);
   const { x, y } = await computePosition(pointReference(point), floating, {
     strategy: 'fixed',
