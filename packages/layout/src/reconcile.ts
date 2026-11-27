@@ -73,6 +73,11 @@ export function adoptablePins(
   const pages: PagePin[] = [];
   const keptOwnPages: number[] = [];
   for (const page of layout.pages) {
+    // A page with no reported start has nothing to adopt: the editor keeps its own break.
+    if (page.starts === null) {
+      keptOwnPages.push(page.n);
+      continue;
+    }
     // At block granularity only block-level starts (offset 0) are used (09 §7: block-level page starts
     // are the guaranteed minimum); a start inside a block is a line-level start, and the editor keeps
     // its own break there.
@@ -86,6 +91,8 @@ export function adoptablePins(
   if (granularity === 'line')
     for (const [blockId, block] of Object.entries(layout.blocks)) {
       if (edited.has(blockId)) continue;
+      // A block the file reports at block level only keeps the editor's own lines.
+      if (block.granularity === 'block') continue;
       for (const offset of block.lineStarts) lines.push({ blockId, offset });
     }
   return Object.freeze({ granularity, pages, lines, keptOwnPages });
