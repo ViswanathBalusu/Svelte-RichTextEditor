@@ -8,6 +8,7 @@ import { CLASS_VERSION } from '@docedit/export-latex';
 import { LIMITS } from '@docedit/model/validate';
 import type { S3Settings } from './objects/s3.ts';
 import type { AzureBlobSettings } from './objects/azure.ts';
+import { parseEndpoint } from './control-plane/webhook-egress.ts';
 
 /** Where the service runs. Test mode (BE-079) is refused in `production`, the default. */
 export type Environment = 'production' | 'development' | 'test';
@@ -223,6 +224,13 @@ export interface WebhookSettings {
    * conformance kit's receiver can be a target (PRO-121). Refused outside test mode.
    */
   testAllow?: readonly string[];
+  /**
+   * Demo stack only (DOCEDIT_DEMO_WEBHOOK_ALLOW, UX-105; ADR 0471, proposed): exact `address:port`
+   * pairs the egress proxy reaches although the address is loopback or private, so that the demo's
+   * reference host can be a target. Needs DOCEDIT_ENVIRONMENT to be `development` or `test`, and is
+   * refused in production (the default). Unlike `testAllow` it does not turn on test mode.
+   */
+  demoAllow?: readonly string[];
 }
 
 export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
@@ -324,9 +332,14 @@ function webhookSettings(env: NodeJS.ProcessEnv): WebhookSettings | null {
   if (!flag(env, 'DOCEDIT_WEBHOOKS', false)) return null;
   const retry = retrySettings(env);
   const testAllow = list(env['DOCEDIT_TEST_WEBHOOK_ALLOW'], []);
+  const demoAllow = list(env['DOCEDIT_DEMO_WEBHOOK_ALLOW'], []);
+  for (const entry of demoAllow)
+    if (parseEndpoint(entry) === null)
+      throw new Error('DOCEDIT_DEMO_WEBHOOK_ALLOW is a list of address:port or [address]:port');
   return {
     ...(retry ? { retry } : {}),
     ...(testAllow.length > 0 ? { testAllow } : {}),
+    ...(demoAllow.length > 0 ? { demoAllow } : {}),
     rejectedWindowMs: required(env, 'DOCEDIT_WEBHOOK_REJECTED_WINDOW_MS', 1),
     rejectedMax: required(env, 'DOCEDIT_WEBHOOK_REJECTED_MAX', 1),
     timeoutMs: required(env, 'DOCEDIT_WEBHOOK_TIMEOUT_MS', 1),
@@ -408,6 +421,10 @@ export function checkConfig(c: ServiceConfig): void {
     throw new Error('test mode is refused in production (set DOCEDIT_ENVIRONMENT to test)');
   if (c.webhooks?.testAllow && !c.testMode)
     throw new Error('DOCEDIT_TEST_WEBHOOK_ALLOW is for test mode only (DOCEDIT_TEST_MODE)');
+  if (c.webhooks?.demoAllow && c.environment === 'production')
+    throw new Error(
+      'DOCEDIT_DEMO_WEBHOOK_ALLOW is refused in production (set DOCEDIT_ENVIRONMENT to development or test)',
+    );
   if (c.s3 && c.azure)
     throw new Error('choose one object store: DOCEDIT_S3_* or DOCEDIT_AZURE_ACCOUNT, not both');
   if (c.assetOrigin && !c.assetUrlKey)

@@ -12,7 +12,13 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { readRoleSecrets, roleEnv, stackSettings, type Role } from './lib/stack.ts';
+import {
+  readRoleSecrets,
+  readWebhookSecret,
+  roleEnv,
+  stackSettings,
+  type Role,
+} from './lib/stack.ts';
 
 const role = process.argv[2] as Role | undefined;
 if (role !== 'service' && role !== 'host' && role !== 'worker') {
@@ -29,7 +35,13 @@ const secrets =
         console.error('No stack secrets yet: run scripts/setup.ts (or stack.ps1 up) first.');
         process.exit(2);
       });
-for (const [k, v] of Object.entries(roleEnv(role, s, secrets))) process.env[k] = v;
+// The host also reads the secret of its webhook subscription, which the seed step issued
+// (UX-105 criterion 1). Without it the host refuses every delivery with 401.
+const webhookSecret = role === 'host' ? await readWebhookSecret() : undefined;
+for (const [k, v] of Object.entries(
+  roleEnv(role, s, { ...secrets, ...(webhookSecret ? { webhookSecret } : {}) }),
+))
+  process.env[k] = v;
 
 const require = createRequire(import.meta.url);
 // Files of workspace packages are found through the packages themselves, not by relative paths:

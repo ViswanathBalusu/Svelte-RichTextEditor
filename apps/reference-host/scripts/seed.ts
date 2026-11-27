@@ -7,7 +7,17 @@
 import { configFromEnv } from '../src/lib/server/config.ts';
 import { createFromTemplate, registerSeedTemplates } from '../src/lib/server/documents.ts';
 import { composeHost } from '../src/lib/server/host.ts';
-import { endpoints, readRoleSecrets, roleEnv, stackSettings } from './lib/stack.ts';
+import { ensureSubscription } from '../src/lib/server/webhook-registration.ts';
+import {
+  endpoints,
+  readRoleSecrets,
+  readWebhookSecret,
+  roleEnv,
+  stackSettings,
+  WEBHOOK_EVENTS,
+  webhookTarget,
+  writeWebhookSecret,
+} from './lib/stack.ts';
 
 const s = stackSettings();
 const secrets = await readRoleSecrets('host');
@@ -46,3 +56,13 @@ for (const d of host.seed.documents) {
 // The gallery's templates (UX-100): each is marked through `POST /templates`.
 for (const t of await registerSeedTemplates(host, host.seed))
   console.log(`seed: template "${t.key}" is ${t.id} (document ${t.document})`);
+
+// The host's webhook subscription (UX-105 criterion 1): the service delivers workflow, comment and
+// task events to the host's receiver. The secret it issues is kept for the host to read at start.
+const registration = await ensureSubscription(host.service, {
+  url: webhookTarget(s),
+  events: WEBHOOK_EVENTS,
+  knownSecret: await readWebhookSecret(),
+});
+await writeWebhookSecret(registration.secret);
+console.log(`seed: webhook subscription ${registration.id} (${registration.action})`);

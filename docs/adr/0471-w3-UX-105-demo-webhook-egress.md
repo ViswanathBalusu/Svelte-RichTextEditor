@@ -1,0 +1,16 @@
+# 0471. UX-105: the demo stack delivers webhooks to the reference host
+
+Status: proposed (lane w3, 2026-11-27). The spec has no default for the points below; they are proposals for the owner and the security review of the definition of done. Nothing here changes the egress policy of a production service.
+
+## The problem
+
+In the demo stack the document service did not deliver webhooks at all (`DOCEDIT_WEBHOOKS` was off, and no subscription existed), and a delivery to the host on `127.0.0.1` would be refused by the egress proxy (`loopback`, PRO-071, BE-056). So "send for completion" answered 200 and no invitation was sent.
+
+## Proposed
+
+1. A separate demo-only setting, not test mode. `DOCEDIT_DEMO_WEBHOOK_ALLOW` is a list of exact `address:port` pairs (IPv6 as `[address]:port`). The egress proxy reaches such a pair although its address is refused by the policy. The setting is refused by `checkConfig` when `DOCEDIT_ENVIRONMENT` is `production`, which is the default, so a service reaches it only when the operator names `development` or `test`. The alternative (option 1 of the story's Notes) was to reuse `DOCEDIT_TEST_WEBHOOK_ALLOW` and run the demo service in test mode; test mode also turns on test hooks, test timers and a restartable data plane, which a demonstration should not run.
+2. Narrower than the test-mode list. `DOCEDIT_TEST_WEBHOOK_ALLOW` names an IP literal and so admits every port of that address (the service's own port, PostgreSQL, the object store). The demo setting names the port as well, and a redirect is checked again like any other target, so a redirect to another port of the same address is refused. The test-mode list is unchanged, and the tests of PRO-071, PRO-121 and BE-056 pass unchanged. A name is never allowed this way.
+3. The signing secret is issued by the service when the subscription is created (PRO-070) and shown once. The seed step creates the subscription and writes the secret to the host's role directory (`role-host/webhook-secret.json`, next to the role's secrets file, which setup rewrites); the host reads it at start into `DOCEDIT_HOST_WEBHOOK_SECRETS`. The seed container therefore mounts the host's role volume writable (it acts as the host); no other part writes a secret volume. A repeated seed keeps a subscription whose secret it still holds and replaces one it does not, because a lost secret cannot be read back.
+4. The service keeps subscriptions in memory only (`webhook-composition.ts`). A restarted document service has none until the seed step runs again (`stack.ps1 up`). A stored subscription needs the table that `PgDeliveryStore` also waits for; it is not built here.
+5. The demo's webhook figures (retry base 2 s, factor 2, timeout 5 s, throttle 100 per minute) are test values in `stack/.env.example`. The spec gives none (ADR 0146, ADR 0216); they are not targets.
+6. The host records the workflow before it asks the service to send. The service raises `participant_activated` while it handles the send, and over a real network the delivery can reach the host before `sendForCompletion` returns; an event for a document the host holds no record of is ignored, so the invitation was lost in that order. A send the service refuses removes the record again.
