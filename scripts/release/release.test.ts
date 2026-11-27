@@ -130,9 +130,14 @@ describe('distributables', () => {
         'asset-worker: services/asset-worker does not exist yet',
       ]);
       put('services/document-service/Containerfile', 'FROM scratch');
-      expect(presence(root).missing[0]).toBe(
-        'document-service image: services/document-service/Containerfile exists, but its build context is not set in scripts/release/distributables.ts',
-      );
+      // The document service's context is the repository root, narrowed by its ignore file.
+      expect(presence(root).images.find((i) => i.id === 'document-service')).toMatchObject({
+        context: '.',
+        image: 'docedit-document-service',
+      });
+      expect(presence(root).missing).toEqual([
+        'asset-worker: services/asset-worker does not exist yet',
+      ]);
       // An image whose context the service's build script stages has no context of its own.
       put('services/asset-worker/package.json', '{}');
       put('services/asset-worker/Containerfile', 'FROM scratch');

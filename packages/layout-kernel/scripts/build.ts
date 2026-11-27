@@ -8,7 +8,8 @@
  *
  * Modes (`node scripts/build.ts <mode>`):
  *   build   the pipeline of `crates/build.sh build`, into `dist/`
- *   test    the crate's native tests, formatting, clippy and the check for system libraries
+ *   test    the crate's native tests, formatting, clippy, the check for system libraries and
+ *           cargo-deny (advisories, licences, sources; WASM-013)
  *   verify  two builds from scratch, and a comparison of the WebAssembly files byte for byte
  *
  * The toolchain is pinned in `crates/rust-toolchain.toml`, in `crates/Containerfile` (Rust 1.89.0,
@@ -17,7 +18,8 @@
  * image is built on first use. `DOCEDIT_CONTAINER_CLI` names another container CLI (default
  * `podman`). `DOCEDIT_KERNEL_NATIVE=1` runs `crates/build.sh` on this machine instead, for one that
  * has the pinned tools. `DOCEDIT_KERNEL_IMAGE` and `DOCEDIT_KERNEL_CARGO_VOLUME` rename the image
- * and the volume that caches the downloaded crates.
+ * and the volume that caches the downloaded crates. `DOCEDIT_ADVISORY_DB_DIR` is where the RustSec
+ * database is cloned on the host (default: a folder in the temporary directory), updated on each run.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -25,6 +27,7 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fetchAdvisoryDb } from './advisory-db.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkg = resolve(here, '..');
@@ -39,11 +42,31 @@ function run(command: string, args: string[], env?: NodeJS.ProcessEnv): void {
   if (r.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with ${r.status}`);
 }
 
-/** Builds the builder image when this machine has none of that name. */
+/**
+ * Builds the builder image when this machine has none of that name, or one built from another
+ * Containerfile (it carries the SHA-256 of the file as a label), so that a change of a pinned tool,
+ * cargo-deny included, reaches a machine that built the image earlier.
+ */
 function ensureImage(): void {
-  const have = spawnSync(cli, ['image', 'exists', image], { stdio: 'ignore' });
-  if (have.status === 0) return;
-  run(cli, ['build', '-f', join(crates, 'Containerfile'), '-t', image, crates]);
+  const file = join(crates, 'Containerfile');
+  const text = readFileSync(file, 'utf8').replaceAll('\r\n', '\n');
+  const label = createHash('sha256').update(text).digest('hex');
+  const have = spawnSync(
+    cli,
+    ['image', 'inspect', '--format', '{{index .Labels "docedit.containerfile.sha256"}}', image],
+    { encoding: 'utf8' },
+  );
+  if (have.status === 0 && have.stdout.trim() === label) return;
+  run(cli, [
+    'build',
+    '-f',
+    file,
+    '--label',
+    `docedit.containerfile.sha256=${label}`,
+    '-t',
+    image,
+    crates,
+  ]);
 }
 
 /** Runs `crates/build.sh <args>`, in the builder image or natively. */
@@ -53,7 +76,18 @@ function buildScript(args: string[], outDir?: string): void {
     return;
   }
   ensureImage();
-  const mounts = ['-v', `${crates}:/work/crates`, '-v', `${cargoVolume}:/usr/local/cargo/registry`];
+  // The RustSec database, fetched here with the host's git because the image has none (WASM-013).
+  const advisoryDbs = fetchAdvisoryDb(
+    process.env['DOCEDIT_ADVISORY_DB_DIR'] ?? join(tmpdir(), 'docedit-advisory-dbs'),
+  );
+  const mounts = [
+    '-v',
+    `${crates}:/work/crates`,
+    '-v',
+    `${cargoVolume}:/usr/local/cargo/registry`,
+    '-v',
+    `${advisoryDbs}:/usr/local/cargo/advisory-dbs`,
+  ];
   if (outDir) mounts.push('-v', `${outDir}:/out`);
   // `--pids-limit=0`: the Podman machine of some hosts has no `pids` cgroup controller.
   run(cli, ['run', '--rm', '--pids-limit=0', ...mounts, image, ...args]);

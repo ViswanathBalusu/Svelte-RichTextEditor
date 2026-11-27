@@ -20,7 +20,12 @@ export function diffPermissions(
       .map((g) => ({ region: g.region, principal: g.principal })),
     putGrants: [...after.values()].filter((g) => {
       const b = before.get(key(g));
-      return !b || b.role !== g.role || b.expiresAt !== g.expiresAt;
+      return (
+        !b ||
+        b.role !== g.role ||
+        b.expiresAt !== g.expiresAt ||
+        (b.structure ?? []).join(',') !== (g.structure ?? []).join(',')
+      );
     }),
     clearRegionStates: [...from.regionStates.keys()].filter((r) => !to.regionStates.has(r)),
     setRegionStates: [...to.regionStates.entries()]

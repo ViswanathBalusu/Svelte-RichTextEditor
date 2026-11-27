@@ -217,6 +217,30 @@ describe('at the field limit (FRW-072, criterion 4)', () => {
     expect(EN_GB['reason.query.fieldLimit']).toBeDefined();
   });
 
+  it('says why when the document does not use forms and the service offers none, not "Not available here" (UX-107 criterion 4)', () => {
+    const { core, registry } = setup([]);
+    core.noForms = true;
+    core.revision.set(core.revision.get() + 1);
+    expect(registry.state('insert.field.text')).toMatchObject({
+      enabled: false,
+      reasonKey: 'reason.query.noForms',
+    });
+    expect(EN_GB['reason.query.noForms']).toMatch(/does not offer forms/);
+    expect(EN_GB['reason.query.noForms']).not.toBe(EN_GB['reason.notApplicable']);
+    // A service that does not announce `fields` does not offer the commands at all, and says so.
+    const plain = setup([], false);
+    expect(plain.registry.state('insert.field.text')).toMatchObject({
+      offered: false,
+      reasonKey: 'reason.unannounced',
+    });
+    const viewer = setup([]);
+    viewer.core.access?.set({ ...EDIT, caps: ['view'] });
+    expect(viewer.registry.state('insert.field.text')).toMatchObject({
+      enabled: false,
+      reasonKey: 'reason.access.view',
+    });
+  });
+
   it('states the limit in the same words when the core calls its reason `limit`', () => {
     const core = new FakeCore({ extended: true, features: ['fields'] });
     Object.assign(core, {

@@ -7,10 +7,12 @@ import {
   type Caps,
   type Connection,
   type Lease,
+  type OperationId,
   type PermissionState,
   type RegionGrant,
   type RegionPolicy,
   REGION_CAPABILITIES,
+  REGION_STRUCTURE_OPERATIONS,
   ROLE_CAPABILITIES,
   isRegionRole,
   roleCaps,
@@ -39,6 +41,18 @@ export interface Access {
    * the region (ADR 0019).
    */
   granted: ReadonlySet<string>;
+  /**
+   * The parts of `structure` the connection holds through region grants (ADR 0424; PRM-068,
+   * PRM-069): the regions whose title it may change (`region.retitle`) and whether it may add
+   * styles (`defs.add`, a right that names no region). Both are empty on a document that is not
+   * `active`, for an agent, and for a grant that does not match, has expired, or is the principal
+   * `everyone` on a restricted region. Whether the connection also holds `edit` in the region is
+   * the outcome check's question, not this map's.
+   */
+  structureGrants: {
+    retitle: ReadonlySet<string>;
+    defsAdd: boolean;
+  };
   /**
    * The leases in force at `at`, with their holder and expiry (07 §10; PRM-043 criterion 4, the
    * `access.leases` member). They are shown to every connection, so a lock can name its holder.
@@ -94,6 +108,27 @@ function bestGrant(
     if (!best || c.length > best.length) best = c;
   }
   return best;
+}
+
+/**
+ * The operations of `structure` the matching grants of a region list (ADR 0424). Only a grant of
+ * the role `editor` carries them; the grant must match the connection and be unexpired, and
+ * `everyone` on a restricted region conveys nothing, as for every other grant.
+ */
+function grantedStructure(
+  region: RegionInfo,
+  conn: Connection,
+  perms: PermissionState,
+  now: number,
+): Set<OperationId> {
+  const out = new Set<OperationId>();
+  for (const g of perms.grants) {
+    if (g.region !== region.id || g.role !== 'editor' || !g.structure?.length) continue;
+    if (!grantMatches(g, conn, now, perms.workflowActive)) continue;
+    if (g.principal === 'everyone' && region.policy === 'restricted') continue;
+    for (const op of g.structure) if (REGION_STRUCTURE_OPERATIONS.includes(op)) out.add(op);
+  }
+  return out;
 }
 
 /**
@@ -165,10 +200,20 @@ export function computeAccess(
 
   const regionMap = new Map<string, Caps>();
   const granted = new Set<string>();
+  const retitle = new Set<string>();
+  let defsAdd = false;
+  // Structure through a grant needs an active document and a user, not an agent (07 §4 limit 1;
+  // ADR 0234 A3: an agent holds at most `suggest`).
+  const structureOpen = perms.documentState === 'active' && conn.agent === undefined;
   for (const r of regions) {
     const grant = bestGrant(r.id, r.policy, conn, perms, now);
     if (grant) granted.add(r.id);
     regionMap.set(r.id, regionCaps(r, grant, conn, perms, now));
+    if (structureOpen && grant) {
+      const ops = grantedStructure(r, conn, perms, now);
+      if (ops.has('region.retitle')) retitle.add(r.id);
+      if (ops.has('defs.add')) defsAdd = true;
+    }
   }
   const fresh: RegionInfo = { id: '\u0000new', policy: 'inherit' };
   const newRegion = regionCaps(
@@ -217,6 +262,7 @@ export function computeAccess(
     regions: agent ? new Map([...regionMap].map(([id, caps]) => [id, capped(caps)])) : regionMap,
     newRegion: capped(newRegion),
     granted,
+    structureGrants: { retitle, defsAdd },
     leases: perms.leases.filter((l) => l.expiresAt > now),
     fill: {
       roles: conn.participantRoles,
@@ -289,6 +335,12 @@ export function sameAccess(a: Access, b: Access): boolean {
     if (!d || !sameCaps(c, d)) return false;
   }
   for (const id of a.granted) if (!b.granted.has(id)) return false;
+  if (
+    a.structureGrants.defsAdd !== b.structureGrants.defsAdd ||
+    a.structureGrants.retitle.size !== b.structureGrants.retitle.size ||
+    [...a.structureGrants.retitle].some((id) => !b.structureGrants.retitle.has(id))
+  )
+    return false;
   if (a.leases.length !== b.leases.length) return false;
   for (const [i, l] of a.leases.entries()) {
     const m = b.leases[i]!;

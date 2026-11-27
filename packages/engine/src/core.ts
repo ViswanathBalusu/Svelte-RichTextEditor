@@ -197,6 +197,12 @@ import type {
   FieldStatus,
 } from './field-entries.ts';
 import { findFormField, formFieldsOf } from './field-lookup.ts';
+import {
+  docUsesFeature,
+  FIELDS_REFUSED_MESSAGE,
+  stepsInsertFeature,
+  withFeature,
+} from './requires-growth.ts';
 import type { FieldEditOutcome, FieldPatch, FieldProperties } from './field-edit.ts';
 import { fieldProperties, listFormFields } from './field-read.ts';
 import { type Refusal, canWrite, capsOf, checkChange, depScope, guardPlugin } from './guard.ts';
@@ -1373,6 +1379,13 @@ export class DocumentCore implements DocumentApi {
         if (t.docChanged) this.#comments.apply(t.mapping.maps, ++this.#commentSeq);
       this.#publishThreadRanges();
     }
+    // A change that brings in the first form field, role or rule makes the document use `fields`:
+    // `requires` says so here, as the room's will once it stores the commit (UX-107).
+    if (!previewEdit && !this.#requires.includes('fields') && state.doc !== before.doc) {
+      const steps = transactions.flatMap((t) => (t.docChanged ? t.steps : []));
+      if (stepsInsertFeature(steps, 'fields'))
+        this.#requires = withFeature(this.#requires, 'fields');
+    }
     for (const api of this.#extApis) api.applied(transactions, tr);
     for (const b of this.#bridges) b.update(state, transactions);
     this.#publish();
@@ -1909,7 +1922,10 @@ export class DocumentCore implements DocumentApi {
       // The document limit of form fields (I15; FRW-072 criterion 4), which the shell states as
       // `reason.query.fieldLimit`. Other refusals have no code here.
       if (this.queryCommand('insertField', { field: { kind: 'text' } }).enabled) return null;
-      return formFieldCount(this.#state) >= FIELD_LIMITS.fields ? 'fieldLimit' : null;
+      if (formFieldCount(this.#state) >= FIELD_LIMITS.fields) return 'fieldLimit';
+      // A document that does not use forms yet, on a service that does not offer them (UX-107
+      // criterion 4). A missing `edit` and a lock have their own reasons in the shell.
+      return !this.#fieldsAllowed() && !this.#locked() ? 'noForms' : null;
     }
     if (name === 'canSetTableSize' || name === 'canMoveBlockUp' || name === 'canMoveBlockDown') {
       // FE-104: the shell states the reason of the command as `reason.query.<code>`.
@@ -2864,7 +2880,7 @@ export class DocumentCore implements DocumentApi {
         if (field === undefined) return null;
         const options = {
           ...fieldOptions(field, writable),
-          formFields: this.#requires.includes('fields'),
+          formFields: this.#fieldsAllowed(),
         };
         if (field.story === undefined) return insertField(state, field.kind, options, dispatch);
         const inStory = this.#caretInStory(state, field.story.id, field.story.pos);
@@ -2990,12 +3006,7 @@ export class DocumentCore implements DocumentApi {
     if (name === 'renameRegion')
       return args.region === undefined || args.title === undefined
         ? null
-        : renameRegion(
-            args.region,
-            args.title,
-            (this.#accessValue?.caps.includes('structure') ?? false) &&
-              this.canEdit(`region:${args.region}`),
-          );
+        : renameRegion(args.region, args.title, this.#mayRetitle(args.region));
     if (name === 'setRegionPolicy')
       return args.region === undefined || args.policy === undefined
         ? null
@@ -3745,7 +3756,7 @@ one or original. It is a
       edit,
       {
         writable: (pos) => this.canEdit(this.#scopeIn(state.doc, pos)),
-        formFields: this.#requires.includes('fields'),
+        formFields: this.#fieldsAllowed(),
       },
       check ? undefined : this.dispatch,
     );
@@ -3753,6 +3764,18 @@ one or original. It is a
     if (outcome.ok && !check && this.#state.doc.eq(state.doc))
       return { ok: false, reason: 'read-only' };
     return outcome;
+  }
+
+  /**
+   * Whether form fields, roles and rules may be edited here (03 §11.1; UX-107): the document
+   * requires `fields`, or it does not yet and the author may turn it on, which is when the backend
+   * announced `fields` and the document is not locked. Turning it on is the first such change:
+   * `dispatchTransaction` adds the feature to `requires`, and the room accepts the commit only
+   * when every attached client announced it.
+   */
+  #fieldsAllowed(): boolean {
+    if (this.#requires.includes('fields')) return true;
+    return !this.#locked() && this.features.get().includes('fields');
   }
 
   /** An identifier for a new role that no role of the document uses (FRW-074). */
@@ -3774,7 +3797,7 @@ one or original. It is a
       edit,
       {
         writable: (pos) => this.canEdit(this.#scopeIn(state.doc, pos)),
-        formFields: this.#requires.includes('fields'),
+        formFields: this.#fieldsAllowed(),
       },
       check ? undefined : this.dispatch,
     );
@@ -4141,9 +4164,7 @@ one or original. It is a
       // A rename says why it is unavailable (PRM-034 criterion 5): a lock first, then the rights
       // `region.retitle` needs, `structure` and `edit` in the region (07 §2).
       if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
-      const permitted =
-        (this.#accessValue?.caps.includes('structure') ?? false) &&
-        this.canEdit(`region:${args.region}`);
+      const permitted = this.#mayRetitle(args.region);
       if (!permitted) return { enabled: false, active: false, reason: 'no-access' };
     }
     const command = this.#command(name, args);
@@ -4229,8 +4250,11 @@ one or original. It is a
     const access = this.#accessValue;
     // Adding or removing a definition also changes the order of `defs`, which is the `doc` scope (the
     // authority's scope diff); renaming a style touches its own definition only.
+    // A grant that lists `defs.add` lets its holder add a style and nothing else (ADR 0424; PRM-070).
+    const addOnly = op === 'create' && (access?.scopes['defs']?.includes('structure.add') ?? false);
     if (
       access &&
+      !addOnly &&
       !(
         access.caps.includes('structure') &&
         this.canEdit('defs') &&
@@ -4256,6 +4280,18 @@ one or original. It is a
       if (refusal) return { ok: false, reason: refusal, regions };
     }
     return { ok: true, regions };
+  }
+
+  /**
+   * Whether the user may change the title of a region: `structure` in the document, or in the region
+   * scope where a grant lists `region.retitle` (ADR 0424; PRM-070), and `edit` in the region.
+   */
+  #mayRetitle(region: string): boolean {
+    const access = this.#accessValue;
+    const structure =
+      (access?.caps.includes('structure') ?? false) ||
+      (access?.scopes[`region:${region}`]?.includes('structure') ?? false);
+    return structure && this.canEdit(`region:${region}`);
   }
 
   /** Records a refused style edit as the guard records one, naming `defs` and the regions. */
@@ -5560,7 +5596,10 @@ one or original. It is a
           }),
         ];
         this.recovered.set({ count: items.length, items });
-        if (e.items.some((i) => i.reason === 'conflict')) this.#retakeExtensions();
+        if (e.items.some((i) => i.reason === 'conflict')) {
+          this.#retakeExtensions();
+          this.#retakeFields();
+        }
         return;
       }
       case 'report':
@@ -5568,7 +5607,11 @@ one or original. It is a
         this.problem.set({
           n: this.#problems,
           code: e.code,
-          message: e.message,
+          // The room's refusal of a feature, in plain words for the author (UX-107 criterion 2).
+          message:
+            e.code === 'conflict' && /cannot gain fields while/.test(e.message)
+              ? FIELDS_REFUSED_MESSAGE
+              : e.message,
           fatal: e.code === 'unsupported_cdm' || e.code === 'unsupported_feature',
         });
         this.#publishSync();
@@ -5594,6 +5637,20 @@ one or original. It is a
       return !used;
     });
     if (!used) this.#requires = this.#requires.filter((f) => f !== 'extensions');
+  }
+
+  /**
+   * After the room refused a commit with `conflict`: if this copy added `fields` to its `requires`
+   * with the first form field, role or rule, and none is left in the document, the feature is taken
+   * back (the notice is the `report` of the refusal, in `FIELDS_REFUSED_MESSAGE`; UX-107 criterion
+   * 2). The room refuses such a commit while a connected client did not announce `fields`
+   * (03 §11.1); when that client has left, the same insert succeeds. The service's own list is not
+   * changed here.
+   */
+  #retakeFields(): void {
+    if (!this.#requires.includes('fields') || this.#serviceRequires.includes('fields')) return;
+    if (docUsesFeature(this.#state.doc, 'fields')) return;
+    this.#requires = this.#requires.filter((f) => f !== 'fields');
   }
 
   /** Tells presence how the confirmed document moved, so that peers' positions are mapped (SYN-036). */

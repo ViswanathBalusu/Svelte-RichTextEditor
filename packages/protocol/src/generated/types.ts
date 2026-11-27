@@ -24,6 +24,9 @@ export type DocRole = "viewer" | "commenter" | "suggester" | "editor" | "owner" 
 /** A role a region grant may give (07 §2). */
 export type RegionRole = "viewer" | "commenter" | "suggester" | "editor";
 
+/** An operation of `structure` that a region grant may carry: `region.retitle` or `defs.add` (07 §2; ADR 0424). */
+export type GrantStructureOperation = "region.retitle" | "defs.add";
+
 /** An output restriction from the `restrict` claim (05 §3.1; 13 §5). */
 export type Restriction = "no-export" | "no-copy" | "no-print";
 
@@ -41,6 +44,12 @@ export type CloseCode = 4400 | 4401 | 4403 | 4406 | 4408 | 4413 | 4429 | 4500 | 
 
 /** A set of capabilities. */
 export type Capabilities = Capability[];
+
+/** A capability held in one scope: a capability of 07 §1, or `structure.add` on the scope `defs` (a grant that lists `defs.add`; ADR 0424). */
+export type ScopeCapability = "view" | "comment" | "suggest" | "edit" | "fill" | "structure" | "manage" | "structure.add";
+
+/** A set of capabilities held in one scope. */
+export type ScopeCapabilities = ScopeCapability[];
 
 /** A lease in `access.leases` (05 §5.5; 07 §10). */
 export interface LeaseInfo {
@@ -70,8 +79,8 @@ export interface Access {
   docRole: DocRole;
   /** Document-level capabilities, including `structure` and `manage`. */
   caps: Capabilities;
-  /** Capabilities per scope. Lists every region of the document; a region not listed is not editable until an access with `asOfSeq` at or after the commit that created it arrives. */
-  scopes: { [key: string]: Capabilities };
+  /** Capabilities per scope. A region scope holds `structure` where a grant lists `region.retitle`; `defs` holds `structure.add` where one lists `defs.add` (ADR 0424). Lists every region of the document; a region not listed is not editable until an access with `asOfSeq` at or after the commit that created it arrives. */
+  scopes: { [key: string]: ScopeCapabilities };
   /** Leases held, by region scope. */
   leases: { [key: string]: LeaseInfo };
   /** Fill permission, or null when it does not apply (12 §4.1). */
@@ -546,13 +555,15 @@ export interface RegionInfo {
   editors?: RegionEditors;
 }
 
-/** A region grant: document, region, principal, role, optional expiry (07 §1). */
+/** A region grant: document, region, principal, role, optional expiry, optional `structure` list (07 §1; ADR 0424). */
 export interface RegionGrant {
   region: string;
   /** `user:<sub>`, `group:<id>`, `everyone` or `role:<id>` (07 §1). */
   principal: string;
   role: RegionRole;
   expiresAt?: string | null;
+  /** Parts of `structure` this grant conveys: `region.retitle`, `defs.add` or both. Valid only with the role `editor`; a client that does not know the member still reads the role (ADR 0424). */
+  structure?: GrantStructureOperation[];
 }
 
 /** The region grants of a document (05 §6.2). Once a PATCH has returned, no commit can be stored under the old revision (04 G7). */

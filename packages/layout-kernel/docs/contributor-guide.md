@@ -32,12 +32,13 @@ Rules the build enforces: the project's crates forbid unsafe code; the dependenc
 ## Test
 
 ```
-pnpm --filter @docedit/layout-kernel test:native      # Rust tests, rustfmt, clippy -D warnings (in the image)
+pnpm --filter @docedit/layout-kernel test:native      # Rust tests, rustfmt, clippy -D warnings, cargo-deny (in the image)
 pnpm --filter @docedit/layout-kernel test:wasm        # build, then the package's Node.js tests
 pnpm --filter @docedit/layout-kernel test:layout      # every suite that runs the kernel, in Node.js (below)
 pnpm exec playwright test -c packages/layout-kernel/playwright.config.ts   # four browsers
 ```
 
+- **Advisories** (`cargo deny`, with `crates/deny.toml`; WASM-013) run in `test:native` and before every `build:wasm`, and fail on a known vulnerability, a yanked release, an unmaintained or unsound crate, a licence outside `licences/policy.json` and any source other than crates.io. The RustSec database is fetched on each run: the builder image has no `git`, so `scripts/build.ts` clones it on the host (default folder `docedit-advisory-dbs` in the temporary directory; `DOCEDIT_ADVISORY_DB_DIR` moves it) and mounts it, so the run needs the network and `git`. An advisory that cannot be fixed is ignored in `deny.toml` and recorded in `licences/cargo-advisory-exceptions.json` with a reason, a decision and an expiry date; `pnpm exec vitest run --project node scripts/kernel-supply-chain.test.ts` fails without the record. The image carries the SHA-256 of its `Containerfile` as a label and is rebuilt when the file changes.
 - **Rust tests** (`cargo test`, in the image) check the rules in integers: the advance unit, the cache, the line breaker, the hyphenation algorithm.
 - **Node.js tests** start the real build. `packages/layout-kernel/src/*.test.ts` test the calls; `packages/perf/test/wasm-006-*.test.ts` and `wasm-008-*.test.ts` compare the kernel with HarfBuzz and with the layout engine's own breaker over the shared corpus; `wasm-010-kernel-node.test.ts` locks `golden/reference.json`. Where `dist/` does not exist a test skips, unless `DOCEDIT_KERNEL_REQUIRED=1` is set, which turns the skip into a failure.
 - **The browser suite** (`e2e/wasm-011-cross-browser.spec.ts`) serves the build, the wrapper and the fonts to Chromium, Edge, Firefox and WebKit and compares every advance and every line with the golden file. One unit of difference fails it. `DOCEDIT_BROWSERS=msedge` limits the projects.

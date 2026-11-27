@@ -250,7 +250,17 @@ export function checkChange(
     diff.regionsMoved.length > 0 ||
     diff.regionTitleChanged.length > 0 ||
     diff.sectionBreaksChanged;
-  if (structural && !access.caps.includes('structure'))
+  // `region.retitle` through a grant (ADR 0424; PRM-070): the region scope holds `structure`.
+  const retitleOnly =
+    diff.regionTitleChanged.length > 0 &&
+    diff.regionsAdded.length === 0 &&
+    diff.regionsRemoved.length === 0 &&
+    diff.regionsMoved.length === 0 &&
+    !diff.sectionBreaksChanged &&
+    diff.regionTitleChanged.every(
+      (id) => access.scopes[`region:${id}`]?.includes('structure') === true,
+    );
+  if (structural && !access.caps.includes('structure') && !retitleOnly)
     return {
       reason: 'structure',
       scopes: [
@@ -262,6 +272,14 @@ export function checkChange(
     };
   if (diff.regionPolicyChanged.length > 0 && !access.caps.includes('manage'))
     return { reason: 'manage', scopes: diff.regionPolicyChanged.map((id) => `region:${id}`) };
+
+  // `defs.add` through a grant: the scope `defs` holds `structure.add`, and the definitions node
+  // changes only by inserting new styles.
+  const addedStyles = new Set(
+    diff.definitionsAdded.filter((d) => d.type === 'style_def').map((d) => d.scope),
+  );
+  const mayAddStyles =
+    addedStyles.size > 0 && access.scopes['defs']?.includes('structure.add') === true;
 
   const blocked = new Set<string>();
   const fieldContainers = new Map(diff.fields.map((f) => [`field:${f.id}`, f.container]));
@@ -278,6 +296,11 @@ export function checkChange(
       blocked.add(dep);
       continue;
     }
+    if (
+      mayAddStyles &&
+      ((scope === 'doc' && diff.docOnlyByAddedDefinitions) || addedStyles.has(scope))
+    )
+      continue;
     const region = added.get(dep);
     const caps = region ? newRegionCaps(access, region.attrs['policy']) : capsOf(access, dep);
     // Text outside a form field needs edit or suggest; fill alone does not allow it (FRW-076).

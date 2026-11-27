@@ -17,6 +17,7 @@ import type {
   LogStore,
 } from '../storage/types.ts';
 import { PayloadAbsentError } from '../storage/payload-absent.ts';
+import { requiresAfter } from '../storage/requires.ts';
 import { ApiError } from './problems.ts';
 import { projectContent, readerView, type ReaderView, type Views } from './visibility.ts';
 import type { WorkerPool } from './workers/pool.ts';
@@ -371,7 +372,7 @@ export class ContentReader {
           doc: start.doc,
           commits: rest.map((c) => c.steps),
         });
-        out = { seq, doc: r.doc, cdm: start.cdm, requires: start.requires };
+        out = { seq, doc: r.doc, cdm: start.cdm, requires: requiresAfter(start.requires, rest) };
       }
     }
     this.#rebuilt.set(base + seq, out);

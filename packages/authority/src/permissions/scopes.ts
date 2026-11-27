@@ -48,6 +48,16 @@ export interface ScopeDiff {
   sectionBreaksChanged: boolean;
   /** Definition scopes that changed, with the node type and identifier. */
   definitionsChanged: Array<{ scope: string; type: string; id: string | null }>;
+  /** The definitions the commit adds: scopes present afterwards and absent before (ADR 0424). */
+  definitionsAdded: Array<{ scope: string; type: string; id: string | null }>;
+  /** The scopes of definitions present before and absent afterwards. */
+  definitionsRemoved: string[];
+  /**
+   * Whether `doc` is in `changed` only because definitions were inserted into the definitions node
+   * (their order changes with them). False when `doc` is not changed, or changed for any other
+   * reason, including a removal or a move of a definition (ADR 0424; PRM-069).
+   */
+  docOnlyByAddedDefinitions: boolean;
   /** Fields present on both sides whose value changed. */
   fields: FieldChange[];
   /**
@@ -146,6 +156,33 @@ function defKey(n: Node): { scope: string; id: string | null } {
 
 /** Longest common subsequence membership: which items of `a` (by key) survive in order in `b`. */
 function lcsKeep(a: readonly string[], b: readonly string[]): Set<string> {
+  // The usual commit adds, removes or changes children and moves none: the keys both sides hold
+  // are then in one order, that order is the only longest common subsequence, and it costs one pass
+  // instead of the table below, which grows with the product of the two lengths (SYN-040).
+  const at = new Map<string, number>();
+  for (let j = 0; j < b.length; j++) at.set(b[j]!, j);
+  if (at.size === b.length) {
+    const seen = new Set<string>();
+    const common = new Set<string>();
+    let last = -1;
+    let inOrder = true;
+    for (const key of a) {
+      if (seen.has(key)) {
+        inOrder = false;
+        break;
+      }
+      seen.add(key);
+      const j = at.get(key);
+      if (j === undefined) continue;
+      if (j < last) {
+        inOrder = false;
+        break;
+      }
+      last = j;
+      common.add(key);
+    }
+    if (inOrder) return common;
+  }
   const n = a.length;
   const m = b.length;
   // Classic dynamic programming; body children are counted in thousands at most.
@@ -198,6 +235,9 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
     regionPolicyChanged: [],
     sectionBreaksChanged: false,
     definitionsChanged: [],
+    definitionsAdded: [],
+    definitionsRemoved: [],
+    docOnlyByAddedDefinitions: false,
     fields: [],
     fieldNodes: [],
     visited: 0,
@@ -218,16 +258,23 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
     d.forEach((c) => out.push(defKey(c).scope));
     return out;
   };
-  if (
+  const docOther =
     !deepEqual(before.attrs, after.attrs) ||
     !deepEqual(storyIds(b.stories), storyIds(a.stories)) ||
     !deepEqual(b.body.attrs, a.body.attrs) ||
     (b.defs !== a.defs &&
-      (!deepEqual(b.defs.attrs, a.defs.attrs) ||
-        !sameMarks(b.defs.marks, a.defs.marks) ||
-        !deepEqual(defOrder(b.defs), defOrder(a.defs))))
-  ) {
-    changed.add('doc');
+      (!deepEqual(b.defs.attrs, a.defs.attrs) || !sameMarks(b.defs.marks, a.defs.marks)));
+  const orderBefore = b.defs !== a.defs ? defOrder(b.defs) : [];
+  const orderAfter = b.defs !== a.defs ? defOrder(a.defs) : [];
+  const orderChanged = !deepEqual(orderBefore, orderAfter);
+  if (docOther || orderChanged) changed.add('doc');
+  if (!docOther && orderChanged) {
+    // Insertions explain the new order when taking them out gives the old order back.
+    const had = new Set(orderBefore);
+    diff.docOnlyByAddedDefinitions = deepEqual(
+      orderBefore,
+      orderAfter.filter((k) => had.has(k)),
+    );
   }
 
   // Definitions, one scope each.
@@ -242,7 +289,10 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
       if (x && y && (x === y || eqIgnoringFieldValues(x, y, counter))) continue;
       changed.add(key);
       const n = (y ?? x)!;
-      diff.definitionsChanged.push({ scope: key, type: n.type.name, id: defKey(n).id });
+      const entry = { scope: key, type: n.type.name, id: defKey(n).id };
+      diff.definitionsChanged.push(entry);
+      if (!x) diff.definitionsAdded.push(entry);
+      else if (!y) diff.definitionsRemoved.push(key);
     }
   }
 
@@ -266,19 +316,36 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
     const aKeys: string[] = [];
     const bOthers: Node[] = [];
     const aOthers: Node[] = [];
-    b.body.forEach((c, _o, i) => {
+    // Only the children between the shared head and the shared tail can differ: a child that both
+    // versions hold as one and the same node, at the same place from either end, is unchanged and
+    // keeps every region and section break around it where it was. The usual commit changes one
+    // child, so the rest of the body is not read (SYN-040).
+    const bodyB = b.body;
+    const bodyA = a.body;
+    let first = 0;
+    const shortest = Math.min(bodyB.childCount, bodyA.childCount);
+    while (first < shortest && bodyB.child(first) === bodyA.child(first)) first++;
+    let endB = bodyB.childCount;
+    let endA = bodyA.childCount;
+    while (endB > first && endA > first && bodyB.child(endB - 1) === bodyA.child(endA - 1)) {
+      endB--;
+      endA--;
+    }
+    for (let i = first; i < endB; i++) {
+      const c = bodyB.child(i);
       bKeys.push(childKey(c, i));
       if (c.type.name === 'region') bRegions.set(String(c.attrs['id']), c);
       else bOthers.push(c);
-    });
-    a.body.forEach((c, _o, i) => {
+    }
+    for (let i = first; i < endA; i++) {
+      const c = bodyA.child(i);
       aKeys.push(childKey(c, i));
       if (c.type.name === 'region') aRegions.set(String(c.attrs['id']), c);
       else aOthers.push(c);
-    });
+    }
 
     // body: the sequence of children with regions as identifiers, other blocks in full.
-    let bodyChanged = bKeys.length !== aKeys.length;
+    let bodyChanged = bodyB.childCount !== bodyA.childCount;
     if (!bodyChanged) {
       for (let i = 0, oi = 0; i < bKeys.length; i++) {
         if (bKeys[i] !== aKeys[i]) {
@@ -309,12 +376,16 @@ export function diffScopes(before: Node, after: Node): ScopeDiff {
     else {
       // A section break whose attributes changed.
       const bsb = new Map<string, Node>();
-      b.body.forEach((c) => c.type.name === 'section_break' && bsb.set(String(c.attrs['id']), c));
-      a.body.forEach((c) => {
-        if (c.type.name !== 'section_break') return;
+      for (let i = first; i < endB; i++) {
+        const c = bodyB.child(i);
+        if (c.type.name === 'section_break') bsb.set(String(c.attrs['id']), c);
+      }
+      for (let i = first; i < endA; i++) {
+        const c = bodyA.child(i);
+        if (c.type.name !== 'section_break') continue;
         const x = bsb.get(String(c.attrs['id']));
         if (x && x !== c && !deepEqual(x.attrs, c.attrs)) diff.sectionBreaksChanged = true;
-      });
+      }
     }
 
     // Moves: regions and section breaks present on both sides that are not on the longest common

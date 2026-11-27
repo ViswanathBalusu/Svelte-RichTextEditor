@@ -737,6 +737,7 @@ export class FakeCore implements CoreApi {
   regionLimit = 500;
   fieldLimit = 2000;
   fields = 0;
+  noForms = false;
   readonly calls: Call[] = [];
   /** How many times each query was asked. */
   readonly queryCounts = new Map<string, number>();
@@ -892,6 +893,8 @@ export class FakeCore implements CoreApi {
       case 'canInsertField':
         if (this.panel.get() !== null) return 'subeditor';
         if (this.fields >= this.fieldLimit) return 'fieldLimit';
+        // A document that does not use forms, on a service that offers none (UX-107).
+        if (this.noForms) return 'noForms';
         return null;
       case 'hasNextEditableRegion':
         return 'none';

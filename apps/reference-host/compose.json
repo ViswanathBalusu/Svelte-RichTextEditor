@@ -1,5 +1,5 @@
 {
-  "x-note": "The reference host's demo stack (BE-005, UX-091; 06 §13; 13 §11.2): PostgreSQL, an S3-compatible store, the document service, one export worker with its sandbox image, and the reference host, seeded with a tenant, users and documents. Demo only: not a production deployment; every port is bound to 127.0.0.1 and the credentials are the test values of stack/.env.example. JSON is valid YAML, so `podman compose -f apps/reference-host/compose.json --env-file apps/reference-host/stack/.env.example up --build` reads this file where Compose works; scripts/stack.ps1 starts the same definitions on a machine where it does not (a WSL Podman machine needs --cgroups=disabled, which Compose cannot pass), running the Node.js services as local processes with the same commands. Services use host networking: on the WSL machine published ports are invisible to Windows, and binding 127.0.0.1 keeps everything local.",
+  "x-note": "The reference host's demo stack (BE-005, UX-091; 06 §13; 13 §11.2): PostgreSQL, an S3-compatible store, the document service, one export worker with its sandbox image, and the reference host, seeded with a tenant, users and documents. Demo only: not a production deployment; every port is bound to 127.0.0.1 and the credentials are the test values of stack/.env.example. JSON is valid YAML, so `podman compose -f apps/reference-host/compose.json --env-file apps/reference-host/stack/.env.example up --build` reads this file where Compose works; scripts/stack.ps1 starts the same definitions on a machine where it does not (a WSL Podman machine needs --cgroups=disabled, which `podman compose` cannot pass; podman-compose can, run inside the machine: infra/tools/podman-compose/README.md), running the Node.js services as local processes with the same commands. Services use host networking: on the WSL machine published ports are invisible to Windows, and binding 127.0.0.1 keeps everything local.",
   "name": "docedit-demo",
   "services": {
     "postgres": {
@@ -78,9 +78,20 @@
       "x-note": "One-shot: secrets (generated, demo-only), the bucket and its CORS rules, the database, the service role, the migrations and the tenant registration (scripts/setup.ts). The only part that mounts every secret volume: the operator's complete record (secrets-operator) and one volume per role (SEC-048 criterion 2; owner decision 107). The other parts mount their own role's volume and nothing else; the export worker mounts none.",
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
+      "env_file": ["${DOCEDIT_DEMO_ENV_FILE:-./stack/.env.example}"],
       "build": { "context": "../..", "dockerfile": "apps/reference-host/containers/Containerfile" },
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "environment": {
+        "DOCEDIT_DEMO_DATA": "/stack",
+        "DOCEDIT_DEMO_SECRETS": "/secrets",
+        "DOCEDIT_DEMO_PROJECT": "${DOCEDIT_DEMO_PROJECT}",
+        "DOCEDIT_DEMO_PG_PORT": "${DOCEDIT_DEMO_PG_PORT}",
+        "DOCEDIT_DEMO_S3_PORT": "${DOCEDIT_DEMO_S3_PORT}",
+        "DOCEDIT_DEMO_MAIL_SMTP_PORT": "${DOCEDIT_DEMO_MAIL_SMTP_PORT}",
+        "DOCEDIT_DEMO_MAIL_UI_PORT": "${DOCEDIT_DEMO_MAIL_UI_PORT}",
+        "DOCEDIT_DEMO_SERVICE_PORT": "${DOCEDIT_DEMO_SERVICE_PORT}",
+        "DOCEDIT_DEMO_HOST_PORT": "${DOCEDIT_DEMO_HOST_PORT}"
+      },
       "volumes": [
         "stack-data:/stack",
         "secrets-operator:/secrets",
@@ -98,8 +109,19 @@
       "x-note": "The document service as one process (BE-001): control plane, DEP WebSocket and rooms, on PostgreSQL and the S3 store, with the tenant seeded from the set-up's registration (BE-012).",
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
+      "env_file": ["${DOCEDIT_DEMO_ENV_FILE:-./stack/.env.example}"],
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "environment": {
+        "DOCEDIT_DEMO_DATA": "/stack",
+        "DOCEDIT_DEMO_SECRETS": "/secrets",
+        "DOCEDIT_DEMO_PROJECT": "${DOCEDIT_DEMO_PROJECT}",
+        "DOCEDIT_DEMO_PG_PORT": "${DOCEDIT_DEMO_PG_PORT}",
+        "DOCEDIT_DEMO_S3_PORT": "${DOCEDIT_DEMO_S3_PORT}",
+        "DOCEDIT_DEMO_MAIL_SMTP_PORT": "${DOCEDIT_DEMO_MAIL_SMTP_PORT}",
+        "DOCEDIT_DEMO_MAIL_UI_PORT": "${DOCEDIT_DEMO_MAIL_UI_PORT}",
+        "DOCEDIT_DEMO_SERVICE_PORT": "${DOCEDIT_DEMO_SERVICE_PORT}",
+        "DOCEDIT_DEMO_HOST_PORT": "${DOCEDIT_DEMO_HOST_PORT}"
+      },
       "volumes": ["stack-data:/stack:ro", "secrets-service:/secrets/role-service:ro"],
       "command": ["node", "apps/reference-host/scripts/run.ts", "service"],
       "depends_on": {
@@ -119,12 +141,23 @@
       "labels": { "org.docedit.env": "demo" }
     },
     "seed": {
-      "x-note": "One-shot: the demo documents, created through the service with the host's externalId, their region grants, and the host's catalogue (scripts/seed.ts).",
+      "x-note": "One-shot: the demo documents, created through the service with the host's externalId, their region grants, and the host's catalogue, and the host's webhook subscription (scripts/seed.ts). The seed acts as the host, so it mounts the host's role volume writable: the signing secret of the subscription is issued by the service when it is registered, and the seed keeps it there, in webhook-secret.json, for the host to read at start (UX-105 criterion 1).",
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
+      "env_file": ["${DOCEDIT_DEMO_ENV_FILE:-./stack/.env.example}"],
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
-      "volumes": ["stack-data:/stack", "secrets-host:/secrets/role-host:ro"],
+      "environment": {
+        "DOCEDIT_DEMO_DATA": "/stack",
+        "DOCEDIT_DEMO_SECRETS": "/secrets",
+        "DOCEDIT_DEMO_PROJECT": "${DOCEDIT_DEMO_PROJECT}",
+        "DOCEDIT_DEMO_PG_PORT": "${DOCEDIT_DEMO_PG_PORT}",
+        "DOCEDIT_DEMO_S3_PORT": "${DOCEDIT_DEMO_S3_PORT}",
+        "DOCEDIT_DEMO_MAIL_SMTP_PORT": "${DOCEDIT_DEMO_MAIL_SMTP_PORT}",
+        "DOCEDIT_DEMO_MAIL_UI_PORT": "${DOCEDIT_DEMO_MAIL_UI_PORT}",
+        "DOCEDIT_DEMO_SERVICE_PORT": "${DOCEDIT_DEMO_SERVICE_PORT}",
+        "DOCEDIT_DEMO_HOST_PORT": "${DOCEDIT_DEMO_HOST_PORT}"
+      },
+      "volumes": ["stack-data:/stack", "secrets-host:/secrets/role-host"],
       "command": ["node", "apps/reference-host/scripts/seed.ts"],
       "depends_on": {
         "document-service": { "condition": "service_healthy" }
@@ -135,8 +168,19 @@
       "x-note": "The reference host (SvelteKit build behind scripts/serve.ts): demo sign-in, token endpoint, catalogue and the editor page.",
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
+      "env_file": ["${DOCEDIT_DEMO_ENV_FILE:-./stack/.env.example}"],
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "environment": {
+        "DOCEDIT_DEMO_DATA": "/stack",
+        "DOCEDIT_DEMO_SECRETS": "/secrets",
+        "DOCEDIT_DEMO_PROJECT": "${DOCEDIT_DEMO_PROJECT}",
+        "DOCEDIT_DEMO_PG_PORT": "${DOCEDIT_DEMO_PG_PORT}",
+        "DOCEDIT_DEMO_S3_PORT": "${DOCEDIT_DEMO_S3_PORT}",
+        "DOCEDIT_DEMO_MAIL_SMTP_PORT": "${DOCEDIT_DEMO_MAIL_SMTP_PORT}",
+        "DOCEDIT_DEMO_MAIL_UI_PORT": "${DOCEDIT_DEMO_MAIL_UI_PORT}",
+        "DOCEDIT_DEMO_SERVICE_PORT": "${DOCEDIT_DEMO_SERVICE_PORT}",
+        "DOCEDIT_DEMO_HOST_PORT": "${DOCEDIT_DEMO_HOST_PORT}"
+      },
       "volumes": ["stack-data:/stack", "secrets-host:/secrets/role-host:ro"],
       "command": ["node", "apps/reference-host/scripts/run.ts", "host"],
       "depends_on": {
@@ -159,6 +203,7 @@
       "x-note": "The export worker (services/export-worker, src/main.ts): claims export jobs from the queue in PostgreSQL, converts, and compiles each job in a fresh sandbox container of the image below, through the Podman socket of the machine. The worker process needs the database and the store; LuaLaTeX runs only in the sandbox, which has no network (09 §9.3; BE-005 criterion 4).",
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
+      "env_file": ["${DOCEDIT_DEMO_ENV_FILE:-./stack/.env.example}"],
       "network_mode": "host",
       "environment": {
         "DOCEDIT_DEMO_DATA": "/stack",
@@ -169,6 +214,7 @@
         "stack-data:/stack:ro",
         "${DOCEDIT_DEMO_PODMAN_SOCKET:-/run/podman/podman.sock}:/run/podman/podman.sock"
       ],
+      "group_add": ["${DOCEDIT_DEMO_PODMAN_SOCKET_GID:-10}"],
       "command": ["node", "apps/reference-host/scripts/run.ts", "worker"],
       "depends_on": {
         "document-service": { "condition": "service_healthy" },

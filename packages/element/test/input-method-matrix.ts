@@ -7,7 +7,8 @@
  *
  * Data only: the drivers that run these cases are the e2e suites. Languages and platforms are the
  * ones the story names: Japanese, Chinese and Korean composition, dead keys, and one Android and
- * one iOS keyboard.
+ * one iOS keyboard. FE-111 criterion 3 adds the scripts of its corpus: Arabic, Hebrew, Devanagari
+ * (Hindi) and Thai (`SCRIPT_CORPUS`, and a composition case for each).
  */
 
 /** How a case is driven: automated through the browser, or by a scripted manual pass. */
@@ -17,7 +18,7 @@ export interface InputMethodCase {
   readonly id: string;
   /** Language or input family the case covers. */
   readonly kind: 'composition' | 'dead-key' | 'mobile-keyboard';
-  readonly language: 'ja' | 'zh' | 'ko' | 'fr' | 'en';
+  readonly language: 'ja' | 'zh' | 'ko' | 'ar' | 'he' | 'hi' | 'th' | 'fr' | 'en';
   /** The keyboard, platform or input method the sequence is shaped like. */
   readonly method: string;
   /** The keystrokes or composition updates, in order. */
@@ -101,6 +102,47 @@ export const INPUT_METHOD_MATRIX: readonly InputMethodCase[] = [
     note: GECKO_COMMIT_ONLY,
   },
   {
+    id: 'ar-phonetic',
+    kind: 'composition',
+    language: 'ar',
+    method: 'Arabic transliteration IME (Latin letters become Arabic as they are typed)',
+    steps: ['m', 'مر', 'مرح', 'مرحب', 'مرحبا'],
+    commit: 'مرحبا',
+    drivers: { chromium: 'automated', gecko: 'manual', webkit: 'manual' },
+    note: GECKO_COMMIT_ONLY,
+  },
+  {
+    id: 'he-phonetic',
+    kind: 'composition',
+    language: 'he',
+    method: 'Hebrew transliteration IME',
+    steps: ['sh', 'של', 'שלו', 'שלום'],
+    commit: 'שלום',
+    drivers: { chromium: 'automated', gecko: 'manual', webkit: 'manual' },
+    note: GECKO_COMMIT_ONLY,
+  },
+  {
+    id: 'hi-devanagari-phonetic',
+    kind: 'composition',
+    language: 'hi',
+    method: 'Hindi (Devanagari) phonetic IME',
+    steps: ['n', 'न', 'नम', 'नमस्', 'नमस्ते'],
+    commit: 'नमस्ते',
+    drivers: { chromium: 'automated', gecko: 'manual', webkit: 'manual' },
+    note: GECKO_COMMIT_ONLY,
+  },
+  {
+    id: 'th-kedmanee-compose',
+    kind: 'composition',
+    language: 'th',
+    method:
+      'Thai input method that composes a syllable (vowels and tone marks follow the consonant)',
+    steps: ['ส', 'สว', 'สวั', 'สวัส', 'สวัสด', 'สวัสดี'],
+    commit: 'สวัสดี',
+    drivers: { chromium: 'automated', gecko: 'manual', webkit: 'manual' },
+    note: GECKO_COMMIT_ONLY,
+  },
+  {
     id: 'fr-dead-acute',
     kind: 'dead-key',
     language: 'fr',
@@ -160,3 +202,21 @@ export function matrixRuns(cases: readonly InputMethodCase[] = INPUT_METHOD_MATR
       for (const remote of MATRIX_REMOTE_MODES) runs.push({ case: c, editor, remote });
   return runs;
 }
+
+/**
+ * The corpus of FE-111 criterion 3: a sentence in each right-to-left or complex script, typed
+ * as plain text (keyboard layouts of these scripts insert characters directly) and composed through
+ * the cases above. Each text is one logical line, with a Latin run and digits in the Arabic and
+ * Hebrew ones so that the bidirectional handling is in play.
+ */
+export const SCRIPT_CORPUS = [
+  { id: 'arabic', language: 'ar', dir: 'rtl', text: 'مرحبا بالعالم abc 123 ثم نهاية' },
+  { id: 'hebrew', language: 'he', dir: 'rtl', text: 'שלום עולם abc 123 ואז סוף' },
+  {
+    id: 'devanagari',
+    language: 'hi',
+    dir: 'ltr',
+    text: 'नमस्ते दुनिया, हिन्दी में लिखा गया वाक्य',
+  },
+  { id: 'thai', language: 'th', dir: 'ltr', text: 'สวัสดีชาวโลก ภาษาไทยไม่มีช่องว่างระหว่างคำ' },
+] as const;

@@ -325,6 +325,11 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
       }
     }
     if (retired.size) d.perms = withoutRegions(d.perms, retired);
+    // A commit that added a feature stores the grown list in the record (as PgLogStore does, UX-107).
+    const grown = [...req.commits].reverse().find((c) => c.requires !== undefined)?.requires;
+    if (grown !== undefined) {
+      d.record = { ...d.record, requires: [...grown], metaRevision: d.record.metaRevision + 1 };
+    }
     return { status: 'ok' };
   }
 

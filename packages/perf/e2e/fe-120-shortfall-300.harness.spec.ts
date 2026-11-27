@@ -575,7 +575,14 @@ const FILTER_WALK = 'transaction filter walk (filterTransaction > nodesBetween, 
 const SELECTION_SYNC =
   'selection sync to the browser (Editor::SyncSelection, GetSelectionOffsets; native)';
 
-test('FE-120: the dominant cause of the pages-300 shortfall is per-keystroke work that grows with the document', () => {
+const OTHER_JS = 'other JavaScript';
+
+// Lane w1, 2026-11-27: the transaction filter's walk, the word count and the form field count no
+// longer walk the whole document on a keystroke (referenced-targets.ts, word-count.ts,
+// frw-072-form-fields.ts), so the filter's share is about zero. What grows with the document now is
+// the rest of the JavaScript (the profile of fe-120-profile-300 names the suggestion list, the
+// decorations and the form field views) and the browser's selection sync.
+test('FE-120: the pages-300 shortfall is per-keystroke work that grows with the document', () => {
   const big = results.get('pages-300');
   const small = results.get('pages-100');
   expect(big).toBeDefined();
@@ -583,15 +590,13 @@ test('FE-120: the dominant cause of the pages-300 shortfall is per-keystroke wor
   const ms = (r: DocResult, cause: string): number =>
     r.causes.list.find((c) => c.cause === cause)?.msPerKeystroke ?? 0;
   const total = (r: DocResult): number => r.causes.list.reduce((s, c) => s + c.msPerKeystroke, 0);
-  const proportional = ms(big!, FILTER_WALK) + ms(big!, SELECTION_SYNC);
-  // The two document-proportional causes together are the largest part of the main-thread time per
-  // keystroke (about half in the runs recorded in FE-120), and more than twice any other cause.
+  const proportional = ms(big!, OTHER_JS) + ms(big!, SELECTION_SYNC);
+  // The two causes that grow with the document are most of the main-thread time per keystroke.
   expect(proportional / total(big!)).toBeGreaterThan(0.4);
-  for (const c of big!.causes.list)
-    if (c.cause !== FILTER_WALK && c.cause !== SELECTION_SYNC)
-      expect(proportional).toBeGreaterThan(2 * c.msPerKeystroke);
+  // The filter's walk is gone from the keystroke: a millisecond at most on the 300-page document.
+  expect(ms(big!, FILTER_WALK)).toBeLessThan(1);
   // Each grows with the document: the caret's paragraph is three times further in on pages-300.
-  expect(ms(big!, FILTER_WALK) / Math.max(ms(small!, FILTER_WALK), 1e-9)).toBeGreaterThan(2);
+  expect(ms(big!, OTHER_JS) / Math.max(ms(small!, OTHER_JS), 1e-9)).toBeGreaterThan(2);
   expect(ms(big!, SELECTION_SYNC) / Math.max(ms(small!, SELECTION_SYNC), 1e-9)).toBeGreaterThan(2);
   // And the shortfall is real in this configuration: the median keystroke misses 16 ms.
   expect(typeof big!.shortfall.p50 === 'number' && big!.shortfall.p50 > 16).toBe(true);
@@ -603,7 +608,7 @@ test.afterAll(() => {
   const small = results.get('pages-100');
   const total = big.causes.list.reduce((s, c) => s + c.msPerKeystroke, 0);
   const proportional = big.causes.list
-    .filter((c) => c.cause === FILTER_WALK || c.cause === SELECTION_SYNC)
+    .filter((c) => c.cause === OTHER_JS || c.cause === SELECTION_SYNC)
     .reduce((s, c) => s + c.msPerKeystroke, 0);
   const scaling = small
     ? big.causes.list.map((c) => {
@@ -621,7 +626,7 @@ test.afterAll(() => {
     pages100: small ?? null,
     dominantCause: {
       cause:
-        'per-keystroke work that grows with the document: the referenced-targets guard walks the whole document in filterTransaction, and Blink syncs the selection to the browser over the single editable root',
+        'per-keystroke work that grows with the document: the JavaScript that still walks the whole document on a transaction (the suggestion list, the decorations, the form field views; the guard, the word count and the form field count no longer do), and Blink syncing the selection to the browser over the single editable root',
       msPerKeystroke: Math.round(proportional * 10) / 10,
       ofMainThreadMsPerKeystroke: Math.round(total * 10) / 10,
       share: Math.round((proportional / Math.max(total, 1e-9)) * 1000) / 1000,

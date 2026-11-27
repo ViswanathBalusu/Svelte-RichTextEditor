@@ -20,6 +20,8 @@ Where Compose works (Linux):
 podman compose -f apps/reference-host/compose.json --env-file apps/reference-host/stack/.env.example up --build
 ```
 
+`podman compose` needs a Compose provider (owner decision 230). The one this repository pins is podman-compose 1.6.0, with the SHA-256 of each file in `infra/containers/compose-provider.requirements.txt` (install it in a virtual environment as that file says, and name it in `PODMAN_COMPOSE_PROVIDER`). On a Podman machine whose cgroup tree has no delegated controllers (WSL on Windows), put `--in-pod false --podman-run-args=--cgroups=disabled` after `podman compose`: without them the provider's pod cannot be created. Checked on 2026-11-27 (Windows 11, Podman 6.0.2, podman-compose 1.6.0): `postgres`, `s3` and `mail` start and report healthy from this file that way. `up --build` of the Node.js parts was not run: the image's `pnpm install` downloads the whole dependency set from the npm registry, which no lane may do unasked.
+
 ## Seeded data
 
 `seed/`: the tenant, four people (`users.json`), and the template and document of `documents.json`: a supply agreement with paragraphs in three styles and two restricted regions, the payment section editable by Ada and the delivery section by Bob. Olivia owns it and can change region grants and roles in the panels under the editor.

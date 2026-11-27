@@ -12,7 +12,7 @@ import { CLASS_VERSION } from './convert.ts';
 
 const CLASS = readFileSync(fileURLToPath(new URL('../class/docedit.cls', import.meta.url)), 'utf8');
 
-/** The packages the class loads itself, with or without options (comments are skipped). */
+/** The packages the class loads itself, with or without options (comments are skipped), each once: babel has two load lines, one per branch of DEbabel. */
 function loadedPackages(source: string): string[] {
   const code = source
     .split('\n')
@@ -23,7 +23,7 @@ function loadedPackages(source: string): string[] {
   const names: string[] = [];
   for (const m of code.matchAll(/\\(?:RequirePackage|usepackage)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g))
     for (const name of m[1]!.split(',')) names.push(name.trim());
-  return names.sort();
+  return [...new Set(names)].sort();
 }
 
 /** The fixed list of 09 §9.3 item 5 as the class has it on 2026-11-13. A change to it is a change to this list. */

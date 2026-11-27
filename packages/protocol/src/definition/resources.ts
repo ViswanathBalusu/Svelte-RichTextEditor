@@ -369,9 +369,13 @@ export const REST_SHAPES: readonly NamedShape[] = [
         ),
         role: req(ref('RegionRole')),
         expiresAt: opt(nullable(timestamp())),
+        structure: opt(
+          arr(ref('GrantStructureOperation'), { unique: true }),
+          'Parts of `structure` this grant conveys: `region.retitle`, `defs.add` or both. Valid only with the role `editor`; a client that does not know the member still reads the role (ADR 0424).',
+        ),
       },
       {
-        doc: 'A region grant: document, region, principal, role, optional expiry (07 §1).',
+        doc: 'A region grant: document, region, principal, role, optional expiry, optional `structure` list (07 §1; ADR 0424).',
         spec: '07 §1',
       },
     ),
