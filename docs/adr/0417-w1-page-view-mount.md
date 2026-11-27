@@ -1,6 +1,6 @@
 # ADR 0417: Mounting the editable page view in `<doc-editor>` (FE-101, FE-098)
 
-Status: proposed. The owner has not seen it. Lane w1, 2026-11-18. It builds on ADR 0380 (the input bridge, proposed) and on owner decisions 26 and 27 of docs/owner-decisions-2026-11-15.md.
+Status: proposed; item 4 (no page view in Firefox for now) is settled by owner decision 247 of docs/owner-decisions-2026-11-26.md, and decisions 196 to 220 accept the other items' recommended options. Lane w1, 2026-11-18. It builds on ADR 0380 (the input bridge, proposed) and on owner decisions 26 and 27 of docs/owner-decisions-2026-11-15.md.
 
 ## Context
 

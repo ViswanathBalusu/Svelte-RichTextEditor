@@ -714,21 +714,33 @@ class SignFieldView implements NodeView, Refreshable {
 
 /** The node view of a `form_field`: a native control for the kinds a person fills by hand. */
 export function formFieldView(port: FormFieldPort, views: FormFieldViews): NodeViewConstructor {
-  return (node, view) => {
-    const kind = String(node.attrs['kind']);
-    if (
-      (kind === 'signature' || kind === 'initials') &&
-      typeof node.attrs['id'] === 'string' &&
-      port.signRequest !== undefined &&
-      !isRedactionMarker(node.attrs['value'] as JsonValue | undefined)
-    )
-      return new SignFieldView(node, port, views);
-    const drawn =
-      CONTROL_KINDS.has(String(node.attrs['kind'])) &&
-      typeof node.attrs['id'] === 'string' &&
-      !isRedactionMarker(node.attrs['value'] as JsonValue | undefined);
-    return drawn ? new FormFieldView(node, view.state.doc, port, views) : { dom: schemaDOM(node) };
-  };
+  return (node, view) => formFieldControl(node, view.state.doc, port, views);
+}
+
+/**
+ * The view of one `form_field` of `doc`: a native control for a kind a person fills, the signing
+ * button of a signature, the schema's drawing for the rest. The web view's node views and the page
+ * view's controls (FE-101 criterion 5) are made here, so one field behaves the same in both.
+ */
+export function formFieldControl(
+  node: PMNode,
+  doc: PMNode,
+  port: FormFieldPort,
+  views: FormFieldViews,
+): NodeView {
+  const kind = String(node.attrs['kind']);
+  if (
+    (kind === 'signature' || kind === 'initials') &&
+    typeof node.attrs['id'] === 'string' &&
+    port.signRequest !== undefined &&
+    !isRedactionMarker(node.attrs['value'] as JsonValue | undefined)
+  )
+    return new SignFieldView(node, port, views);
+  const drawn =
+    CONTROL_KINDS.has(kind) &&
+    typeof node.attrs['id'] === 'string' &&
+    !isRedactionMarker(node.attrs['value'] as JsonValue | undefined);
+  return drawn ? new FormFieldView(node, doc, port, views) : { dom: schemaDOM(node) };
 }
 
 /** What a mirror shows and how it is named, from the document it sits in (FRW-006). */

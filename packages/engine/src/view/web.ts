@@ -17,7 +17,7 @@ import {
   type Transaction,
 } from 'prosemirror-state';
 import { AttrStep, Mapping } from 'prosemirror-transform';
-import { EditorView, type NodeViewConstructor } from 'prosemirror-view';
+import { DecorationSet, EditorView, type NodeViewConstructor } from 'prosemirror-view';
 import type { CoreLabels, PeerCaretInfo } from '../api.ts';
 import { type ClipboardPayload, fragmentFromHtml } from '../clipboard.ts';
 import { CDM_VERSION, type CoreConfig, DocumentCore } from '../core.ts';
@@ -531,24 +531,26 @@ export class EditorCore extends DocumentCore {
     }
     const registry = (this.#fieldViews ??= new views.FormFieldViews());
     return {
-      form_field: views.formFieldView(
-        {
-          entry: (id) => this.fieldEntry(id),
-          check: (id, value) => this.checkFieldEntry(id, value),
-          enter: (id, value) => {
-            this.enterFieldValue(id, value);
-          },
-          fillable: (id) => this.fieldFillable(id),
-          rules: (id) => this.fieldRuleState(id),
-          focused: (id) => this.selectField(id),
-          signable: (id) => this.fieldSignable(id),
-          signRequest: (id) => {
-            this.requestSign(id);
-          },
-        },
-        registry,
-      ),
+      form_field: views.formFieldView(this.#fieldPort(), registry),
       field: views.fieldView(registry),
+    };
+  }
+
+  /** What the form field controls need from the core (the web view's and the page view's). */
+  #fieldPort(): Parameters<FormViews['formFieldView']>[0] {
+    return {
+      entry: (id) => this.fieldEntry(id),
+      check: (id, value) => this.checkFieldEntry(id, value),
+      enter: (id, value) => {
+        this.enterFieldValue(id, value);
+      },
+      fillable: (id) => this.fieldFillable(id),
+      rules: (id) => this.fieldRuleState(id),
+      focused: (id) => this.selectField(id),
+      signable: (id) => this.fieldSignable(id),
+      signRequest: (id) => {
+        this.requestSign(id);
+      },
     };
   }
 
@@ -870,12 +872,25 @@ export class EditorCore extends DocumentCore {
    */
   attachPageView(hooks: PageViewHooks): PageViewHandle {
     let composingBlock: string | null = null;
+    // The controls of the form fields the page view painted, by field identifier (FE-101 c.5).
+    const controls = new Map<string, ReturnType<FormViews['formFieldControl']>>();
+    const dropControls = (keep: ReadonlySet<string>): void => {
+      for (const [id, view] of controls)
+        if (!keep.has(id)) {
+          view.destroy?.();
+          controls.delete(id);
+        }
+    };
     const remove = this.addView({
-      update: (state, transactions) =>
+      update: (state, transactions) => {
+        // With the body view mounted behind the page view, it draws the fields again itself.
+        if (!this.#view && controls.size > 0)
+          this.#fieldViews?.refresh(state.doc, onlyFieldValues(transactions));
         hooks.update(
           transactions.some((t) => t.docChanged) || transactions.length === 0,
           transactions.length === 0,
-        ),
+        );
+      },
       composing: () => {
         if (composingBlock === null) return null;
         const block = findBlock(this.editorState.doc, composingBlock);
@@ -929,8 +944,40 @@ export class EditorCore extends DocumentCore {
         if (ended) this.compositionEnded();
       },
       readOnly: () => this.readOnly,
+      fieldControl: (id) => {
+        const views = formViews;
+        if (views === null) {
+          void loadFormViews().then(
+            () => hooks.update(true, false),
+            () => {},
+          );
+          return null;
+        }
+        const found: { node: PMNode | null } = { node: null };
+        this.editorState.doc.descendants((node) => {
+          if (found.node !== null) return false;
+          if (node.type.name === 'form_field' && node.attrs['id'] === id) found.node = node;
+          return found.node === null;
+        });
+        const field = found.node;
+        if (field === null) return null;
+        const held = controls.get(id);
+        if (held?.update?.(field, [], DecorationSet.empty) === true) return held.dom as HTMLElement;
+        held?.destroy?.();
+        const registry = (this.#fieldViews ??= new views.FormFieldViews());
+        const made = views.formFieldControl(
+          field,
+          this.editorState.doc,
+          this.#fieldPort(),
+          registry,
+        );
+        controls.set(id, made);
+        return made.dom as HTMLElement;
+      },
+      keepFieldControls: dropControls,
       detach: () => {
         composingBlock = null;
+        dropControls(new Set());
         remove();
       },
     };

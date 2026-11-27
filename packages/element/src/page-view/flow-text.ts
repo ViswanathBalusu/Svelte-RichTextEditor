@@ -61,6 +61,16 @@ export class FlowText {
     return this.#byBlock.get(blockId) ?? [];
   }
 
+  /** The identifiers of the form fields the layout left room for, in every block and story. */
+  fieldIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const paragraphs of this.#byBlock.values())
+      for (const p of paragraphs)
+        for (const inline of p.inlines)
+          if (inline.kind === 'box' && inline.exactWidth && inline.field) ids.add(inline.field.id);
+    return ids;
+  }
+
   /** Whether the block is justified: its first flow paragraph says so. */
   justified(blockId: string): boolean {
     return this.#byBlock.get(blockId)?.[0]?.align === 'justify';
@@ -88,6 +98,21 @@ export class FlowText {
             // A field, an equation or a note mark never breaks: it is on the line that holds it.
             out.push(runOf(inline.font, inline.text));
           }
+        } else if (inline.kind === 'box') {
+          // A form field is a box of exactly its width, on the line that holds it (FRW-080); the
+          // painter leaves that space and places the field's control on it (FE-093; FE-101 c.5).
+          // Other boxes are not painted by the page view yet.
+          if (inline.exactWidth && inline.field && a >= from && b <= to)
+            out.push({
+              ...runOf(inline.font, ''),
+              box: {
+                id: inline.field.id,
+                kind: inline.field.kind,
+                offset: a,
+                widthPt: inline.width,
+                heightPt: inline.height,
+              },
+            });
         } else if (inline.kind === 'tab') {
           if (a >= from && (b <= to || b === a)) out.push(runOf(inline.font, '\t'));
         }
@@ -103,6 +128,10 @@ export class FlowText {
     let sum = 0;
     for (const run of runs) {
       if (run.text === '\t') continue;
+      if (run.box) {
+        sum += run.box.widthPt;
+        continue;
+      }
       sum += this.#measurer.advance(
         {
           family: unquoted(run.fontFamily),
