@@ -41,8 +41,13 @@
     return () => {
       if (node.open) node.close();
       // Back where it was, if that is still in the page; else the editing surface.
-      if (before?.isConnected && typeof before.focus === 'function') before.focus();
-      else shell.core.focus();
+      if (before?.isConnected && typeof before.focus === 'function') {
+        before.focus();
+        // The editing surface holds no browser selection while a modal dialog is open, so a bare
+        // focus() puts the caret at its start, and the view reads that as the person's move. The
+        // core puts its own selection back.
+        if (before.classList.contains('de-editing-surface')) shell.core.focus();
+      } else shell.core.focus();
     };
   }
 

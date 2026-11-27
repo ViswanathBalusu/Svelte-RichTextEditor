@@ -1119,6 +1119,9 @@
       return true;
     },
     commandSearch: () => {
+      // The search takes focus, and the view stops reading the browser's selection then: a click
+      // just before the keys that open the search would leave the commands listed for the old caret.
+      core.syncSelection?.();
       commandSearchOpen = true;
       return true;
     },

@@ -154,6 +154,10 @@ async function chooseCommand(page: Page, word: string): Promise<void> {
   const search = page.locator(`${HOST} input[role="combobox"]`).first();
   await expect(search).toBeVisible();
   await search.fill(word);
+  // The first match must be runnable before Enter: Enter on a disabled result runs nothing.
+  const first = page.locator(`${HOST} [role="option"]`).first();
+  await expect(first).toContainText(word);
+  await expect(first).toHaveAttribute('data-runnable', '');
   await page.keyboard.press('Enter');
 }
 
