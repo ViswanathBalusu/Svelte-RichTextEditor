@@ -36,7 +36,6 @@ import {
   isSnapshot,
   project,
   projectCommitPage,
-  projectionSchema,
   regionPolicyOf,
   rejectionAudit,
   verifyRoomApprovals,
@@ -62,7 +61,7 @@ import {
 import { mathGateReason } from '@docedit/export-latex';
 import { AttributionMap } from '@docedit/history';
 import type { JsonEnvelope, JsonNode } from '@docedit/model';
-import { cdmSchema } from '@docedit/model/prosemirror';
+import { definitionForCdm, projectionSchemaForCdm, schemaForCdm } from '../cdm-schemas.ts';
 import type {
   ChannelClosed,
   ChannelOpened,
@@ -124,8 +123,8 @@ import { hidesNothing, type ViewTokens } from './view.ts';
 import { DataPlaneError, Refusal, RequestRefused } from './wire.ts';
 import type { Workers } from './workers.ts';
 
-let schemaCache: ReturnType<typeof cdmSchema> | undefined;
-const schemaOf = () => (schemaCache ??= cdmSchema());
+const schemaOf = (version = 1) => schemaForCdm(version);
+
 type Doc = Room['document'];
 
 /** The canonical size limit of a document (I7): 16 MiB. */
@@ -227,6 +226,11 @@ export type ServerOp =
       /** A surrogate or `system`. */
       actor: string;
       content: SnapshotContent;
+      /**
+       * A migration to the model version cdm (BE-094; ADR 0435): the content is a document of
+       * that version, and the room reads and writes that version once the commit is stored.
+       */
+      migration?: { cdm: number };
       preconditions?: Preconditions;
       trace?: TraceContext | null;
     }
@@ -298,7 +302,8 @@ const SYNTHETIC_BASE = '00000000-0000-7000-8000-000000000000';
 
 export class HostedRoom {
   readonly ref: DocRef;
-  readonly record: DocumentRecord;
+  /** The document's record as loaded; its model version moves when a migration is stored (BE-094). */
+  record: DocumentRecord;
   readonly epoch: number;
   readonly incarnation: string;
   /** A transient authority (06 §2.2, last paragraph): no channels, no timers (BE-023). */
@@ -436,7 +441,11 @@ export class HostedRoom {
     };
     const admission = admissionFor(deps.settings, init.ref.tenant, deps.now());
     this.#room = new Room({
-      schema: schemaOf(),
+      schema: schemaOf(init.record.cdmVersion),
+      cdm: init.record.cdmVersion,
+      ...(definitionForCdm(init.record.cdmVersion)
+        ? { definition: definitionForCdm(init.record.cdmVersion)! }
+        : {}),
       initial: init.initial,
       initialSeq: init.initialSeq,
       requires: init.record.requires,
@@ -498,9 +507,9 @@ export class HostedRoom {
     // Every reader goes through the gateway, even while the visibility hides nothing (ADR 0019).
     this.#gateway = new ProjectionGateway(
       this.#room,
-      schemaOf(),
+      schemaOf(init.record.cdmVersion),
       (conn, doc, perms) => deps.tokens.hidden(conn, doc, perms),
-      projectionSchema(),
+      projectionSchemaForCdm(init.record.cdmVersion),
       {
         initial: init.initial,
         log: history,
@@ -1004,15 +1013,35 @@ ecentHead, keeping one entry older than the window. */
     const key = `${REQUESTER}${op.id}:${Math.random().toString(36).slice(2)}`;
     if (op.trace) this.#lastTrace = op.trace;
     return new Promise((resolve, reject) => {
-      this.#requests.set(key, { resolve, reject, actor: op.actor });
+      // A stored migration moves the room's record to the new version before the requester hears of
+      // it, so that a channel that opens next is judged against the version the document is at.
+      const settled =
+        op.kind === 'snapshot' && op.migration
+          ? (v: { seq: number }) => {
+              this.record = { ...this.record, cdmVersion: op.migration!.cdm };
+              resolve(v);
+            }
+          : resolve;
+      this.#requests.set(key, { resolve: settled, reject, actor: op.actor });
       const as = requesterOf(op.actor);
       let fx: Effects;
       if (op.kind === 'anchor') {
         fx = this.#gateway.anchor(key, { id: op.id, evidence: op.evidence });
       } else if (op.kind === 'snapshot') {
         let content: Doc;
+        const migration = op.migration
+          ? {
+              cdm: op.migration.cdm,
+              schema: schemaOf(op.migration.cdm),
+              ...(definitionForCdm(op.migration.cdm)
+                ? { def: definitionForCdm(op.migration.cdm)! }
+                : {}),
+            }
+          : undefined;
         try {
-          content = schemaOf().nodeFromJSON(op.content.envelope.doc);
+          content = (migration?.schema ?? schemaOf(this.record.cdmVersion)).nodeFromJSON(
+            op.content.envelope.doc,
+          );
           content.check();
         } catch {
           this.#requests.delete(key);
@@ -1020,10 +1049,12 @@ ecentHead, keeping one entry older than the window. */
           return;
         }
         this.#snapshots.set(op.id, op.content);
+        if (migration) this.#gateway.setProjectionSchema(projectionSchemaForCdm(migration.cdm));
         fx = this.#gateway.snapshot(key, {
           id: op.id,
           reason: op.reason,
           content,
+          ...(migration ? { migration } : {}),
           checkpoint: `sha256:${op.content.hash}`,
           as,
           ...(op.preconditions ? { preconditions: op.preconditions } : {}),
@@ -1375,10 +1406,13 @@ ecentHead, keeping one entry older than the window. */
       try {
         // The map of a snapshot commit is one run of its user and `seq` (08 §7).
         const side = this.attribution
-          ? AttributionMap.create(contentSizeOf(schemaOf(), content.envelope.doc), {
-              user: req.snapshot.user,
-              seq: req.snapshot.seq,
-            }).toJSON()
+          ? AttributionMap.create(
+              contentSizeOf(schemaOf(this.record.cdmVersion), content.envelope.doc),
+              {
+                user: req.snapshot.user,
+                seq: req.snapshot.seq,
+              },
+            ).toJSON()
           : undefined;
         key = (await this.#deps.checkpointer.save(this.ref, req.snapshot.seq, content, false, side))
           .key;
@@ -1554,7 +1588,10 @@ ecentHead, keeping one entry older than the window. */
     for (const c of commits) {
       const content = isSnapshot(c) ? this.#snapshots.get(c.id) : undefined;
       this.attribution?.apply(c, () =>
-        contentSizeOf(schemaOf(), content ? content.envelope.doc : this.#room.document.toJSON()),
+        contentSizeOf(
+          schemaOf(this.record.cdmVersion),
+          content ? content.envelope.doc : this.#room.document.toJSON(),
+        ),
       );
       if (this.attribution?.broken) {
         this.#report(new Error(this.attribution.broken), 'attribution map');
@@ -2043,23 +2080,34 @@ export class RoomHost {
       let initial: Doc;
       let base: Base;
       let baseBytes: number;
+      let storedCdm: number | undefined;
       if ('encoded' in found) {
         const parts = await d.workers.run('open', { encoded: found.encoded, slice: OPEN_SLICE });
-        initial = await buildFromParts(schemaOf(), parts);
+        initial = await buildFromParts(schemaOf(record.cdmVersion), parts);
         base = { encoded: found.encoded };
         baseBytes = parts.bytes;
+        storedCdm = parts.cdm;
       } else {
-        initial = schemaOf().nodeFromJSON(found.envelope.doc);
+        initial = schemaOf(record.cdmVersion).nodeFromJSON(found.envelope.doc);
         initial.check();
+        storedCdm = found.envelope.cdm;
         base = found.base;
         baseBytes = baseBytesOf(found);
       }
+      // A migration whose commit is stored but whose version change is not (BE-094): the checkpoint
+      // is of a newer version than the record. Opening it in the record's schema would drop what
+      // the newer version added, so the operator finishes the migration first.
+      if (storedCdm !== undefined && storedCdm !== record.cdmVersion)
+        throw new Refusal(
+          'unavailable',
+          `the document is stored at CDM ${record.cdmVersion} but its checkpoint is CDM ${storedCdm}; finish the migration`,
+        );
       const snapshots = new Map<number, { doc: Doc; json: JsonEnvelope }>();
       for (const c of log)
         if (isSnapshot(c)) {
           const json = d.logs.snapshotContent ? await d.logs.snapshotContent(ref, c.seq) : null;
           if (!json) throw new Error(`the content of snapshot commit ${c.seq} is missing`);
-          const doc = schemaOf().nodeFromJSON(json.doc);
+          const doc = schemaOf(record.cdmVersion).nodeFromJSON(json.doc);
           snapshots.set(c.seq, { doc, json });
         }
       // Who wrote what (HIS-014): the map saved with the checkpoint plus the commits after it. A
@@ -2070,7 +2118,7 @@ export class RoomHost {
           attribution = await openAttribution({
             ref,
             record,
-            schema: schemaOf(),
+            schema: schemaOf(record.cdmVersion),
             checkpointer: d.checkpointer,
             logs: d.logs,
             checkpoint: { seq: cp.seq, size: initial.content.size },
@@ -2080,7 +2128,7 @@ export class RoomHost {
               if (loaded) return loaded.doc.content.size;
               const json = d.logs.snapshotContent ? await d.logs.snapshotContent(ref, c.seq) : null;
               if (!json) throw new Error(`the content of snapshot commit ${c.seq} is missing`);
-              return contentSizeOf(schemaOf(), json.doc);
+              return contentSizeOf(schemaOf(record.cdmVersion), json.doc);
             },
           });
         } catch (e) {
@@ -2274,6 +2322,25 @@ export class RoomHost {
     }
   }
 
+  /**
+   * The document's stored head and its content as the log replays to it, in the envelope of the
+   * version the document is stored at (BE-094: what a migration reads). Throws `not_found`.
+   */
+  async headContent(ref: DocRef): Promise<{ seq: number; envelope: JsonEnvelope }> {
+    const d = this.#deps;
+    const record = await d.documents.get(ref);
+    if (!record || record.deletedAt !== null)
+      throw new DataPlaneError('not_found', 'no such document');
+    const head = await d.logs.head(ref);
+    const m = await this.#materialise(ref, head.seq);
+    const envelope = {
+      cdm: record.cdmVersion,
+      requires: [...record.requires],
+      doc: m.doc,
+    } as unknown as JsonEnvelope;
+    return { seq: head.seq, envelope };
+  }
+
   /** Encodes content in a worker (SYN-039): canonical text, Zstandard, SHA-256. */
   encode(envelope: JsonEnvelope): Promise<Encoded> {
     return this.#deps.checkpointer.encode(envelope);
@@ -2364,7 +2431,7 @@ export class RoomHost {
       if (at > head.seq) throw new DataPlaneError('not_found', `no content at seq ${at}`);
       const atHead = await this.#materialise(ref, head.seq);
       const setting = historySetting(record.historyVisibility);
-      const headDoc = schemaOf().nodeFromJSON(atHead.doc);
+      const headDoc = schemaOf(record.cdmVersion).nodeFromJSON(atHead.doc);
       if (at !== head.seq) {
         const gate = gateOf(conn, {
           setting,
@@ -2384,7 +2451,10 @@ export class RoomHost {
       const hidden = d.tokens.hidden(await this.#readerOf(ref, conn), headDoc, stored);
       const out = hidesNothing(hidden)
         ? full
-        : (project(schemaOf().nodeFromJSON(full), hidden).doc.toJSON() as JsonNode);
+        : (project(
+            schemaOf(record.cdmVersion).nodeFromJSON(full),
+            hidden,
+          ).doc.toJSON() as JsonNode);
       return {
         seq: at,
         incarnation: head.incarnation,
@@ -2469,7 +2539,7 @@ export class RoomHost {
           const log = await d.logs.read(ref, 1, head.seq);
           gate = gateOf(conn, {
             setting,
-            head: schemaOf().nodeFromJSON(emptyDocJson()),
+            head: schemaOf(record.cdmVersion).nodeFromJSON(emptyDocJson()),
             headSeq: head.seq,
             perms: stored,
             log,
@@ -2478,7 +2548,7 @@ export class RoomHost {
           hides = false;
         } else {
           const m = await this.#materialise(ref, head.seq);
-          const headDoc = schemaOf().nodeFromJSON(m.doc);
+          const headDoc = schemaOf(record.cdmVersion).nodeFromJSON(m.doc);
           gate = gateOf(conn, {
             setting,
             head: headDoc,
@@ -2513,10 +2583,15 @@ export class RoomHost {
       let view: string | undefined;
       if (hides) {
         const atHead = await this.#materialise(ref, head.seq);
-        const headDoc = schemaOf().nodeFromJSON(atHead.doc);
+        const headDoc = schemaOf(record.cdmVersion).nodeFromJSON(atHead.doc);
         const hidden = d.tokens.hidden(await this.#readerOf(ref, conn), headDoc, stored);
         const before = after === head.seq ? atHead.doc : (await this.#materialise(ref, after)).doc;
-        page = projectCommitPage(schemaOf(), schemaOf().nodeFromJSON(before), hidden, storedPage);
+        page = projectCommitPage(
+          schemaOf(record.cdmVersion),
+          schemaOf(record.cdmVersion).nodeFromJSON(before),
+          hidden,
+          storedPage,
+        );
         view = d.tokens.tokenFor(hidden);
       }
       const users = [...new Set(page.map((c) => c.user))].filter((u) => u !== 'system');

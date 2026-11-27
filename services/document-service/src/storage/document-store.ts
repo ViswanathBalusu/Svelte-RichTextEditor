@@ -282,6 +282,25 @@ export class PgDocumentStore implements DocumentStore {
     });
   }
 
+  setCdmVersion(ref: DocRef, from: number, to: number): Promise<boolean> {
+    assertUuid(ref.doc, 'document');
+    return inTenant(this.#pool, ref.tenant, async (c) => {
+      const r = await c.query(
+        `UPDATE documents SET cdm_version = $3
+          WHERE id = $1 AND deleted_at IS NULL AND cdm_version = $2`,
+        [ref.doc, from, to],
+      );
+      if (r.rowCount === 1) return true;
+      const cur = await c.query<{ deleted: boolean }>(
+        'SELECT deleted_at IS NOT NULL AS deleted FROM documents WHERE id = $1',
+        [ref.doc],
+      );
+      const row = cur.rows[0];
+      if (!row || row.deleted) throw new DocumentNotFoundError(`no document ${ref.doc}`);
+      return false;
+    });
+  }
+
   /** Why a conditional update changed no row: no document, or a stale revision. */
   async #refusal(c: Queryable, doc: string, ifRev: number | undefined): Promise<Error> {
     const cur = await c.query<{ meta_rev: string; deleted: boolean }>(

@@ -291,6 +291,8 @@ import {
   tableStyleRefusal,
 } from './table-style-sort.ts';
 import { type AltRequest, setAltText } from './alt-text.ts';
+import { blockFix } from './block-fix.ts';
+import type { BlockFix } from './block-fix-types.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
 import { setParagraphFormat } from './paragraph-format.ts';
@@ -546,6 +548,7 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'isItalic',
   'canInsertFootnote',
   'hasHeader',
+  'hasFooter',
   'canInsertField',
   'canMarkRegion',
   'hasNextEditableRegion',
@@ -592,6 +595,7 @@ const COMMANDS: readonly CommandName[] = [
   'selectAll',
   'insertFootnote',
   'editHeader',
+  'editFooter',
   'undo',
   'redo',
   'paragraphStyle',
@@ -1859,6 +1863,8 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('insertFootnote').enabled;
       case 'hasHeader':
         return this.queryCommand('editHeader').enabled;
+      case 'hasFooter':
+        return this.queryCommand('editFooter').enabled;
       case 'canInsertField':
         // A form field of the palette's first kind stands for the palette (FRW-072 criterion 1).
         return this.queryCommand('insertField', { field: { kind: 'text' } }).enabled;
@@ -1893,8 +1899,8 @@ export class DocumentCore implements DocumentApi {
    * PRM-030 criterion 2); a lock or a mode is the mode switcher's to explain. Null otherwise.
    */
   queryReason(name: string): string | null {
-    if (name === 'hasHeader') {
-      const header = this.queryCommand('editHeader');
+    if (name === 'hasHeader' || name === 'hasFooter') {
+      const header = this.queryCommand(name === 'hasHeader' ? 'editHeader' : 'editFooter');
       return !header.enabled && header.reason === 'no-access' && !this.#locked()
         ? 'structure'
         : null;
@@ -2189,6 +2195,23 @@ export class DocumentCore implements DocumentApi {
   setImageAlt(asset: string, alt: string): boolean {
     if (this.#locked()) return false;
     const command = setAltText(asset, alt, (pos) => this.canEdit(this.#scopeAt(pos)));
+    return command(this.#state, (tr) => this.dispatchTransaction(tr));
+  }
+
+  /**
+   * Repairs one issue of the accessibility checker in the block with this identifier (UX-067
+   * criterion 2), through the guard of the scope the block is in. False, and nothing changes, when the
+   * core is read-only, the block or the thing to fix is not there, the value is not allowed, or the
+   * user may not change that part.
+   */
+  fixBlock(id: string, fix: BlockFix): boolean {
+    if (this.#locked()) return false;
+    const command = blockFix(
+      id,
+      fix,
+      (pos) => this.canEdit(this.#scopeAt(pos)),
+      (pos) => this.#suggestionIn(this.#scopeAt(pos)).on,
+    );
     return command(this.#state, (tr) => this.dispatchTransaction(tr));
   }
 
@@ -3068,14 +3091,17 @@ export class DocumentCore implements DocumentApi {
           });
         };
       case 'editHeader':
+      case 'editFooter':
         return (state, dispatch) => {
+          const part: StoryPart = name === 'editFooter' ? 'footer' : 'header';
           let id: string | null = null;
           state.doc.forEach((node) => {
-            if (id === null && node.type.name === 'story' && node.attrs['kind'] === 'header')
+            if (id === null && node.type.name === 'story' && node.attrs['kind'] === part)
               id = String(node.attrs['id']);
           });
-          // FE-057 criterion 2: with no header story yet, the default header is created first.
-          if (id === null) return this.#createHeaderStory(state, dispatch);
+          // FE-057 criterion 2: with no header story yet, the default header is created first; the
+          // footer is the same (FE-066 criterion 6).
+          if (id === null) return this.#createStory(state, dispatch, part, 'default');
           // 07 §7 (FE-056 criterion 6): disabled for a person who may not change the story.
           if (!this.canEdit(`story:${id}`)) return false;
           return dispatch ? this.openStory(id) : true;
@@ -3136,18 +3162,6 @@ export class DocumentCore implements DocumentApi {
       }
       return true;
     };
-  }
-
-  /**
-   * FE-057 criterion 2: a document with no header story gets its default header story when the
-   * person starts to edit the header. The creation is one transaction through the guard, so a
-   * refusal leaves no story behind and the command reports false.
-   */
-  #createHeaderStory(
-    state: EditorState,
-    dispatch: ((tr: Transaction) => void) | undefined,
-  ): boolean {
-    return this.#createStory(state, dispatch, 'header', 'default');
   }
 
   /**
@@ -3235,6 +3249,7 @@ export class DocumentCore implements DocumentApi {
       name !== 'selectAll' &&
       name !== 'copyFormat' &&
       name !== 'editHeader' &&
+      name !== 'editFooter' &&
       name !== 'followInternalLink' &&
       name !== 'nextEditableRegion'
     );
@@ -3318,7 +3333,8 @@ export class DocumentCore implements DocumentApi {
       const turnedOn = [...this.#headerVariantsInUse()].find((v) => !usedBefore.has(v));
       if (turnedOn !== undefined && this.editStory('header', turnedOn)) return done;
     }
-    if (done && name !== 'insertFootnote' && name !== 'editHeader') this.focus();
+    if (done && name !== 'insertFootnote' && name !== 'editHeader' && name !== 'editFooter')
+      this.focus();
     return done;
   }
 
@@ -4164,19 +4180,22 @@ one or original. It is a
       case 'paragraphStyle':
         active = args?.style !== undefined && currentStyle(state) === args.style;
         break;
-      case 'editHeader': {
+      case 'editHeader':
+      case 'editFooter': {
         // FE-056 criterion 6 (07 §7): a header the user may not change disables the command and
         // says why. With no header the command would create one, so a user who may not create it
-        // is told the same (PRM-030 criterion 2); a document with no page setup has no reason.
+        // is told the same (PRM-030 criterion 2); a document with no page setup has no reason. The
+        // footer is the same (FE-066 criterion 6).
+        const part: StoryPart = name === 'editFooter' ? 'footer' : 'header';
         let headerId: string | null = null;
         state.doc.forEach((node) => {
-          if (headerId === null && node.type.name === 'story' && node.attrs['kind'] === 'header')
+          if (headerId === null && node.type.name === 'story' && node.attrs['kind'] === part)
             headerId = String(node.attrs['id']);
         });
         if (headerId !== null && !this.canEdit(`story:${headerId}`))
           return { enabled: false, active: false, reason: 'no-access' };
         if (headerId === null) {
-          const reason = this.#storyCreationRefusal(state, 'header', 'default');
+          const reason = this.#storyCreationRefusal(state, part, 'default');
           if (reason !== null) return { enabled: false, active: false, reason };
         }
         break;

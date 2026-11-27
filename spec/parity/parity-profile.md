@@ -100,6 +100,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `format.italic` | character-and-paragraph-formatting |
 | `insert.footnote` | footnotes |
 | `page.header` | headers-and-footers |
+| `page.footer` | headers-and-footers |
 | `format.applyStyle` | styles |
 | `navigate.nextEditableRegion` | regions-and-permissions |
 | `edit.insertRecovered` | recovery-journal |

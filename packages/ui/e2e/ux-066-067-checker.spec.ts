@@ -118,12 +118,11 @@ test.describe('the accessibility checker pane (UX-066, UX-067)', () => {
     });
     await h.exec('view.checker');
     const pane = page.locator('.de-pane[data-pane="checker"]');
-    await pane.locator('li[data-block="pNavy"] button').click();
+    await pane.locator('li[data-block="pNavy"] button:not([data-fix-apply])').click();
     expect(await h.checkerSelected()).toEqual(['pNavy']);
-    await expect(pane.locator('li[data-block="pNavy"] button')).toHaveAttribute(
-      'aria-current',
-      'true',
-    );
+    await expect(
+      pane.locator('li[data-block="pNavy"] button:not([data-fix-apply])'),
+    ).toHaveAttribute('aria-current', 'true');
   });
 
   test('re-evaluates after a change: the issue goes and the count is announced (UX-067 criterion 4)', async ({

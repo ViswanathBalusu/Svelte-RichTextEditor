@@ -339,3 +339,29 @@ export function ssrHostServerConfig(): InlineConfig {
     },
   };
 }
+
+/**
+ * The framework hosts of the host matrix (FE-124 criterion 1): React, Vue and Angular, each its own
+ * application with its own copy of the framework, built from `demo/hosts/<name>/host.ts` into
+ * `dist/demo/hosts/<name>`. Each loads the element's bundle on demand, as a host would.
+ */
+export const FRAMEWORK_HOSTS = ['react', 'vue', 'angular'] as const;
+export type FrameworkHost = (typeof FRAMEWORK_HOSTS)[number];
+
+export function frameworkHostConfig(name: FrameworkHost): InlineConfig {
+  const config = base(join(demoDir, 'hosts', name));
+  return {
+    ...config,
+    build: {
+      ...config.build,
+      rollupOptions: {
+        input: { host: join(elementDir, `demo/hosts/${name}/host.ts`) },
+        output: {
+          entryFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
+    },
+  };
+}

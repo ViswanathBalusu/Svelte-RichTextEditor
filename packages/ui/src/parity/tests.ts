@@ -555,6 +555,46 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/e2e/ux-055-import-filters.spec.ts', kind: 'playwright' },
     ],
   ],
+  // Shipped when UX-012 closed (owner decision 258, 2026-11-27).
+  [
+    'access-keys',
+    [
+      { path: 'packages/ui/e2e/ux-012-access-keys.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/access-key-mode.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/access-keys.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when FRW-069 closed, the last story of the row (owner decision 266, 2026-11-27).
+  [
+    'modes',
+    [
+      { path: 'packages/element/e2e/ux-015-mode-in-effect.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-029-review-mode.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-041-suggester-mode.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/frw-069-upgrade.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/ux-015-mode-commits.test.ts', kind: 'unit' },
+      { path: 'packages/element/test/frw-069-methods.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when EXP-088 closed (2026-11-27).
+  [
+    'export-markdown',
+    [
+      { path: 'packages/export-latex/src/exp-088-render.test.ts', kind: 'unit' },
+      { path: 'services/export-worker/src/exp-088-md.job.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when UX-056 closed, the last story of the row (owner decision 260, 2026-11-27).
+  [
+    'custom-blocks',
+    [
+      { path: 'packages/engine/test/ux-056-extension-block.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/ux-056-extension-requires.test.ts', kind: 'unit' },
+      { path: 'packages/authority/test/ux-056-extension-requires.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/ux-057-extension-inline.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/ux-058-extension-edit-around.test.ts', kind: 'unit' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);

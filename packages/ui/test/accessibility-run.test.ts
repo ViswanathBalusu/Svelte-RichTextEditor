@@ -197,6 +197,7 @@ describe('the checker runs over the document the core holds (UX-066, criterion 1
     // The generic link is the one flagged; the descriptive one is not.
     expect(result.report.groups.find((g) => g.kind === 'link-text')!.issues[0]!.detail).toEqual({
       reason: 'generic',
+      index: 0,
     });
   });
 
@@ -255,8 +256,15 @@ describe('contrast uses the document colours against the output page (UX-066, cr
     expect(ids).not.toContain('pYellow');
     expect(ids).not.toContain('pCell');
     // Black on navy (#000080) and white on white are below the minimum; the ratios are reported.
-    expect(contrast.find((i) => i.blockId === 'pWhite')!.detail).toEqual({ ratio: 1 });
-    expect(contrast.find((i) => i.blockId === 'pOnBlack')!.detail).toEqual({ ratio: 1 });
+    // Each also names the colour the fix of UX-067 offers: black on white, white on black.
+    expect(contrast.find((i) => i.blockId === 'pWhite')!.detail).toEqual({
+      ratio: 1,
+      suggest: '#000000',
+    });
+    expect(contrast.find((i) => i.blockId === 'pOnBlack')!.detail).toEqual({
+      ratio: 1,
+      suggest: '#FFFFFF',
+    });
     expect(Number(contrast.find((i) => i.blockId === 'pNavy')!.detail['ratio'])).toBeLessThan(4.5);
   });
 });

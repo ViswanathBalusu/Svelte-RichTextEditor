@@ -897,7 +897,7 @@
       "builtBy": ["BE-011", "BE-012", "BE-003"],
       "provenBy": "SEC-045",
       "phase": "1a",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "tenant-isolation.test.ts",
         "tenant-objects.test.ts",
@@ -911,18 +911,11 @@
         "sec-045-w8-keys-and-urls.test.ts",
         "sec-045-w8-key-inventory.test.ts"
       ],
-      "open": [
-        {
-          "criterion": 5,
-          "what": "the tenant in the key of every cache, counter and stream"
-        },
-        {
-          "criterion": 7,
-          "what": "one tenant's fonts unavailable to another tenant's export job"
-        }
-      ],
       "boundaries": ["host-backend-to-service", "service-to-workers"],
-      "specRows": ["Row-level security and a tenant identifier on every table"]
+      "specRows": [
+        "Row-level security and a tenant identifier on every table",
+        "Two kinds of key hold no tenant, by decision"
+      ]
     },
     {
       "id": "T-3.7-signed-urls",
@@ -974,16 +967,13 @@
         "secret-scan.test.ts",
         "services/document-service/test/postgres/u-sec-033-048-secret-rotation.pg.test.ts",
         "services/export-worker/test/u-sec-033-048-container-env.podman.test.ts",
-        "services/asset-worker/test/u-sec-033-048-container-env.podman.test.ts"
+        "services/asset-worker/test/u-sec-033-048-container-env.podman.test.ts",
+        "apps/reference-host/test/sec-048-secret-split.test.ts"
       ],
       "open": [
         {
           "criterion": 1,
           "what": "secret scanning of the repository, the images and the default configuration in CI"
-        },
-        {
-          "criterion": 2,
-          "what": "only the secrets a container needs present in its environment and files"
         }
       ],
       "boundaries": ["host-backend-to-service"],

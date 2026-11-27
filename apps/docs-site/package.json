@@ -1,0 +1,19 @@
+{
+  "name": "@docedit/docs-site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The documentation site (FND-013): the specification, the decision records, the stories, the API reference generated from the packages, the protocol artifacts and the integration guide, built as a VitePress site with one version per release.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "site": "node scripts/build.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "node scripts/build.ts --stage-only && vitepress dev dist/.stage"
+  },
+  "devDependencies": {
+    "typedoc": "0.28.20",
+    "vitepress": "1.6.4"
+  }
+}

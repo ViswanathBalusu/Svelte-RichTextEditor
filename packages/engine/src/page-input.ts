@@ -215,6 +215,15 @@ export interface PageViewHandle {
   /** Tells the core which block an input method is composing in (null when it ended), so a remote change waits (FE-034). */
   composing(blockId: string | null): void;
   readOnly(): boolean;
+  /**
+   * The control of a form field of the document, the one the web view draws (FRW-004; FE-101
+   * criterion 5): the same element for the same field until `keepFieldControls` lets it go, drawn
+   * from the field as it is now. Null when the field is not in the document, or when the module that
+   * draws fields is not loaded yet; it is then loaded, and `hooks.update(true, false)` follows.
+   */
+  fieldControl(id: string): HTMLElement | null;
+  /** Lets go of the controls of the fields not in `ids`: the page view painted these and no others. */
+  keepFieldControls(ids: ReadonlySet<string>): void;
   detach(): void;
 }
 

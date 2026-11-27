@@ -28,6 +28,17 @@ export const EN_GB_CHECKER_PANE = {
   'checker.fixable': 'You can fix this here.',
   'checker.locked': 'You cannot fix this. Ask someone who can.',
   'checker.locked.who': 'You cannot fix this. {who}',
+  // The fix each kind of issue offers (UX-067 criterion 2).
+  'checker.fix.alt-text.label': 'Alternative text',
+  'checker.fix.alt-text': 'Set alternative text',
+  'checker.fix.link-text.label': 'Link text',
+  'checker.fix.link-text': 'Change link text',
+  'checker.fix.table-header': 'Make the first row a header row',
+  'checker.fix.heading-order': 'Change to heading level {level}',
+  'checker.fix.contrast.black': 'Use black text',
+  'checker.fix.contrast.white': 'Use white text',
+  'checker.fix.done': 'Fixed.',
+  'checker.fix.failed': 'This could not be changed.',
 } as const satisfies StringTable;
 
 registerSource(EN_GB_CHECKER_PANE);

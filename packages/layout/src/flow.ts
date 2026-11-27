@@ -88,6 +88,8 @@ export interface FlowInlineBox {
    * boxes are measured as one character until the stories that own them are built (items.ts).
    */
   readonly exactWidth?: true;
+  /** The identifier and kind of the form field this box is, so a painter can place its control (FE-101). */
+  readonly field?: { readonly id: string; readonly kind: string };
 }
 
 export type FlowInline = FlowText | FlowTab | FlowLineBreak | FlowInlineBox;
@@ -813,6 +815,7 @@ function paragraphBlocks(
         // The box is the field's `width`, or the default of its kind (12 §3.2; FRW-080): the value
         // never enters it, so filling a field moves no break.
         const width = fieldWidth(str(node.attrs?.['kind']), node.attrs?.['width']);
+        const fieldId = str(node.attrs?.['id']);
         inlines.push({
           kind: 'box',
           what: 'preserved',
@@ -822,6 +825,9 @@ function paragraphBlocks(
           offset: at,
           size,
           exactWidth: true,
+          ...(fieldId === null
+            ? {}
+            : { field: { id: fieldId, kind: str(node.attrs?.['kind']) ?? 'text' } }),
         });
         break;
       }

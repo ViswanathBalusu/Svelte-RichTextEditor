@@ -59,8 +59,11 @@ export type CheckBlock =
     }
   | { readonly kind: 'image' | 'figure'; readonly id: string; readonly altText?: string | null }
   | { readonly kind: 'table'; readonly id: string; readonly headerRows: number }
-  /** A hyperlink's text, under the identifier of the block that holds it. */
-  | { readonly kind: 'link'; readonly id: string; readonly text: string };
+  /**
+   * A hyperlink's text, under the identifier of the block that holds it. `index` counts the links of
+   * that block in order, so that a fix can name the one it means (UX-067 criterion 2).
+   */
+  | { readonly kind: 'link'; readonly id: string; readonly text: string; readonly index?: number };
 
 export interface CheckOptions {
   /** The page background as hex; the default is white. */
@@ -75,7 +78,9 @@ export interface CheckIssue {
   readonly blockId: string;
   /**
    * Facts behind the explanation, for the shell to phrase: `from` and `to` for a skipped heading
-   * level, `ratio` for a contrast, and `reason` (`empty` or `generic`) for a link text.
+   * level, `ratio` and `suggest` (`#000000` or `#FFFFFF`, whichever reads better on the worst
+   * run's background) for a contrast, and `reason` (`empty` or `generic`) and `index` (which
+   * link of the block) for a link text.
    */
   readonly detail: Readonly<Record<string, string | number>>;
 }
@@ -194,9 +199,9 @@ export function checkDocument(
       case 'link': {
         const normal = normaliseLinkText(block.text);
         if (normal === '') {
-          add({ kind: 'link-text', blockId: block.id, detail: { reason: 'empty' } });
+          add({ kind: 'link-text', blockId: block.id, detail: linkDetail('empty', block.index) });
         } else if (GENERIC_LINK_TEXT.has(normal)) {
-          add({ kind: 'link-text', blockId: block.id, detail: { reason: 'generic' } });
+          add({ kind: 'link-text', blockId: block.id, detail: linkDetail('generic', block.index) });
         }
         break;
       }
@@ -218,7 +223,10 @@ export function checkDocument(
           add({
             kind: 'contrast',
             blockId: block.id,
-            detail: { ratio: Math.round(worst * 100) / 100 },
+            detail: {
+              ratio: Math.round(worst.ratio * 100) / 100,
+              suggest: readableOn(worst.background),
+            },
           });
         }
         break;
@@ -234,6 +242,18 @@ export function checkDocument(
   return { groups, count: groups.reduce((n, g) => n + g.issues.length, 0) };
 }
 
+/** The detail of a link text issue; `index` is left out when the view does not number the links. */
+function linkDetail(reason: string, index: number | undefined): Record<string, string | number> {
+  return index === undefined ? { reason } : { reason, index };
+}
+
+/** Black or white, whichever has the higher contrast with the background. */
+function readableOn(background: Rgb): '#000000' | '#FFFFFF' {
+  return contrastRatio([0, 0, 0], background) >= contrastRatio([255, 255, 255], background)
+    ? '#000000'
+    : '#FFFFFF';
+}
+
 /**
  * The lowest ratio among the paragraph's text runs that fall below the minimum, or null. `behind`
  * is what shows behind a run without a highlight: the paragraph's shading, or the page.
@@ -242,15 +262,16 @@ function worstFailingContrast(
   runs: readonly CheckRun[],
   behind: Rgb,
   defaultText: Rgb,
-): number | null {
-  let worst: number | null = null;
+): { ratio: number; background: Rgb } | null {
+  let worst: { ratio: number; background: Rgb } | null = null;
   for (const run of runs) {
     if (run.text.trim() === '') continue;
     const text = isAuto(run.color) ? defaultText : parseColour(run.color!);
     const background = isAuto(run.highlight, ['none']) ? behind : parseColour(run.highlight!);
     if (!text || !background) continue;
     const ratio = contrastRatio(text, background);
-    if (ratio < CONTRAST_MINIMUM && (worst === null || ratio < worst)) worst = ratio;
+    if (ratio < CONTRAST_MINIMUM && (worst === null || ratio < worst.ratio))
+      worst = { ratio, background };
   }
   return worst;
 }
