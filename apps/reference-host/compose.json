@@ -80,7 +80,17 @@
       "image": "localhost/docedit-demo-node:dev",
       "build": { "context": "../..", "dockerfile": "apps/reference-host/containers/Containerfile" },
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "environment": {
+        "DOCEDIT_DEMO_DATA": "/stack",
+        "DOCEDIT_DEMO_SECRETS": "/secrets",
+        "DOCEDIT_DEMO_PROJECT": "${DOCEDIT_DEMO_PROJECT}",
+        "DOCEDIT_DEMO_PG_PORT": "${DOCEDIT_DEMO_PG_PORT}",
+        "DOCEDIT_DEMO_S3_PORT": "${DOCEDIT_DEMO_S3_PORT}",
+        "DOCEDIT_DEMO_MAIL_SMTP_PORT": "${DOCEDIT_DEMO_MAIL_SMTP_PORT}",
+        "DOCEDIT_DEMO_MAIL_UI_PORT": "${DOCEDIT_DEMO_MAIL_UI_PORT}",
+        "DOCEDIT_DEMO_SERVICE_PORT": "${DOCEDIT_DEMO_SERVICE_PORT}",
+        "DOCEDIT_DEMO_HOST_PORT": "${DOCEDIT_DEMO_HOST_PORT}"
+      },
       "volumes": [
         "stack-data:/stack",
         "secrets-operator:/secrets",
@@ -99,7 +109,17 @@
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "environment": {
+        "DOCEDIT_DEMO_DATA": "/stack",
+        "DOCEDIT_DEMO_SECRETS": "/secrets",
+        "DOCEDIT_DEMO_PROJECT": "${DOCEDIT_DEMO_PROJECT}",
+        "DOCEDIT_DEMO_PG_PORT": "${DOCEDIT_DEMO_PG_PORT}",
+        "DOCEDIT_DEMO_S3_PORT": "${DOCEDIT_DEMO_S3_PORT}",
+        "DOCEDIT_DEMO_MAIL_SMTP_PORT": "${DOCEDIT_DEMO_MAIL_SMTP_PORT}",
+        "DOCEDIT_DEMO_MAIL_UI_PORT": "${DOCEDIT_DEMO_MAIL_UI_PORT}",
+        "DOCEDIT_DEMO_SERVICE_PORT": "${DOCEDIT_DEMO_SERVICE_PORT}",
+        "DOCEDIT_DEMO_HOST_PORT": "${DOCEDIT_DEMO_HOST_PORT}"
+      },
       "volumes": ["stack-data:/stack:ro", "secrets-service:/secrets/role-service:ro"],
       "command": ["node", "apps/reference-host/scripts/run.ts", "service"],
       "depends_on": {
@@ -123,7 +143,17 @@
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "environment": {
+        "DOCEDIT_DEMO_DATA": "/stack",
+        "DOCEDIT_DEMO_SECRETS": "/secrets",
+        "DOCEDIT_DEMO_PROJECT": "${DOCEDIT_DEMO_PROJECT}",
+        "DOCEDIT_DEMO_PG_PORT": "${DOCEDIT_DEMO_PG_PORT}",
+        "DOCEDIT_DEMO_S3_PORT": "${DOCEDIT_DEMO_S3_PORT}",
+        "DOCEDIT_DEMO_MAIL_SMTP_PORT": "${DOCEDIT_DEMO_MAIL_SMTP_PORT}",
+        "DOCEDIT_DEMO_MAIL_UI_PORT": "${DOCEDIT_DEMO_MAIL_UI_PORT}",
+        "DOCEDIT_DEMO_SERVICE_PORT": "${DOCEDIT_DEMO_SERVICE_PORT}",
+        "DOCEDIT_DEMO_HOST_PORT": "${DOCEDIT_DEMO_HOST_PORT}"
+      },
       "volumes": ["stack-data:/stack", "secrets-host:/secrets/role-host"],
       "command": ["node", "apps/reference-host/scripts/seed.ts"],
       "depends_on": {
@@ -136,7 +166,17 @@
       "x-docedit-process": true,
       "image": "localhost/docedit-demo-node:dev",
       "network_mode": "host",
-      "environment": { "DOCEDIT_DEMO_DATA": "/stack", "DOCEDIT_DEMO_SECRETS": "/secrets" },
+      "environment": {
+        "DOCEDIT_DEMO_DATA": "/stack",
+        "DOCEDIT_DEMO_SECRETS": "/secrets",
+        "DOCEDIT_DEMO_PROJECT": "${DOCEDIT_DEMO_PROJECT}",
+        "DOCEDIT_DEMO_PG_PORT": "${DOCEDIT_DEMO_PG_PORT}",
+        "DOCEDIT_DEMO_S3_PORT": "${DOCEDIT_DEMO_S3_PORT}",
+        "DOCEDIT_DEMO_MAIL_SMTP_PORT": "${DOCEDIT_DEMO_MAIL_SMTP_PORT}",
+        "DOCEDIT_DEMO_MAIL_UI_PORT": "${DOCEDIT_DEMO_MAIL_UI_PORT}",
+        "DOCEDIT_DEMO_SERVICE_PORT": "${DOCEDIT_DEMO_SERVICE_PORT}",
+        "DOCEDIT_DEMO_HOST_PORT": "${DOCEDIT_DEMO_HOST_PORT}"
+      },
       "volumes": ["stack-data:/stack", "secrets-host:/secrets/role-host:ro"],
       "command": ["node", "apps/reference-host/scripts/run.ts", "host"],
       "depends_on": {
