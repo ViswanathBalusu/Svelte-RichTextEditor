@@ -2,7 +2,8 @@
  * The scheduled run's regression check (FND-007 criterion 5): compares a harness result
  * (test-results/runs/*.json) with the committed baseline (baseline/reference-1.json) and exits
  * with 1 when a metric is worse than the baseline by more than the baseline's tolerance, when a
- * baseline metric is missing, or when the run used another corpus version or profile.
+ * baseline metric is missing, or when the run used another corpus version or profile. It also exits
+ * with 1 when a gated budget is exceeded (`BUDGET_GATED_METRICS`: the 95th percentile of typing).
  *
  * Usage (from packages/perf):
  *   node scripts/compare-baseline.ts [run.json] [--baseline baseline/reference-1.json]
@@ -15,7 +16,12 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { baselineFrom, compareWithBaseline, type Baseline } from '../src/baseline.ts';
+import {
+  baselineFrom,
+  budgetBreaches,
+  compareWithBaseline,
+  type Baseline,
+} from '../src/baseline.ts';
 import type { RunResult } from '../src/results.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -68,5 +74,10 @@ if (writeFrom) {
     );
   for (const m of report.missing) console.log(`MISSING   ${m}`);
   for (const i of report.incompatible) console.log(`INCOMPATIBLE ${i}`);
-  if (!report.ok) process.exit(1);
+  const breaches = budgetBreaches(run);
+  for (const b of breaches)
+    console.log(
+      `OVER BUDGET ${b.key}: ${b.value ?? 'not measured'} against a target of at most ${b.max}`,
+    );
+  if (!report.ok || breaches.length > 0) process.exit(1);
 }
