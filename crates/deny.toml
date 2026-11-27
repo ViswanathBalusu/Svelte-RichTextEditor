@@ -1,0 +1,55 @@
+# cargo-deny configuration of the Rust workspace (WASM-013; ADR 0016, decision 5; owner decision 281
+# of docs/owner-decisions-2026-11-26.md). `build.sh test` runs `cargo deny --locked check`, which
+# checks advisories, licences and sources on every build. The RustSec advisory database is fetched
+# on each run, so a vulnerability published today fails today's build.
+#
+# Three rules keep this file honest (`scripts/kernel-supply-chain.test.ts` checks them):
+# - `[licenses] allow` is a subset of `allow` in licences/policy.json (FND-011). The licence gate
+#   of the repository stays the one place that decides which licences are allowed.
+# - Every advisory in `[advisories] ignore` has a record in licences/cargo-advisory-exceptions.json
+#   with a reason, a decision and an expiry date, and no record has expired. Without that, the
+#   exception is a way round the check, not a decision.
+# - `[sources]` allows crates.io and nothing else: no other registry, no git dependency.
+
+[advisories]
+version = 2
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# A yanked release was withdrawn by its author, usually for a defect.
+yanked = "deny"
+# Vulnerabilities always fail. Unmaintained and unsound crates fail too, whether the workspace or a
+# dependency of a dependency uses them.
+unmaintained = "all"
+unsound = "all"
+# Exceptions: `{ id = "RUSTSEC-0000-0000", reason = "..." }`, each with a record in
+# licences/cargo-advisory-exceptions.json. None today.
+ignore = []
+
+[licenses]
+version = 2
+# The same identifiers as `allow` in licences/policy.json, and no others.
+allow = [
+  "MIT",
+  "ISC",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Apache-2.0",
+  "0BSD",
+  "Zlib",
+  "BlueOak-1.0.0",
+  "Unicode-3.0",
+  "PostgreSQL",
+]
+confidence-threshold = 0.9
+# The workspace's own crates are Apache-2.0 and not published (`publish = false`).
+private = { ignore = false }
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
