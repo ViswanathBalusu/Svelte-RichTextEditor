@@ -57,6 +57,31 @@ export interface PaintRun {
   /** A CSS colour, or null for the text colour of the page. */
   readonly color: string | null;
   readonly vertAlign: 'super' | 'sub' | null;
+  /**
+   * Set on a run that is a box of its own width and holds no text: a form field (FE-101). The painter
+   * leaves the space and, with `PaintOptions.inlineControl`, places the field's control on it in the
+   * overlay (FE-093).
+   */
+  readonly box?: PaintBox;
+}
+
+/** An inline box a line leaves room for (a form field): its widths and heights are in points. */
+export interface PaintBox {
+  readonly id: string;
+  readonly kind: string;
+  /** The CDM offset of the box inside its block. */
+  readonly offset: number;
+  readonly widthPt: number;
+  readonly heightPt: number;
+}
+
+/** What `PaintOptions.inlineControl` is told: the box, the block that holds it and where it is, in points. */
+export interface InlineBoxPlace extends PaintBox {
+  readonly blockId: string;
+  readonly x: number;
+  readonly y: number;
+  /** The height of the line that holds the box; the control is as high as the line. */
+  readonly lineHeightPt: number;
 }
 
 /** What the painter needs that the layout tree does not hold. */
@@ -104,6 +129,14 @@ export interface PaintOptions {
    * `aria-labelledby` or `aria-label` keeps it, and no label element is made for it.
    */
   readonly controlLabel?: (box: BoxFragment) => string | null;
+  /**
+   * The control of an inline box of a line, a form field (FE-101 criterion 5; FE-093). It is placed
+   * in the same overlay as the controls of box fragments, over the space the line left for the box.
+   * Null leaves the space empty. The position follows the widths the source measured and the
+   * justification of the line; a tab before the box moves it by the layout's tab stop, which the
+   * painter does not know (the tab stops are painted with the default only).
+   */
+  readonly inlineControl?: (place: InlineBoxPlace) => HTMLElement | null;
 }
 
 export interface PaintResult {
@@ -153,6 +186,20 @@ function paintRuns(
       tail = body.slice(end);
       body = body.slice(0, end);
     }
+    if (run.box) {
+      // The room of a form field: an inline block of exactly the box's width (FRW-080).
+      const el = doc.createElement('span');
+      el.className = 'de-inline-box';
+      el.dataset['field'] = run.box.id;
+      const s = el.style;
+      s.display = 'inline-block';
+      s.width = `${run.box.widthPt}pt`;
+      s.height = '0';
+      s.verticalAlign = 'baseline';
+      s.unicodeBidi = 'isolate';
+      span.appendChild(el);
+      return;
+    }
     const piece = (text: string, reset: boolean): void => {
       if (text === '') return;
       const el = doc.createElement('span');
@@ -199,6 +246,51 @@ export function paintTree(
   let controlCount = 0;
   // The overlay of the page being painted (FE-093); set per page below.
   let overlay: HTMLElement | null = null;
+
+  /** Puts a control in the overlay of the page being painted, filling `at` exactly (FE-093). */
+  const placeControl = (
+    control: HTMLElement,
+    blockId: string,
+    at: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+    labelText: string | null,
+  ): void => {
+    if (!overlay) return;
+    control.classList.add('de-control');
+    control.dataset['block'] = blockId;
+    const cs = control.style;
+    cs.position = 'absolute';
+    // The control fills its box exactly, padding and border included (FE-093).
+    cs.boxSizing = 'border-box';
+    cs.left = `${at.x}pt`;
+    cs.top = `${at.y}pt`;
+    cs.width = `${at.width}pt`;
+    cs.height = `${at.height}pt`;
+    cs.pointerEvents = 'auto';
+    if (
+      labelText !== null &&
+      labelText !== '' &&
+      !control.hasAttribute('aria-labelledby') &&
+      !control.hasAttribute('aria-label')
+    ) {
+      const label = doc.createElement('span');
+      label.id = `de-control-label-${++labelSerial}`;
+      label.className = 'de-control-label';
+      label.textContent = labelText;
+      // Visually hidden, still in the accessibility tree; set through the style object.
+      const ls = label.style;
+      ls.position = 'absolute';
+      ls.width = '1px';
+      ls.height = '1px';
+      ls.overflow = 'hidden';
+      ls.setProperty('clip-path', 'inset(50%)');
+      ls.whiteSpace = 'nowrap';
+      ls.pointerEvents = 'none';
+      control.setAttribute('aria-labelledby', label.id);
+      overlay.appendChild(label);
+    }
+    overlay.appendChild(control);
+    controlCount++;
+  };
 
   const paintLine = (
     parent: HTMLElement,
@@ -258,6 +350,34 @@ export function paintTree(
         ).wordSpacing;
       }
       paintRuns(doc, span, runs, spacing);
+      // The control of each form field of the line (FE-101 criterion 5): over the room the line left.
+      if (options.inlineControl && overlay && source.measureRange) {
+        let before = '';
+        for (const r of runs) {
+          const box = r.box;
+          if (!box) {
+            before += r.text;
+            continue;
+          }
+          // Word spacing applies to the space and the no-break space.
+          const blanks = before.split('').filter((c) => c === ' ' || c === ' ').length;
+          const left = x + source.measureRange(f.blockId, line.from, box.offset) + spacing * blanks;
+          const control = options.inlineControl({
+            ...box,
+            blockId: f.blockId,
+            x: left,
+            y,
+            lineHeightPt: line.height,
+          });
+          if (control)
+            placeControl(
+              control,
+              f.blockId,
+              { x: left, y, width: box.widthPt, height: line.height },
+              null,
+            );
+        }
+      }
     } else if (justified && source.measure) {
       const target = f.x + f.width - x;
       const { wordSpacing } = justifyLine(text, source.measure(text), target);
@@ -304,44 +424,7 @@ export function paintTree(
         box.style.pointerEvents = 'none';
         parent.appendChild(box);
         const control = options.control?.(f) ?? null;
-        if (control && overlay) {
-          control.classList.add('de-control');
-          control.dataset['block'] = f.blockId;
-          const cs = control.style;
-          cs.position = 'absolute';
-          // The control fills its box exactly, padding and border included (FE-093).
-          cs.boxSizing = 'border-box';
-          cs.left = `${f.x}pt`;
-          cs.top = `${f.y}pt`;
-          cs.width = `${f.width}pt`;
-          cs.height = `${f.height}pt`;
-          cs.pointerEvents = 'auto';
-          const labelText = options.controlLabel?.(f) ?? null;
-          if (
-            labelText !== null &&
-            labelText !== '' &&
-            !control.hasAttribute('aria-labelledby') &&
-            !control.hasAttribute('aria-label')
-          ) {
-            const label = doc.createElement('span');
-            label.id = `de-control-label-${++labelSerial}`;
-            label.className = 'de-control-label';
-            label.textContent = labelText;
-            // Visually hidden, still in the accessibility tree; set through the style object.
-            const ls = label.style;
-            ls.position = 'absolute';
-            ls.width = '1px';
-            ls.height = '1px';
-            ls.overflow = 'hidden';
-            ls.setProperty('clip-path', 'inset(50%)');
-            ls.whiteSpace = 'nowrap';
-            ls.pointerEvents = 'none';
-            control.setAttribute('aria-labelledby', label.id);
-            overlay.appendChild(label);
-          }
-          overlay.appendChild(control);
-          controlCount++;
-        }
+        if (control) placeControl(control, f.blockId, f, options.controlLabel?.(f) ?? null);
       }
     }
   };

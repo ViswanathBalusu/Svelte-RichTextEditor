@@ -34,6 +34,7 @@ export const CORE_QUERY_NAMES_1B: readonly CoreQueryName1b[] = [
   'canSetTableSize',
   'canMoveBlockUp',
   'canMoveBlockDown',
+  'hasFooter',
 ];
 
 function fromViews(core: CoreApi, name: string): boolean | undefined {

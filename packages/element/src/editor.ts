@@ -606,6 +606,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         'setTableSize',
         'moveBlockUp',
         'moveBlockDown',
+        'editFooter',
         'setTrackedForEveryone',
         'paragraphStyle',
         'characterStyle',
@@ -686,6 +687,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
           return core.run('setTableSize', { tableSize });
         }
         if (name === 'moveBlockUp' || name === 'moveBlockDown') return core.run(name);
+        // The footer opens in the panel as the header does (FE-066 criterion 6).
+        if (name === 'editFooter') return core.run('editFooter');
         // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
         // puts it on the selection through the guards; neither takes an argument.
         if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);

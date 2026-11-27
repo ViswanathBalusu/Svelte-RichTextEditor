@@ -55,7 +55,8 @@ export default defineConfig({
     command: 'node demo/build.ts && node demo/serve.ts',
     url: `http://127.0.0.1:${port}/health`,
     reuseExistingServer: true,
-    timeout: 180_000,
+    // The demo build grew with the framework hosts of the host matrix (FE-124); lanes also build at once.
+    timeout: 420_000,
     stdout: 'pipe',
   },
 });

@@ -699,6 +699,13 @@
       "aliases": []
     },
     {
+      "id": "page.footer",
+      "group": "page",
+      "capability": "headers-and-footers",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "page.header",
       "group": "page",
       "capability": "headers-and-footers",

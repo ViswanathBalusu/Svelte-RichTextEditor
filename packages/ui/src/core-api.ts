@@ -295,7 +295,9 @@ export type CoreQueryName =
  * - `canSetTableSize`: the caret is in a table whose column widths and row height may be changed
  *   (FE-104);
  * - `canMoveBlockUp`, `canMoveBlockDown`: the blocks at the selection have a sibling above or below
- *   to change places with, in a scope the user may change (FE-104).
+ *   to change places with, in a scope the user may change (FE-104);
+ * - `hasFooter`: the footer story may be opened, or created when the page setup has none, by this
+ *   user (FE-066 criterion 6; the footer's counterpart of `hasHeader`).
  */
 export type CoreQueryName1b =
   | 'canCopyFormat'
@@ -305,7 +307,8 @@ export type CoreQueryName1b =
   | 'canInsertField'
   | 'canSetTableSize'
   | 'canMoveBlockUp'
-  | 'canMoveBlockDown';
+  | 'canMoveBlockDown'
+  | 'hasFooter';
 
 /**
  * Named commands of phase 1b, run through `runNamed` and declared in `commandNames` (ADR 0052).
@@ -342,6 +345,8 @@ export type CoreQueryName1b =
  *   every column and the height of the caret's row, or null for the natural height (FE-104);
  * - `moveBlockUp`, `moveBlockDown`: none; the blocks at the selection change places with the block
  *   above or below (FE-104);
+ * - `editFooter`: none; opens the footer in the panel, creating its story when the document has
+ *   none, as `editHeader` does for the header (FE-066 criterion 6);
  * - `setTrackedForEveryone`: `{ on }`; switches `settings.trackChanges` between `everyone` and `off`,
  *   for a user with `manage` only (UX-038; owner decision 118).
  */
@@ -351,6 +356,7 @@ export type CoreCommandName =
   | 'setTableSize'
   | 'moveBlockUp'
   | 'moveBlockDown'
+  | 'editFooter'
   | 'setTrackedForEveryone'
   | 'copyFormat'
   | 'pasteFormat'
