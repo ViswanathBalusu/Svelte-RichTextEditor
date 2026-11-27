@@ -56,7 +56,7 @@ const hasTable = (node: { type?: string; content?: unknown[] } | undefined): boo
  * the layout package's advance table, a synthetic serif: its heights are an estimate, not those of
  * the font the compile uses. The layout is loaded only when a table is there.
  */
-async function measureTablesOf(envelope: CdmEnvelope): Promise<TableMeasure | null> {
+export async function measureTablesOf(envelope: CdmEnvelope): Promise<TableMeasure | null> {
   if (!hasTable(envelope.doc as never)) return null;
   try {
     const [{ measureTables }, { advanceTableMeasurer }, { firstFitBreaker }] = await Promise.all([
