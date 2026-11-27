@@ -44,7 +44,10 @@ describe('DOCX export with the real math gate (EXP-096)', () => {
     const xml = documentXml(out.bytes);
     expect(xml).not.toContain(String.raw`\def`);
     expect(xml.split(MATH_PLACEHOLDER).length - 1).toBe(2);
-    for (const text of ['Before', 'Inline ', ' end', 'a^2+b^2=c^2']) expect(xml).toContain(text);
+    for (const text of ['Before', 'Inline ', ' end']) expect(xml).toContain(text);
+    // The accepted equation is Office math, from the converter of EXP-096, and not its source text.
+    expect(xml).toContain('<m:oMathPara');
+    expect(xml).not.toContain('a^2+b^2=c^2');
     expect(out.warnings.some((w) => w.includes('block eBadAAAAAAAAAAA1'))).toBe(true);
     expect(out.warnings.some((w) => w.includes('block pInlineAAAAAAA1'))).toBe(true);
   });

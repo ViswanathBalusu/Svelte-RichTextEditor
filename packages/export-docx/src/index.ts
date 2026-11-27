@@ -80,4 +80,7 @@ export {
 export type { ScriptedEdit, SkippedEdit } from './edits.ts';
 export { NodeHasher } from './hash.ts';
 export { jobWarnings } from './job-warnings.ts';
+export { MATH_LIMITS, MathConvertError, parseLatex, toLatex } from './math.ts';
+export type { MathNode } from './math.ts';
+export { OMML_NS, latexToOmml, ommlToLatex, readOmml } from './math-omml.ts';
 export type { JobWarning } from './job-warnings.ts';

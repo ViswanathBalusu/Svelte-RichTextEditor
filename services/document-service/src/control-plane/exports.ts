@@ -135,6 +135,8 @@ export function exportRequestKey(parts: {
   suggestionDates?: unknown;
   /** The pictures an `html` export carries (EXP-087): identifier to hash and type. */
   assets?: unknown;
+  /** The imported file, its source map and fragments of a full `docx` export (EXP-090, EXP-123). */
+  preservation?: unknown;
 }): string {
   return createHash('sha256')
     .update(
@@ -155,6 +157,7 @@ export function exportRequestKey(parts: {
         ...(parts.commentThreads ? { commentThreads: parts.commentThreads } : {}),
         ...(parts.suggestionDates ? { suggestionDates: parts.suggestionDates } : {}),
         ...(parts.assets ? { assets: parts.assets } : {}),
+        ...(parts.preservation ? { preservation: parts.preservation } : {}),
       }),
       'utf8',
     )

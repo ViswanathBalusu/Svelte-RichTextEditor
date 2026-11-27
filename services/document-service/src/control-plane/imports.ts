@@ -48,6 +48,14 @@ export const ORIGINAL_NOTE = 'Original Word file: asset';
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
+/**
+ * The content types the Word importer gives the source map and the fragments it returns among its
+ * assets (`@docedit/export-docx`). Both are for the server only (SR-C1): the source map is never
+ * served, a fragment only to a reader of the whole document.
+ */
+export const SOURCE_MAP_CONTENT_TYPE = 'application/vnd.docedit.docx-source-map+json';
+export const FRAGMENT_CONTENT_TYPE = 'application/vnd.docedit.fragment+zip';
+
 export type { DocxImporter, ImportedDocument } from './import-port.ts';
 
 export interface ImportJobDeps {

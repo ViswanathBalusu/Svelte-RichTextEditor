@@ -6,6 +6,8 @@ import { formatTimestamp } from '@docedit/model';
 import type { CreateExportRequest, ExportJob } from '@docedit/protocol';
 import { objectKeys } from '../objects/store.ts';
 import type { Access } from '@docedit/authority';
+import type { AssetRecord } from './assets.ts';
+import { DOCX_CONTENT_TYPE, FRAGMENT_CONTENT_TYPE, SOURCE_MAP_CONTENT_TYPE } from './imports.ts';
 import { hasSuggestions, suggestionOwners } from './content.ts';
 import { suggestionDatesAt } from './export-suggestion-dates.ts';
 import { commentThreadsAt } from './export-comments.ts';
@@ -75,6 +77,45 @@ export async function exportAssets(
     out[r.id] = { sha256: r.sha256, mediaType: r.contentType };
   }
   return out;
+}
+
+/** The content types the Word importer gives its source map and fragments (`@docedit/export-docx`). */
+export interface PreservationAssets {
+  original: { sha256: string; mediaType: string };
+  sourceMap: { sha256: string; mediaType: string };
+  fragments: Record<string, { sha256: string; mediaType: string }>;
+}
+
+/**
+ * What a patching `docx` export needs from the import of a document: its original Word file, the
+ * source map and the fragments (ADR 0017), as the ready assets the import attached. The newest
+ * original and the newest source map are taken. Null when the document was not imported. Only a
+ * full export asks (EXP-123 criterion 3): the caller never calls it for another requester, so
+ * nothing about the original reaches a job of a requester who may not read everything.
+ */
+export async function preservationAssets(
+  d: Kit['d'],
+  tenant: string,
+  doc: string,
+): Promise<PreservationAssets | null> {
+  if (!d.assetRegistry) return null;
+  const ready = (await d.assetRegistry.readyFor(tenant, doc)).filter(
+    (a) => a.state === 'ready' && a.sha256 !== null && a.contentType !== null,
+  );
+  const newest = (type: string): AssetRecord | undefined =>
+    ready.filter((a) => a.contentType === type).sort((x, y) => y.createdAt - x.createdAt)[0];
+  const original = newest(DOCX_CONTENT_TYPE);
+  const sourceMap = newest(SOURCE_MAP_CONTENT_TYPE);
+  if (!original || !sourceMap) return null;
+  const fragments: PreservationAssets['fragments'] = {};
+  for (const a of ready)
+    if (a.contentType === FRAGMENT_CONTENT_TYPE)
+      fragments[a.id] = { sha256: a.sha256!, mediaType: a.contentType };
+  return {
+    original: { sha256: original.sha256!, mediaType: DOCX_CONTENT_TYPE },
+    sourceMap: { sha256: sourceMap.sha256!, mediaType: SOURCE_MAP_CONTENT_TYPE },
+    fragments,
+  };
 }
 
 export function exportRoutes(k: Kit): Record<string, Handler> {
@@ -218,6 +259,13 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       body.target === 'html'
         ? await exportAssets(d, ctx.caller.tenant, doc, projectContent(view, content.doc))
         : null;
+    // A full `docx` export patches the imported Word file (ADR 0017; EXP-090 criterion 5), so its
+    // job names the file, its source map and its fragments. Any other requester's job names none
+    // of them: the original is neither patched nor offered (EXP-123 criterion 3; SR-C1).
+    const preservation =
+      body.target === 'docx' && (full || ctx.caller.kind === 'service')
+        ? await preservationAssets(d, ctx.caller.tenant, doc)
+        : null;
     const kind = options['profile'] === 'preview' ? PREVIEW_KIND : EXPORT_KIND;
     const cacheKey = exportRequestKey({
       tenant: ctx.caller.tenant,
@@ -234,6 +282,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       commentThreads,
       suggestionDates,
       assets,
+      preservation,
     });
     const now = d.now();
     const payload = {
@@ -251,6 +300,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       ...(commentThreads ? { commentThreads } : {}),
       ...(suggestionDates && Object.keys(suggestionDates).length > 0 ? { suggestionDates } : {}),
       ...(assets && Object.keys(assets).length > 0 ? { assets } : {}),
+      ...(preservation ? { preservation } : {}),
       ...exportView(view),
     };
     const accepted = (job: JobRecord) =>

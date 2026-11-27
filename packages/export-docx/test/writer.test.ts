@@ -389,7 +389,9 @@ describe('the direct DOCX writer', () => {
     expect(header).toContain('NUMPAGES');
     // The equation reference resolves to a bookmark around the equation's number.
     expect(instr.some((s) => /^REF _Ref\d+ \\w \\h$/.test(s))).toBe(true);
-    expect(out.warnings.some((w) => w.includes('LaTeX source'))).toBe(true);
+    // The equations are Office math now (EXP-096), so no warning says they are written as source.
+    expect(out.warnings.some((w) => w.includes('LaTeX source'))).toBe(false);
+    expect(all(body, 'oMath').length).toBeGreaterThan(0);
   });
 
   it('writes suggestions as tracked changes with author and date, or settles them (EXP-093)', async () => {

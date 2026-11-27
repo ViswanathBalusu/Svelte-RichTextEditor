@@ -45,7 +45,7 @@ import {
   type JobRecord,
 } from '@docedit/document-service';
 import { project, type HiddenSet } from '@docedit/authority';
-import { writeDocx } from '@docedit/export-docx';
+import { exportDocx, writeDocx } from '@docedit/export-docx';
 import type { CdmEnvelope } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { buildBundle, classFiles } from './bundle-io.ts';
@@ -226,8 +226,8 @@ interface DocxAsset {
   readonly bytes: Uint8Array;
   readonly contentType: string;
   readonly sha256: string;
-  readonly role: 'image';
-  readonly serverOnly: false;
+  readonly role: 'image' | 'fragment';
+  readonly serverOnly: boolean;
 }
 
 /** The file of the `tex` target under the job's prefix: the bundle as one archive (EXP-085). */
@@ -256,6 +256,76 @@ interface Payload {
   suggestionDates: Record<string, string>;
   /** The ready assets of the document that the exported content names, by identifier (EXP-087). */
   assets: Record<string, { sha256: string; mediaType: string }>;
+  /** A full export: the requester manages the document and asked for everything (EXP-123 criterion 1). */
+  full: boolean;
+  /**
+   * The imported Word file, its source map and its fragments, for a `docx` export that patches the
+   * original package (ADR 0017; EXP-090 criterion 5). The control plane writes it for a full export
+   * only (EXP-123 criterion 3); the worker uses it for no other.
+   */
+  preservation: Preservation | null;
+}
+
+interface AssetRef {
+  sha256: string;
+  mediaType: string;
+}
+interface Preservation {
+  original: AssetRef;
+  sourceMap: AssetRef;
+  fragments: Record<string, AssetRef>;
+}
+
+/**
+ * The imported file, its source map and its fragments, each read by hash and checked against it;
+ * null when any is missing or does not match (the job then writes from the document instead).
+ */
+async function readOriginal(
+  read: (tenant: string, sha256: string) => Promise<Uint8Array | null>,
+  tenant: string,
+  p: Preservation,
+): Promise<{ original: Uint8Array; sourceMap: unknown; fragments: Map<string, DocxAsset> } | null> {
+  const get = async (a: AssetRef): Promise<Uint8Array | null> => {
+    const bytes = await read(tenant, a.sha256);
+    return bytes !== null && sha256(bytes) === a.sha256 ? bytes : null;
+  };
+  const original = await get(p.original);
+  const map = await get(p.sourceMap);
+  if (!original || !map) return null;
+  let sourceMap: unknown;
+  try {
+    sourceMap = JSON.parse(new TextDecoder().decode(map));
+  } catch {
+    return null;
+  }
+  const fragments = new Map<string, DocxAsset>();
+  for (const [id, a] of Object.entries(p.fragments)) {
+    const bytes = await get(a);
+    if (!bytes) return null;
+    fragments.set(id, {
+      id,
+      bytes,
+      contentType: a.mediaType,
+      sha256: a.sha256,
+      role: 'fragment',
+      serverOnly: true,
+    });
+  }
+  return { original, sourceMap, fragments };
+}
+
+/** The preservation members of a payload, or `invalid` when they are not the shape the control plane writes. */
+function readPreservation(v: unknown): Preservation | null | 'invalid' {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'object' || Array.isArray(v)) return 'invalid';
+  const o = v as Record<string, unknown>;
+  const original = readAssets({ original: o['original'] });
+  const sourceMap = readAssets({ sourceMap: o['sourceMap'] });
+  const fragments = readAssets(o['fragments']);
+  if (original === 'invalid' || sourceMap === 'invalid' || fragments === 'invalid')
+    return 'invalid';
+  if (!original['original'] || !sourceMap['sourceMap']) return 'invalid';
+  return { original: original['original'], sourceMap: sourceMap['sourceMap'], fragments };
 }
 
 /** The suggestion dates of a payload, or `invalid` when they are not the shape the control plane writes. */
@@ -430,6 +500,12 @@ function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
       'internal',
       'the assets of the job are not the shape the control plane writes',
     );
+  const preservation = readPreservation(p['preservation']);
+  if (preservation === 'invalid')
+    throw new JobFailure(
+      'internal',
+      'the preservation members of the job are not the shape the control plane writes',
+    );
   return {
     sealing,
     certificate,
@@ -437,6 +513,12 @@ function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
     commentThreads,
     suggestionDates,
     assets,
+    // Only the control plane's own `true` counts, and a hidden region or value makes it not full.
+    full:
+      p['full'] === true &&
+      !((p['hiddenRegions'] as unknown[] | undefined)?.length ?? 0) &&
+      !((p['hiddenValues'] as unknown[] | undefined)?.length ?? 0),
+    preservation,
     doc: p['doc'],
     target: p['target'],
     seq: p['seq'],
@@ -808,9 +890,44 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         }
         stopIfCancelled(ctx);
       }
-      let written;
+      // A full export of a document imported from Word patches the original package, so that what
+      // the model does not hold survives (ADR 0017; EXP-090 criterion 5). Only a full export does:
+      // a requester who may not read everything gets a package written from what they may read,
+      // and the original is neither read nor patched here (EXP-123 criterion 3; SR-C1). The worker
+      // looks at the control plane's `full` and at its own check that nothing is hidden.
+      const patchingDiagnostics: Diagnostic[] = [];
+      let written: { bytes: Uint8Array; warnings: string[] } | null = null;
+      if (payload.full && payload.preservation !== null && deps.assetBytes) {
+        const original = await readOriginal(deps.assetBytes, tenant, payload.preservation);
+        stopIfCancelled(ctx);
+        if (!original)
+          patchingDiagnostics.push(
+            diagnostic(
+              'docx_approximation',
+              null,
+              'the imported Word file or its source map could not be read, so the package is written from the document and what the model does not hold is lost',
+            ),
+          );
+        else
+          try {
+            written = await exportDocx(
+              { ...docxEnvelope, doc: settledDoc } as unknown as Parameters<typeof exportDocx>[0],
+              original.original,
+              original.sourceMap as Parameters<typeof exportDocx>[2],
+              { get: (id) => pictures.get(id) ?? original.fragments.get(id) },
+            );
+          } catch (e) {
+            patchingDiagnostics.push(
+              diagnostic(
+                'docx_approximation',
+                null,
+                `the original package could not be patched (${e instanceof Error ? e.message.slice(0, 200) : 'error'}), so the package is written from the document and what the model does not hold is lost`,
+              ),
+            );
+          }
+      }
       try {
-        written = await writeDocx(
+        written ??= await writeDocx(
           { ...docxEnvelope, doc: settledDoc } as unknown as Parameters<typeof writeDocx>[0],
           { get: (id) => pictures.get(id) },
           {
@@ -835,7 +952,8 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         ...docxPlan.plan.diagnostics,
         ...settledDiagnostics,
         ...pictureProblems,
-        ...written.warnings.map((w) => diagnostic('docx_approximation', null, w)),
+        ...patchingDiagnostics,
+        ...written!.warnings.map((w) => diagnostic('docx_approximation', null, w)),
       ];
       stopIfCancelled(ctx);
       await ctx.report('converting', 50);
@@ -843,7 +961,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         tenant,
         job.id,
         DOCX_OUTPUT_FILE,
-        written.bytes,
+        written!.bytes,
         DOCX_CONTENT_TYPE,
       );
       const docxOut: ExportOutputs = {

@@ -44,6 +44,10 @@ import {
 } from './assets.ts';
 import { NodeHasher } from './hash.ts';
 import { NumberingImport } from './import-numbering.ts';
+import { importSources } from './import-sources.ts';
+import { MathConvertError } from './math.ts';
+import { ommlToLatex } from './math-omml.ts';
+import { parseCitationInstruction, residualTree } from './writer-citations.ts';
 import { payloadDigests } from './integrity.ts';
 import { valuesToMarks } from './marks.ts';
 import { pname } from './names.ts';
@@ -159,6 +163,13 @@ export interface ImportOptions {
   validate?: boolean;
   /** Font substitution (EXP-106): the ordered manifest (tenant entries first) and the default family. */
   fonts?: { manifest?: readonly FontManifestEntry[]; defaultFamily?: string };
+  /**
+   * The math gate of 09 §6.3 (`mathGateReason` of `@docedit/export-latex`: a reason, or null when the
+   * LaTeX passes). Office math is made an equation only when a gate is given and passes the LaTeX
+   * the converter wrote, so no unvalidated TeX is stored in a `latex` attribute (EXP-105). Without a
+   * gate every equation stays preserved content, as before.
+   */
+  mathGate?: (latex: string, display: boolean) => string | null;
 }
 
 export interface TreeStat {
@@ -669,6 +680,9 @@ class Importer {
   /** The vertical merges of the table being read: row spans, and the cells they absorb (EXP-101). */
   private vMerges: VMergePlan = { spans: new Map(), absorbed: new Set() };
   private preserveUsed = false;
+  /** The source definitions read from the bibliography sources part, and their tags (EXP-122). */
+  private readonly sourceDefs: JsonNode[] = [];
+  private readonly sourceByTag = new Map<string, string>();
   readonly ctx: LensContext;
 
   readonly bytes: Uint8Array;
@@ -794,6 +808,9 @@ class Importer {
       }
     }
 
+    // Sources before the body: a citation refers to one by its tag (EXP-122).
+    this.readSources(mainRels, mainPart);
+
     // Numbering before the styles: a style may be numbered (headings).
     const numberingRel = mainRels.list.find((r) => r.type === REL.numbering && !r.external);
     const numberingPart = numberingRel ? resolveTarget(mainPart, numberingRel.target) : null;
@@ -897,6 +914,7 @@ class Importer {
       ...styleDefs,
       ...this.numberingImport.defs,
       ...pageSetups,
+      ...this.sourceDefs,
     ];
     const envelope: JsonEnvelope = {
       cdm: 1,
@@ -938,7 +956,10 @@ class Importer {
     );
 
     if (this.opts.validate !== false) {
-      const result = validate(envelope, { attachedAssets: this.assets.ids() });
+      const result = validate(envelope, {
+        attachedAssets: this.assets.ids(),
+        ...(this.opts.mathGate ? { mathGate: this.opts.mathGate } : {}),
+      });
       if (!result.valid) {
         const first = result.violations
           .slice(0, 5)
@@ -1035,6 +1056,202 @@ class Importer {
     this.sm.nodes[String(node.attrs!['id'])] = target;
     this.pending.push({ node, target });
     return target;
+  }
+
+  /**
+   * The bibliography sources part (a custom XML item with a `b:Sources` root) as source definitions.
+   * Each keeps its place in the part, so the writer can copy an unchanged source and rebuild a
+   * changed one (EXP-122, criteria 2 and 3).
+   */
+  readSources(mainRels: Relationships, mainPart: string): void {
+    for (const r of mainRels.list) {
+      if (r.type !== REL.customXml || r.external) continue;
+      const part = resolveTarget(mainPart, r.target);
+      const bytes = this.read(part);
+      if (!bytes) continue;
+      let read: ReturnType<typeof importSources>;
+      try {
+        read = importSources(this.parse(part, bytes).root, this.preserve);
+      } catch (e) {
+        if (!(e instanceof ImportError)) throw e;
+        continue;
+      }
+      if (!read) continue;
+      for (const s of read.sources) {
+        const id = String(s.node.attrs!['id']);
+        // The tag is Word's name for the source; the identifier is a fresh one (nothing is taken
+        // from the file), and the source map says which tag it stands for.
+        const target: DefSource = { part, start: s.start, end: s.end, hash: '', wordId: s.tag };
+        this.sm.defs[id] = target;
+        this.pending.push({ node: s.node, target });
+        this.sourceDefs.push(s.node);
+        this.sourceByTag.set(s.tag, id);
+        this.count(this.stats.nodes, 'source_def');
+        if (s.node.attrs!['preserved']) {
+          this.count(this.stats.nodesWithPreserved, 'source_def');
+          this.preserveUsed = true;
+        }
+      }
+      for (const why of read.skipped)
+        this.warnings.push(`a source was not imported: ${why}; its citations stay as they were`);
+      if (read.sources.length)
+        this.sm.sources = { part, prefixEnd: read.prefixEnd, suffixStart: read.suffixStart };
+      return;
+    }
+  }
+
+  /**
+   * A citation: a content control holding a `CITATION` field of sources the document defines
+   * (EXP-122, criterion 2). The node keeps the original control as its origin while unedited, and
+   * the switches the model has no place for as preserved text (criterion 3). Anything else stays
+   * a preserved content control.
+   */
+  async citation(sdt: XmlElement, pc: PartCtx, marks: JsonMark[]): Promise<JsonNode | null> {
+    if (!this.sourceByTag.size) return null;
+    const pr = child(sdt, NS.w, 'sdtPr');
+    const content = child(sdt, NS.w, 'sdtContent');
+    if (!pr || !content || !child(pr, NS.w, 'citation')) return null;
+    if (elements(pr).some((k) => k.ns !== NS.w || (k.local !== 'id' && k.local !== 'citation')))
+      return null;
+    let state: 'before' | 'code' | 'result' | 'done' = 'before';
+    let instr = '';
+    let cached = '';
+    for (const run of elements(content)) {
+      if (nameOf(run) !== W_R) return null;
+      for (const c of elements(run)) {
+        const n = nameOf(c);
+        if (n === W_RPR) continue;
+        if (n === w('fldChar')) {
+          const type = attr(c, NS.w, 'fldCharType');
+          if (type === 'begin' && state === 'before') state = 'code';
+          else if (type === 'separate' && state === 'code') state = 'result';
+          else if (type === 'end' && (state === 'code' || state === 'result')) state = 'done';
+          else return null;
+        } else if (n === w('instrText') && state === 'code') instr += textContent(c);
+        else if (n === W_T && state === 'result') cached += textContent(c);
+        else return null;
+      }
+    }
+    if (state !== 'done') return null;
+    const parsed = parseCitationInstruction(instr);
+    if (!parsed || !parsed.tags.every((t) => this.sourceByTag.has(t))) return null;
+    const items = parsed.tags.map((tag) => {
+      const item: Record<string, JsonValue> = { source: this.sourceByTag.get(tag)! };
+      if (parsed.locator !== null) {
+        item['locator'] = parsed.locator;
+        item['label'] = 'page';
+      }
+      return item;
+    });
+    const attrs: Record<string, JsonValue> = { items, mode: parsed.mode };
+    if (cached && cached.length <= 1024) attrs['cached'] = cached;
+    const node: JsonNode = { type: 'citation', attrs };
+    if (this.preserve) {
+      const tree = residualTree(parsed.residual);
+      if (tree) attrs['preserved'] = tree as unknown as JsonValue;
+      const fragment = await this.fragment(
+        { xml: pc.bytes.slice(sdt.start, sdt.end), el: sdt },
+        'citation',
+        pc,
+        'none',
+      );
+      attrs['origin'] = { fragment, hash: await modelledHash(node) };
+      this.preserveUsed = true;
+    } else if (parsed.residual) return null;
+    this.count(this.stats.nodes, 'citation');
+    if (marks.length) this.count(this.stats.markedAtoms, 'citation');
+    if (marks.some((m) => m.type === 'ins' || m.type === 'del')) this.stats.suggestions.atoms++;
+    return withMarks(node, marks);
+  }
+
+  /**
+   * The LaTeX of Office math: converted by the converter of this package (EXP-054, decision 234),
+   * then passed through the math gate, so that no unvalidated TeX is stored (EXP-105 criterion 2).
+   * `{ why }` names the reason when it is not converted or the gate refuses it; null when there is
+   * no gate (nothing is converted then) or the equation is empty.
+   */
+  convertMath(el: XmlElement, display: boolean): { latex: string } | { why: string } | null {
+    const gate = this.opts.mathGate;
+    if (!gate) return null;
+    let latex: string;
+    try {
+      latex = ommlToLatex(el);
+    } catch (e) {
+      if (!(e instanceof MathConvertError)) throw e;
+      return { why: `it cannot be converted: ${e.message}` };
+    }
+    if (!latex) return null;
+    const reason = gate(latex, display);
+    return reason === null
+      ? { latex }
+      : { why: `the converted LaTeX fails the math gate: ${reason}` };
+  }
+
+  /** The warning for an equation that stays as Word has it (EXP-105 criterion 3). */
+  mathWarning(block: string | null, why: string): void {
+    this.warnings.push(
+      `an equation (block ${block ?? 'unknown'}) was not made editable and is kept as Word has it: ${why}`,
+    );
+  }
+
+  /** Inline Office math as an `equation` that keeps its original element as its origin (EXP-105). */
+  async equation(el: XmlElement, pc: PartCtx, marks: JsonMark[]): Promise<JsonNode | null> {
+    const converted = this.convertMath(el, false);
+    if (!converted) return null;
+    if ('why' in converted) {
+      this.mathWarning(this.block_, converted.why);
+      return null;
+    }
+    const node: JsonNode = { type: 'equation', attrs: { latex: converted.latex } };
+    if (this.preserve) {
+      const fragment = await this.fragment(
+        { xml: pc.bytes.slice(el.start, el.end), el },
+        'equation',
+        pc,
+        'none',
+      );
+      node.attrs!['origin'] = { fragment, hash: await modelledHash(node) };
+      this.preserveUsed = true;
+    }
+    this.count(this.stats.nodes, 'equation');
+    if (marks.some((m) => m.type === 'ins' || m.type === 'del')) this.stats.suggestions.atoms++;
+    return withMarks(node, marks);
+  }
+
+  /**
+   * A paragraph that holds one `m:oMathPara` and nothing else is an `equation_block`. The block
+   * keeps its place in the source map, so while it is unedited the paragraph is copied, and once
+   * edited only the math element is replaced (EXP-105 criteria 2 and 4).
+   */
+  async equationBlock(
+    p: XmlElement,
+    pc: PartCtx,
+  ): Promise<{ node: JsonNode; sectPr: XmlElement | null } | { why: string } | null> {
+    if (!this.opts.mathGate) return null;
+    const kids = elements(p).filter((k) => nameOf(k) !== W_PPR);
+    const para = kids[0];
+    if (kids.length !== 1 || !para || nameOf(para) !== M_OMATHPARA) return null;
+    const pPr = child(p, NS.w, 'pPr');
+    if (pPr && child(pPr, NS.w, 'sectPr')) return null;
+    const converted = this.convertMath(para, true);
+    if (!converted) return null;
+    if ('why' in converted) return converted;
+    const id = nodeId();
+    this.block_ = id;
+    const node: JsonNode = {
+      type: 'equation_block',
+      attrs: { id, latex: converted.latex, numbered: false },
+    };
+    const target: NodeSource = {
+      part: pc.part,
+      start: p.start,
+      end: p.end,
+      hash: '',
+      mathRange: [para.start, para.end],
+    };
+    this.source(node, target);
+    this.count(this.stats.nodes, 'equation_block');
+    return { node, sectPr: null };
   }
 
   /** Records a node the importer added without a source element: listed in `synthetic`, hashed in `derived`. */
@@ -1481,7 +1698,10 @@ class Importer {
         this.stats.fallbacks.trackedParagraphs++;
         label = 'tracked change';
       } else {
+        const equation = await this.equationBlock(el, pc);
+        if (equation && 'node' in equation) return equation;
         const p = await this.paragraph(el, pc);
+        if (equation && p) this.mathWarning(String(p.node.attrs?.['id']), equation.why);
         if (p) return p;
         this.stats.fallbacks.paragraphToBlock++;
       }
@@ -1871,6 +2091,20 @@ class Importer {
           'Word regenerates them; dropped only from paragraphs that are edited',
         );
         continue;
+      }
+      if (name === w('sdt')) {
+        const cited = await this.citation(c, pc, marks);
+        if (cited) {
+          out.push(cited);
+          continue;
+        }
+      }
+      if (name === M_OMATH) {
+        const equation = await this.equation(c, pc, marks);
+        if (equation) {
+          out.push(equation);
+          continue;
+        }
       }
       if (!this.preserve) continue;
       out.push(this.smallAtom(c, marks) ?? (await this.fragmentAtom(c, pc, 'none', marks)));
