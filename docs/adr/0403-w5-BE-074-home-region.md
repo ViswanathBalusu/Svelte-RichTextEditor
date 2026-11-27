@@ -26,3 +26,26 @@ Status: proposed (2026-11-18, lane w5). Not decided by the owner. Each choice be
 1. Where does the assignment live when each region has its own database: one global directory, or a copy in each region?
 2. May a gateway outside the home region read the document's head and the tenant's region from the home region's database to route a channel? If not, the gateway must route from the region alone and leave the owner check to the node that receives the channel.
 3. When no node of the home region is live, should the answer carry a `retryInMs`?
+
+## Addendum (2026-11-27): owner decision 233
+
+Decision 233 of [the 2026-11-26 decisions](../owner-decisions-2026-11-26.md) answers open question 2:
+"No cross-region read. A gateway routes by region alone, and the receiving node checks the owner
+(ADR 0403)." Built as follows.
+
+- `Forwarder.route` resolves the home region first. When the document has one and the node's own
+  region (`ForwardingDeps.region`, from the node's traits) is another, it reads the live node
+  leases and nothing about the document: no head, no owner. It names one node of the home region
+  by rendezvous hashing (`eligibleHosts`, `routeDocument`) and answers `{ node, byRegion: true }`,
+  or refuses with `unavailable` when no node of the region is live.
+- The `open` frame carries `byRegion`. The receiving node reads the head inside its own region. If
+  another live node holds the document, it answers a new down frame `moved` with that node's name
+  and drops the channel; the gateway opens the channel on that node (at most three moves). If it
+  holds the document, or none does, it acquires the room as before. Ownership is still decided by
+  the epoch check of BE-017.
+- A node inside the home region routes as before, with the head.
+- Open question 1 (where the assignment lives) is not answered by decision 233. The gateway still
+  reads the home region of a document from the stores it is given, which with one database per
+  region means a copy of the assignment in each region.
+- The node leases are read across regions. They name nodes, their addresses, regions and
+  dedicated documents, and no tenant content.

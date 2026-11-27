@@ -103,6 +103,12 @@ export type UpFrame =
       readonly wantsPresence: boolean;
       readonly features: readonly string[];
       readonly trace: ChannelPort['trace'];
+      /**
+       * The gateway chose this node by the home region alone and read nothing of the document
+       * (BE-074; decision 233): this node checks the owner and says `moved` when another node of
+       * the region holds the document.
+       */
+      readonly byRegion?: true;
     }
   | { readonly t: 'submit'; readonly commit: Commit; readonly id: string }
   | { readonly t: 'presence'; readonly u: PresenceUpdate }
@@ -117,7 +123,22 @@ export type DownFrame =
   | { readonly t: 'event'; readonly n: Parameters<ChannelPort['event']>[0] }
   | { readonly t: 'check'; readonly d: Parameters<ChannelPort['check']>[0] }
   | { readonly t: 'closed'; readonly d: Closed; readonly cause: Cause }
-  | { readonly t: 'rejected'; readonly code: Refusal['code']; readonly message: string };
+  | { readonly t: 'rejected'; readonly code: Refusal['code']; readonly message: string }
+  /** The document is held by another live node, which the gateway should open the channel on. */
+  | { readonly t: 'moved'; readonly node: string };
+
+/** The node the document is held on, told to a gateway that chose a node by region alone. */
+class MovedTo extends Error {
+  override name = 'MovedTo';
+  readonly node: string;
+  constructor(node: string) {
+    super(`the document is held by ${node}`);
+    this.node = node;
+  }
+}
+
+/** How many times one open follows a `moved` answer. */
+const MAX_MOVES = 3;
 
 type Frame = UpFrame | DownFrame;
 
@@ -177,6 +198,8 @@ export interface ForwardingDeps {
    * the nodes of that region only, and is refused with `unavailable` when none is live.
    */
   readonly homeRegions?: Pick<HomeRegionStore, 'resolve'> | undefined;
+  /** The region this node announces (BE-074), or null when it announces none. */
+  readonly region?: string | null | undefined;
   readonly settings?: Partial<ForwardingSettings>;
   readonly now: () => number;
   readonly metrics: Metrics;
@@ -186,6 +209,8 @@ export interface ForwardingDeps {
 /** What a gateway gives to open a forwarded channel. */
 export interface ForwardOpen {
   readonly ref: DocRef;
+  /** The owner was chosen by the home region alone (`route` says so); see `UpFrame`. */
+  readonly byRegion?: boolean;
   /** The channel's key on the gateway: unique on this node. */
   readonly key: string;
   readonly owner: string;
@@ -238,16 +263,27 @@ export class Forwarder {
    * region and no live node is in it (BE-074 criterion 4): the channel is not served anywhere
    * else, so nothing is written elsewhere.
    */
-  async route(ref: DocRef): Promise<{ node: string } | null> {
+  async route(ref: DocRef): Promise<{ node: string; byRegion?: true } | null> {
     if (this.#closed) return null;
     const me = this.#d.node;
     let head;
     let live;
     let region: string | null = null;
     try {
-      [head, live] = await Promise.all([this.#d.logs.head(ref), this.#d.leases.live()]);
       if (this.#d.homeRegions) region = await this.#d.homeRegions.resolve(ref);
-    } catch {
+      // A gateway outside the home region reads nothing of the document: no cross-region read
+      // (BE-074 criterion 3; decision 233). It routes by the region alone, and the node that
+      // receives the channel checks the owner.
+      if (region !== null && (this.#d.region ?? null) !== region) {
+        live = await this.#d.leases.live();
+        const inRegion = eligibleHosts(ref.doc, live, region).map((n) => n.node);
+        if (inRegion.length === 0)
+          throw new Refusal('unavailable', `no live node in the home region ${region}`);
+        return { node: routeDocument(ref.doc, inRegion), byRegion: true };
+      }
+      [head, live] = await Promise.all([this.#d.logs.head(ref), this.#d.leases.live()]);
+    } catch (e) {
+      if (e instanceof Refusal) throw e;
       return null;
     }
     const names = live.map((n) => n.node);
@@ -277,7 +313,23 @@ export class Forwarder {
    * `ch.opened` (the port has had `opened` called); rejects with a `Refusal` when the owner refused
    * the channel or could not be reached.
    */
-  open(o: ForwardOpen): Promise<ChannelRoom> {
+  async open(o: ForwardOpen): Promise<ChannelRoom> {
+    let target = o;
+    for (let moves = 0; ; moves++) {
+      try {
+        return await this.#openOnce(target);
+      } catch (e) {
+        // The node chosen by region alone is not the owner: open on the node it names.
+        if (!(e instanceof MovedTo) || moves >= MAX_MOVES) {
+          if (e instanceof MovedTo) throw new Refusal('unavailable', e.message);
+          throw e;
+        }
+        target = { ...o, owner: e.node, byRegion: false };
+      }
+    }
+  }
+
+  #openOnce(o: ForwardOpen): Promise<ChannelRoom> {
     if (this.#closed) return Promise.reject(new Refusal('unavailable', 'the service is stopping'));
     const cid = `${this.#d.node}/${++channelCounter}/${o.key}`;
     const chan = this.#newChan(cid, 'gateway', this.#d.node, o.owner, o.ref.tenant);
@@ -318,6 +370,7 @@ export class Forwarder {
       wantsPresence: o.port.wantsPresence,
       features: o.port.features,
       trace: o.port.trace,
+      ...(o.byRegion ? { byRegion: true as const } : {}),
     };
     this.stats.opened++;
     this.#up(chan, frame);
@@ -356,6 +409,15 @@ export class Forwarder {
         if (o) {
           clearTimeout(o.timer);
           o.reject(new Refusal(f.code, f.message));
+        }
+        return;
+      }
+      case 'moved': {
+        const o = chan.opening;
+        this.#teardown(chan, false);
+        if (o) {
+          clearTimeout(o.timer);
+          o.reject(new MovedTo(f.node));
         }
         return;
       }
@@ -451,6 +513,19 @@ export class Forwarder {
       },
     };
     try {
+      if (f.byRegion) {
+        // The gateway chose this node by region alone. The owner is read here, inside the region.
+        const [head, live] = await Promise.all([this.#d.logs.head(ref), this.#d.leases.live()]);
+        if (
+          head.owner !== null &&
+          head.owner !== this.#d.node &&
+          live.some((n) => n.node === head.owner)
+        ) {
+          down({ t: 'moved', node: head.owner });
+          this.#teardown(chan, false);
+          return;
+        }
+      }
       const room = await this.#d.host.acquire(ref);
       const decision = mayOpen(room.requires, [...f.features]);
       if (!decision.ok)

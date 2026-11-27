@@ -850,6 +850,7 @@ export class Session {
           ref,
           key: c.key,
           owner: route.node,
+          ...(route.byRegion ? { byRegion: true } : {}),
           port: this.#port(c, m.id),
           conn,
           resume: d.resume,
