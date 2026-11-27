@@ -116,6 +116,15 @@ jobs:
             playwright-report/
             .vitest-attachments/
           if-no-files-found: ignore
+      # A painted-width test writes the golden file for an engine and platform that has none (for
+      # example fe-094-pages-20.painted.webkit.darwin.json). Keep what a run wrote so that someone can
+      # review it and commit it. It cannot be made on another platform.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: browser-${{ matrix.browser }}-golden
+          path: packages/painter/golden/*.json
+          if-no-files-found: ignore
 
   kernel:
     # The layout kernel (ADR 0016; WASM-001) is Rust compiled to WebAssembly in the pinned builder

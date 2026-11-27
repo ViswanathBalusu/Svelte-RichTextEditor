@@ -32,6 +32,18 @@ const hasDateControl = ((): boolean => {
   return probe.type === 'date';
 })();
 
+/**
+ * Whether Tab skips checkboxes and buttons here. Safari on macOS does so by default (the system
+ * setting "Press Tab to highlight each item" is off), and so does the WebKit build Playwright runs on
+ * macOS. Safari reaches every control with Alt+Tab, so the test presses that there. Other engines,
+ * and WebKit on Linux and Windows, are checked with plain Tab.
+ */
+const safariTabSkipsControls =
+  isBrowser &&
+  /Macintosh/.test(navigator.userAgent) &&
+  /AppleWebKit/.test(navigator.userAgent) &&
+  !/Chrome|Chromium|Edg|Firefox/.test(navigator.userAgent);
+
 function mounted() {
   const host = document.createElement('div');
   document.body.append(host);
@@ -295,9 +307,13 @@ describe.skipIf(!isBrowser)('keyboard only (FRW-079 criterion 5)', () => {
       // that Tab visits before it leaves the control, so the bound is wider than the parts of one
       // engine: the hosted WebKit run did not reach the checkbox in 8 presses (the same test passes in
       // a Playwright 1.65 container).
+      const tab = (shift: boolean) =>
+        safariTabSkipsControls
+          ? m.user.keyboard(shift ? '{Shift>}{Alt>}{Tab}{/Alt}{/Shift}' : '{Alt>}{Tab}{/Alt}')
+          : m.user.tab({ shift });
       const press = async (shift: boolean, want: Element | null) => {
         for (let n = 0; n < 16; n++) {
-          await m.user.tab({ shift });
+          await tab(shift);
           if (document.activeElement === want) return true;
         }
         return false;
@@ -306,7 +322,7 @@ describe.skipIf(!isBrowser)('keyboard only (FRW-079 criterion 5)', () => {
       for (let i = 1; i < ids.length; i++)
         expect(await press(false, m.control(ids[i]!)), `Tab reaches ${ids[i]}`).toBe(true);
       // No trap: Tab from the last control leaves the controls.
-      await m.user.tab();
+      await tab(false);
       expect(ids.map((id) => m.control(id))).not.toContain(document.activeElement);
       m.control(ids[ids.length - 1]!).focus();
       for (let i = ids.length - 2; i >= 0; i--)

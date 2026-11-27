@@ -123,13 +123,14 @@ test.describe('choosing a suggestion, accept and reject (UX-037 criterion 3)', (
     await pane.locator('li[data-suggestion="s2"] [data-review-accept]').click();
     expect(await h.reviewIds()).toEqual(['s3', 's1', 's4']);
     await expect(status(page)).toHaveText('1 suggestion accepted.');
-    expect(await ids(rows)).toEqual(['s1', 's3', 's4']);
+    await expect.poll(() => ids(rows)).toEqual(['s1', 's3', 's4']);
     await pane
       .getByRole('button', { name: 'Reject the suggestion by Ada Lovelace' })
       .first()
       .click();
     expect(await h.reviewCalls()).toContainEqual({ op: 'reject', handled: ['s1'], skipped: 0 });
-    expect(await ids(rows)).toEqual(['s3', 's4']);
+    // The list follows the core's answer in the next render, so read it until it settles.
+    await expect.poll(() => ids(rows)).toEqual(['s3', 's4']);
     await expect(status(page)).toHaveText('1 suggestion rejected.');
   });
 
