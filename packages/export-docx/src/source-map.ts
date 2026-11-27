@@ -28,6 +28,8 @@ export interface NodeSource {
   sectPrRange?: [number, number];
   /** Shape of the original element the writer keeps when it regenerates it: `no-tblPr` for a table without properties. */
   flags?: string[];
+  /** For an `equation_block`: the byte range of the paragraph's `m:oMathPara`, replaced when the equation is edited (EXP-105). */
+  mathRange?: [number, number];
 }
 
 export interface DefSource {
@@ -123,6 +125,12 @@ export interface SourceMap {
   runIdentity?: Record<string, IdentityEntry[]>;
   /** CDM style id to Word style id. */
   styles: Record<string, string>;
+  /**
+   * The bibliography sources part (EXP-122): its name, and the byte offsets where its sources
+   * start and end, so that the part is rebuilt around the original root (its `SelectedStyle`,
+   * `StyleName` and `Version` stay as they were). The sources are in `defs`, with their ranges.
+   */
+  sources?: { part: string; prefixEnd: number; suffixStart: number };
   /** Story id to its part and the main part's relationship id for it. */
   stories: Record<string, { part: string; relId: string }>;
   /** Nodes and definitions the importer added without a source element; the writer leaves them out while unchanged. */

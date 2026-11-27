@@ -853,6 +853,11 @@ export interface FindState {
   readonly current: number | null;
   /** False when the find ignores case (UX-020); absent when case matters, the default. */
   readonly matchCase?: boolean;
+  /**
+   * The preserved Word atoms whose fallback text holds the query, which the find does not search
+   * (FE-139 criterion 4). Absent when there are none.
+   */
+  readonly skippedPreserved?: number;
 }
 
 /** One match for a navigation pane (FE-059 criterion 6): its place and the text around it. */

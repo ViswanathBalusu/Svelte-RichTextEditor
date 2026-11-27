@@ -91,11 +91,16 @@ import {
 } from './writer-comments.ts';
 import {
   BIBLIOGRAPHY_NS,
+  CITATION_CONTROL_BASE,
+  citationControl,
   citationInstruction,
   fieldRuns,
+  residualOf,
   sourcesItemId,
   sourcesPart,
 } from './writer-citations.ts';
+import { MathConvertError } from './math.ts';
+import { latexToOmml } from './math-omml.ts';
 import { escapeAttr, escapeText } from './xml.ts';
 import { type ZipWriteEntry, writeZip } from './zip.ts';
 
@@ -363,6 +368,8 @@ class DirectWriter {
   private readonly slotOverrides = new Map<string, Record<string, string>>();
   /** Identifiers of the source definitions, so a citation of an undefined source is reported (EXP-122). */
   private readonly sourceIds = new Set<string>();
+  /** The identifier of the last content control written round a citation (`w:sdt`). */
+  private citationControls = 0;
   private nextId = 1;
   private nextFootnote = 1;
   private nextDocPr = 1;
@@ -419,6 +426,23 @@ class DirectWriter {
       `an equation that fails the math gate is replaced by a placeholder (block ${block}: ${reason})`,
     );
     return true;
+  }
+
+  /**
+   * An equation as Office math, or null when the converter does not take it (it is then written
+   * as its LaTeX source, with a warning that names the block). The converter is our own, bounded
+   * and without a TeX engine (EXP-054, owner decision 234); it runs after the gate (EXP-096).
+   */
+  officeMath(latex: string, display: boolean, block: string): string | null {
+    try {
+      return latexToOmml(latex, display);
+    } catch (e) {
+      if (!(e instanceof MathConvertError)) throw e;
+      this.warn(
+        `an equation that cannot be converted to Office math is written as its LaTeX source (block ${block}: ${e.message})`,
+      );
+      return null;
+    }
   }
 
   warn(message: string): void {
@@ -868,16 +892,16 @@ class DirectWriter {
             el('w:pPr', {}, el('w:jc', { 'w:val': 'center' })),
             el('w:r', {}, textElement('w:t', MATH_PLACEHOLDER)),
           );
-        this.warn(
-          'an equation is written as its LaTeX source: Office math needs the converter of EXP-054',
-        );
         const label = this.labels.equations.get(id);
         const bookmark =
           typeof n.attrs?.['label'] === 'string'
             ? this.refBookmarks.get(`eq:${n.attrs['label']}`)
             : undefined;
         const number = label ? `\t(${label})` : '';
-        const text = xmlSafe(String(n.attrs?.['latex'] ?? '')).text;
+        const latex = String(n.attrs?.['latex'] ?? '');
+        // Office math through the converter of this package (EXP-096); an equation it does not
+        // convert is written as its LaTeX source, and the warning names the block.
+        const office = this.officeMath(latex, !label, id);
         const numberXml = number
           ? this.bookmarked(bookmark, el('w:r', {}, el('w:tab'), textElement('w:t', `(${label})`)))
           : '';
@@ -885,7 +909,7 @@ class DirectWriter {
           'w:p',
           {},
           el('w:pPr', {}, el('w:jc', { 'w:val': 'center' })),
-          el('w:r', {}, textElement('w:t', text)),
+          office ?? el('w:r', {}, textElement('w:t', xmlSafe(latex).text)),
           numberXml,
         );
       }
@@ -1620,7 +1644,11 @@ class DirectWriter {
             : `[${items.map((x) => x.source).join('; ')}]`;
         const instr = inDel
           ? null
-          : citationInstruction(items, typeof a['mode'] === 'string' ? a['mode'] : 'normal');
+          : citationInstruction(
+              items,
+              typeof a['mode'] === 'string' ? a['mode'] : 'normal',
+              residualOf(a['preserved']),
+            );
         if (!instr) {
           if (!inDel)
             this.warn('a citation with no source Word can cite is written as its text (EXP-122)');
@@ -1629,22 +1657,28 @@ class DirectWriter {
         for (const x of items)
           if (typeof x.source === 'string' && !this.sourceIds.has(x.source))
             this.warn('a citation names a source the document does not define (EXP-122)');
-        return fieldRuns(instr, xmlSafe(text).text, rPr());
+        return citationControl(
+          CITATION_CONTROL_BASE + ++this.citationControls,
+          fieldRuns(instr, xmlSafe(text).text, rPr()),
+        );
       }
       case 'form_field':
         return this.formFieldXml(node, rPr());
       case 'equation':
         if (this.refusedByGate(String(a['latex'] ?? ''), cx.seqBlock ?? 'unknown', false))
           return el('w:r', {}, rPr(), textElement(inDel ? 'w:delText' : 'w:t', MATH_PLACEHOLDER));
-        this.warn(
-          'an equation is written as its LaTeX source: Office math needs the converter of EXP-054',
-        );
-        return el(
-          'w:r',
-          {},
-          rPr(),
-          textElement(inDel ? 'w:delText' : 'w:t', xmlSafe(String(a['latex'] ?? '')).text),
-        );
+        {
+          const latex = String(a['latex'] ?? '');
+          // Office math cannot sit in a deleted run, so a deleted equation stays its source text.
+          const office = inDel ? null : this.officeMath(latex, false, cx.seqBlock ?? 'unknown');
+          if (office !== null) return office;
+          return el(
+            'w:r',
+            {},
+            rPr(),
+            textElement(inDel ? 'w:delText' : 'w:t', xmlSafe(latex).text),
+          );
+        }
       case 'extension_inline':
       case 'preserved_inline': {
         const label = String(a['label'] ?? a['extension'] ?? node.type);

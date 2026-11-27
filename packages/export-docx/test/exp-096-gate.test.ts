@@ -47,15 +47,10 @@ describe('the DOCX writer and the math gate (EXP-096)', () => {
     // The refused equations leave no trace of their source, and each is a visible placeholder.
     expect(xml).not.toContain('\\def');
     expect(xml.split(MATH_PLACEHOLDER).length - 1).toBe(2);
-    // The rest of the document is written, and the accepted equation is written as before.
-    for (const text of [
-      'Before the display',
-      'Inline ',
-      ' and after',
-      'Last paragraph',
-      'a^2+b^2=c^2',
-    ])
+    // The rest of the document is written, and the accepted equation is Office math (EXP-096).
+    for (const text of ['Before the display', 'Inline ', ' and after', 'Last paragraph'])
       expect(xml).toContain(text);
+    expect(xml).toContain('<m:oMath');
     // The diagnostics carry the block identifiers: the display's own, and the inline one's paragraph.
     expect(out.warnings.some((w) => w.includes(`block ${display}`))).toBe(true);
     expect(out.warnings.some((w) => w.includes(`block ${para}`))).toBe(true);

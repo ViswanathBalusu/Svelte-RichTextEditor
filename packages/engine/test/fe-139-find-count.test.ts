@@ -6,7 +6,8 @@
 import type { CdmEnvelope } from '../src/api.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { describe, expect, it } from 'vitest';
-import { spikeDocument } from './fixtures.ts';
+import { internals } from '../src/testing.ts';
+import { ownerAccess, spikeDocument } from './fixtures.ts';
 import { microtask } from './support.ts';
 
 const ASSET = '0190f0a0-0000-7000-8000-000000000002';
@@ -58,5 +59,46 @@ describe('the core reports the preserved atoms the find skipped (FE-139 criterio
     const core = new DocumentCore({ doc: spikeDocument(), schedule: microtask });
     core.findText('Introduction');
     expect(core.skippedPreservedFind()).toBe(0);
+  });
+});
+
+describe('find and replace leave preserved content alone and report the skip (FE-139 criterion 4)', () => {
+  it('carries the skipped count in the find state, and leaves it out when nothing was skipped', () => {
+    const core = new DocumentCore({ doc: withPreserved('Chart from Word'), schedule: microtask });
+    core.findText('Chart');
+    expect(core.findState.get().skippedPreserved).toBe(1);
+    core.findText('Sales');
+    expect(core.findState.get()).not.toHaveProperty('skippedPreserved');
+    core.findText('');
+    expect(core.findState.get()).not.toHaveProperty('skippedPreserved');
+  });
+
+  it('does not report an atom whose fallback text lacks the query', () => {
+    const core = new DocumentCore({ doc: withPreserved('Quarterly'), schedule: microtask });
+    core.findText('Chart');
+    expect(core.findState.get().count).toBe(1);
+    expect(core.findState.get()).not.toHaveProperty('skippedPreserved');
+  });
+
+  it('replace all changes the text matches and leaves the atom and its fallback text as they were', () => {
+    const core = new DocumentCore({
+      doc: withPreserved('Chart from Word'),
+      access: ownerAccess(),
+      schedule: microtask,
+    });
+    core.findText('Chart');
+    const report = core.replaceAll('Graph');
+    expect(report.replaced).toBe(1);
+    const atoms: Array<{ label: unknown; fallbackText: unknown }> = [];
+    internals(core).state.doc.descendants((node) => {
+      if (node.type.name === 'preserved_block')
+        atoms.push({ label: node.attrs['label'], fallbackText: node.attrs['fallbackText'] });
+      return true;
+    });
+    expect(atoms).toEqual([{ label: 'chart', fallbackText: 'Chart from Word' }]);
+    expect(internals(core).state.doc.textContent).toContain('Sales Graph below');
+    // The query is gone from the text, but the atom still holds it: the skip is still reported.
+    expect(core.findState.get().count).toBe(0);
+    expect(core.findState.get().skippedPreserved).toBe(1);
   });
 });

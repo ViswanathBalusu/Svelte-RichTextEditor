@@ -80,6 +80,7 @@ import {
   type TableCellItem,
   type TableRowItem,
 } from './page-items.ts';
+import { diffItems, sameValue } from './paginate-diff.ts';
 import { judgePins, type PagePin, type PinJudgement } from './reconcile.ts';
 import { splitRowAt } from './row-split.ts';
 import { splitRowAtLine } from './row-line-split.ts';
@@ -351,6 +352,97 @@ interface Pass {
 }
 
 /**
+ * The state of a pass between two items, taken at the first item boundary after a page turn
+ * (FE-088). A pass restarted from it gives what the whole pass would, provided the items before
+ * `itemIndex` are the ones the checkpoint was taken over. It is not taken inside a keepNext chain
+ * or a balanced run of columns, where the items still to come take part in the placement.
+ */
+interface Checkpoint {
+  /** The item the pass places next. */
+  readonly itemIndex: number;
+  /** Pages (and frames and overflow entries) closed before this point. */
+  readonly pageCount: number;
+  /** Entries of the pass's `overflowed` list made before this point. */
+  readonly overflowedCount: number;
+  readonly cur: OpenPage;
+  readonly section: number;
+  readonly sectionPages: number;
+  readonly sectionSetup: PageSetup;
+  readonly nextNumber: number;
+  readonly pendingStart: number | null;
+  readonly opened: number;
+  readonly checkBalance: boolean;
+  readonly noteCarry: readonly NotePiece[];
+  readonly noteFresh: readonly NotePiece[];
+  readonly notesPlaced: readonly string[];
+  readonly holding: boolean;
+  readonly pendingPin: number | null;
+  readonly skippedNoRoom: boolean;
+  readonly usedStories: boolean;
+}
+
+/** What an incremental pass is given and what it reports (FE-088). */
+interface PassTrace {
+  /** Output: the checkpoints this pass takes, in item order. */
+  readonly checkpoints: Checkpoint[];
+  /** Start from this checkpoint of `base`, the pass that took it, instead of from the first item. */
+  readonly resume?: { readonly checkpoint: Checkpoint; readonly base: Pass };
+  /**
+   * Stop as soon as the state at a page turn is the one `base` had at the same item: from then on
+   * the placement is the same, so the pages of `base` after that point are kept. Item indexes of
+   * `base` are the new indexes minus `delta`; only indexes from `from` on are looked at.
+   */
+  readonly converge?: {
+    readonly base: Pass;
+    readonly checkpoints: ReadonlyMap<number, Checkpoint>;
+    readonly from: number;
+    readonly delta: number;
+  };
+  /** Output: the item at which the pass stopped because it had converged, or null. */
+  stoppedAt: number | null;
+  /** Output: the checkpoint of `base` at which it converged. */
+  stoppedOn: Checkpoint | null;
+}
+
+const cloneOpenPage = (p: OpenPage): OpenPage => ({
+  ...p,
+  fragments: [...p.fragments],
+  colUsed: [...p.colUsed],
+  colFrags: [...p.colFrags],
+});
+
+/** Whether the state of a pass at a page turn is the state `old` had at the same item. */
+function sameCheckpoint(now: Checkpoint, old: Checkpoint): boolean {
+  return (
+    now.pageCount === old.pageCount &&
+    now.section === old.section &&
+    now.sectionPages === old.sectionPages &&
+    now.nextNumber === old.nextNumber &&
+    now.pendingStart === old.pendingStart &&
+    now.opened === old.opened &&
+    now.checkBalance === old.checkBalance &&
+    now.holding === old.holding &&
+    now.pendingPin === old.pendingPin &&
+    now.skippedNoRoom === old.skippedNoRoom &&
+    now.usedStories === old.usedStories &&
+    sameValue(now.sectionSetup, old.sectionSetup) &&
+    sameValue(now.noteCarry, old.noteCarry) &&
+    sameValue(now.noteFresh, old.noteFresh) &&
+    sameValue(now.notesPlaced, old.notesPlaced) &&
+    sameValue(now.cur, old.cur)
+  );
+}
+
+/** Whether item `k` keeps with the next item, so that the two are placed together. */
+function keepsWithNext(items: readonly PageItem[], k: number): boolean {
+  const it = items[k];
+  const nx = items[k + 1];
+  if (!it || !nx || (it.kind !== 'paragraph' && it.kind !== 'box') || !it.keepNext) return false;
+  if (nx.kind === 'paragraph') return !nx.pageBreakBefore;
+  return nx.kind === 'box';
+}
+
+/**
  * The paragraph fragments of a table cell at page position `x` (the cell's left edge) and `top`
  * (the row's top), stacked with their spacing and the cell's left and top margins (FE-083).
  */
@@ -533,6 +625,177 @@ export function* paginateSteps(
   return freezeTree({ pages: s.pages, overflowed: s.overflowed, pageCountSettled: s.settled });
 }
 
+/**
+ * What `paginateIncremental` keeps from a run so that the next run can start part-way: the input,
+ * the pass and its checkpoints. Opaque to callers; the next call is given the whole memo.
+ */
+export interface PaginationMemo {
+  readonly pagination: Pagination;
+  /** Null when the run cannot be resumed from (typeset pins were given). */
+  readonly state: MemoState | null;
+}
+
+/** The part of a `PaginationMemo` that only `paginateIncremental` reads. */
+export interface MemoState {
+  readonly items: readonly PageItem[];
+  readonly first: PageSetup;
+  readonly notes: ReadonlyMap<string, NoteItem>;
+  /** The page count the stories were given in the last pass. */
+  readonly count: number;
+  readonly pass: Pass;
+  readonly checkpoints: readonly Checkpoint[];
+}
+
+/** What `paginateIncremental` did, with its result (FE-088). */
+export interface IncrementalPagination {
+  readonly pagination: Pagination;
+  readonly memo: PaginationMemo;
+  /**
+   * `full`: every item was placed (no earlier run, a changed setup or footnotes, pins, or a page
+   * count that did not settle). `incremental`: the pass started from a checkpoint. `unchanged`: the
+   * items are those of the earlier run, and its result is returned as it was.
+   */
+  readonly mode: 'full' | 'incremental' | 'unchanged';
+  /** The first page laid out again, for an incremental run; null otherwise. */
+  readonly restartedAtPage: number | null;
+  /** The page at which the new pages met the earlier ones and the pass stopped; null when it ran to the end. */
+  readonly stoppedAtPage: number | null;
+  /** Items placed by the pass that gave the result. */
+  readonly itemsPlaced: number;
+}
+
+/**
+ * `paginate` for the next run of a document that changed a little (02 §9.5; FE-088). The items of
+ * the earlier run (`previous`, its memo) and the new items are compared; the pass restarts at the
+ * last page start before the first changed item, with the state it had there, and stops as soon as
+ * its state at a page turn is the state the earlier pass had at the same item: the pages after that
+ * point are the earlier ones. The pagination equals the one `paginate` gives on the same input.
+ *
+ * The first changed item is found by comparing items, so a caller does not have to name the dirty
+ * blocks. A keepNext chain that reaches the first changed item is placed again from its head, and a
+ * balanced run of columns is placed again as a whole, because the items to come take part in their
+ * placement. A run is whole when the earlier run has no memo, the first page setup or the footnotes
+ * changed, typeset pins are given, or the stories' page count changed.
+ */
+export function paginateIncremental(
+  items: readonly PageItem[],
+  first: PageSetup,
+  options: PaginateOptions = {},
+  previous?: PaginationMemo,
+): IncrementalPagination {
+  const notes = options.notes ?? new Map<string, NoteItem>();
+  const prev = options.pins ? null : (previous?.state ?? null);
+  if (previous && prev && sameValue(prev.first, first) && sameValue(prev.notes, notes)) {
+    const diff = diffItems(prev.items, items);
+    if (diff.same) {
+      return {
+        pagination: previous.pagination,
+        memo: previous,
+        mode: 'unchanged',
+        restartedAtPage: null,
+        stoppedAtPage: null,
+        itemsPlaced: 0,
+      };
+    }
+    let from = diff.prefix;
+    while (from > 0 && (keepsWithNext(prev.items, from - 1) || keepsWithNext(items, from - 1)))
+      from--;
+    // Whether a run of columns is balanced depends on the break that ends it, which may be among
+    // the changed items: a section of several columns is placed again from its start.
+    let lastBreak = -1;
+    for (let k = from - 1; k >= 0; k--)
+      if (items[k]!.kind === 'sectionBreak') {
+        lastBreak = k;
+        break;
+      }
+    const sectionAtFrom = lastBreak < 0 ? first : (items[lastBreak] as SectionBreakItem).page;
+    if (columnCount(sectionAtFrom) > 1) from = Math.min(from, lastBreak);
+    let resumeAt: Checkpoint | undefined;
+    for (const c of prev.checkpoints) if (c.itemIndex <= from) resumeAt = c;
+    const delta = items.length - prev.items.length;
+    const refs = notes.size > 0 ? referencesOf(items) : new Map<string, NoteRef[]>();
+    const passNotes: Pick<PassOptions, 'notes'> = notes.size > 0 ? { notes: { refs, notes } } : {};
+    const trace: PassTrace = {
+      checkpoints: [],
+      ...(resumeAt ? { resume: { checkpoint: resumeAt, base: prev.pass } } : {}),
+      converge: {
+        base: prev.pass,
+        checkpoints: new Map(prev.checkpoints.map((c) => [c.itemIndex, c])),
+        from: Math.max(from, items.length - diff.suffix),
+        delta,
+      },
+      stoppedAt: null,
+      stoppedOn: null,
+    };
+    const pass = drain(
+      layoutPassSteps(items, first, { count: prev.count, balance: true, ...passNotes }, 1, trace),
+    );
+    const placed = closePass(pass, refs, notes);
+    if (!pass.usedStories || placed.pages.length === prev.count) {
+      const kept = resumeAt
+        ? prev.checkpoints.filter((c) => c.itemIndex <= resumeAt.itemIndex)
+        : [];
+      const tail = trace.stoppedOn
+        ? prev.checkpoints
+            .filter((c) => c.itemIndex >= trace.stoppedOn!.itemIndex)
+            .map((c) => ({ ...c, itemIndex: c.itemIndex + delta }))
+        : [];
+      const pagination = freezeTree({
+        pages: [...placed.pages],
+        overflowed: placed.overflowed,
+        pageCountSettled: true,
+      });
+      return {
+        pagination,
+        memo: {
+          pagination,
+          state: {
+            items,
+            first,
+            notes,
+            count: prev.count,
+            pass,
+            checkpoints: [...kept, ...trace.checkpoints, ...tail],
+          },
+        },
+        mode: 'incremental',
+        restartedAtPage: resumeAt ? resumeAt.cur.index : 0,
+        stoppedAtPage: trace.stoppedOn ? trace.stoppedOn.cur.index : null,
+        itemsPlaced: (trace.stoppedAt ?? items.length) - (resumeAt?.itemIndex ?? 0),
+      };
+    }
+  }
+  // A whole run, keeping the checkpoints of its last pass for the next one.
+  if (options.pins) {
+    const pagination = paginate(items, first, options);
+    return {
+      pagination,
+      memo: { pagination, state: null },
+      mode: 'full',
+      restartedAtPage: null,
+      stoppedAtPage: null,
+      itemsPlaced: items.length,
+    };
+  }
+  const s = drain(settleSteps(items, first, options, undefined, true));
+  const pagination = freezeTree({
+    pages: s.pages,
+    overflowed: s.overflowed,
+    pageCountSettled: s.settled,
+  });
+  return {
+    pagination,
+    memo: {
+      pagination,
+      state: { items, first, notes, count: s.count, pass: s.pass, checkpoints: s.checkpoints },
+    },
+    mode: 'full',
+    restartedAtPage: null,
+    stoppedAtPage: null,
+    itemsPlaced: items.length,
+  };
+}
+
 /** The pins whose place is among the items: a paragraph line start, or a box's start (offset 0). */
 function matchPins(
   items: readonly PageItem[],
@@ -635,6 +898,35 @@ interface Settled {
   readonly overflowed: string[];
   readonly settled: boolean;
   readonly pass: Pass;
+  /** The page count the last pass was given. */
+  readonly count: number;
+  /** The checkpoints of the last pass, when they were asked for. */
+  readonly checkpoints: readonly Checkpoint[];
+}
+
+/**
+ * What follows a pass: the footnote areas are set below the pages, and an area that cannot fit
+ * marks its block as overflowing. The pages are those of the pass when there are no footnotes.
+ */
+function closePass(
+  pass: Pass,
+  refs: ReadonlyMap<string, readonly NoteRef[]>,
+  notes: ReadonlyMap<string, NoteItem>,
+): { readonly pages: readonly PaginatedPage[]; readonly overflowed: string[] } {
+  const placed =
+    notes.size > 0
+      ? placeNotes(pass.pages, pass.frames, refs, notes)
+      : { pages: pass.pages, areas: [] as number[] };
+  // Each area fits below its page's body by construction. Only a line placed alone at the top of
+  // an empty page, with a first footnote line that does not fit below it, can make an area
+  // larger than that space; its block is reported as overflowing.
+  const overflowed = [...pass.overflowed];
+  placed.areas.forEach((a, i) => {
+    if (a <= (pass.frames[i]?.area ?? 0) + EPS) return;
+    const head = pass.pages[i]?.fragments[0];
+    if (head && !overflowed.includes(head.blockId)) overflowed.push(head.blockId);
+  });
+  return { pages: placed.pages, overflowed };
 }
 
 /** The page-count iteration of `paginate` (see its comment), with the pins of a reconciliation. */
@@ -643,6 +935,7 @@ function* settleSteps(
   first: PageSetup,
   options: PaginateOptions,
   pins?: PassPins,
+  record = false,
 ): Generator<PaginationProgress, Settled, void> {
   const notes = options.notes ?? new Map<string, NoteItem>();
   const refs = notes.size > 0 ? referencesOf(items) : new Map<string, NoteRef[]>();
@@ -650,28 +943,27 @@ function* settleSteps(
   const passPins: Pick<PassOptions, 'pins'> = pins ? { pins } : {};
   let count = 0;
   for (let attempt = 1; ; attempt++) {
+    const trace: PassTrace | undefined = record
+      ? { checkpoints: [], stoppedAt: null, stoppedOn: null }
+      : undefined;
     const pass = yield* layoutPassSteps(
       items,
       first,
       { count, balance: true, ...passNotes, ...passPins },
       attempt,
+      trace,
     );
-    const placed =
-      notes.size > 0
-        ? placeNotes(pass.pages, pass.frames, refs, notes)
-        : { pages: pass.pages, areas: [] as number[] };
-    // Each area fits below its page's body by construction. Only a line placed alone at the top of
-    // an empty page, with a first footnote line that does not fit below it, can make an area
-    // larger than that space; its block is reported as overflowing.
-    const overflowed = [...pass.overflowed];
-    placed.areas.forEach((a, i) => {
-      if (a <= (pass.frames[i]?.area ?? 0) + EPS) return;
-      const head = pass.pages[i]?.fragments[0];
-      if (head && !overflowed.includes(head.blockId)) overflowed.push(head.blockId);
-    });
+    const placed = closePass(pass, refs, notes);
     const settled = !pass.usedStories || placed.pages.length === count;
     if (settled || attempt >= MAX_COUNT_PASSES) {
-      return { pages: [...placed.pages], overflowed, settled, pass };
+      return {
+        pages: [...placed.pages],
+        overflowed: placed.overflowed,
+        settled,
+        pass,
+        count,
+        checkpoints: trace?.checkpoints ?? [],
+      };
     }
     count = placed.pages.length;
   }
@@ -691,6 +983,7 @@ function* layoutPassSteps(
   first: PageSetup,
   opts: PassOptions,
   pass: number,
+  trace?: PassTrace,
 ): Generator<PaginationProgress, Pass, void> {
   const pages: PaginatedPage[] = [];
   const frames: PageFrame[] = [];
@@ -923,14 +1216,6 @@ function* layoutPassSteps(
     cur.colFrags = Array.from({ length: cols }, () => 0);
     cur.runTop = 0;
     cur.cap = opts.capAll ?? null;
-  };
-
-  const keepsWithNext = (items: readonly PageItem[], k: number): boolean => {
-    const it = items[k];
-    const nx = items[k + 1];
-    if (!it || !nx || (it.kind !== 'paragraph' && it.kind !== 'box') || !it.keepNext) return false;
-    if (nx.kind === 'paragraph') return !nx.pageBreakBefore;
-    return nx.kind === 'box';
   };
 
   /**
@@ -1215,8 +1500,86 @@ function* layoutPassSteps(
     }
   };
 
-  startRun(-1, columnCount(first));
-  for (let i = 0; i < items.length; i++) {
+  /** The state between two items (FE-088), taken before item `i`. */
+  const snapshot = (i: number): Checkpoint => ({
+    itemIndex: i,
+    pageCount: pages.length,
+    overflowedCount: overflowed.length,
+    cur: cloneOpenPage(cur),
+    section,
+    sectionPages,
+    sectionSetup,
+    nextNumber,
+    pendingStart,
+    opened,
+    checkBalance,
+    noteCarry: [...noteCarry],
+    noteFresh: [...noteFresh],
+    notesPlaced: [...notesPlaced],
+    holding,
+    pendingPin,
+    skippedNoRoom,
+    usedStories: stats.usedStories,
+  });
+
+  let startAt = 0;
+  const resume = trace?.resume;
+  if (resume) {
+    // Restart from a checkpoint of an earlier pass: its closed pages stand, its state is restored.
+    const c = resume.checkpoint;
+    pages.push(...resume.base.pages.slice(0, c.pageCount));
+    frames.push(...resume.base.frames.slice(0, c.pageCount));
+    pageOverflow.push(...resume.base.pageOverflow.slice(0, c.pageCount));
+    overflowed.push(...resume.base.overflowed.slice(0, c.overflowedCount));
+    stats.usedStories = c.usedStories;
+    cur = cloneOpenPage(c.cur);
+    section = c.section;
+    sectionPages = c.sectionPages;
+    sectionSetup = c.sectionSetup;
+    nextNumber = c.nextNumber;
+    pendingStart = c.pendingStart;
+    opened = c.opened;
+    checkBalance = c.checkBalance;
+    noteCarry = [...c.noteCarry];
+    noteFresh = [...c.noteFresh];
+    for (const id of c.notesPlaced) notesPlaced.add(id);
+    holding = c.holding;
+    pendingPin = c.pendingPin;
+    skippedNoRoom = c.skippedNoRoom;
+    startAt = c.itemIndex;
+  } else {
+    startRun(-1, columnCount(first));
+  }
+  let lastPage = cur.index;
+  for (let i = startAt; i < items.length; i++) {
+    if (trace && cur.index !== lastPage) {
+      lastPage = cur.index;
+      // A page turned while the previous item was placed. Not inside a keepNext chain or a
+      // balanced run, where the items to come take part in the placement.
+      if (run === null && chainTerminal < i) {
+        const snap = snapshot(i);
+        const conv = trace.converge;
+        const old = conv && i >= conv.from ? conv.checkpoints.get(i - conv.delta) : undefined;
+        if (conv && old && sameCheckpoint(snap, old)) {
+          // From here the placement is the one of the earlier pass: keep its pages.
+          trace.stoppedAt = i;
+          trace.stoppedOn = old;
+          pages.push(...conv.base.pages.slice(old.pageCount));
+          frames.push(...conv.base.frames.slice(old.pageCount));
+          pageOverflow.push(...conv.base.pageOverflow.slice(old.pageCount));
+          overflowed.push(...conv.base.overflowed.slice(old.overflowedCount));
+          return {
+            pages,
+            frames,
+            overflowed,
+            usedStories: stats.usedStories || conv.base.usedStories,
+            pinPages,
+            pageOverflow,
+          };
+        }
+        trace.checkpoints.push(snap);
+      }
+    }
     const item = items[i]!;
     if (item.kind !== 'sectionBreak') maybeBalance(() => runRest(i));
     switch (item.kind) {

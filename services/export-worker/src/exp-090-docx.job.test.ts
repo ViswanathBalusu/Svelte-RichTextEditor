@@ -168,7 +168,8 @@ describe('EXP-090 docx job through the export worker (criteria 1 and 5, job half
     expect(named[0]).toMatchObject({ severity: 'warning', code: 'docx_approximation' });
     // The equation the gate accepts is written, the one it refuses is not, and the job is not failed.
     const xml = documentXml(run.stored[0]!.bytes);
-    expect(xml).toContain('a^2+b^2=c^2');
+    expect(xml).toContain('<m:oMath');
+    expect(xml).not.toContain('a^2+b^2=c^2');
     expect(xml).not.toContain(String.raw`\def`);
   });
 
