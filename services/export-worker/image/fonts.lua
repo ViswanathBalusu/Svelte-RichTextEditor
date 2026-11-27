@@ -1,6 +1,6 @@
 -- fonts.lua: builds the worker's font directory (09 §5; spike S4, SPK-017).
 --
--- Usage: texlua fonts.lua <output directory>
+-- Usage: texlua fonts.lua <output directory> [<directory of the Noto faces>]
 --
 -- Copies the fonts the house class uses out of the TeX Live tree into <output directory>, each
 -- named by its SHA-256, and writes fonts.json: the font manifest the converter reads. Every font
@@ -84,9 +84,37 @@ for i, fam in ipairs(families) do
 end
 local math_face = face("STIXTwoMath-Regular.otf")
 
+-- The fallback chain (09 §3.2; EXP-026, EXP-047): the math face first, then the faces of the
+-- optional directory given as the second argument, in the order of its fallback.txt (lines of
+-- name, file name and licence, separated by tabs; scripts/fetch-noto-fonts.ts writes it). Those
+-- files are not in the TeX tree: they are read from that directory, not found by kpathsea.
+local math_name = '{"name":"STIX Two Math","file":"%s","sha256":"%s","licence":"OFL-1.1"}'
+local chain = { string.format(math_name, math_face.file, math_face.sha256) }
+local extra = arg[2]
+if extra and extra ~= "" then
+  extra = extra:gsub("\\", "/"):gsub("/$", "")
+  local list = assert(io.open(extra .. "/fallback.txt", "r"))
+  for line in list:lines() do
+    local name, file, licence = line:match("^([^\t]+)\t([^\t]+)\t([^\t]+)$")
+    if name then
+      local f = assert(io.open(extra .. "/" .. file, "rb"))
+      local data = f:read("*a")
+      f:close()
+      local sha = hex(sha2.digest256(data))
+      local stored = sha .. (file:match("%.otf$") and ".otf" or ".ttf")
+      local o = assert(io.open(out .. "/" .. stored, "wb"))
+      o:write(data)
+      o:close()
+      chain[#chain + 1] = string.format(
+        '{"name":"%s","file":"%s","sha256":"%s","licence":"%s"}', name, stored, sha, licence)
+    end
+  end
+  list:close()
+end
+
 local manifest = string.format(
-  '{"version":1,"families":[%s],"math":{"name":"STIX Two Math","file":"%s","sha256":"%s","licence":"OFL-1.1"},"defaultFamily":"Noto Serif"}\n',
-  table.concat(parts), math_face.file, math_face.sha256)
+  '{"version":1,"families":[%s],"math":{"name":"STIX Two Math","file":"%s","sha256":"%s","licence":"OFL-1.1"},"fallback":[%s],"defaultFamily":"Noto Serif"}\n',
+  table.concat(parts), math_face.file, math_face.sha256, table.concat(chain, ","))
 local f = assert(io.open(out .. "/fonts.json", "w"))
 f:write(manifest)
 f:close()

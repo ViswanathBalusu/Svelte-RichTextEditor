@@ -50,6 +50,8 @@ import {
   type Tex,
 } from './emit.ts';
 import { checkGlyphs } from './fonts/check.ts';
+import { covers } from './fonts/coverage.ts';
+import type { ScriptName } from './fonts/scripts.ts';
 import { languageRef } from './languages.ts';
 import { mathGate } from './math/gate.ts';
 import { familyOf, naturalHeight, paragraphFormat, runProps, shapeOf } from './props.ts';
@@ -204,6 +206,23 @@ function linkWrap(ctx: Ctx, marks: readonly Mark[] | undefined, st: InlineState,
   return body;
 }
 
+/**
+ * The number of the face of the fallback chain that sets a run of a script that needs shaping
+ * (EXP-037 criterion 2), the face that has the run's first character. The fallback chain gives a
+ * glyph at a time, and an Indic syllable shaped that way is not reordered; a run in its own face,
+ * with its script, is shaped whole by HarfBuzz. A run that no face of the chain covers is left to
+ * the chain (the glyph check reports it).
+ */
+function scriptFace(ctx: Ctx, first: number, script: ScriptName): number | null {
+  const face = ctx.scripts.faces.find((f) => f.coverage !== undefined && covers(f.coverage, first));
+  if (!face) return null;
+  let entry = ctx.scripts.used.get(face.file);
+  if (!entry) {
+    entry = { k: ctx.scripts.used.size + 1, script };
+    ctx.scripts.used.set(face.file, entry);
+  }
+  return entry.k;
+}
 function runTex(ctx: Ctx, node: J, st: InlineState): Tex | null {
   const value = node.text ?? '';
   const start = st.off;
@@ -222,9 +241,10 @@ function runTex(ctx: Ctx, node: J, st: InlineState): Tex | null {
   const local = new Set<number>();
   for (let i = 0; i < value.length; i++) if (st.explicit.has(start + i)) local.add(i);
   const body = join(
-    textChunks(value, { explicit: local }).map(
-      (c) => tex`\DEr{${int(start + c.offset)}}{${c.tex}}`,
-    ),
+    textChunks(value, {
+      explicit: local,
+      scriptFace: (first, script) => scriptFace(ctx, first, script),
+    }).map((c) => tex`\DEr{${int(start + c.offset)}}{${c.tex}}`),
   );
   return linkWrap(
     ctx,

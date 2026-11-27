@@ -33,6 +33,7 @@
  * manifest) and `gatedMath` (math that passed the gate, 09 §6.3).
  */
 import { twipsToBp, utf8 } from '@docedit/model';
+import { scriptRuns, type ScriptName } from './fonts/scripts.ts';
 
 declare const texBrand: unique symbol;
 /** A fragment of TeX produced by an emitter or by converter-authored constants. */
@@ -141,13 +142,40 @@ const TEXT_ESCAPES: Readonly<Record<string, string>> = {
   [SOFT_HYPHEN]: '\\-',
 };
 
+/** A word, with its runs of a script that needs shaping set apart for their own face. */
+function escapeWord(raw: string, face: ScriptFace | undefined): string {
+  if (!face) return escapeSegment(raw);
+  const cleaned = clean(raw);
+  const runs = scriptRuns(cleaned);
+  if (runs.length === 0) return escapeSegment(raw);
+  let out = '';
+  let at = 0;
+  for (const r of runs) {
+    const k = face(r.first, r.script);
+    if (k === null) continue;
+    out += escapeSegment(cleaned.slice(at, r.start));
+    out += `\\DEscr{${k}}{${escapeSegment(cleaned.slice(r.start, r.end))}}`;
+    at = r.end;
+  }
+  return out + escapeSegment(cleaned.slice(at));
+}
+
 function escapeSegment(segment: string): string {
   let out = '';
   for (const ch of clean(segment)) out += TEXT_ESCAPES[ch] ?? ch;
   return out;
 }
 
+/** The number of the face that sets a run of a script that needs shaping, or null (EXP-037). */
+export type ScriptFace = (first: number, script: ScriptName) => number | null;
+
 export interface TextContext {
+  /**
+   * Sets each run of a script that needs shaping in its own face: \DEscr{k}{run} with the number
+   * the function gives. Arabic and the Indic scripts are shaped whole by HarfBuzz this way; the
+   * fallback chain would give one glyph at a time. Without it, the text is not marked.
+   */
+  scriptFace?: ScriptFace;
   /** The character before this string in the block was a space, or this is the block's start. */
   afterSpace?: boolean;
   /**
@@ -188,7 +216,7 @@ export function textChunks(value: string, context: TextContext = {}): TextChunk[
     while (j < value.length && value.charCodeAt(j) !== 0x20) j++;
     const raw = value.slice(i, j);
     const cleaned = clean(raw);
-    current += escapeSegment(raw);
+    current += escapeWord(raw, context.scriptFace);
     prevSpace = false;
     i = j;
     if (cleaned.length !== raw.length) {

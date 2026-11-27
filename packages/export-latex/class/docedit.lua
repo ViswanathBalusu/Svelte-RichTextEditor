@@ -1195,12 +1195,85 @@ end
 
 -- ---------------------------------------------------------------------------------------------
 
+-- East Asian line breaking (09 §3.2; EXP-025 criterion 3). TeX breaks a line only at glue, a
+-- penalty or a discretionary. Ideographs and kana have none between them, so a paragraph of
+-- Chinese or Japanese is one box that runs past the right margin, and the text beyond the page
+-- is lost from the PDF. Between two glyphs that follow each other, one of them an ideograph, a
+-- kana or a CJK or full-width punctuation mark, this puts a glue of no width that can stretch
+-- (so that justified lines can be filled), which is a break opportunity (UAX #14, class ID).
+-- The rules of kinsoku shori keep a closing mark, a small kana or the prolonged sound mark off
+-- the start of a line, and an opening mark off the end of one: there the glue follows a penalty
+-- of 10000, which is not a break opportunity. Hangul is set as in Korean text, with breaks at its
+-- spaces. This runs before shaping, on the characters as typed.
+local EA_STRETCH = 0.1 -- of the font size
+local ea_no_before = {}
+local ea_no_after = {}
+for _, c in ipairs({
+  0x3001, 0x3002, 0xFF0C, 0xFF0E, 0xFF1A, 0xFF1B, 0xFF01, 0xFF1F, 0xFF09, 0xFF3D, 0xFF5D,
+  0x3015, 0x3009, 0x300B, 0x300D, 0x300F, 0x3011, 0x3017, 0x3019, 0x301B, 0x309B, 0x309C,
+  0x309D, 0x309E, 0x3005, 0x30FC, 0x30FB, 0x30FD, 0x30FE, 0x2025, 0x2026, 0xFF65,
+  0x3041, 0x3043, 0x3045, 0x3047, 0x3049, 0x3063, 0x3083, 0x3085, 0x3087, 0x308E, 0x3095, 0x3096,
+  0x30A1, 0x30A3, 0x30A5, 0x30A7, 0x30A9, 0x30C3, 0x30E3, 0x30E5, 0x30E7, 0x30EE, 0x30F5, 0x30F6,
+}) do ea_no_before[c] = true end
+for _, c in ipairs({
+  0xFF08, 0xFF3B, 0xFF5B, 0x3014, 0x3008, 0x300A, 0x300C, 0x300E, 0x3010, 0x3016, 0x3018, 0x301A,
+}) do ea_no_after[c] = true end
+
+local function ea_wide(c)
+  return (c >= 0x2E80 and c <= 0x30FF) or (c >= 0x3100 and c <= 0x312F)
+      or (c >= 0x31C0 and c <= 0x31FF) or (c >= 0x3400 and c <= 0x4DBF)
+      or (c >= 0x4E00 and c <= 0x9FFF) or (c >= 0xF900 and c <= 0xFAFF)
+      or (c >= 0xFE30 and c <= 0xFE4F) or (c >= 0xFF00 and c <= 0xFF60)
+      or (c >= 0xFF61 and c <= 0xFF9F) or (c >= 0x20000 and c <= 0x3FFFF)
+end
+
+local ea_size = {}
+local function ea_stretch(f)
+  local s = ea_size[f]
+  if not s then
+    local data = font.getfont(f)
+    s = math.floor(((data and data.size) or 655360) * EA_STRETCH)
+    ea_size[f] = s
+  end
+  return s
+end
+
+local function ea_breaks(head)
+  local h = todirect(head)
+  local n = h
+  while n do
+    if getid(n) == GLYPH then
+      local nx = getnext(n)
+      if nx and getid(nx) == GLYPH then
+        local a, b = getchar(n), getchar(nx)
+        if ea_wide(a) or ea_wide(b) then
+          local g = new_node(GLUE)
+          setglue(g, 0, ea_stretch(getfont(n)), 0)
+          setattributelist(g, getattributelist(n))
+          if ea_no_before[b] or ea_no_after[a] then
+            local p = new_node(PENALTY)
+            direct.setfield(p, "penalty", 10000)
+            setattributelist(p, getattributelist(n))
+            direct.insert_after(h, n, p)
+            direct.insert_after(h, p, g)
+          else
+            direct.insert_after(h, n, g)
+          end
+        end
+      end
+    end
+    n = getnext(n)
+  end
+  return true
+end
 function docedit.init(attrs, lvl)
   A = attrs
   level = lvl
   luatexbase.add_to_callback("post_linebreak_filter", lines, "docedit.lines")
   luatexbase.add_to_callback("pre_linebreak_filter", pre_tabs, "docedit.tabs")
   luatexbase.declare_callback_rule("pre_linebreak_filter", "luaotfload.node_processor", "before", "docedit.tabs")
+  luatexbase.add_to_callback("pre_linebreak_filter", ea_breaks, "docedit.eabreaks")
+  luatexbase.declare_callback_rule("pre_linebreak_filter", "docedit.eabreaks", "before", "luaotfload.node_processor")
   luatexbase.add_to_callback("hpack_filter", hpack_missing, "docedit.missing")
   luatexbase.declare_callback_rule("hpack_filter", "luaotfload.node_processor", "before", "docedit.missing")
   if level >= 2 then
