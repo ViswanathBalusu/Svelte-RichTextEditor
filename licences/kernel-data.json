@@ -63,6 +63,132 @@
       "finding": "The crate is zerofrom-derive, the derive macro of zerofrom, a helper of part of the ICU4X project and its licence is Unicode-3.0 (MIT-style, with the Unicode notice). It is a zero-copy and ownership helper (a dependency of read-fonts and harfrust through the font parser) and carries no Unicode data tables: the licence is the project's, not a data licence. Unicode-3.0 is on the allow-list of licences/policy.json. Its LICENSE file is part of the element's third-party notices (scripts/release/release.ts) and of its bill of materials.",
       "decision": "WASM-006, lane w6, 2026-11-18 (proposed; a maintainer confirms)",
       "expires": "2027-05-18"
+    },
+    {
+      "crate": "icu_segmenter",
+      "version": "2.4.0",
+      "data": "The segmentation algorithms of ICU4X (word, sentence, grapheme and line breaking) and the code that reads the dictionary data; the crate itself carries no tables, its data is in icu_segmenter_data. The module of WASM-016 uses the line segmenter without the Chinese and Japanese dictionary and loads the Southeast Asian dictionaries.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "icu_segmenter_data",
+      "version": "2.4.0",
+      "data": "The baked data of ICU4X for the segmenter, as Rust source: the line-break, word, sentence and grapheme tables, the dictionaries for Thai, Lao, Khmer and Burmese (segmenter_dictionary_extended_v2, 2.9 MB of source), the Chinese and Japanese dictionary (segmenter_dictionary_auto_v2, 5.2 MB of source) and the LSTM models (segmenter_lstm_auto_v1). Each data marker is compiled in only when the code calls the constructor that asks for it; the module calls the line segmenter and the Southeast Asian dictionaries, so the Chinese and Japanese dictionary and the LSTM models are not read. The module is 1,125,779 bytes, measured with the build of 2026-11-27.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The data is the Unicode Consortium's and ICU4X's own. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "icu_locale_fallback_data",
+      "version": "2.4.0",
+      "data": "The locale fallback data of ICU4X (parent locales and likely-subtag defaults), a few kilobytes of source. A dependency of icu_locale_fallback, which icu_segmenter uses to choose data for a locale.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The data is the Unicode Consortium's and ICU4X's own. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "icu_locale_fallback",
+      "version": "2.4.0",
+      "data": "The locale fallback algorithm of ICU4X (it carries no table of its own; its data is icu_locale_fallback_data).",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "icu_locale_core",
+      "version": "2.4.0",
+      "data": "The types for Unicode language and locale identifiers (BCP 47 and Unicode extensions); no tables of text data beyond the syntax of identifiers.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "icu_provider",
+      "version": "2.4.0",
+      "data": "The data provider traits and the baked-data support of ICU4X; no data of its own.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "icu_collections",
+      "version": "2.4.0",
+      "data": "Data structures that hold Unicode property data (code point tries and sets); no property data of its own.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "zerovec",
+      "version": "0.11.9",
+      "data": "A zero-copy vector over a byte array, which holds the baked tables of ICU4X; no Unicode data of its own.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "zerovec-derive",
+      "version": "0.11.7",
+      "data": "The derive macro of zerovec, which runs at build time and is not in the module; no data.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "zerotrie",
+      "version": "0.2.5",
+      "data": "A trie that maps strings to integers, which holds the dictionary words of ICU4X; no Unicode data of its own.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "tinystr",
+      "version": "0.8.5",
+      "data": "A small ASCII-only string type for language and script codes; no data.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "litemap",
+      "version": "0.8.3",
+      "data": "A sorted key-value map over a flat vector; no data.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "potential_utf",
+      "version": "0.1.6",
+      "data": "Unvalidated string and character types for the baked tables; no data.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
+    },
+    {
+      "crate": "writeable",
+      "version": "0.6.4",
+      "data": "An alternative to fmt::Display for writing to a sink; no data.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is licensed Unicode-3.0 (its LICENSE file is the Unicode licence, version 3, 2023), which is on the allow-list of licences/policy.json. The crate carries code and no Unicode data of its own; it is listed because the licence gate reviews every crate under a Unicode licence. The licence asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data and software; scripts/release/release.ts writes the notices of the crates compiled into the module. It is a dependency of crates/sea-segmenter only (the module of Thai, Lao, Khmer and Burmese, WASM-016), not of the layout kernel.",
+      "decision": "WASM-016, lane w6, 2026-11-27, on owner decision 282 (the ICU4X segmenter data; proposed, a maintainer confirms)",
+      "expires": "2027-05-27"
     }
   ]
 }

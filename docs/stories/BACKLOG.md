@@ -1,6 +1,6 @@
 # Backlog by phase
 
-Generated on 2026-11-26 from the epic files in this folder; regenerate it whenever a story's fields change. 1007 stories. Within a phase, stories are ordered by priority, then by epic in build order (foundations, decisions and spikes, model, sync, permissions, protocol, backend, security, frontend, shell, history, export, fields and workflow, WebAssembly). Order within a phase is not a dependency order: each story's **Depends on** line is.
+Generated on 2026-11-27 from the epic files in this folder; regenerate it whenever a story's fields change. 1010 stories. Within a phase, stories are ordered by priority, then by epic in build order (foundations, decisions and spikes, model, sync, permissions, protocol, backend, security, frontend, shell, history, export, fields and workflow, WebAssembly). Order within a phase is not a dependency order: each story's **Depends on** line is.
 
 ## Phase 0: decisions, spikes and notes (47)
 
@@ -223,7 +223,7 @@ Generated on 2026-11-26 from the epic files in this folder; regenerate it whenev
 | [EXP-042](EXP-export.md#exp-042-emit-text-and-generated-identifiers-safely) | Emit text and generated identifiers safely | enabler | M | must |
 | [FND-014](FND-foundations.md#fnd-014-requirements-traceability) | Requirements traceability | enabler | S | could |
 
-## Phase 1b: first usable release (382)
+## Phase 1b: first usable release (385)
 
 | Story | Title | Type | Size | Priority |
 |---|---|---|---|---|
@@ -570,6 +570,9 @@ Generated on 2026-11-26 from the epic files in this folder; regenerate it whenev
 | [PRM-034](PRM-permissions.md#prm-034-rename-remove-move-split-and-merge-regions) | Rename, remove, move, split and merge regions | story | M | should |
 | [PRM-064](PRM-permissions.md#prm-064-decide-a-size-quota-for-region-only-editors) | Decide a size quota for region-only editors | decision | S | should |
 | [PRM-065](PRM-permissions.md#prm-065-decide-what-happens-to-grants-policy-and-state-when-a-region-is-split-or-merged) | Decide what happens to grants, policy and state when a region is split or merged | decision | S | should |
+| [PRM-068](PRM-permissions.md#prm-068-grant-renaming-and-adding-styles-on-a-region-grant) | Grant renaming and adding styles on a region grant | story | M | should |
+| [PRM-069](PRM-permissions.md#prm-069-check-renaming-and-adding-styles-against-the-grant-in-the-outcome-check) | Check renaming and adding styles against the grant in the outcome check | story | M | should |
+| [PRM-070](PRM-permissions.md#prm-070-show-renaming-and-adding-styles-to-region-only-editors) | Show renaming and adding styles to region-only editors | story | M | should |
 | [PRO-013](PRO-protocol.md#pro-013-call-the-control-plane-with-a-signed-service-credential-and-act-for-a-user) | Call the control plane with a signed service credential and act for a user | story | M | should |
 | [PRO-030](PRO-protocol.md#pro-030-reload-after-a-snapshot-and-detect-divergence) | Reload after a snapshot and detect divergence | story | M | should |
 | [PRO-044](PRO-protocol.md#pro-044-trace-a-request-across-the-planes) | Trace a request across the planes | enabler | S | should |

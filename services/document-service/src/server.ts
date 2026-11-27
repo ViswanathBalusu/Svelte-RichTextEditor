@@ -71,7 +71,7 @@ import {
 } from './control-plane/fonts.ts';
 import { createHandlers } from './control-plane/handlers.ts';
 import type { HandlerDeps } from './control-plane/kit.ts';
-import { BULK_SEND_KIND, bulkSendHandler } from './control-plane/bulk-send.ts';
+import { BULK_SEND_KIND, BulkSendBudget, bulkSendHandler } from './control-plane/bulk-send.ts';
 import type {
   SubscriptionStore,
   WebhookSubscriptions,
@@ -1363,10 +1363,13 @@ export async function startService(opts: StartOptions): Promise<Service> {
   const compileBudget = new CompileBudget(quotaSource ?? null, (tenant, from, to) =>
     parts.queue.workerTime(tenant, EXPORT_KINDS, from, to),
   );
+  // The monthly limit on the recipient rows of bulk sends (FRW-063; decision 265), read from the queue.
+  const bulkSendBudget = new BulkSendBudget(quotaSource ?? null, parts.queue);
   const usage = new UsageService({
     peaks: usagePeaks,
     now: () => Date.now(),
     minutesUsed: (tenant, at) => compileBudget.usedMinutes(tenant, at),
+    bulkRowsUsed: (tenant, at) => bulkSendBudget.usedRows(tenant, at),
     ...(parts.assetRegistry
       ? { storedBytes: (t: string) => parts.assetRegistry!.storedBytes(t) }
       : {}),
@@ -2105,6 +2108,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),
     compileBudget,
+    bulkSendBudget,
     usage,
     usagePeaks,
     ...(liveQuotas ? { liveQuotas } : {}),

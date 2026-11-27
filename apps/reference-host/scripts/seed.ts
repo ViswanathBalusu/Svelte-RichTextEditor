@@ -7,10 +7,10 @@
 import { configFromEnv } from '../src/lib/server/config.ts';
 import { createFromTemplate, registerSeedTemplates } from '../src/lib/server/documents.ts';
 import { composeHost } from '../src/lib/server/host.ts';
-import { dataDir, endpoints, readSecrets, roleEnv, stackSettings } from './lib/stack.ts';
+import { endpoints, readRoleSecrets, roleEnv, stackSettings } from './lib/stack.ts';
 
 const s = stackSettings();
-const secrets = await readSecrets(dataDir());
+const secrets = await readRoleSecrets('host');
 const env = { ...process.env, ...roleEnv('host', s, secrets) };
 
 /** Waits for `/readyz` (BE-001 criterion 5): the database answers and the schema is the code's. */

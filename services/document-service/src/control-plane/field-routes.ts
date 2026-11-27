@@ -158,6 +158,20 @@ export function fieldRoutes(k: Kit): Record<string, Handler> {
         },
       },
     });
+    // Wait for the room (or a transient authority) to store the commit (06 §2.2, §3).
+    const deadline = d.now() + (d.outboxWaitMs ?? 10_000);
+    let settled = item;
+    while (settled.state === 'pending' && d.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      settled = (await outbox.get(ref.tenant, item.id)) ?? settled;
+    }
+    if (settled.state === 'failed') {
+      const r = settled.result as { code?: string; message?: string } | null;
+      const code = r?.code === 'conflict' || r?.code === 'field_invalid' ? r.code : 'conflict';
+      throw new ApiError(code, `the prefill was refused (${r?.code ?? 'refused'})`);
+    }
+    // Only a commit the room accepted or still holds is audited: a refused prefill changed nothing
+    // (UX-097 criterion 4).
     // The audit trail names the person the change is attributed to and the credential that made it
     // (owner decision 174; UX-097 criterion 1; 07 §14). Identifiers and the origin only, never a value.
     if (d.audit)
@@ -177,18 +191,6 @@ export function fieldRoutes(k: Kit): Record<string, Handler> {
           at: d.now(),
         },
       ]);
-    // Wait for the room (or a transient authority) to store the commit (06 §2.2, §3).
-    const deadline = d.now() + (d.outboxWaitMs ?? 10_000);
-    let settled = item;
-    while (settled.state === 'pending' && d.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 25));
-      settled = (await outbox.get(ref.tenant, item.id)) ?? settled;
-    }
-    if (settled.state === 'failed') {
-      const r = settled.result as { code?: string; message?: string } | null;
-      const code = r?.code === 'conflict' || r?.code === 'field_invalid' ? r.code : 'conflict';
-      throw new ApiError(code, `the prefill was refused (${r?.code ?? 'refused'})`);
-    }
     if (settled.state === 'pending')
       // Accepted: the outbox delivers it; the values are read back later (D145).
       return json(202, { values, seq: null, view: current.view });

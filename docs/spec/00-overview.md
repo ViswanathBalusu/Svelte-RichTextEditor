@@ -138,7 +138,7 @@ All figures here are targets to validate.
 | Typing latency | Keystroke to paint within 16 ms at the median and 50 ms at the 95th percentile, for documents up to 100 pages on a mid-range laptop |
 | Commit acknowledgement | Median 50 ms and 99th percentile 300 ms within one region of the world |
 | Cold open of a room | 95th percentile 500 ms for a document whose CDM is under 1 MB |
-| Export | A 20-page document reaches a finished PDF within 10 seconds at the 95th percentile when the queue is empty |
+| Export | A 20-page document reaches a preview PDF (one pass) within 10 seconds at the 95th percentile when the queue is empty. The final PDF (every pass until the page references settle) has its own, longer target, set from measurements on the reference machine (owner decision 235, 2026-11-26) |
 | Availability | 99.9 percent monthly for editing in hosted mode |
 | Durability | No acknowledged commit is lost while the primary database survives, because a commit is acknowledged only after it is stored. In hosted mode the log is replicated synchronously, giving a recovery point of zero for a single failure; self-hosted deployments state their own recovery point, and a log that is ever rewound gets a new incarnation that forces clients to reload (04, section 9) |
 | Recovery time | Editing restored within 15 minutes of losing a node or a database primary in hosted mode |

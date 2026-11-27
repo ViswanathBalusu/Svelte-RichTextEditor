@@ -88,6 +88,7 @@ const QUOTA_KINDS: ReadonlySet<string> = new Set([
   'storage',
   'exportConcurrency',
   'exportMinutes',
+  'bulkSendRows',
 ]);
 
 /** The message for a quota kind the service named (06 §12; owner decision 110). */

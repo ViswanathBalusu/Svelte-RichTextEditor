@@ -287,7 +287,7 @@ Support staff must be able to debug a broken document without reading it. The to
 ## 12. Tenancy and quotas
 
 - Row-level security on every table, a storage prefix and an encryption key per tenant, and a dedicated deployment for customers who need one.
-- Per-tenant quotas: connections, open documents, commit rate, CPU budget in rooms, storage, export concurrency and export minutes. Exceeding one returns `quota_exceeded`, except the CPU budget in rooms: a commit that would exceed the tenant's budget is rejected with `rate_limited` and action `retry`, as for a connection's budget (04, section 12).
+- Per-tenant quotas: connections, open documents, commit rate, CPU budget in rooms, storage, export concurrency, export minutes and the recipient rows of bulk sends (counted per calendar month in UTC, like other usage; owner decision 265; 12 §9). Exceeding one returns `quota_exceeded`, except the CPU budget in rooms: a commit that would exceed the tenant's budget is rejected with `rate_limited` and action `retry`, as for a connection's budget (04, section 12).
 - Administration resources for tenants, keys, origins, quotas, fonts, retention and webhooks are outlined in 13, section 10.
 
 ## 13. Operations

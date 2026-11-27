@@ -67,15 +67,23 @@ function build(dir: string): string {
   mkdirSync(dir, { recursive: true });
   const out = join(dir, 'dist');
   rmSync(out, { recursive: true, force: true });
-  if (native) buildScript(['build', out]);
-  else buildScript(['build', '/out/dist'], dir);
+  // The kernel, then the module of Thai, Lao, Khmer and Burmese (WASM-016) in `dist/sea`, which a
+  // page fetches only when a document uses one of those scripts.
+  if (native) {
+    buildScript(['build', out]);
+    buildScript(['build-sea', join(out, 'sea')]);
+  } else {
+    buildScript(['build', '/out/dist'], dir);
+    buildScript(['build-sea', '/out/dist/sea'], dir);
+  }
   return out;
 }
 
-/** The SHA-256 of the WebAssembly file in a build folder. */
+/** The SHA-256 of the kernel's WebAssembly file and of the Southeast Asian module in a build folder. */
 function wasmHash(dist: string): string {
-  const file = join(dist, 'docedit_layout_kernel_bg.wasm');
-  return createHash('sha256').update(readFileSync(file)).digest('hex');
+  const hash = (file: string): string =>
+    createHash('sha256').update(readFileSync(file)).digest('hex');
+  return `${hash(join(dist, 'docedit_layout_kernel_bg.wasm'))} ${hash(join(dist, 'sea', 'docedit_sea_segmenter_bg.wasm'))}`;
 }
 
 const mode = process.argv[2] ?? 'build';

@@ -15,6 +15,10 @@
  *   `i` has an identifier derived from the job and `i`, so a row that was made already is reported
  *   as made and never made twice.
  * - Both routes need a service credential, as instantiation does.
+ * - The recipient rows a tenant submits in a UTC calendar month are limited by the quota
+ *   `bulkSendRows` (owner decision 265): a request that would take the month's rows past it is
+ *   refused with `quota_exceeded` and a `Retry-After` to the start of next month, before any job is
+ *   queued. The rows used are read from the job queue, so they hold on every node.
  */
 import { createHash } from 'node:crypto';
 import { formatTimestamp } from '@docedit/model';
@@ -27,10 +31,11 @@ import { createFromTemplate, pinTemplate, type FromTemplateBody } from './templa
 import { JobFailure, type JobHandler } from './jobs/runner.ts';
 import type { JobRecord } from './jobs/queue.ts';
 import { json, type HandlerDeps, type Kit } from './kit.ts';
+import { BULK_SEND_KIND } from './bulk-send-budget.ts';
 import { type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 
-export const BULK_SEND_KIND = 'workflow.bulk_send';
+export { BULK_SEND_KIND, BulkSendBudget, type BulkSendRefusal } from './bulk-send-budget.ts';
 
 /**
  * The most rows one request may hold. A setting of this build for the size of the job's payload,
@@ -105,6 +110,20 @@ export function bulkSendRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('forbidden', 'bulk sends are a service-credential resource (12 §9)');
   };
 
+  // The check of the quota and the queueing of the job are one step for a tenant on this node, so
+  // two requests of one tenant do not both pass the check on the same month's figure. Across nodes
+  // the figure is the queue's, and a race between nodes can pass the limit by one request.
+  const tails = new Map<string, Promise<unknown>>();
+  const inTurn = <T>(tenant: string, step: () => Promise<T>): Promise<T> => {
+    const run = (tails.get(tenant) ?? Promise.resolve()).then(step, step);
+    const tail = run.catch(() => undefined);
+    tails.set(tenant, tail);
+    void tail.then(() => {
+      if (tails.get(tenant) === tail) tails.delete(tenant);
+    });
+    return run;
+  };
+
   const createBulkSend: Handler = async (ctx) => {
     serviceOnly(ctx);
     const body = (await ctx.body()) as {
@@ -131,13 +150,25 @@ export function bulkSendRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('validation_failed', 'a row is not valid', { violations });
     // The template and the pinned seq are checked now, once; the rows are checked by the job.
     const pinned = await pinTemplate(k, ctx, body.template, body.templateSeq);
-    const job = await d.queue.enqueue(ctx.caller.tenant, {
-      kind: BULK_SEND_KIND,
-      createdBy: ctx.caller.actor,
-      // A retry would make no second document (the identifiers derive from the job), but it would
-      // report the first run's rows again as made: one attempt keeps the report true.
-      maxAttempts: 1,
-      payload: { template: pinned.template.id, seq: pinned.atSeq, rows: body.rows },
+    const tenant = ctx.caller.tenant;
+    const job = await inTurn(tenant, async () => {
+      // The tenant's monthly limit on recipient rows (decision 265): refused before any job.
+      await d.quotaSource?.load?.(tenant);
+      const spent = await d.bulkSendBudget?.refusal(tenant, body.rows.length, d.now());
+      if (spent)
+        throw new ApiError(
+          'quota_exceeded',
+          'the tenant would pass its recipient rows for this month',
+          { retryAfterS: spent.retryAfterS, quota: 'bulkSendRows' },
+        );
+      return d.queue.enqueue(tenant, {
+        kind: BULK_SEND_KIND,
+        createdBy: ctx.caller.actor,
+        // A retry would make no second document (the identifiers derive from the job), but it would
+        // report the first run's rows again as made: one attempt keeps the report true.
+        maxAttempts: 1,
+        payload: { template: pinned.template.id, seq: pinned.atSeq, rows: body.rows },
+      });
     });
     d.onJobQueued?.();
     return json(202, wire(job), { Location: `${k.rest}/bulk-sends/${job.id}` });

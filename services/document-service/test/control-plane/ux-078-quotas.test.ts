@@ -11,7 +11,7 @@ function store() {
 }
 
 describe('UX-078 criterion 1: quota values are stored, validated and readable', () => {
-  it('lists the seven dimensions of 06 section 12 and reads null for every unset one', () => {
+  it('lists the dimensions of 06 section 12 (the seven and the rows of bulk sends) and reads null for every unset one', () => {
     const s = store();
     expect([...QUOTA_DIMENSIONS]).toEqual([
       'connections',
@@ -21,6 +21,7 @@ describe('UX-078 criterion 1: quota values are stored, validated and readable', 
       'storage',
       'exportConcurrency',
       'exportMinutes',
+      'bulkSendRows',
     ]);
     expect(s.get(TENANT)).toEqual(Object.fromEntries(QUOTA_DIMENSIONS.map((d) => [d, null])));
   });
