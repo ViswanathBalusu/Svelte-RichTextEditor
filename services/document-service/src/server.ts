@@ -245,6 +245,7 @@ import {
   ObjectCheckpointStore,
 } from './objects/checkpoints.ts';
 import { DocumentKeyedObjectStore, sealExistingObjects } from './objects/document-keyed-store.ts';
+import { OptInTenantSealStore } from './objects/opt-in-seal-store.ts';
 import { DocumentKeys, type DocumentKeyStore } from './storage/document-keys.ts';
 import type { KeyService } from './storage/key-service.ts';
 import { S3ObjectStore } from './objects/s3.ts';
@@ -389,6 +390,12 @@ export interface ServiceParts {
    */
   documentKeyStore?: DocumentKeyStore;
   keyService?: KeyService;
+  /**
+   * Tenants that opted in to sealing their files with their own key (BE-041; decision 274). With
+   * `keyService`, the objects under `tenants/<tenant>/docs/` of these tenants are sealed with the
+   * tenant's key (`OptInTenantSealStore`); all other objects pass through unchanged.
+   */
+  sealedTenants?: readonly string[];
   /** Built by `startService` from the two parts above. */
   documentKeys?: DocumentKeys;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
@@ -964,6 +971,11 @@ export async function startService(opts: StartOptions): Promise<Service> {
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
+  if (parts.keyService && parts.sealedTenants && parts.sealedTenants.length > 0) {
+    const tenantSeal = new OptInTenantSealStore(parts.objects, parts.keyService, parts.sealedTenants);
+    await tenantSeal.provision();
+    parts.objects = tenantSeal;
+  }
   if (parts.documentKeyStore && parts.keyService) {
     const rawObjects = parts.objects;
     const keys = new DocumentKeys({
