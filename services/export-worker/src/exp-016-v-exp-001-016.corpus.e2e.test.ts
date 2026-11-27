@@ -11,7 +11,7 @@ import { loadDocument } from '../../../packages/corpus/src/index.ts';
 import { podman } from './container.ts';
 import { flavoursFor, requiresValidation, validationReport } from './exp-016-corpus-report.ts';
 import { runExport } from './pipeline.ts';
-import { IMAGE } from './sandbox.ts';
+import { IMAGE, LIMITS } from './sandbox.ts';
 import { sandboxReady } from './sandbox-ready.ts';
 import { validatePdf } from './verapdf.ts';
 
@@ -58,6 +58,14 @@ const KNOWN_VIOLATIONS: Record<string, string[]> = {
   'pages-20 ua2': ['8.2.5.26 test 4 x4'],
 };
 
+/**
+ * The memory limit (MiB) per document where it differs from the spec limit of 1.5 GiB (09 §9.3 item 4).
+ * pages-20 with the Noto CJK face is killed (exit 137) at 1536 and compiles at 2048 (measured
+ * 2026-11-27, Podman machine route). The gate here tests PDF validation, not capacity; the question
+ * of the production limit is the proposed ADR 0481. Remove the entry when it is decided.
+ */
+const MEMORY_MIB: Record<string, number> = { 'pages-20': 2048 };
+
 describe.skipIf(!ready.ok)(`EXP-016 corpus validation (${ready.reason})`, () => {
   for (const name of CORPUS_DOCUMENTS) {
     it(`validates ${name} against every declared flavour`, async () => {
@@ -77,7 +85,10 @@ describe.skipIf(!ready.ok)(`EXP-016 corpus validation (${ready.reason})`, () => 
         doc.envelope,
         await imageFonts(),
         { tagging: 'on', pdfStandard: DECLARED, layout: 'block', title: name, assets },
-        { kind: 'sandbox' },
+        {
+          kind: 'sandbox',
+          options: { limits: { memoryMiB: MEMORY_MIB[name] ?? LIMITS.memoryMiB } },
+        },
       );
       expect(r.compile.ok, r.compile.log.slice(-3000)).toBe(true);
       expect(requiresValidation('on')).toBe(true);
