@@ -76,8 +76,9 @@
       "id": "region.retitle",
       "needs": "structure",
       "where": "commit",
-      "spec": "07 §2, P2",
-      "text": "Change a region's title."
+      "spec": "07 §2, P2; ADR 0424",
+      "text": "Change a region's title.",
+      "perRegion": true
     },
     {
       "id": "section_break.change",
@@ -92,6 +93,14 @@
       "where": "commit",
       "spec": "07 §2, §4",
       "text": "Change the top of the tree: which stories exist, the attributes of the body, the definitions node and their order."
+    },
+    {
+      "id": "defs.add",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, §5.3, §17; ADR 0424",
+      "text": "Add a new style definition that no earlier commit used. It never changes or removes an existing definition.",
+      "perRegion": true
     },
     {
       "id": "defs.change",

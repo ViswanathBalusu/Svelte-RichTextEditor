@@ -34,7 +34,11 @@ export function isRegionRole(role: unknown): role is RegionRole {
   return typeof role === 'string' && (REGION_ROLES as readonly string[]).includes(role);
 }
 
-/** 07 §2. `structure` for an editor is document level only; region grants never convey it. */
+/**
+ * 07 §2. `structure` for an editor is document level only: a region grant never conveys the
+ * capability. It may list two of its operations (`structure` member, ADR 0424), which is not the
+ * capability and leaves this table unchanged.
+ */
 export const ROLE_CAPABILITIES: Readonly<Record<DocRole, readonly Capability[]>> = {
   viewer: ['view'],
   commenter: ['view', 'comment'],
@@ -90,6 +94,12 @@ export interface Operation {
   readonly where: 'commit' | 'control';
   readonly spec: string;
   readonly text: string;
+  /**
+   * Set on the operations whose effect stays inside one region or only adds, so that a region grant
+   * may carry them in its `structure` list (ADR 0424; owner decision 279; PRM-068). Only
+   * `structure` operations can carry it; `manage` never becomes grantable per region.
+   */
+  readonly perRegion?: true;
 }
 
 export const OPERATIONS = [
@@ -132,8 +142,9 @@ export const OPERATIONS = [
     id: 'region.retitle',
     needs: 'structure',
     where: 'commit',
-    spec: '07 §2, P2',
+    spec: '07 §2, P2; ADR 0424',
     text: "Change a region's title.",
+    perRegion: true,
   },
   {
     id: 'section_break.change',
@@ -148,6 +159,14 @@ export const OPERATIONS = [
     where: 'commit',
     spec: '07 §2, §4',
     text: 'Change the top of the tree: which stories exist, the attributes of the body, the definitions node and their order.',
+  },
+  {
+    id: 'defs.add',
+    needs: 'structure',
+    where: 'commit',
+    spec: '07 §2, §5.3, §17; ADR 0424',
+    text: 'Add a new style definition that no earlier commit used. It never changes or removes an existing definition.',
+    perRegion: true,
   },
   {
     id: 'defs.change',
@@ -246,6 +265,13 @@ export type OperationId = (typeof OPERATIONS)[number]['id'];
 
 export const STRUCTURE_OPERATIONS: readonly OperationId[] = OPERATIONS.filter(
   (o) => o.needs === 'structure',
+).map((o) => o.id);
+/**
+ * The operations a region grant may list in `structure` (ADR 0424; decision 279): `region.retitle`
+ * and `defs.add`.
+ */
+export const REGION_STRUCTURE_OPERATIONS: readonly OperationId[] = OPERATIONS.filter(
+  (o) => 'perRegion' in o,
 ).map((o) => o.id);
 export const MANAGE_OPERATIONS: readonly OperationId[] = OPERATIONS.filter(
   (o) => o.needs === 'manage',
@@ -356,6 +382,11 @@ export interface RegionGrant {
   role: RegionRole;
   /** Server time (Unix ms) after which the grant no longer matches, or null. */
   expiresAt: number | null;
+  /**
+   * The parts of `structure` this grant conveys on top of its role (ADR 0424; PRM-068): only with
+   * the role `editor`, and only operations that carry `perRegion`. Absent means none.
+   */
+  structure?: readonly OperationId[];
 }
 
 const NODE_ID_RE = new RegExp(NODE_ID_PATTERN);
@@ -363,8 +394,9 @@ const NODE_ID_RE = new RegExp(NODE_ID_PATTERN);
 /**
  * The problems of a region grant, or an empty list (07 §1, §2; PRM-001). A grant names a region by
  * its node identifier, a principal of one of the four forms, one of the four region roles (so a
- * region grant never conveys `fill`, `structure` or `manage`), and an expiry in Unix milliseconds
- * or null. On a `restricted` region (when `policy` says so) the principal `everyone` is refused:
+ * region grant never conveys `fill`, `structure` or `manage`), an expiry in Unix milliseconds or
+ * null, and optionally a `structure` list of the operations that may be granted per region (ADR
+ * 0424; `validateGrantStructure`). On a `restricted` region (when `policy` says so) the principal `everyone` is refused:
  * it would make the region behave like an `inherit` one for that role (07 §17; owner decision 12 of
  * 2026-11-15, PRM-061).
  */
@@ -386,9 +418,35 @@ export function validateRegionGrant(grant: unknown, policy?: RegionPolicy): stri
     );
   if (g['expiresAt'] !== null && !Number.isSafeInteger(g['expiresAt']))
     out.push('expiresAt must be Unix milliseconds or null');
+  if ('structure' in g) out.push(...validateGrantStructure(g['structure'], g['role']));
   for (const key of Object.keys(g))
-    if (!['region', 'principal', 'role', 'expiresAt'].includes(key))
+    if (!['region', 'principal', 'role', 'expiresAt', 'structure'].includes(key))
       out.push(`unknown member ${key}`);
+  return out;
+}
+
+/**
+ * The problems of the `structure` list of a region grant (ADR 0424; PRM-068). The list is closed:
+ * only operations marked `perRegion` in `OPERATIONS`, each at most once, and only with the role
+ * `editor`, because the operations are of no use without `edit` in the region. The reason names
+ * the entry that is wrong.
+ */
+export function validateGrantStructure(list: unknown, role: unknown): string[] {
+  if (!Array.isArray(list)) return ['structure must be a list of operation identifiers'];
+  const out: string[] = [];
+  if (role !== 'editor')
+    out.push('structure can be listed only with the role editor; the operations need edit');
+  const seen = new Set<unknown>();
+  for (const [i, op] of list.entries()) {
+    if (typeof op !== 'string' || !OPERATIONS.some((o) => o.id === op))
+      out.push(`structure[${i}] is not an operation identifier`);
+    else if (!(REGION_STRUCTURE_OPERATIONS as readonly string[]).includes(op))
+      out.push(
+        `structure[${i}] \`${op}\` cannot be granted per region; it stays with ${operationNeeds(op as OperationId)}`,
+      );
+    else if (seen.has(op)) out.push(`structure[${i}] \`${op}\` is listed twice`);
+    seen.add(op);
+  }
   return out;
 }
 

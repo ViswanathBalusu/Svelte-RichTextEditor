@@ -47,6 +47,8 @@ export const CAPABILITIES = [
 ] as const;
 export const DOC_ROLES = ['viewer', 'commenter', 'suggester', 'editor', 'owner', 'filler'] as const;
 export const REGION_ROLES = ['viewer', 'commenter', 'suggester', 'editor'] as const;
+/** The operations of `structure` a region grant may list (ADR 0424); the authority's table agrees (a test). */
+export const GRANT_STRUCTURE_OPERATIONS = ['region.retitle', 'defs.add'] as const;
 export const RESTRICTIONS = ['no-export', 'no-copy', 'no-print'] as const;
 export const STEP_TYPES = [
   'replace',
@@ -116,6 +118,13 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
   named(
     'RegionRole',
     enm(REGION_ROLES, { doc: 'A role a region grant may give (07 §2).', spec: '07 §2' }),
+  ),
+  named(
+    'GrantStructureOperation',
+    enm(GRANT_STRUCTURE_OPERATIONS, {
+      doc: 'An operation of `structure` that a region grant may carry: `region.retitle` or `defs.add` (07 §2; ADR 0424).',
+      spec: '07 §2',
+    }),
   ),
   named(
     'Restriction',
