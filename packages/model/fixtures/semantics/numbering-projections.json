@@ -287,21 +287,12 @@
           "lists": {
             "listAxxxxxxxxxxx": {
               "numberingId": "decimal-list",
-              "levels": [
-                { "add": 2 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 }
-              ]
+              "levels": [3, 0, 0, 0, 0, 0, 0, 0, 0],
+              "starts": [1, 1, 1, 1, 1, 1, 1, 1, 1]
             }
           },
           "sequences": { "Figure": 1 },
-          "footnotes": { "add": 1 }
+          "footnotes": 2
         }
       },
       "expected": {
@@ -473,17 +464,8 @@
           "lists": {
             "listAxxxxxxxxxxx": {
               "numberingId": "decimal-list",
-              "levels": [
-                { "set": 11 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 }
-              ]
+              "levels": [11, 0, 0, 0, 0, 0, 0, 0, 0],
+              "starts": [10, 1, 1, 1, 1, 1, 1, 1, 1]
             }
           }
         }
@@ -591,17 +573,8 @@
           "lists": {
             "listBxxxxxxxxxxx": {
               "numberingId": "decimal-list",
-              "levels": [
-                { "add": 2 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 },
-                { "set": 0 }
-              ]
+              "levels": [2, 0, 0, 0, 0, 0, 0, 0, 0],
+              "starts": [1, 1, 1, 1, 1, 1, 1, 1, 1]
             }
           }
         }

@@ -73,7 +73,8 @@ describe('EXP-096 criterion 1: equations become Office math', () => {
     expect(all(root, 'oMath').length).toBe(2);
     expect(all(root, 'nary').length).toBe(1);
     expect(xml).not.toContain('a^2 + b^2');
-    expect(xml).toMatch(/\(1\)/);
+    // The number is a `SEQ Equation` field between brackets (owner decision 238).
+    expect(xml).toMatch(/SEQ Equation <\/w:instrText>.*<w:t>1<\/w:t>/);
   });
 
   it('keeps the placeholder for an equation the gate refuses, and the source text for one only the converter refuses', async () => {

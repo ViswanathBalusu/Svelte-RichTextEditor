@@ -35,34 +35,11 @@ const file = listsFile as unknown as {
 /**
  * Cases where the labels of Word's counting, as `WordCounter` models it, differ from the fixture's,
  * with the reason. `at` maps an index into the case's numbered paragraphs, in document order, to
- * the label the writer's output gives. None of these has been checked in Word itself.
+ * the label the writer's output gives. None now: owner decision 238 made Word's labels the
+ * fixture's, and `WordCounter` follows what Word 16 printed (EXP-115, `exp-115-numbering.word.test.ts`).
  */
-const WORD_DIFFERS: Record<string, { why: string; at: Record<number, string> }> = {
-  'skipped-level': {
-    why: 'A skipped level counts from start - 1 in the model (ADR 0032, shows 0); Word shows the level start.',
-    at: { 1: '1.1.1' },
-  },
-  'skipped-level-with-start': {
-    why: 'As skipped-level: the model shows start - 1 (4), Word the start (5).',
-    at: { 1: '1.5.1' },
-  },
-  'template-names-deeper-level': {
-    why: 'A template that names a level not yet counted: the model shows start - 1, Word the start.',
-    at: { 0: '1-3', 3: '2-3' },
-  },
-  'headings-numbered-by-style': {
-    why: 'As skipped-level, for a heading style that skips a level.',
-    at: { 4: '2.1.1' },
-  },
-  'zero-in-every-format': {
-    why: 'Letters and Roman numerals have no zero: the model writes 0, Word writes nothing.',
-    at: { 0: '', 2: '' },
-  },
-  'one-list-two-definitions': {
-    why: 'Two definitions cannot share counters in Word (the writer reports it through sharedLists); each counts alone.',
-    at: { 1: '1', 2: '2.' },
-  },
-};
+const WORD_DIFFERS: Record<string, { why: string; at: Record<number, string> }> = {};
+
 function mergeById(base: readonly J[], extra: readonly J[] = []): J[] {
   const out = [...base];
   for (const n of extra) {
@@ -205,33 +182,46 @@ class WordCounter {
       });
   }
 
+  /** The start of each level for each abstract numbering: a start override stays for later restarts. */
+  readonly starts = new Map<string, number[]>();
+
   next(numId: string, level: number): string {
     const num = this.nums.get(numId)!;
     const levels = this.abstracts.get(num.abstract)!;
     const counter = this.counters.get(num.abstract) ?? [];
     this.counters.set(num.abstract, counter);
+    const starts = this.starts.get(num.abstract) ?? levels.map((l) => l.start);
+    this.starts.set(num.abstract, starts);
     if (!this.used.has(numId)) {
       this.used.add(numId);
-      for (const [l, v] of num.overrides) counter[l] = v - 1;
+      for (const [l, v] of num.overrides) {
+        counter[l] = v - 1;
+        starts[l] = v;
+      }
     }
     const lvl = levels[level]!;
-    counter[level] = (counter[level] ?? lvl.start - 1) + 1;
+    // A level above this one that was not counted yet is counted once, at its start (Word 16).
+    for (let k = 0; k < level; k++) counter[k] ??= starts[k]!;
+    counter[level] = (counter[level] ?? starts[level]! - 1) + 1;
     levels.forEach((deeper, k) => {
       if (k <= level) return;
       const after = deeper.restart;
       if (after === null || (after > 0 && level <= after - 1)) counter[k] = undefined;
     });
     if (lvl.fmt === 'bullet') return lvl.text;
+    // Word prints no label for a template that names a level below its own or one that is missing.
+    for (const m of lvl.text.matchAll(/%([1-9])/g)) {
+      const k = Number(m[1]) - 1;
+      if (!levels[k] || k > level) return '';
+    }
     return lvl.text.replace(/%([1-9])/g, (_, d: string) => {
       const k = Number(d) - 1;
-      const at = levels[k];
-      if (!at) return '';
-      const n = counter[k] ?? at.start;
+      const at = levels[k]!;
+      const n = counter[k] ?? starts[k]!;
       return formatNumber(n, lvl.lgl && k < level ? 'decimal' : at.fmt);
     });
   }
 }
-
 describe('CDM-042 criterion 6: Word counts what the writer writes as the fixture expects', () => {
   const cases = file.cases.filter((c) => c.valid !== false && c.expected?.lists);
   it('covers the cases of numbering-lists.json', () => {

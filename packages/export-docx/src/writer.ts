@@ -359,6 +359,12 @@ class DirectWriter {
   private readonly footnotes: string[] = [];
   private readonly media = new Map<string, string>();
   private readonly refBookmarks = new Map<string, string>();
+  /** The names of the bookmarks that a `bookmark:` reference points at. */
+  private readonly bookmarkRefs = new Set<string>();
+  /** The blocks whose first `seq` field has been written, so that it carries the bookmarks once. */
+  private readonly seqWrapped = new Set<string>();
+  /** Whether a footnote's content is being written (a `SEQ` field cannot be updated there). */
+  private inFootnote = false;
   private readonly seqIndex = new Map<string, number>();
   private readonly fieldValues: Array<{ key: string; text: string }> = [];
   private readonly redacted: string[] = [];
@@ -705,6 +711,7 @@ class DirectWriter {
     const walk = (n: JsonNode): void => {
       if (n.type === 'field' && n.attrs?.['kind'] === 'ref') {
         const t = n.attrs?.['target'];
+        if (typeof t === 'string' && t.startsWith('bookmark:')) this.bookmarkRefs.add(t.slice(9));
         if (
           typeof t === 'string' &&
           (t.startsWith('node:') || t.startsWith('eq:')) &&
@@ -806,6 +813,21 @@ class DirectWriter {
         const rel = typeof story === 'string' ? this.storyRel.get(story) : undefined;
         if (rel) refs.push(el(kind, { 'w:type': type, 'r:id': rel }));
       }
+    // Word reads the format and the restart of footnote marks from the section, not from the
+    // settings part alone (EXP-115, owner decision 238): without this it prints 1, 2, 3.
+    const settingsNode = defs?.content?.find((n) => n.type === 'settings');
+    const sa = withDefaults(settingsNode ?? { type: 'settings' });
+    const noteFormat = FOOTNOTE_FORMATS[String(sa['footnoteFormat'])] ?? 'decimal';
+    const noteRestart = sa['footnoteRestart'] === 'perPageSection';
+    const footnotePr =
+      noteFormat !== 'decimal' || noteRestart
+        ? el(
+            'w:footnotePr',
+            {},
+            noteFormat !== 'decimal' ? el('w:numFmt', { 'w:val': noteFormat }) : '',
+            noteRestart ? el('w:numRestart', { 'w:val': 'eachSect' }) : '',
+          )
+        : '';
     const landscape = v['orientation'] === 'landscape';
     const pgNum =
       typeof v['pageNumberStart'] === 'number' || v['pageNumberFormat'] !== 'decimal'
@@ -818,6 +840,7 @@ class DirectWriter {
       'w:sectPr',
       {},
       ...refs,
+      footnotePr,
       index > 0 && start && start !== 'nextPage' ? el('w:type', { 'w:val': start }) : '',
       el('w:pgSz', {
         'w:w': Number(v['width']),
@@ -897,13 +920,14 @@ class DirectWriter {
           typeof n.attrs?.['label'] === 'string'
             ? this.refBookmarks.get(`eq:${n.attrs['label']}`)
             : undefined;
-        const number = label ? `\t(${label})` : '';
         const latex = String(n.attrs?.['latex'] ?? '');
         // Office math through the converter of this package (EXP-096); an equation it does not
         // convert is written as its LaTeX source, and the warning names the block.
         const office = this.officeMath(latex, !label, id);
-        const numberXml = number
-          ? this.bookmarked(bookmark, el('w:r', {}, el('w:tab'), textElement('w:t', `(${label})`)))
+        // The number is a `SEQ Equation` field, so that Word counts it with the other fields of
+        // the sequence (owner decision 238); a reference points at the field, without the brackets.
+        const numberXml = label
+          ? `${el('w:r', {}, el('w:tab'), textElement('w:t', '('))}${this.bookmarked(bookmark, fieldRuns(' SEQ Equation ', label, ''))}${el('w:r', {}, textElement('w:t', ')'))}`
           : '';
         return el(
           'w:p',
@@ -942,6 +966,54 @@ class DirectWriter {
         this.warn(`a ${n.type} block is not written`);
         return '';
     }
+  }
+
+  /** Whether a block's label is a `seq` number (a caption), not a list label. */
+  private hasSeqLabel(id: string): boolean {
+    return (
+      !this.labels.lists.has(id) &&
+      (this.labels.sequences.get(id)?.some((s) => s.name !== null) ?? false)
+    );
+  }
+
+  /**
+   * How Word gets the label a `ref` prints: `list` (`REF \w` of the numbered paragraph), `seq`
+   * (the bookmark sits round the `SEQ` field, and a plain `REF` reads it), `note` (`NOTEREF` of the
+   * footnote mark), `eq` (the bookmark sits round the equation's `SEQ` field) or `plain`.
+   */
+  private refKind(target: string): 'list' | 'seq' | 'note' | 'eq' | 'plain' {
+    const colon = target.indexOf(':');
+    const scheme = target.slice(0, colon);
+    const name = target.slice(colon + 1);
+    if (scheme === 'eq') return 'eq';
+    const holder =
+      scheme === 'node'
+        ? name
+        : scheme === 'bookmark'
+          ? this.labels.bookmarks.get(name)
+          : undefined;
+    if (holder === undefined) return 'plain';
+    if (scheme === 'bookmark' && this.labels.footnotes.has(holder)) return 'note';
+    if (this.labels.lists.has(holder)) return 'list';
+    return this.hasSeqLabel(holder) ? 'seq' : 'plain';
+  }
+
+  /** The bookmark of `node:<id>` for a block that is not a caption (a caption's sits round its `SEQ`). */
+  private nodeBookmark(id: string): string | undefined {
+    return this.refKind(`node:${id}`) === 'seq' ? undefined : this.refBookmarks.get(`node:${id}`);
+  }
+
+  /** The bookmarks that go round the first `SEQ` field of a block: for its `node:` and `bookmark:` references. */
+  private seqBookmarks(block: string): string[] {
+    if (this.seqWrapped.has(block) || !this.hasSeqLabel(block)) return [];
+    this.seqWrapped.add(block);
+    const names: string[] = [];
+    const node = this.refBookmarks.get(`node:${block}`);
+    if (node) names.push(node);
+    for (const [name, holder] of this.labels.bookmarks)
+      if (holder === block && this.bookmarkRefs.has(name) && BOOKMARK_NAME.test(name))
+        names.push(name);
+    return names;
   }
 
   bookmarked(name: string | undefined, inner: string): string {
@@ -1135,7 +1207,7 @@ class DirectWriter {
       { ...cx, blockSuggestions: block, seqBlock: id },
       rp,
     );
-    const bookmark = this.refBookmarks.get(`node:${id}`);
+    const bookmark = this.nodeBookmark(id);
     const content = this.bookmarked(bookmark, `${leading}${inner}`);
     if (!threads.length) return el('w:p', {}, pPr ? el('w:pPr', {}, pPr) : '', content);
     for (const t of threads) this.commentUsed.add(t);
@@ -1165,7 +1237,7 @@ class DirectWriter {
       caption ? el('w:keepNext') : '',
       jc ? el('w:jc', { 'w:val': jc }) : '',
     );
-    const figure = this.bookmarked(this.refBookmarks.get(`node:${id}`), picture);
+    const figure = this.bookmarked(this.nodeBookmark(id), picture);
     let out = el('w:p', {}, pPr, figure);
     if (caption) {
       const style = this.styles.has('Caption') ? el('w:pStyle', { 'w:val': 'Caption' }) : '';
@@ -1633,6 +1705,13 @@ class DirectWriter {
       case 'anchor': {
         const name = String(a['name'] ?? '');
         if (!BOOKMARK_NAME.test(name)) return '';
+        // A bookmark that a reference reads a number from sits round the `SEQ` field or the
+        // footnote mark instead, where Word can find the number.
+        if (
+          this.bookmarkRefs.has(name) &&
+          ['seq', 'note'].includes(this.refKind(`bookmark:${name}`))
+        )
+          return '';
         const id = this.id();
         return `${el('w:bookmarkStart', { 'w:id': id, 'w:name': name })}${el('w:bookmarkEnd', { 'w:id': id })}`;
       }
@@ -1763,6 +1842,7 @@ class DirectWriter {
       el('w:vertAlign', { 'w:val': 'superscript' }),
     );
     const xml: string[] = [];
+    this.inFootnote = true;
     for (const [k, p] of (node.content ?? []).entries()) {
       const leading =
         k === 0
@@ -1773,6 +1853,7 @@ class DirectWriter {
           await this.paragraphXml(p, { name: 'word/footnotes.xml' }, emptyCtx(), [], leading),
         );
     }
+    this.inFootnote = false;
     if (!xml.length) xml.push(el('w:p', {}, el('w:r', {}, markProps, el('w:footnoteRef'))));
     this.footnotes.push(el('w:footnote', { 'w:id': id }, ...xml));
     const props = rPr(
@@ -1783,7 +1864,18 @@ class DirectWriter {
           ]
         : [superscript],
     );
-    return el('w:r', {}, props, el('w:footnoteReference', { 'w:id': id }));
+    const reference = el('w:r', {}, props, el('w:footnoteReference', { 'w:id': id }));
+    // A bookmark in the footnote that a reference points at goes round the mark in the text,
+    // where `NOTEREF` reads it.
+    const here: string[] = [];
+    const walkAnchors = (x: JsonNode): void => {
+      if (x.type === 'anchor' && typeof x.attrs?.['name'] === 'string') here.push(x.attrs['name']);
+      for (const c of x.content ?? []) walkAnchors(c);
+    };
+    walkAnchors(node);
+    return here
+      .filter((name) => this.bookmarkRefs.has(name) && BOOKMARK_NAME.test(name))
+      .reduce((inner, name) => this.bookmarked(name, inner), reference);
   }
 
   /** A field as Word's complex field, its result the text the model computes (03 §7; EXP-092). */
@@ -1794,6 +1886,7 @@ class DirectWriter {
     let instr: string | null;
     let result = cached;
     let lock = false;
+    let seqNames: string[] = [];
     switch (kind) {
       case 'page':
         instr = `PAGE${numberSwitch(typeof a['format'] === 'string' ? a['format'] : null)}`;
@@ -1833,11 +1926,17 @@ class DirectWriter {
         const target = typeof a['target'] === 'string' ? a['target'] : '';
         const label = referenceText(this.labels, target);
         result = label ?? cached;
-        if (target.startsWith('bookmark:')) instr = `REF ${target.slice('bookmark:'.length)} \\h`;
-        else {
-          const bm = this.refBookmarks.get(target);
-          instr = bm ? `REF ${bm} \\w \\h` : null;
-        }
+        const kind = this.refKind(target);
+        const name = target.startsWith('bookmark:')
+          ? target.slice(9)
+          : this.refBookmarks.get(target);
+        // Word cannot print a label that is not a paragraph number through `REF \w`: it prints 0
+        // or nothing. A caption number and an equation number are read from their `SEQ` field,
+        // and a footnote's mark with `NOTEREF` (owner decision 238).
+        if (!name) instr = null;
+        else if (kind === 'list') instr = `REF ${name} \\w \\h`;
+        else if (kind === 'note') instr = `NOTEREF ${name} \\h`;
+        else instr = `REF ${name} \\h`;
         break;
       }
       case 'styleRef': {
@@ -1863,6 +1962,10 @@ class DirectWriter {
         instr = name
           ? `SEQ ${name}${numberSwitch(typeof a['format'] === 'string' ? a['format'] : null)}`
           : null;
+        // Word cannot update a `SEQ` field in a footnote ("Error! Main Document Only."), so the
+        // field there keeps the number the model counted (owner decision 238).
+        if (this.inFootnote) lock = true;
+        if (name && label) seqNames = this.seqBookmarks(block);
         break;
       }
       case 'formValue': {
@@ -1877,7 +1980,7 @@ class DirectWriter {
     const safe = xmlSafe(result).text;
     if (instr === null) return safe ? el('w:r', {}, rPr, textElement(t, safe)) : '';
     const it = inDel ? 'w:delInstrText' : 'w:instrText';
-    return [
+    const runs = [
       el(
         'w:r',
         {},
@@ -1889,6 +1992,7 @@ class DirectWriter {
       safe ? el('w:r', {}, rPr, textElement(t, safe)) : '',
       el('w:r', {}, rPr, el('w:fldChar', { 'w:fldCharType': 'end' })),
     ].join('');
+    return seqNames.reduce((inner, name) => this.bookmarked(name, inner), runs);
   }
 
   /** A form field as an inline content control bound to the values part (12 §12; EXP-095). */

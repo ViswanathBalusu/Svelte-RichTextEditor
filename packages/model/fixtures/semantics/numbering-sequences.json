@@ -403,7 +403,7 @@
     },
     {
       "id": "field-inside-a-footnote",
-      "description": "A seq field in a footnote counts at the footnote's place in the text; it belongs to the footnote's paragraph.",
+      "description": "A seq field in a footnote counts in the footnote story on its own, as Word counts it (owner decision 238); it belongs to the footnote's paragraph.",
       "body": [
         {
           "type": "paragraph",
@@ -440,14 +440,14 @@
       "expected": {
         "sequences": [
           { "holder": "p01xxxxxxxxxxxxx", "texts": ["1"] },
-          { "holder": "fp01xxxxxxxxxxxx", "texts": ["2"] },
-          { "holder": "p03xxxxxxxxxxxxx", "texts": ["3"] }
+          { "holder": "fp01xxxxxxxxxxxx", "texts": ["1"] },
+          { "holder": "p03xxxxxxxxxxxxx", "texts": ["2"] }
         ]
       }
     },
     {
       "id": "numbered-paragraph-inside-a-footnote",
-      "description": "A numbered paragraph in a footnote counts in its list at the footnote's place in the text.",
+      "description": "A numbered paragraph in a footnote counts in the footnote story on its own, as in Word (owner decision 238).",
       "body": [
         {
           "type": "paragraph",
@@ -505,8 +505,8 @@
       "expected": {
         "lists": [
           { "id": "p01xxxxxxxxxxxxx", "text": "1." },
-          { "id": "fp01xxxxxxxxxxxx", "text": "2." },
-          { "id": "p03xxxxxxxxxxxxx", "text": "3." }
+          { "id": "fp01xxxxxxxxxxxx", "text": "1." },
+          { "id": "p03xxxxxxxxxxxxx", "text": "2." }
         ]
       }
     },

@@ -89,21 +89,30 @@ export interface DocumentLabels {
   readonly problems: readonly CascadeError[];
 }
 
-/** How a counter changes across opaque content: by a number of steps, or to a fixed value. */
-export type LevelEffect = { readonly add: number } | { readonly set: number };
+/** The counters of one list instance after a stretch of content (a counter effect, below). */
+export interface ListState {
+  readonly numberingId: string;
+  /** The counter of each level, from level 0. */
+  readonly levels: readonly number[];
+  /** The value each level starts at (the definition's `start`, or the last restart value). */
+  readonly starts: readonly number[];
+}
 
 /**
- * What a stretch of content does to the counters, without its content: per list instance, the
- * definition it was first counted with and one effect per level (missing levels are unchanged);
- * per sequence name, how many numbers it takes; and the footnote marks it takes. Plain JSON, so a
- * server can send it with a projection.
+ * What a stretch of opaque content did to the counters: the state it left behind, for each list
+ * instance, sequence and footnote counter it changed (the others are unchanged). The server
+ * computes it from the full document (`counterEffects`), so a projection that applies it before
+ * the next visible block shows the full document's numbers (ADR 0019, SR-C3). Plain JSON, so a
+ * server can send it with a projection. Lists in footnotes count apart from the body's (ADR 0032;
+ * owner decision 238), so they have their own entry.
  */
 export interface CounterEffect {
-  readonly lists?: Readonly<
-    Record<string, { readonly numberingId: string; readonly levels: readonly LevelEffect[] }>
-  >;
+  readonly lists?: Readonly<Record<string, ListState>>;
+  readonly noteLists?: Readonly<Record<string, ListState>>;
+  /** The sequences of the footnote story, which count apart from the body's. */
+  readonly noteSequences?: Readonly<Record<string, number>>;
   readonly sequences?: Readonly<Record<string, number>>;
-  readonly footnotes?: LevelEffect;
+  readonly footnotes?: number;
 }
 
 export interface LabelOptions {
@@ -115,41 +124,60 @@ export interface LabelOptions {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Counter state. A counter is absolute (`abs`: a value) or relative (an increment over an unknown
-// value). The real computation starts every new list instance absolute; the computation of an
-// effect starts it relative, so that what it ends with is the effect.
+// Counter state.
 
 interface Counter {
-  abs: boolean;
   value: number;
 }
 
 interface ListCounters {
   numberingId: string;
   levels: Counter[];
+  /**
+   * The value each level starts at: the definition's `start`, or the value of the last
+   * `numberingRestart` at that level, which Word keeps for every later restart of the level (owner
+   * decision 238).
+   */
+  starts: number[];
 }
 
+/** Separates the list identifier from a second numbering definition's identifier in a list key. */
+const KEY_SEPARATOR = '\u0000';
+
+/** The counters of one story: lists by instance, sequences by name, and the footnote marks. */
 class Counters {
   readonly lists = new Map<string, ListCounters>();
   readonly sequences = new Map<string, Counter>();
-  footnotes: Counter;
-  readonly symbolic: boolean;
+  /** The definition each `listId` was first counted with: it keeps the plain `listId` as its key. */
+  private readonly firstDefinition = new Map<string, string>();
+  footnotes: Counter = { value: 0 };
 
-  constructor(symbolic: boolean) {
-    this.symbolic = symbolic;
-    this.footnotes = { abs: !symbolic, value: 0 };
+  /**
+   * The counters of a list instance. Word counts each numbering definition of a list on its own
+   * (owner decision 238), so the instance is the pair of `listId` and definition: the first
+   * definition used keeps the plain `listId` as its key, another one gets a longer key.
+   */
+  list(listId: string, numberingId: string, levels: readonly Attrs[]): ListCounters {
+    const first = this.firstDefinition.get(listId);
+    if (first === undefined) this.firstDefinition.set(listId, numberingId);
+    return this.listByKey(
+      first === undefined || first === numberingId
+        ? listId
+        : `${listId}${KEY_SEPARATOR}${numberingId}`,
+      numberingId,
+      levels,
+    );
   }
 
-  list(listId: string, numberingId: string, levels: readonly Attrs[]): ListCounters {
-    let c = this.lists.get(listId);
+  private listByKey(key: string, numberingId: string, levels: readonly Attrs[]): ListCounters {
+    let c = this.lists.get(key);
     if (!c) {
       c = {
         numberingId,
-        levels: Array.from({ length: LEVELS }, (_, k) =>
-          this.symbolic ? { abs: false, value: 0 } : { abs: true, value: startOf(levels[k]) - 1 },
-        ),
+        levels: Array.from({ length: LEVELS }, (_, k) => ({ value: startOf(levels[k]) - 1 })),
+        starts: Array.from({ length: LEVELS }, (_, k) => startOf(levels[k])),
       };
-      this.lists.set(listId, c);
+      this.lists.set(key, c);
     }
     return c;
   }
@@ -157,53 +185,57 @@ class Counters {
   sequence(name: string): Counter {
     let c = this.sequences.get(name);
     if (!c) {
-      c = { abs: !this.symbolic, value: 0 };
+      c = { value: 0 };
       this.sequences.set(name, c);
     }
     return c;
   }
 
+  /** Puts the state an effect describes in place of the counters' own. */
   apply(effect: CounterEffect, table: StyleTable): void {
-    for (const [listId, e] of Object.entries(effect.lists ?? {})) {
-      const c = this.list(listId, e.numberingId, table.numberings.get(e.numberingId) ?? []);
-      e.levels.forEach((le, k) => {
-        if (k < LEVELS) applyLevel(c.levels[k]!, le);
+    for (const [key, e] of Object.entries(effect.lists ?? {})) {
+      const listId = key.split(KEY_SEPARATOR)[0]!;
+      if (key === listId && !this.firstDefinition.has(listId))
+        this.firstDefinition.set(listId, e.numberingId);
+      this.lists.delete(key);
+      const c = this.listByKey(key, e.numberingId, table.numberings.get(e.numberingId) ?? []);
+      e.levels.forEach((v, k) => {
+        if (k < LEVELS) c.levels[k] = { value: v };
+      });
+      e.starts.forEach((v, k) => {
+        if (k < LEVELS) c.starts[k] = v;
       });
     }
-    for (const [name, n] of Object.entries(effect.sequences ?? {})) this.sequence(name).value += n;
-    if (effect.footnotes) applyLevel(this.footnotes, effect.footnotes);
+    for (const [name, n] of Object.entries(effect.sequences ?? {})) this.sequence(name).value = n;
+    if (effect.footnotes !== undefined) this.footnotes = { value: effect.footnotes };
   }
 
-  effect(): CounterEffect {
-    const lists: Record<string, { numberingId: string; levels: LevelEffect[] }> = {};
-    for (const [listId, c] of this.lists) {
-      const levels = c.levels.map(toEffect);
-      while (levels.length && isIdentity(levels[levels.length - 1]!)) levels.pop();
-      lists[listId] = { numberingId: c.numberingId, levels };
-    }
-    const sequences: Record<string, number> = {};
-    for (const [name, c] of this.sequences) if (c.value !== 0) sequences[name] = c.value;
-    const out: { -readonly [K in keyof CounterEffect]: CounterEffect[K] } = {};
-    if (Object.keys(lists).length) out.lists = lists;
-    if (Object.keys(sequences).length) out.sequences = sequences;
-    if (!isIdentity(toEffect(this.footnotes))) out.footnotes = toEffect(this.footnotes);
+  /** The state of every list instance, as plain values. */
+  listStates(): Map<string, ListState> {
+    const out = new Map<string, ListState>();
+    for (const [key, c] of this.lists)
+      out.set(key, {
+        numberingId: c.numberingId,
+        levels: c.levels.map((l) => l.value),
+        starts: [...c.starts],
+      });
     return out;
   }
+
+  sequenceValues(): Map<string, number> {
+    return new Map([...this.sequences].map(([name, c]) => [name, c.value]));
+  }
 }
 
-function applyLevel(c: Counter, e: LevelEffect): void {
-  if ('set' in e) {
-    c.abs = true;
-    c.value = e.set;
-  } else c.value += e.add;
-}
-
-function toEffect(c: Counter): LevelEffect {
-  return c.abs ? { set: c.value } : { add: c.value };
-}
-
-function isIdentity(e: LevelEffect): boolean {
-  return 'add' in e && e.add === 0;
+/** The entries of `after` that differ from `before` (or are new), as a record; null when none. */
+function changed<T>(
+  before: ReadonlyMap<string, T>,
+  after: ReadonlyMap<string, T>,
+): Record<string, T> | null {
+  const out: Record<string, T> = {};
+  for (const [key, value] of after)
+    if (JSON.stringify(before.get(key)) !== JSON.stringify(value)) out[key] = value;
+  return Object.keys(out).length ? out : null;
 }
 
 function startOf(level: Attrs | undefined): number {
@@ -228,14 +260,21 @@ export function fillTemplate(
   const text = own?.['text'];
   if (typeof text !== 'string') return '';
   const legal = own?.['legal'] === true;
-  return text.replace(/%([1-9])/g, (_m, digit: string) => {
+  // Word prints no label at all for a template that names a level below its own or one the
+  // definition lacks (owner decision 238).
+  let invalid = false;
+  const filled = text.replace(/%([1-9])/g, (_m, digit: string) => {
     const k = Number(digit) - 1;
     const def = levels[k];
-    if (!def) return '';
+    if (!def || k > level) {
+      invalid = true;
+      return '';
+    }
     const format = legal && k < level ? 'decimal' : String(def['format'] ?? 'decimal');
     const bullet = def['bulletChar'];
     return formatNumber(values[k] ?? 0, format, typeof bullet === 'string' ? bullet : null);
   });
+  return invalid ? '' : filled;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -254,6 +293,10 @@ interface Sink {
 interface Walk {
   readonly table: StyleTable;
   readonly counters: Counters;
+  /** The lists of the footnote story: Word counts them on their own (owner decision 238). */
+  readonly noteCounters: Counters;
+  /** Whether the walk is inside a footnote's content. */
+  inNote: boolean;
   readonly sink: Sink | null;
   readonly effects: (id: string) => CounterEffect | undefined;
   /** Footnotes get marks in the body only. */
@@ -306,13 +349,19 @@ function visitBlock(w: Walk, node: TreeNode): void {
     }
     case 'section_break':
       if (w.footnotes && w.table.settings.footnoteRestart === 'perPageSection')
-        w.counters.footnotes = { abs: true, value: 0 };
+        w.counters.footnotes = { value: 0 };
       return;
     default: {
       if (!OPAQUE_BLOCKS.has(type)) return;
       const id = idOf(node);
       const effect = id ? w.effects(id) : undefined;
-      if (effect) w.counters.apply(effect, w.table);
+      if (effect) {
+        w.counters.apply(effect, w.table);
+        w.noteCounters.apply(
+          { lists: effect.noteLists ?? {}, sequences: effect.noteSequences ?? {} },
+          w.table,
+        );
+      }
     }
   }
 }
@@ -335,14 +384,21 @@ function count(w: Walk, n: NumberingRef, restart: unknown, id: string | null): v
   const levels = w.table.numberings.get(n.numberingId);
   const level = levels?.[n.level];
   if (!levels || !level || n.level < 0 || n.level >= LEVELS) return;
-  const c = w.counters.list(n.listId, n.numberingId, levels);
+  const c = (w.inNote ? w.noteCounters : w.counters).list(n.listId, n.numberingId, levels);
   const own = c.levels[n.level]!;
+  // A level above this one that was never counted is counted once, at its start, as Word does
+  // for a skipped level (owner decision 238; it shows 1.1.1, not 1.0.1).
+  for (let k = 0; k < n.level; k++) {
+    const above = c.levels[k]!;
+    if (above.value < c.starts[k]!) above.value = c.starts[k]!;
+  }
   if (typeof restart === 'number') {
-    own.abs = true;
     own.value = restart;
+    // Word keeps a restart value as the level's start for the rest of the list (decision 238).
+    c.starts[n.level] = restart;
   } else own.value += 1;
   for (let d = n.level + 1; d < LEVELS; d++)
-    if (restarts(levels[d], d, n.level)) c.levels[d] = { abs: true, value: startOf(levels[d]) - 1 };
+    if (restarts(levels[d], d, n.level)) c.levels[d] = { value: c.starts[d]! - 1 };
   if (!w.sink || !id) return;
   const format = level['format'];
   if (format === 'bullet') {
@@ -382,7 +438,7 @@ function visitInlines(
         const name = attrs['name'];
         let label: SequenceLabel = { name: null, value: 0, text: '' };
         if (typeof name === 'string') {
-          const c = w.counters.sequence(name);
+          const c = (w.inNote ? w.noteCounters : w.counters).sequence(name);
           c.value += 1;
           label = {
             name,
@@ -411,7 +467,9 @@ function visitInlines(
         // not in a table, so no table style applies to it. A footnote holds paragraphs (CDM-001);
         // an earlier draft held inline content directly, which is still read.
         const outer = w.tableStyle;
+        const outerNote = w.inNote;
         w.tableStyle = null;
+        w.inNote = true;
         let inline = false;
         eachChild(child, (inner) => {
           if (typeOf(inner) === 'paragraph') visitParagraph(w, inner, id);
@@ -419,6 +477,7 @@ function visitInlines(
         });
         if (inline) visitInlines(w, child, id, id);
         w.tableStyle = outer;
+        w.inNote = outerNote;
         return;
       }
       case 'anchor': {
@@ -461,14 +520,32 @@ export function computeLabels(doc: TreeNode, options: LabelOptions = {}): Docume
     const type = typeOf(top);
     if (type === 'body')
       visitBlocks(
-        { table, counters: new Counters(false), sink, effects, footnotes: true, tableStyle: null },
+        {
+          table,
+          counters: new Counters(),
+          noteCounters: new Counters(),
+          inNote: false,
+          sink,
+          effects,
+          footnotes: true,
+          tableStyle: null,
+        },
         top,
       );
   });
   eachChild(doc, (top) => {
     if (typeOf(top) === 'story')
       visitBlocks(
-        { table, counters: new Counters(false), sink, effects, footnotes: false, tableStyle: null },
+        {
+          table,
+          counters: new Counters(),
+          noteCounters: new Counters(),
+          inNote: false,
+          sink,
+          effects,
+          footnotes: false,
+          tableStyle: null,
+        },
         top,
       );
   });
@@ -485,8 +562,9 @@ export function computeLabels(doc: TreeNode, options: LabelOptions = {}): Docume
 
 /**
  * The counter effects of body-level blocks of a full document (normally confidential regions), by
- * identifier, for a projection that replaces them with placeholders. An identifier that names no
- * direct child of the body is left out.
+ * identifier, for a projection that replaces them with placeholders. The document is counted once
+ * in full; an effect holds what the block changed. An identifier that names no direct child of the
+ * body is left out.
  */
 export function counterEffects(
   doc: TreeNode,
@@ -498,24 +576,44 @@ export function counterEffects(
   const out = new Map<string, CounterEffect>();
   eachChild(doc, (top) => {
     if (typeOf(top) !== 'body') return;
+    const w: Walk = {
+      table,
+      counters: new Counters(),
+      noteCounters: new Counters(),
+      inNote: false,
+      sink: null,
+      effects: () => undefined,
+      footnotes: true,
+      tableStyle: null,
+    };
     eachChild(top, (block) => {
       const id = idOf(block);
-      if (!id || !wanted.has(id)) return;
-      const w: Walk = {
-        table,
-        counters: new Counters(true),
-        sink: null,
-        effects: () => undefined,
-        footnotes: true,
-        tableStyle: null,
+      const keep = id !== null && wanted.has(id);
+      const before = {
+        lists: w.counters.listStates(),
+        noteLists: w.noteCounters.listStates(),
+        noteSequences: w.noteCounters.sequenceValues(),
+        sequences: w.counters.sequenceValues(),
+        footnotes: w.counters.footnotes.value,
       };
       visitBlock(w, block);
-      out.set(id, w.counters.effect());
+      if (!keep || id === null) return;
+      const effect: { -readonly [K in keyof CounterEffect]: CounterEffect[K] } = {};
+      const lists = changed(before.lists, w.counters.listStates());
+      const noteLists = changed(before.noteLists, w.noteCounters.listStates());
+      const sequences = changed(before.sequences, w.counters.sequenceValues());
+      if (lists) effect.lists = lists;
+      const noteSequences = changed(before.noteSequences, w.noteCounters.sequenceValues());
+      if (noteLists) effect.noteLists = noteLists;
+      if (noteSequences) effect.noteSequences = noteSequences;
+      if (sequences) effect.sequences = sequences;
+      if (w.counters.footnotes.value !== before.footnotes)
+        effect.footnotes = w.counters.footnotes.value;
+      out.set(id, effect);
     });
   });
   return out;
 }
-
 /**
  * The text a `ref` field prints for its `target` (03 §4.4; CDM-036, CDM-042): the label the target
  * carries, as literal text. `node:` names a numbered paragraph or a caption paragraph; `bookmark:`
@@ -547,7 +645,9 @@ export function referenceText(labels: DocumentLabels, target: string): string | 
 
 function blockLabel(labels: DocumentLabels, id: string): string | null {
   const list = labels.lists.get(id);
-  if (list) return list.text;
+  // A reference to a numbered paragraph leaves off the label's closing full stops: Word's
+  // `REF \w` does (owner decision 238).
+  if (list) return list.text.replace(/\.+$/, '');
   const seq = labels.sequences.get(id)?.find((s) => s.name !== null);
   return seq ? seq.text : null;
 }

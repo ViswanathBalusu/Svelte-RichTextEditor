@@ -172,7 +172,9 @@ describe('labels (CDM-042)', () => {
       `${'m'.repeat(32)}dcclxvii`,
     ]);
     expect(formatNumber(-1, 'decimal')).toBe('0');
-    expect(formatNumber(0, 'upperRoman')).toBe('0');
+    expect(formatNumber(0, 'upperRoman')).toBe('');
+    expect(formatNumber(0, 'lowerLetter')).toBe('');
+    expect(formatNumber(0, 'decimal')).toBe('0');
     expect(formatNumber(5, 'bullet', '◦')).toBe('◦');
     expect(formatNumber(5, 'bullet', null)).toBe('•');
     expect(formatNumber(5, 'none')).toBe('');
@@ -190,7 +192,7 @@ describe('labels (CDM-042)', () => {
 
   it('gives no text for a reference it cannot resolve', () => {
     const labels = computeLabels(doc([item('p1xxxxxxxxxxxxxx')]));
-    expect(referenceText(labels, 'node:p1xxxxxxxxxxxxxx')).toBe('1.');
+    expect(referenceText(labels, 'node:p1xxxxxxxxxxxxxx')).toBe('1');
     for (const t of [
       'node:nope',
       'bookmark:nope',
