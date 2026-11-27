@@ -16,8 +16,9 @@ import type { LayoutTree, ParagraphFragment } from '../../layout/src/tree.ts';
 import { paintTree, type PaintSource } from './painter.ts';
 
 const PX_PER_PT = 96 / 72;
-const COLUMN_PT = 300;
 const FAMILY = 'serif';
+// The painted family is written as the measurer writes it (canvas-measure.ts); see fe-090-metrics.
+const PAINT_FAMILY = `"${FAMILY}", serif`;
 const SIZE_PT = 12;
 const font = { family: FAMILY, sizePt: SIZE_PT, bold: false, italic: false };
 
@@ -29,6 +30,14 @@ const LINES = [
 ];
 
 const hasDom = typeof document !== 'undefined';
+
+// The column is a twentieth wider than the longer of the two justified lines in the face this
+// machine gives `serif`, so that each of them has room to spread whatever the face. A fixed 300 pt
+// was narrower than the lines in DejaVu Serif, where nothing can be justified (hosted CI, Linux).
+const naturalPt = (text: string): number => canvasTextMeasurer().advance(font, text);
+const COLUMN_PT = hasDom
+  ? Math.ceil(Math.max(naturalPt(LINES[0]!), naturalPt(LINES[1]!)) * 1.05)
+  : 300;
 
 describe.skipIf(!hasDom)(
   'justified lines are painted at the column width (FE-091, criteria 1 and 3)',
@@ -95,7 +104,7 @@ describe.skipIf(!hasDom)(
           const idx = lines.findIndex((l) => l.from === from && l.to === to);
           return LINES[idx < 0 ? 0 : idx]!;
         },
-        fontFamily: FAMILY,
+        fontFamily: PAINT_FAMILY,
         fontSizePt: SIZE_PT,
         measure: (t) => measurer.advance(font, t),
       };

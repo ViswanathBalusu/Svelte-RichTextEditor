@@ -17,6 +17,10 @@ import { PAINT_TEXT_PINS, paintTree, type PaintSource } from './painter.ts';
 const SIZE_PT = 12;
 const PX_PER_PT = 96 / 72;
 const FAMILY = 'serif';
+// The painted family is written as the measurer writes it (canvas-measure.ts): a quoted name, then
+// the generic. On Linux a quoted `serif` is a font name that fontconfig resolves, and the bare
+// generic is the browser's own serif, which can be another face (hosted CI: 94 px against 116 px).
+const PAINT_FAMILY = `"${FAMILY}", serif`;
 
 /** Ligature-rich (ffi, fi, fl, ffl) and kerning-heavy (AV, To, Wa, Ty, Yo) samples. */
 const SAMPLES = [
@@ -90,7 +94,7 @@ describe.skipIf(!hasDom)('painter metrics match the measurer (FE-090, criterion 
     host = el;
     const source: PaintSource = {
       lineText: (block, from, to) => texts[block]!.slice(from, to),
-      fontFamily: FAMILY,
+      fontFamily: PAINT_FAMILY,
       fontSizePt: SIZE_PT,
     };
     const { pages } = paintTree(el, t, source);
@@ -109,7 +113,7 @@ describe.skipIf(!hasDom)('painter metrics match the measurer (FE-090, criterion 
     host = el;
     const source: PaintSource = {
       lineText: (block, from, to) => texts[block]!.slice(from, to),
-      fontFamily: FAMILY,
+      fontFamily: PAINT_FAMILY,
       fontSizePt: SIZE_PT,
     };
     const { pages } = paintTree(el, t, source);
@@ -133,7 +137,11 @@ describe.skipIf(!hasDom)('painter metrics match the measurer (FE-090, criterion 
 
   // The open problem, kept visible: in Chromium the kerned samples paint narrower than canvas
   // `auto` measures them. When this fails, the gap has closed and FE-090's Notes need revisiting.
-  it.runIf(chromium)('in Chromium, kerned text still paints off the canvas measure', () => {
+  it.runIf(chromium)('in Chromium, kerned text still paints off the canvas measure', (ctx) => {
+    // The gap was measured on Windows. On Linux (hosted CI, and a Playwright container with DejaVu
+    // Fonts) canvas uto and CSS kerning paint the same in the face serif gives: gaps of 0.008 px
+    // and 0 px. There is no problem to keep visible there.
+    if (/Linux/.test(navigator.userAgent)) ctx.skip('canvas and CSS kerning agree in the serif of Linux');
     const { tree: t, texts } = tree();
     const el = document.createElement('div');
     el.style.width = '600px';
@@ -141,7 +149,7 @@ describe.skipIf(!hasDom)('painter metrics match the measurer (FE-090, criterion 
     host = el;
     const { pages } = paintTree(el, t, {
       lineText: (block, from, to) => texts[block]!.slice(from, to),
-      fontFamily: FAMILY,
+      fontFamily: PAINT_FAMILY,
       fontSizePt: SIZE_PT,
     });
     const measurer = canvasTextMeasurer();
