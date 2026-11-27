@@ -113,21 +113,38 @@ export async function recordFirstView(
   }
 }
 
+/** What a completion needs: who completes, and what the routes see. */
+export interface CompletionRequest {
+  ref: DocRef;
+  actor: string;
+  participant: string;
+  /** The `seq` of the commit that completes the participant (FRW-047); default: none stored. */
+  completedSeq?: number;
+  /**
+   * The document as it stands after the completion's `rules` commit, whole. With it the routes of
+   * the workflow are evaluated and applied in this transition (FRW-037): who is added or skipped
+   * is settled before the participant completes, so the next order is the one routing leaves.
+   */
+  routingDocument?: unknown;
+}
+
 export async function recordCompletion(
   deps: TransitionDeps,
-  req: {
-    ref: DocRef;
-    actor: string;
-    participant: string;
-    /** The `seq` of the commit that completes the participant (FRW-047); default: none stored. */
-    completedSeq?: number;
-    /**
-     * The document as it stands after the completion's `rules` commit, whole. With it the routes of
-     * the workflow are evaluated and applied in this transition (FRW-037): who is added or skipped
-     * is settled before the participant completes, so the next order is the one routing leaves.
-     */
-    routingDocument?: unknown;
-  },
+  req: CompletionRequest,
+): Promise<ProgressOutcome> {
+  // Another participant's first view, or another completion, may write the row between the read and
+  // the write. The completion reads it again and goes on, as `recordFirstView` does, so that it is
+  // never refused for a race it did not cause.
+  for (let attempt = 0; ; attempt++) {
+    const out = await completeOnce(deps, req);
+    if (!out.ok && out.problem.code === 'conflict' && attempt < 5) continue;
+    return out;
+  }
+}
+
+async function completeOnce(
+  deps: TransitionDeps,
+  req: CompletionRequest,
 ): Promise<ProgressOutcome> {
   const { ref, actor, participant } = req;
   const stored = await deps.workflows.read(ref.tenant, ref.doc);

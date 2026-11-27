@@ -14,10 +14,16 @@ import {
 } from './support.ts';
 
 /** Waits for a job to reach one of `states` through the API. */
-async function until(h: Harness, token: string, job: string, states: string[]) {
+async function until(
+  h: Harness,
+  token: string,
+  job: string,
+  states: string[],
+  ready: (json: Record<string, unknown>) => boolean = () => true,
+) {
   for (let i = 0; i < 200; i++) {
     const r = await h.call('GET', `/v1/exports/${job}`, { token });
-    if (states.includes(r.json?.state)) return r;
+    if (states.includes(r.json?.state) && ready(r.json)) return r;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error(`job ${job} did not reach ${states.join(' or ')}`);
@@ -92,11 +98,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           jobHandlers: { export: exportHandler },
           config: { jobIdleMs: 20, jobLeaseMs: 2000 },
         });
-    });
+    }, 120_000);
     afterAll(async () => {
       gate?.();
       await h?.close();
-    });
+    }, 60_000);
 
     it.skipIf(skip)(
       'accepts an export with 202 and a job, and runs it to completion (PRO-063; PRO-064 criteria 1, 2)',
@@ -260,7 +266,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             body: { target: 'pdf', options: { profile: 'preview' } },
           })
         ).json.id as string;
-        const running = await until(h, editor, job, ['converting']);
+        // A running job is converting from the moment it is leased; the 10 per cent is reported after.
+        const running = await until(h, editor, job, ['converting'], (j) => j['progress'] === 10);
         expect(running.json.progress).toBe(10);
         expect((await h.call('DELETE', `/v1/exports/${job}`, { token: editor })).status).toBe(204);
         expect((await h.call('GET', `/v1/exports/${job}`, { token: editor })).json.state).toBe(

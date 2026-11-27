@@ -112,8 +112,14 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             await new Promise((resolve) => setTimeout(resolve, 10));
           expect(appends, 'the first copy reached the store').toBe(before + 1);
           for (let i = 1; i < COPIES; i++) send();
-          // Let the copies arrive while the commit is still being stored, then store it.
-          await new Promise((resolve) => setTimeout(resolve, 300));
+          // Every copy must be handled while the commit is still being stored. The session handles
+          // the frames of a connection in order, so the answer to a ping sent after the last copy
+          // comes after the room has seen all of them. (A fixed wait is not enough on a loaded
+          // host: a copy handled after the store is answered from the log, with the stored steps,
+          // which is another acknowledgement by design, 04 §5 step 2.)
+          const ping = c.nextId();
+          c.send({ t: 'ping', id: ping });
+          await c.take((m) => m.t === 'pong' && m.re === ping, 60_000, 'the pong after the copies');
           open();
           hold = null;
 

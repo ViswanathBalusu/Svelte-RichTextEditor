@@ -214,14 +214,24 @@ export const FUZZ: ProfileDef = {
       async run(ctx) {
         const doc = await ctx.document();
         const seed = ctx.config.fuzz.seed;
-        const deadline = Date.now() + ctx.config.fuzz.budgetMs;
         let s = await openSession(ctx, doc);
+        // The budget counts from the first frame: opening the session can be slow on a loaded host.
+        const deadline = Date.now() + ctx.config.fuzz.budgetMs;
         let sent = 0;
         let closes = 0;
         const codes = new Map<number, number>();
-        for (let batch = 0; Date.now() < deadline && sent < ctx.config.fuzz.maxRuns; batch++) {
-          const inputs = fc.sample(frames(doc), { seed: seed + batch, numRuns: 50 });
-          for (let i = 0; i < inputs.length && Date.now() < deadline; i++) {
+        // The first frame is fixed and is always sent, so that what the scenario declares (a close
+        // with 4400) is in its traffic however few random frames the budget allows (PRO-117).
+        for (
+          let batch = 0;
+          (batch === 0 || Date.now() < deadline) && sent < ctx.config.fuzz.maxRuns;
+          batch++
+        ) {
+          const inputs = [
+            ...(batch === 0 ? ['not json'] : []),
+            ...fc.sample(frames(doc), { seed: seed + batch, numRuns: 50 }),
+          ];
+          for (let i = 0; i < inputs.length && (i === 0 || Date.now() < deadline); i++) {
             const text = inputs[i]!;
             if (utf8Length(text) > ctx.limits.maxMessageBytes) continue;
             const from = s.wire.mark();

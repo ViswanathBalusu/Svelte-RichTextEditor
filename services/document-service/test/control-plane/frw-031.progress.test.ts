@@ -132,6 +132,44 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
+      "a completion is not refused when another participant's first view is stored between its read and its write (CI run 45931204248)",
+      async () => {
+        const { ref } = await sent();
+        await recordFirstView(deps(), { ref, actor: 'one', participant: 'one' });
+        // The first read of the completion is followed at once by the first view of "two", which
+        // moves the row, so that the completion's write finds it changed.
+        const real = deps();
+        let raced = false;
+        const workflows = new Proxy(real.workflows, {
+          get(target, key) {
+            const value: unknown = Reflect.get(target, key);
+            if (key !== 'read' || typeof value !== 'function') {
+              return typeof value === 'function' ? value.bind(target) : value;
+            }
+            return async (...args: unknown[]) => {
+              const seen: unknown = await value.apply(target, args);
+              if (!raced) {
+                raced = true;
+                await recordFirstView(real, { ref, actor: 'two', participant: 'two' });
+              }
+              return seen;
+            };
+          },
+        });
+        const out = await recordCompletion(
+          { ...real, workflows },
+          { ref, actor: 'one', participant: 'one' },
+        );
+        expect(raced).toBe(true);
+        expect(out).toMatchObject({ ok: true, changed: true });
+        const stored = (await h.parts.workflows!.read(ref.tenant, ref.doc))!;
+        const marks = Object.fromEntries(stored.participants.map((p) => [p.id, p.state]));
+        expect(marks['one']).toBe('completed');
+        expect(stored.participants.find((p) => p.id === 'two')!.firstViewedAt).toBeDefined();
+      },
+    );
+
+    it.skipIf(skip)(
       'activates the next order together, raises the events and pushes wf.changed; the last completion completes the workflow (criteria 2, 3, 5 and 6)',
       async () => {
         const { ref, client } = await sent();
