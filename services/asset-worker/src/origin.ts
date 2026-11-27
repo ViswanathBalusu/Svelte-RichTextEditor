@@ -177,21 +177,45 @@ export interface RunningOrigin {
   close(): Promise<void>;
 }
 
-/** Starts the asset origin on `host:port` (port 0 picks a free one). */
-export function startAssetOrigin(
+/**
+ * The ports from 1024 up that the Fetch standard blocks ("bad port"): `fetch`, a WebSocket client
+ * and a browser refuse to talk to them. A system whose dynamic range starts at 1024 (Windows can:
+ * `netsh int ipv4 show dynamicport tcp`) may hand one out for port 0.
+ */
+const FETCH_BLOCKED_PORTS: ReadonlySet<number> = new Set([
+  1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669,
+  6679, 6697, 10080,
+]);
+
+/** The most binds before the last port is kept whatever it is. */
+const LISTEN_ATTEMPTS = 20;
+
+/**
+ * Starts the asset origin on `host:port`. Port 0 picks a free one, and picks again while the system
+ * hands out a port that fetch blocks. A port that is named is kept as it is.
+ */
+export async function startAssetOrigin(
   opts: AssetOriginOptions & { host?: string; port?: number },
 ): Promise<RunningOrigin> {
   const server = createServer(assetOriginHandler(opts));
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(opts.port ?? 0, opts.host ?? '127.0.0.1', () => {
-      const a = server.address() as AddressInfo;
-      const host = a.family === 'IPv6' ? `[${a.address}]` : a.address;
-      resolve({
-        server,
-        url: `http://${host}:${a.port}`,
-        close: () => new Promise<void>((r) => server.close(() => r())),
-      });
+  const port = opts.port ?? 0;
+  let a: AddressInfo;
+  for (let attempt = 1; ; attempt++) {
+    let failed: (e: Error) => void = () => {};
+    await new Promise<void>((resolve, reject) => {
+      failed = reject;
+      server.once('error', failed);
+      server.listen(port, opts.host ?? '127.0.0.1', () => resolve());
     });
-  });
+    a = server.address() as AddressInfo;
+    if (port !== 0 || attempt >= LISTEN_ATTEMPTS || !FETCH_BLOCKED_PORTS.has(a.port)) break;
+    server.off('error', failed);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+  const host = a.family === 'IPv6' ? `[${a.address}]` : a.address;
+  return {
+    server,
+    url: `http://${host}:${a.port}`,
+    close: () => new Promise<void>((r) => server.close(() => r())),
+  };
 }
