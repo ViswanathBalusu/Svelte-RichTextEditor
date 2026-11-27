@@ -10,7 +10,7 @@ import { baseDoc, posInside } from '../../../../packages/authority/test/fixtures
 import { MemoryAudit } from '../../src/data-plane/memory-ports.ts';
 import {
   affectedAmong,
-  newIncarnation,
+  type newIncarnation,
   rebuild,
   runIncarnation,
 } from '../../src/data-plane/recovery.ts';
