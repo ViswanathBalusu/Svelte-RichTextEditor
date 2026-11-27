@@ -32,11 +32,14 @@ export async function openKernelPage(page: Page): Promise<void> {
         contentType: 'text/javascript',
         body: stripTypeScriptTypes(readFileSync(join(PKG, 'src', basename(pathname)), 'utf8')),
       });
-    if (pathname.startsWith('/dist/'))
+    if (pathname.startsWith('/dist/')) {
+      // `dist/sea/` holds the module of Thai, Lao, Khmer and Burmese (WASM-016).
+      const inSea = pathname.startsWith('/dist/sea/');
       return file(
-        join(DIST, basename(pathname)),
+        join(inSea ? join(DIST, 'sea') : DIST, basename(pathname)),
         pathname.endsWith('.wasm') ? 'application/wasm' : 'text/javascript',
       );
+    }
     if (pathname.startsWith('/fonts/'))
       return file(join(FONTS, pathname.slice('/fonts/'.length)), 'application/octet-stream');
     return route.fulfill({ status: 404, body: '' });
