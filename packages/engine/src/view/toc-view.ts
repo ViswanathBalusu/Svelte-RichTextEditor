@@ -16,7 +16,13 @@ import {
   type NodeView,
   type NodeViewConstructor,
 } from 'prosemirror-view';
-import { type TocEntry, tocContext, tocEntries, tocNodes } from '../toc-entries.ts';
+import {
+  type TocEntry,
+  isPlainTextEdit,
+  tocContext,
+  tocEntries,
+  tocNodes,
+} from '../toc-entries.ts';
 
 export const tocKey = new PluginKey<DecorationSet>('docedit-toc');
 
@@ -55,7 +61,12 @@ export function tocPlugin(): Plugin<DecorationSet> {
     key: tocKey,
     state: {
       init: (_config, state) => decorationsOf(state.doc),
-      apply: (tr, value) => (tr.docChanged ? decorationsOf(tr.doc) : value),
+      apply: (tr, value) => {
+        if (!tr.docChanged) return value;
+        // A plain text edit in an ordinary paragraph changes no entry: the lists move with the text.
+        if (isPlainTextEdit(tr)) return value.map(tr.mapping, tr.doc);
+        return decorationsOf(tr.doc);
+      },
     },
     props: {
       decorations(state) {

@@ -16,7 +16,7 @@
  * not to `ref`, and are not checked here.
  */
 import type { Node as PMNode } from 'prosemirror-model';
-import { Plugin, PluginKey } from 'prosemirror-state';
+import { Plugin, PluginKey, type Transaction } from 'prosemirror-state';
 import { INTERNAL, REMOTE } from './meta.ts';
 
 export const referencedTargetKey = new PluginKey('docedit-referenced-targets');
@@ -39,22 +39,79 @@ function namedTargets(doc: PMNode): Set<string> {
   return out;
 }
 
+/** Adds the targets that `node` resolves to `out`. */
+function addResolvable(node: PMNode, out: Set<string>): void {
+  const id = node.attrs['id'];
+  if (typeof id === 'string' && id !== '') out.add(`node:${id}`);
+  if (node.type.name === 'anchor' && typeof node.attrs['name'] === 'string') {
+    out.add(`bookmark:${node.attrs['name']}`);
+  }
+  const label = node.attrs['label'];
+  if (node.type.name === 'equation_block' && typeof label === 'string' && label !== '') {
+    out.add(`eq:${label}`);
+  }
+}
+
 /** The `node:`, `bookmark:` and `eq:` targets that a document can resolve. */
 function resolvable(doc: PMNode): Set<string> {
   const out = new Set<string>();
   doc.descendants((node) => {
-    const id = node.attrs['id'];
-    if (typeof id === 'string' && id !== '') out.add(`node:${id}`);
-    if (node.type.name === 'anchor' && typeof node.attrs['name'] === 'string') {
-      out.add(`bookmark:${node.attrs['name']}`);
-    }
-    const label = node.attrs['label'];
-    if (node.type.name === 'equation_block' && typeof label === 'string' && label !== '') {
-      out.add(`eq:${label}`);
-    }
+    addResolvable(node, out);
     return true;
   });
   return out;
+}
+
+/** The targets that the nodes touching `from` to `to` of `doc` resolve, ancestors included. */
+function resolvableBetween(doc: PMNode, from: number, to: number): Set<string> {
+  const out = new Set<string>();
+  const size = doc.content.size;
+  doc.nodesBetween(Math.max(0, Math.min(from, size)), Math.max(0, Math.min(to, size)), (node) => {
+    addResolvable(node, out);
+    return true;
+  });
+  return out;
+}
+
+/** Steps that change marks only: no node, id, anchor name or label changes. */
+const MARK_STEPS: ReadonlySet<string> = new Set([
+  'addMark',
+  'removeMark',
+  'addNodeMark',
+  'removeNodeMark',
+]);
+
+/**
+ * The span of `before` that the transaction replaced and the span of `after` that took its
+ * place, or null when the steps cannot be bounded: a step that changes an attribute has no changed
+ * range (it can change a label or an id), so such a transaction is checked as a whole.
+ */
+function changedSpans(
+  tr: Transaction,
+): { before: [number, number]; after: [number, number] } | null {
+  const maps = tr.mapping.maps;
+  let bFrom = Infinity;
+  let bTo = -Infinity;
+  let aFrom = Infinity;
+  let aTo = -Infinity;
+  for (let i = 0; i < maps.length; i++) {
+    const toBefore = tr.mapping.slice(0, i).invert();
+    const toAfter = tr.mapping.slice(i + 1);
+    let ranged = false;
+    maps[i]!.forEach((oldStart, oldEnd, newStart, newEnd) => {
+      ranged = true;
+      bFrom = Math.min(bFrom, toBefore.map(oldStart, -1));
+      bTo = Math.max(bTo, toBefore.map(oldEnd, 1));
+      aFrom = Math.min(aFrom, toAfter.map(newStart, -1));
+      aTo = Math.max(aTo, toAfter.map(newEnd, 1));
+    });
+    if (!ranged) {
+      const kind = (tr.steps[i]!.toJSON() as { stepType?: string }).stepType;
+      if (kind === undefined || !MARK_STEPS.has(kind)) return null;
+    }
+  }
+  if (bFrom === Infinity) return null;
+  return { before: [bFrom, bTo], after: [aFrom, aTo] };
 }
 
 /**
@@ -71,6 +128,31 @@ export function removedReferencedTargets(before: PMNode, after: PMNode): string[
     if (had.has(target) && !has.has(target)) out.push(target);
   }
   return out.sort();
+}
+
+/**
+ * The same answer as `removedReferencedTargets` for the document before and after `tr`, without
+ * walking the whole document for the usual transaction. Everything outside the changed spans is the
+ * same in both documents, so a target that `before` resolved can be gone from `after` only if a node
+ * in the replaced span of `before` resolved it and no node in the new span of `after` does. When no
+ * target is missing from the new span the answer is empty; otherwise the whole check runs, so a
+ * target that survives elsewhere in the document (a copy of the node, a second bookmark of the
+ * name) is still told apart from one that is gone (FE-120: the guard was half of the per-keystroke
+ * cost that grows with the document).
+ */
+export function removedReferencedTargetsOf(
+  before: PMNode,
+  after: PMNode,
+  tr: Transaction,
+): string[] {
+  const spans = changedSpans(tr);
+  if (spans === null) return removedReferencedTargets(before, after);
+  const oldTargets = resolvableBetween(before, spans.before[0], spans.before[1]);
+  if (oldTargets.size === 0) return [];
+  const newTargets = resolvableBetween(after, spans.after[0], spans.after[1]);
+  for (const target of oldTargets)
+    if (!newTargets.has(target)) return removedReferencedTargets(before, after);
+  return [];
 }
 
 /** The `ref` fields of a document that name one of `targets`, as positions in document order. */
@@ -98,7 +180,7 @@ export function referenceGuardPlugin(refused?: (targets: readonly string[]) => v
     filterTransaction(tr, state) {
       if (!tr.docChanged) return true;
       if (tr.getMeta(REMOTE) === true || tr.getMeta(INTERNAL) === true) return true;
-      const removed = removedReferencedTargets(state.doc, tr.doc);
+      const removed = removedReferencedTargetsOf(state.doc, tr.doc, tr);
       if (removed.length === 0) return true;
       refused?.(removed);
       return false;
