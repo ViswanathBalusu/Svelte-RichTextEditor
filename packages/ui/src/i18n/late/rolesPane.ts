@@ -32,7 +32,7 @@ export const EN_GB_ROLES_PANE = {
   'roles.error.duplicate': 'The document already has this role.',
   'roles.error.gone': 'This role is no longer in the document.',
   'roles.error.noChange': 'Nothing was changed.',
-  'roles.error.noFeature': 'This document does not use fields, so it has no roles.',
+  'roles.error.noFeature': 'This service does not offer forms, so this document cannot have roles.',
   'roles.error.invalid': 'Some values are not valid. Check the marked fields.',
   'roles.error.inUse': 'Fields are still assigned to this role, so it cannot be deleted. They are:',
   'announce.roles.added': 'Role added.',
