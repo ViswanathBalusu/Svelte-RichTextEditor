@@ -30,6 +30,8 @@ const s = (def: Omit<ScenarioDef, 'id'> & { id: string }) => scenario('core', de
  * provisional bound, not a measurement: a server that announces more is skipped with the reason.
  */
 const MAX_PAGE_LIMIT = 6000;
+/** How often `channel.page` refreshes its token: well within the 60 s test-mode token. */
+const PAGE_REFRESH_EVERY_MS = 20_000;
 
 /** A document with three commits by its owner after the content it was created with. */
 async function withHistory(ctx: ScenarioContext) {
@@ -230,8 +232,19 @@ export const CORE_CHANNELS: ScenarioDef[] = [
       const owner = await join(ctx, 'owner', doc, 'owner');
       let base = owner.content.seq;
       const pos = posIn(owner.content.doc, 'pLong00000000000');
-      for (let i = 0; i <= limit + 1; i++)
+      // Thousands of commits can outlast one token: 60 s in test mode (BE-079), and a loaded server
+      // commits slowly. Refresh the owner's token as awaitAssetEvent does (05 §3.1 `auth.refresh`),
+      // or the server closes the connection with 4401 part-way.
+      let refreshedAt = Date.now();
+      for (let i = 0; i <= limit + 1; i++) {
+        if (Date.now() - refreshedAt >= PAGE_REFRESH_EVERY_MS) {
+          const token = await ctx.service.token(owner.sub, { [doc]: 'owner' });
+          const r = await owner.wire.request({ t: 'auth.refresh', d: { token } });
+          equal(r.reply.t, 'auth.ok', 'auth.refresh while the commits are sent');
+          refreshedAt = Date.now();
+        }
         base = (await ackedWithRetry(owner.wire, 1, { base, steps: [insertText(pos, 'p')] })).seq;
+      }
       const e = await ctx.session('late', { [doc]: 'editor' });
       const o = await opened(ctx, e.wire, 1, doc, {
         resume: { seq: owner.content.seq, incarnation: owner.content.incarnation },
