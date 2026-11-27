@@ -61,6 +61,8 @@ export interface CommitCost {
   /** The whole `submit` call and the `writeCompleted` call that follows it. */
   submit: Quantiles;
   complete: Quantiles;
+  /** How the room validated the results: from the changed nodes, or the whole document (step 6). */
+  validation: { incremental: number; full: number };
 }
 
 export interface CostOptions {
@@ -253,6 +255,7 @@ export async function measureCommit(
     stagesTotal: quantiles(totals),
     submit: quantiles(submits),
     complete: quantiles(completes),
+    validation: { ...room.validation },
   };
 }
 
@@ -291,4 +294,63 @@ export function tabulate(results: readonly CommitCost[]): string {
     );
   }
   return lines.join('\n');
+}
+
+// -- the budget ------------------------------------------------------------------------------------
+
+/**
+ * The budget of a typical commit (SYN-040 criterion 2; 04 §12): "well under a millisecond of CPU".
+ * The spec gives no number, so the gate reads "well under" as at most 1 ms, the most it can mean,
+ * for the median of each stage of steps 2 to 7 and for the median of their sum. A commit at the
+ * head and a rebased one are both held to it, on every corpus size. The 99th percentile and the
+ * commit of 500 steps have no target in the spec and are reported, not gated. The figures are
+ * wall-clock times on one thread (see `describeMachine`), which on an idle machine stand for CPU time.
+ */
+export const TARGET_MS = 1;
+
+/** Which commit kinds the budget holds for. */
+export const BUDGETED_KINDS: readonly CommitKind[] = ['typical', 'rebased'];
+
+/**
+ * What exceeds the budget in `results`, one line each (empty when nothing does). A run that
+ * refused a commit is a violation too: its cost is the refusal path, not the cost of a commit.
+ */
+export function budgetViolations(
+  results: readonly CommitCost[],
+  targetMs: number = TARGET_MS,
+): string[] {
+  const out: string[] = [];
+  for (const r of results) {
+    if (!BUDGETED_KINDS.includes(r.kind)) continue;
+    const at = `${r.doc} ${r.kind}`;
+    if (r.refused > 0) out.push(`${at}: ${r.refused} commits refused (${r.reason})`);
+    for (const s of STAGES)
+      if (r.stages[s].median >= targetMs)
+        out.push(
+          `${at} step ${STAGE_STEP[s]} ${s}: median ${f(r.stages[s].median)} ms, budget ${targetMs} ms`,
+        );
+    if (r.stagesTotal.median >= targetMs)
+      out.push(`${at} steps 2 to 7: median ${f(r.stagesTotal.median)} ms, budget ${targetMs} ms`);
+  }
+  return out;
+}
+
+/**
+ * The results as JSON, with the machine and the budget, for a workflow that stores them per commit
+ * (SYN-040 criterion 4; owner decisions 103 and 225). `commit` is the revision measured.
+ */
+export function toJson(results: readonly CommitCost[], commit: string | null): string {
+  return JSON.stringify(
+    {
+      kind: 'authority-commit-cost',
+      commit,
+      machine: describeMachine(),
+      unit: 'ms, wall-clock, one thread',
+      budget: { targetMs: TARGET_MS, kinds: BUDGETED_KINDS },
+      violations: budgetViolations(results),
+      results,
+    },
+    null,
+    2,
+  );
 }

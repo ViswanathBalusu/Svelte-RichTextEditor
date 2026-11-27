@@ -13,6 +13,7 @@
  * commits for a new grants revision). All of them pass the same steps of 04 §5.
  */
 import { isUuid7 } from '@docedit/model';
+import { CommitValidator } from '@docedit/model/validate';
 import { mayAddFeatures, mayOpen, type CdmDefinition } from '@docedit/model/definition';
 import type { Node, Schema } from 'prosemirror-model';
 import { Step, type StepMap } from 'prosemirror-transform';
@@ -480,6 +481,8 @@ export class Room {
   /** Serialised size of stored commits, computed when a catch-up needs it. */
   private readonly sizes = new Map<number, number>();
   private readonly retired = new Set<string>();
+  /** Step 6 from what the commit changed (ADR 0422; SYN-040): one validator for this document. */
+  private readonly validator = new CommitValidator();
   private readonly owners = new Map<string, string>();
   private perms: PermissionState;
   private workflow: WorkflowRecord | null;
@@ -579,6 +582,11 @@ export class Room {
 
   get isStopped(): boolean {
     return this.stopped;
+  }
+
+  /** How many results step 6 validated from the changed nodes and how many in full (SYN-040). */
+  get validation(): Readonly<{ incremental: number; full: number }> {
+    return this.validator.stats;
   }
 
   /** The permission indexes at the durable head (PRM-016), for diagnostics and tests. */
@@ -1269,6 +1277,7 @@ export class Room {
     return {
       requires: this.tentativeRequires,
       retiredRegionIds: retired,
+      validator: this.validator,
       ...(def ? { def } : {}),
       ...(this.attachedAssets ? { attachedAssets: this.attachedAssets } : {}),
       ...(this.mathGate ? { mathGate: this.mathGate } : {}),
