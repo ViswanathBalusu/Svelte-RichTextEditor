@@ -2243,6 +2243,8 @@ As a maintainer, I want the owner to decide whether comments stay on while a wor
 
 **Notes (lane w4, 2026-11-27):** Criterion 3 stays unticked, unchanged. FRW-068 is still blocked (its Notes of today list what was checked again), so the profile `workflow` does not exist and cannot hold the case. Decision 131 is applied and the FRW-029 half is done and tested.
 
+**Notes (lane w4, 2026-11-27, after merging stories/integration):** Unchanged. Criterion 3 waits for FRW-068; the FRW-068 Notes of today list the two missing server pieces (a consent text over the wire and a workflow sweep test timer).
+
 **Notes (lane w4, 2026-11-26):** Criterion 3 stays unticked. FRW-068 is still blocked (its Notes of today list why: the kit cannot act as a participant, and nothing can make a workflow expire from outside), so the profile `workflow` does not exist and cannot hold the case. The FRW-029 half is done and tested. Decision 131 is the only decision this story waited on, and it is applied.
 
 ### FRW-086 Decide how a role writes a long formatted answer in a locked document
