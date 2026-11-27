@@ -144,10 +144,6 @@ describe('EXP-054 criterion 2, measured with the converter that was built', () =
         refused.push(latex);
       }
     }
-    (await import('node:fs')).writeFileSync(
-      `${process.env['TEMP']}/w2-measure105.txt`,
-      JSON.stringify({ total: ALLOWED.length, correct, wrong, refused, gateRefused }, null, 1),
-    );
     expect({ total: ALLOWED.length, correct, wrong, refused, gateRefused }).toEqual({
       total: ALLOWED.length,
       correct: ALLOWED.length,
