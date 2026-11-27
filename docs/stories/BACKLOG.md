@@ -1,6 +1,6 @@
 # Backlog by phase
 
-Generated on 2026-11-27 from the epic files in this folder; regenerate it whenever a story's fields change. 1010 stories. Within a phase, stories are ordered by priority, then by epic in build order (foundations, decisions and spikes, model, sync, permissions, protocol, backend, security, frontend, shell, history, export, fields and workflow, WebAssembly). Order within a phase is not a dependency order: each story's **Depends on** line is.
+Generated on 2026-11-27 from the epic files in this folder; regenerate it whenever a story's fields change. 1014 stories. Within a phase, stories are ordered by priority, then by epic in build order (foundations, decisions and spikes, model, sync, permissions, protocol, backend, security, frontend, shell, history, export, fields and workflow, WebAssembly). Order within a phase is not a dependency order: each story's **Depends on** line is.
 
 ## Phase 0: decisions, spikes and notes (47)
 
@@ -223,7 +223,7 @@ Generated on 2026-11-27 from the epic files in this folder; regenerate it whenev
 | [EXP-042](EXP-export.md#exp-042-emit-text-and-generated-identifiers-safely) | Emit text and generated identifiers safely | enabler | M | must |
 | [FND-014](FND-foundations.md#fnd-014-requirements-traceability) | Requirements traceability | enabler | S | could |
 
-## Phase 1b: first usable release (385)
+## Phase 1b: first usable release (386)
 
 | Story | Title | Type | Size | Priority |
 |---|---|---|---|---|
@@ -465,6 +465,7 @@ Generated on 2026-11-27 from the epic files in this folder; regenerate it whenev
 | [UX-096](UX-experience.md#ux-096-decision-semantics-of-the-dep-actor-header) | Decision: semantics of the `DEP-Actor` header | decision | S | must |
 | [UX-097](UX-experience.md#ux-097-service-calls-on-behalf-of-a-user) | Service calls on behalf of a user | story | M | must |
 | [UX-101](UX-experience.md#ux-101-export-dialog-with-progress-and-diagnostics) | Export dialog with progress and diagnostics | story | M | must |
+| [UX-107](UX-experience.md#ux-107-turn-on-form-fields-in-an-existing-document) | Turn on form fields in an existing document | story | M | must |
 | [HIS-005](HIS-history.md#his-005-rebuild-the-content-at-any-sequence-number) | Rebuild the content at any sequence number | enabler | M | must |
 | [HIS-023](HIS-history.md#his-023-decide-the-exact-shape-of-the-visibility-gate) | Decide the exact shape of the visibility gate | decision | S | must |
 | [HIS-024](HIS-history.md#his-024-enforce-one-visibility-gate-wherever-a-sequence-number-is-supplied) | Enforce one visibility gate wherever a sequence number is supplied | enabler | L | must |
@@ -613,7 +614,7 @@ Generated on 2026-11-27 from the epic files in this folder; regenerate it whenev
 | [PRM-063](PRM-permissions.md#prm-063-decide-whether-part-of-structure-can-be-granted-per-region) | Decide whether part of `structure` can be granted per region | decision | S | could |
 | [FRW-006](FRW-fields-rules-workflow.md#frw-006-mirror-a-fields-value-elsewhere-in-the-document) | Mirror a field's value elsewhere in the document | story | S | could |
 
-## Phase 2: review, history, workflow (281)
+## Phase 2: review, history, workflow (284)
 
 | Story | Title | Type | Size | Priority |
 |---|---|---|---|---|
@@ -713,6 +714,8 @@ Generated on 2026-11-27 from the epic files in this folder; regenerate it whenev
 | [UX-081](UX-experience.md#ux-081-audit-query) | Audit query | story | M | must |
 | [UX-098](UX-experience.md#ux-098-reference-host-webhook-receiver-and-e-mail-notifications) | Reference host: webhook receiver and e-mail notifications | story | L | must |
 | [UX-099](UX-experience.md#ux-099-reference-host-send-for-completion) | Reference host: send for completion | story | L | must |
+| [UX-105](UX-experience.md#ux-105-deliver-workflow-webhooks-to-the-reference-host-in-the-demo-stack) | Deliver workflow webhooks to the reference host in the demo stack | story | M | must |
+| [UX-106](UX-experience.md#ux-106-reference-host-the-participants-fill-and-sign-view) | Reference host: the participant's fill and sign view | story | L | must |
 | [HIS-006](HIS-history.md#his-006-name-a-version) | Name a version | story | S | must |
 | [HIS-007](HIS-history.md#his-007-create-versions-for-exports-restores-imports-and-workflows) | Create versions for exports, restores, imports and workflows | enabler | M | must |
 | [HIS-008](HIS-history.md#his-008-list-history-grouped-by-day-and-editing-session) | List history grouped by day and editing session | story | M | must |
@@ -862,6 +865,7 @@ Generated on 2026-11-27 from the epic files in this folder; regenerate it whenev
 | [UX-079](UX-experience.md#ux-079-manage-fonts-and-webhooks-through-the-administration-api) | Manage fonts and webhooks through the administration API | story | S | should |
 | [UX-082](UX-experience.md#ux-082-audit-streaming-export) | Audit streaming export | story | M | should |
 | [UX-102](UX-experience.md#ux-102-rulers-for-indents-tab-stops-and-margins) | Rulers for indents, tab stops and margins | story | M | should |
+| [UX-108](UX-experience.md#ux-108-reference-host-a-seeded-document-that-allows-forms) | Reference host: a seeded document that allows forms | story | S | should |
 | [HIS-021](HIS-history.md#his-021-preview-a-restore-with-a-dry-run) | Preview a restore with a dry run | story | S | should |
 | [HIS-022](HIS-history.md#his-022-copy-a-version-into-a-new-document) | Copy a version into a new document | story | M | should |
 | [HIS-029](HIS-history.md#his-029-move-old-payloads-to-cold-segments) | Move old payloads to cold segments | enabler | L | should |

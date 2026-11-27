@@ -2635,6 +2635,93 @@ As a reader, I want to understand why part of a document is hidden and how to as
 
 **Notes:** lane ui-3, round 1. Criteria 1 to 3 are partly in the shell already (the access notice in `StatusBar.svelte`, the access request in `App.svelte`, peer carets in `Carets.svelte`), but nothing here can focus a placeholder, check that the request sends nothing itself, or check that the core sends no peer inside hidden content. They stay unticked until a browser run and the core projection exist. Lane UX-092-104, round 8: criterion 2 is blocked outside this package. `App.svelte` calls the `onAccessRequest` prop with the scope, but `packages/element` does not pass that prop on, and `packages/element/src/events.ts` has no event for an access request (`de-permission-change` only), so `<doc-editor>` never raises an event for the host. A new `de-*` event needs a story in the element's package (PRO) and is not built here. Criterion 1 needs a browser run. Round 3 (lane V-UX-091-104): the engine now reports the `hidden` limit at a selected placeholder, and the browser run in Evidence (round 3) ticks criteria 1 and 2; criterion 3 stays open. Evidence audit (2026-11-13): criterion 4 was unticked because its cited test (`packages/ui/test/export-diagnostics.test.ts`) only matches the text of `ExportDialog.svelte` and `core-api.ts` with regular expressions, and nothing in the product supplies `ExportService.projected` (the engine's core has no `exports` port, so a mounted `<doc-editor>` never reaches the statement); the only browser run that shows it, `packages/ui/e2e/regions.spec.ts` ("shows the result and goes from a diagnostic to its block", passing in Chromium), uses the harness's fake core. It can be ticked again when the core or the element reports a projected export and a test shows the statement through it. Criteria 1 and 2 were checked and stand (the element test passes in Chromium; its "no request leaves the page" check is weak, since the backend is in memory, but the shell test "says in plain words..." shows that no command runs and the product code only raises the event). Lane U-UX-091-104, round 7 (criterion 3, stays unticked): `packages/engine/test/u-ux-104-hidden-peers.test.ts` (Node.js, 2 tests passing) shows that `PresenceClient` lists no peer whose scope is a hidden region, and lists it again once it leaves; the name flag and caret are drawn only by `Carets.svelte` from `core.carets`, and no core produces `carets` yet (`grep` of `packages/engine` and `packages/element` finds none), so no caret or flag can be shown there today and the criterion is not shown in a browser run. A caret view must reuse the same filter when it is built.
 
+## Gaps found by running the demo stack
+
+Added on 2026-11-27 after the demo stack (`apps/reference-host/scripts/stack.ps1`) was driven by hand. Four things that the stories above assume do not yet work end to end in the running demo. They are written as stories so that each has criteria and evidence. Whatever the spec leaves open is in the Notes of the story, not decided in its criteria.
+
+### UX-105 Deliver workflow webhooks to the reference host in the demo stack
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Integrating developer |
+
+**Spec:** 13 §11.2; 05 §7; 10 §3.2; 12 §6.3 · **Requirements:** R6, R15 · **Depends on:** UX-091, UX-098, UX-099, BE-055, BE-056, PRO-071
+
+As an integrating developer running the demo stack, I want the document service to deliver its webhooks to the reference host, so that sending a document for completion causes the invitation e-mail to arrive in the mail sink without any step by hand.
+
+**Acceptance criteria**
+
+- [ ] Given a fresh `stack.ps1 up`, when the stack has started, then the document service holds a webhook subscription for the host's `POST /webhooks/dep` (at least `dep.workflow.participant_activated`, `reminder_due`, `completed` and `finalised`, and the comment and task events of UX-098), registered from configuration by the set-up or seed step, and the host holds the matching signing secret in `DOCEDIT_HOST_WEBHOOK_SECRETS`, generated per data directory and marked demo-only like the other demo secrets.
+- [ ] Given the host's address is loopback, when the service delivers a webhook to it, then the egress proxy reaches that one address and no other: the exception is named by the operator in the demo's own configuration, is exact (the check for every other target, every redirect and every other loopback or private address is unchanged), and is refused outside a demo or test environment.
+- [ ] Given the exception is not configured, when a webhook is sent to a loopback or private target, then it is refused with the same reason as before (`loopback` or `private`), so the egress tests of PRO-071 and BE-056 still pass unchanged.
+- [ ] Given a document with roles, fields and a participant, when the owner uses "send for completion" in the running demo, then the first participant's invitation e-mail appears in Mailpit with the host's link, within the time the receiver and the dispatcher's retry schedule allow, and the link carries no token.
+- [ ] Given the stack test `apps/reference-host/test/ux-098-mailpit.stack.test.ts` as the pattern, when a stack test runs from `POST /v1/documents/{id}/workflow/send` through the service, the dispatcher, the egress proxy and the host's receiver, then it finds the invitation in Mailpit, and the same test run with the exception removed finds none and the dispatcher records a refusal.
+- [ ] Given a comment that mentions a user in the running demo, when the thread is saved, then the mention e-mail arrives in Mailpit (the gap named in the Notes of UX-098).
+
+**Notes:** Found on 2026-11-27 by hand: `POST /v1/documents/{id}/workflow/send` answered 200, but `participant_activated` never reached the host and Mailpit stayed empty. Two causes in `apps/reference-host/scripts/lib/stack.ts` (`roleEnv`): it sets `DOCEDIT_HOST_SMTP` for the host but never registers a subscription for the host's endpoint with the service and never sets `DOCEDIT_HOST_WEBHOOK_SECRETS`; and a delivery to `127.0.0.1` would in any case be refused by the egress proxy (`services/document-service/src/control-plane/webhook-egress.ts`, which fails closed on loopback; PRO-071, BE-056). The check must stay on. Not decided here, for the owner: (a) The service already has an exception for the conformance kit, `DOCEDIT_TEST_WEBHOOK_ALLOW` (exact IP literals, ADR 0316 proposal 2; PRO-121), but `config.ts` accepts it only with `DOCEDIT_TEST_MODE`, and test mode also turns on test hooks, test timers and a restartable data plane (`server.ts`, `data-plane/index.ts`), which a demo should not run. Option 1: reuse it and run the demo service in test mode. Option 2: add a separate demo-only setting with the same exact-literal rule, refused when `DOCEDIT_ENVIRONMENT` is `production` and when the service is not in a demo or test environment. No spec default exists; both change security configuration and need the security review of the definition of done. (b) The existing exception is an IP literal and so admits every port of that address (the service's own port, PostgreSQL, the object store). The criterion says "that one address". Whether to narrow it to the host's `address:port` is a change to the egress proxy, with a security review; if it is not made, say so in the integration guide. (c) Who generates the signing secret and how both sides learn it (the subscription's secret is chosen by the service or by the registrar) is a detail of PRO-070 and the registration API, to be read before building. (d) The stack test needs a Podman machine for Mailpit, as UX-098 criterion 5 did, so it runs on a machine with Podman, not in the plain Node.js run.
+
+### UX-106 Reference host: the participant's fill and sign view
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Participant |
+
+**Spec:** 13 §11.2; 12 §6.2, §8.1, §10, §11; 11 §10 (decision 10) · **Requirements:** R13, R11, R2 · **Depends on:** UX-099, UX-105, FRW-038, FRW-039, FRW-069, FRW-076, FRW-079, FRW-044, FRW-045, FRW-046, FRW-047, FRW-048, FRW-071
+
+As a participant who was invited to complete a document, I want the page behind my invitation link to show the document so that I can fill my fields, adopt a signature, sign and finish, so that I never need an account or a pointer.
+
+**Acceptance criteria**
+
+- [ ] Given the passcode was accepted, when the page continues, then it mounts `<doc-editor>` in `mode="fill"` on the document with the participant's token (`wfp`, `amr` and `auth_time` as the host asserted them), and the token is neither in the address, nor in the page's text, nor in a cookie readable by script outside the element's token provider.
+- [ ] Given the participant's fields, when they fill them, then only fields assigned to their role accept input, the other fields are shown read-only or hidden as the rules decide, the guided bar of FRW-076 moves between required fields, and the values reach the document service through the normal commit path.
+- [ ] Given the consent text of the workflow, when the participant reaches a signature or initials field, then the consent is shown and accepted first (FRW-044), a typed signature is the default and a drawn one is optional (FRW-045, FRW-048), and the signature is applied to the field (FRW-046).
+- [ ] Given every required field of the participant is valid and signed, when they choose to finish, then the page calls the embedding API's finish method (FRW-071), the host shows a confirmation, the next participant is activated and invited, and the old link no longer lets anyone edit.
+- [ ] Given the participant does not want to sign, when they choose to decline, then the page asks for a reason, declines through the embedding API, and the owner sees the workflow as declined (FRW-033).
+- [ ] Given a keyboard alone and a screen reader, when the page is used from the passcode to the confirmation, then every step is operable without a pointer and without drawing, and axe reports no violations (this is also the last open criterion of UX-099).
+- [ ] Given the running stack with UX-105 in place, when a browser test sends a document with two participants, opens each invitation from Mailpit in turn, fills and signs, then the sealed PDF and the evidence bundle appear for the owner (UX-099 criterion 5).
+
+**Notes:** Today `apps/reference-host/src/routes/fill/[invitation]/+page.svelte` stops after the passcode and says that the view in which the participant fills and signs the document is not built in this demo yet; `+page.server.ts` says the token is not put on the page for the same reason. The parts it builds on are in the FRW epic: the embedding API in fill mode (FRW-069, FRW-071), the guided bar and the keyboard and assistive-technology work (FRW-076, FRW-079), the consent and the signature ceremony (FRW-044 to FRW-048) and the host-minted token and access code (FRW-038, FRW-039). Which of those are built, and what each still lacks, is read from their Evidence before this story starts; this story must not tick a criterion that rests on one of them being unticked. Not decided here, for the owner: (a) how the token reaches the element without appearing in the address: a server-rendered `tokenProvider` call back to a host endpoint that checks a cookie bound to the invitation, or a short-lived token placed in the page's data. 05 §8.1 and 12 §7 give no more than "the host mints it". (b) Whether the participant sees the whole document or only the parts their role may see (ADR 0019 applies). (c) Whether a participant who finished may re-open a read-only view of the document (12 §6.2 does not say). No real screen reader is available on the development machine, so criterion 6 can be ticked for the keyboard and axe parts only until one is run (as in UX-099).
+
+### UX-107 Turn on form fields in an existing document
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 03 §11, §11.1; 12 §3.2, §11 (authors); 05 §1 (rule 4) · **Requirements:** R13, R14, R6 · **Depends on:** CDM-047, FRW-072, SYN-011, PRO-023, UX-003
+
+As an author, I want to insert a form field into a document that does not use forms yet, so that I can turn an ordinary document into a form without a separate step that I cannot find.
+
+**Acceptance criteria**
+
+- [ ] Given a document whose `requires` lacks `fields`, when an author with `edit` in the scope inserts the first form field, then the commit contains the field, the document's `requires` gains `fields` (kept sorted, I1 satisfied), and every client and every later read of the document sees `fields` in `requires`.
+- [ ] Given the room's rule (03 §11.1), when another attached client did not announce `fields`, then the commit is refused with `requires` unchanged, the author's editor reverts the field, and a notice in plain words says that someone in the document cannot yet work with forms; when that client has left, the same insert succeeds.
+- [ ] Given the document service, when it runs a room, then the room lets `requires` grow (`RoomInit.requiresGrowth`, which only the mock backend sets today), stores the grown list with the commit, and a client that later connects without `fields` is refused with `unsupported_feature`.
+- [ ] Given the insert commands (`insert.field.<kind>`), the roles pane and the rule builder in a document that does not use forms, when the author cannot turn the feature on (no `edit`, the backend does not announce `fields`, or a room client lacks it), then each control is disabled and its reason says which of these it is, instead of the generic "Not available here".
+- [ ] Given a document that already requires `fields`, when the author inserts, edits or deletes fields, then nothing about `requires` changes, and the behaviour of FRW-072 is as ticked there.
+- [ ] Given the mock backend and the document service, when the same browser test inserts a field into a new document that has no fields, then it passes against both (the element's embed page for the mock, the demo stack for the service).
+
+**Notes:** Found on 2026-11-27 in the demo: the field commands are disabled with the reason `no-feature` unless the document's `requires` lists `fields`, and nothing adds it. In `packages/engine/src/frw-072-form-fields.ts` `insertFormField` refuses when `options.formFields` is not true, and `packages/engine/src/core.ts` computes that as `this.#requires.includes('fields')`; `#requires` is set once from the loaded document and grows only through `requireFeature`, which only an extension calls. The room side exists (`packages/authority/src/room/room.ts`, `checkResult`: it derives the grown list from what the result uses and calls `mayAddFeatures`), but `requiresGrowth` is off unless the host sets it (CDM-047 Notes), and only `packages/backend-mock/src/document.ts` does. So the document service refuses any commit that adds `fields`. The generic reason is `reason.notApplicable` in `packages/ui/src/i18n/en-GB-core.ts`. Not decided here, for the owner. (a) Adding automatically or by an explicit command. The spec's mechanism is automatic: 03 §11.1 says a room accepts a commit that adds a feature when every attached client announced it, and the room's code derives the new list from the content the commit uses; the criteria above follow that, as the default. The alternative is a command such as "Use forms in this document" (a control commit that adds `fields` with no field in it), which makes the step visible and lets the author decline, at the cost of one more step; if the owner chooses it, criterion 1 is replaced by that command and criterion 4 says to use it. (b) Whether `requires` ever shrinks when the last field is deleted. 03 §11.1 only says features are added; this story does not remove one. (c) How a client knows, before it tries, that a room client lacks `fields`: the room knows each channel's features, the author's client does not. The criteria accept the refusal and a notice after the fact, and a disabled control only for the causes the client can know. (d) The same gate (`options.formFields`) disables role and rule editing (`role-edit.ts`, `rule-edit.ts`, `roles.error.noFeature`); whether turning on forms by the first field also should enable them is covered by criterion 4 but not by an explicit decision. A change to the authority or the service is security-reviewed (definition of done).
+
+### UX-108 Reference host: a seeded document that allows forms
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Author |
+
+**Spec:** 13 §11.2; 12 §9 · **Requirements:** R13, R15 · **Depends on:** UX-091, UX-094, UX-099, UX-105
+
+As an author trying the demo, I want a seeded document that already allows form fields, or a plain statement on the page of how to make one, so that I can try fields, send for completion and the participant's view without building a document first.
+
+**Acceptance criteria**
+
+- [ ] Given a fresh `stack.ps1 up`, when the seed has run, then the document list of the document's owner shows a form document that requires `fields` and has roles, fields and rules (made from the "Lease agreement" service template, `apps/reference-host/seed/lease-template.cdm.json`, through the templates resource, or seeded from the same content).
+- [ ] Given the seeded form document and the seeded people, when the owner opens "send for completion" and names two participants, then the send succeeds and, with UX-105 in place, the first invitation arrives in Mailpit.
+- [ ] Given a document whose `requires` lacks `fields` (the seeded "Supply agreement (demo)"), when its page is shown, then the page says in one sentence that forms are off in this document and how to turn them on (the way UX-107 settles on), or that it is a plain document and the form document is the one to open.
+- [ ] Given `down` with volume removal, when the stack is started again, then the form document is seeded again (UX-091 criterion 7).
+
+**Notes:** The seeded documents in `apps/reference-host/seed/documents.json` are one document, "Supply agreement (demo)", made from the two-regions content with `requires: []`, and one service template, "Lease agreement" (`requires: ["fields"]`), that the template gallery lists (UX-100) but that no document is seeded from. Not decided here, for the owner: whether to change the existing seeded document to require `fields` (this alters the content used by the two-user scenario of UX-091 criterion 5, so the default is a separate seeded document) or to leave the supply agreement as it is and only explain it on the page. The hint in criterion 3 is a stopgap that UX-107 makes unnecessary if its default (adding the feature automatically) is chosen; this story then keeps criteria 1, 2 and 4 and drops criterion 3 with the owner's agreement.
+
 ## Coverage
 
 | Spec section | Stories |
@@ -2667,7 +2754,7 @@ As a reader, I want to understand why part of a document is hidden and how to as
 | 13 §9 Recovery journal | UX-016, UX-017 for the indicator and the pane (the journal itself: none: owned by FE) |
 | 13 §10 Governance and administration | UX-076 to UX-089: audit UX-081, UX-082; retention and hold UX-080; discovery export UX-087; classification label UX-085; policy hook UX-086; administration API UX-076 to UX-079; listing and search BE-053, UX-084, UX-094; tenant export UX-088; console UX-089 |
 | 13 §11.1 What a host must build | UX-090, UX-092, UX-093, UX-094, UX-098 |
-| 13 §11.2 Reference host | UX-091 to UX-095, UX-098, UX-099, UX-100 |
+| 13 §11.2 Reference host | UX-091 to UX-095, UX-098, UX-099, UX-100, UX-105, UX-106, UX-108 (the first form field: UX-107) |
 | 13 §11.3 Service calls on behalf of a user | UX-096, UX-097 |
 | 13 §12 Roadmap placement | none: informative (used to set every phase) |
 | 13 §13 Open issues | UX-043, UX-049, UX-059; the rest in the open questions below |
