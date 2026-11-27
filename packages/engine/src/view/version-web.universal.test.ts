@@ -6,16 +6,21 @@
  *
  * Skipped in Node.js (no DOM).
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { ownerAccess } from '../../test/fixtures.ts';
 import { COMMENT_RANGE_CLASS } from '../comment-decorations.ts';
 import type { AssetImageLookup } from '../image-source.ts';
 import { spikeDocument } from '../spike-document.ts';
 import { VersionView } from './version-web.ts';
-import { EditorCore, viewsOf } from './web.ts';
+import { EditorCore, loadFormViews, viewsOf } from './web.ts';
 
 const isBrowser = typeof document !== 'undefined' && typeof DataTransfer !== 'undefined';
 const tick = (ms = 50): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+// The spike document has a field. The element loads the drawing of fields before it mounts such a
+// document (web.ts); without it the first mount draws every node view again when it arrives, and each
+// picture asks for its asset a second time.
+beforeAll(() => loadFormViews());
 
 /** The document with one picture of `asset` in it, made by the live editor. */
 function withPicture(asset: string) {
