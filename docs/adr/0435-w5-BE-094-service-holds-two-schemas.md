@@ -1,6 +1,6 @@
 # ADR 0435: The service holds the schemas of the versions it serves (BE-094)
 
-**Status:** proposed, 2026-11-26. Recorded by lane w5. Not built. The owner's decisions 75 (n and n-1 are the supported format versions) and 76 (a test-only CDM 2, nothing ships) are the basis; no owner decision chooses the design below, so it is a proposal under the spec's default (06 §13, 03 §11.3).
+**Status:** proposed, 2026-11-26; built for the data plane, 2026-11-27 (see "As built"). Recorded by lane w5. The owner's decisions 75 (n and n-1 are the supported format versions) and 76 (a test-only CDM 2, nothing ships) are the basis. Decisions 225 to 282 took the default for every question not answered and none names this design, so it stands as the proposal under the spec's default (06 §13, 03 §11.3); the owner may still change it.
 
 **Story:** BE-094 (`docs/stories/BE-backend.md`), criteria 2 and 3. **Related:** CDM-049 (ticked, `packages/authority/test/cdm-049-migration-snapshot.test.ts`), CDM-050 (open), BE-039, BE-020.
 
@@ -30,6 +30,20 @@ A runner built on these would write a version 2 snapshot that the next read turn
 - Twelve or more modules change signature. This is one pass across the data plane and the control-plane routes, as the BE-094 Notes say; it should not be split, because a half-done state corrupts documents.
 - Criterion 2 of BE-094 needs a test-only version 2 (CDM-050 fixtures). Criterion 3 needs the stop request and a test that stops mid-run.
 - No version 2 ships. The migration is exercised only by tests.
+
+## As built (2026-11-27)
+
+- `services/document-service/src/cdm-schemas.ts`: the registry (`schemaForCdm`, `projectionSchemaForCdm`, `definitionForCdm`, `registerCdmSchema`). Version 1 is built in. A later version exists only when the deployment registers it; today only tests do.
+- `Room` takes `cdm` and `definition` (default 1 and CDM 1) and stamps `cdm` on every commit. A snapshot request may carry `migration: { schema, cdm, def }`: the room checks the new content against that definition, stamps the commit with the new version, and reads and writes the new schema once the commit is stored. `ProjectionGateway` follows the room's schema.
+- `HostedRoom`, the checkpoint and open tasks and the room loader read each document in the schema of its stored version. A document whose checkpoint is of another version than its record is refused (`unavailable`) until the migration is finished.
+- `DocumentStore.setCdmVersion(ref, from, to)` (memory and PostgreSQL) is written only by the runner, after the snapshot commit and the checkpoint that holds its content are stored.
+- `src/data-plane/migration.ts`: `MigrationRunner` with `dryRun` and `run` (scope: a document, a batch or a tenant; a `stop` check before each document). The procedure is `services/document-service/docs/migration-procedure.md`.
+- The commit goes through the room's own snapshot path, so the checkpoint before it (when commits came after the last checkpoint) and the checkpoint that holds the new content are written as for any snapshot commit, and every open channel receives `sync.reset`. The runner then closes the room, so each client reconnects.
+
+## Not built (open)
+
+- The control-plane routes that read or write whole documents (content PUT, import, restore, export, comments, fields, workflow completion and signing; about a dozen `cdmSchema()` calls in `src/control-plane` and `src/workflow`) still read version 1. They must take the document's version before a version 2 ships. Nothing ships one yet.
+- A document with an active workflow, or whose migration would change an approved region, is refused by the room (a snapshot commit follows the rules of any commit). The runner reports it and leaves the document at N.
 
 ## Not decided here
 

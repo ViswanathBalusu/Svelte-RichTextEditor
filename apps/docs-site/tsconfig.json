@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Node.js scripts, the VitePress configuration and the tests.",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["scripts/**/*.ts", "test/**/*.ts", "site/**/*.mts"]
+}

@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import { DEFAULT_LIMITS, applySteps, parseSteps, type StepJson } from '@docedit/authority';
 import { canonicalText, type JsonEnvelope, type JsonNode } from '@docedit/model';
-import { cdmSchema } from '@docedit/model/prosemirror';
+import { schemaForCdm } from '../cdm-schemas.ts';
 import { tokenCounts } from '../control-plane/search-index.ts';
 import { encodeSide, type CheckpointSide } from '../storage/codec.ts';
 
@@ -77,8 +77,8 @@ export interface TaskTypes {
 
 export type TaskName = keyof TaskTypes;
 
-let schemaCache: ReturnType<typeof cdmSchema> | undefined;
-const schema = () => (schemaCache ??= cdmSchema());
+/** The schema of the document's model version (BE-094; ADR 0435). */
+const schema = (cdm = 1) => schemaForCdm(cdm);
 
 function baseDoc(base: Base): unknown {
   if ('encoded' in base) return (decode({ encoded: base.encoded }).envelope as JsonEnvelope).doc;
@@ -86,10 +86,11 @@ function baseDoc(base: Base): unknown {
 }
 
 function replay(input: ReplayInput): JsonNode {
-  let doc = schema().nodeFromJSON(baseDoc(input.base));
+  const s = schema(input.cdm);
+  let doc = s.nodeFromJSON(baseDoc(input.base));
   for (const steps of input.commits) {
     if (steps.length === 0) continue;
-    const parsed = parseSteps(schema(), steps, DEFAULT_LIMITS);
+    const parsed = parseSteps(s, steps, DEFAULT_LIMITS);
     if (!parsed.ok) throw new Error('a stored commit has steps that do not parse');
     const applied = applySteps(doc, parsed.value);
     if (!applied.ok) throw new Error('a stored commit does not apply');
@@ -120,7 +121,7 @@ export function decode(input: { encoded: Uint8Array }): { envelope: JsonEnvelope
  */
 export function open(input: { encoded: Uint8Array; slice: number }): OpenedParts {
   const env = decode({ encoded: input.encoded }).envelope as JsonEnvelope;
-  schema().nodeFromJSON(env.doc).check();
+  schema(env.cdm).nodeFromJSON(env.doc).check();
   const root = env.doc as unknown as { content?: JsonNode[] };
   const bytes = Buffer.byteLength(JSON.stringify(root), 'utf8');
   const split: Array<{ at: number; slices: Uint8Array[] }> = [];

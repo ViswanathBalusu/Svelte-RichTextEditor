@@ -229,6 +229,15 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     return this.#record(d);
   }
 
+  async setCdmVersion(ref: DocRef, from: number, to: number): Promise<boolean> {
+    const d = this.#find(ref);
+    if (!d || d.record.deletedAt !== null)
+      throw new DocumentNotFoundError(`no document ${ref.doc}`);
+    if (d.record.cdmVersion !== from) return false;
+    d.record.cdmVersion = to;
+    return true;
+  }
+
   /** A document that is not deleted, at the metadata revision the caller names. */
   #live(ref: DocRef, opts: DocumentChangeOptions): MemoryDocument {
     const d = this.#find(ref);

@@ -13,7 +13,7 @@
  * commits for a new grants revision). All of them pass the same steps of 04 §5.
  */
 import { isUuid7 } from '@docedit/model';
-import { mayAddFeatures, mayOpen } from '@docedit/model/definition';
+import { mayAddFeatures, mayOpen, type CdmDefinition } from '@docedit/model/definition';
 import type { Node, Schema } from 'prosemirror-model';
 import { Step, type StepMap } from 'prosemirror-transform';
 import {
@@ -108,6 +108,8 @@ interface Pending {
   rebased: boolean;
   docAfter: Node;
   maps: StepMap[];
+  /** A snapshot commit that moves the room to another model version (BE-094). */
+  migration?: { schema: Schema; cdm: number; def?: CdmDefinition };
   /** The user, or import label, each suggestion identifier the commit claimed belongs to. */
   claimedBy?: ReadonlyMap<string, string>;
   /** The permission indexes after the commit (PRM-016). */
@@ -172,8 +174,16 @@ export interface SnapshotRequest {
   id: string;
   /** Also the commit's origin. */
   reason: SnapshotReason;
-  /** The new content, in the room's schema. */
+  /** The new content, in the room's schema (or in `migration.schema` for a migration). */
   content: Node;
+  /**
+   * A migration to a newer model version (BE-094; ADR 0435). The content is a document of
+   * `schema` and the commit is stamped `cdm`. When the commit is stored the room reads and
+   * writes `schema` and stamps `cdm` from then on. Only reason `migration` may carry it, and
+   * `cdm` must be higher than the room's. `def` is the definition of that version, which the
+   * invariants are checked against (CDM 1 when absent).
+   */
+  migration?: { schema: Schema; cdm: number; def?: CdmDefinition };
   /** The checkpoint, already written, that holds `content` (08 §3); the commit references it. */
   checkpoint: string;
   as: Requester;
@@ -191,6 +201,10 @@ export interface StageProfile {
 
 export interface RoomInit {
   schema: Schema;
+  /** The model version of `schema`, stamped on every commit. Default 1. */
+  cdm?: number;
+  /** The definition of that version, for the invariants. Default CDM 1. */
+  definition?: CdmDefinition;
   /** Content at sequence number `initialSeq` (0 unless given). */
   initial: Node;
   requires: readonly string[];
@@ -421,7 +435,11 @@ function regionListKey(list: readonly RegionInfo[]): string {
 }
 
 export class Room {
-  readonly schema: Schema;
+  /** Changes only when a migration snapshot commit is stored (BE-094). */
+  schema: Schema;
+  /** The model version stamped on commits; changes with `schema`. */
+  cdm: number;
+  private definition: CdmDefinition | undefined;
   readonly epoch: number;
   readonly incarnation: string;
   private readonly now: () => number;
@@ -477,6 +495,8 @@ export class Room {
 
   constructor(init: RoomInit) {
     this.schema = init.schema;
+    this.cdm = init.cdm ?? 1;
+    this.definition = init.definition;
     this.epoch = init.epoch;
     this.incarnation = init.incarnation;
     this.now = init.now;
@@ -1198,7 +1218,7 @@ export class Room {
       origin: s.origin,
       scopes: verdict.scopes,
       revision: this.perms.revision,
-      cdm: 1,
+      cdm: this.cdm,
       engine: ENGINE,
       retired: inv.value.removedRegions,
       claimed: verdict.claimedSuggestionIds,
@@ -1230,12 +1250,14 @@ export class Room {
     return fx;
   }
 
-  private invariantContext() {
+  private invariantContext(migration?: { def?: CdmDefinition }) {
     const retired = new Set(this.retired);
     for (const p of this.pending()) for (const r of p.stored.retired) retired.add(r);
+    const def = migration ? migration.def : this.definition;
     return {
       requires: this.tentativeRequires,
       retiredRegionIds: retired,
+      ...(def ? { def } : {}),
       ...(this.attachedAssets ? { attachedAssets: this.attachedAssets } : {}),
       ...(this.mathGate ? { mathGate: this.mathGate } : {}),
     };
@@ -1252,8 +1274,9 @@ export class Room {
     after: Node,
     steps: readonly Step[],
     docs: readonly Node[],
+    migration?: { def?: CdmDefinition },
   ): Result<InvariantOutcome> & { requires?: string[] } {
-    const ctx = this.invariantContext();
+    const ctx = this.invariantContext(migration);
     const inv = checkInvariants(before, after, steps, docs, ctx);
     if (inv.ok || !this.requiresGrowth) return inv;
     const grown = [...new Set([...this.tentativeRequires, ...featuresUsed(after)])].sort();
@@ -1472,7 +1495,7 @@ export class Room {
       origin: 'control',
       scopes: [],
       revision: this.perms.revision,
-      cdm: 1,
+      cdm: this.cdm,
       engine: ENGINE,
       retired: [],
       claimed: [],
@@ -1510,7 +1533,17 @@ export class Room {
       return reject('invalid_op', `"${String(request.reason)}" is not a snapshot reason`);
     if (typeof request.checkpoint !== 'string' || request.checkpoint === '')
       return reject('invalid_op', 'a snapshot commit references a checkpoint');
-    if (!request.content || request.content.type?.schema !== this.schema)
+    const migration = request.migration;
+    if (migration) {
+      if (request.reason !== 'migration')
+        return reject('invalid_op', 'only a migration snapshot moves a room to another version');
+      if (!Number.isSafeInteger(migration.cdm) || migration.cdm <= this.cdm)
+        return reject(
+          'invalid_op',
+          `a migration goes above CDM ${this.cdm}, not to ${migration.cdm}`,
+        );
+    }
+    if (!request.content || request.content.type?.schema !== (migration?.schema ?? this.schema))
       return reject('invalid_op', 'the content is not a document of this schema');
     const conn = request.as === 'system' ? SYSTEM_CONN : request.as;
     const access = this.access(conn);
@@ -1548,7 +1581,7 @@ export class Room {
     if (failed) return reject('conflict', `a precondition no longer holds: ${failed}`, 'drop');
     // 6. Invariants on the new content. A snapshot may change identities, but it cannot bring back
     // a retired region identifier (I3). An import may add a feature (03 §11.1).
-    const inv = this.checkResult(this.tentativeDoc, request.content, [], []);
+    const inv = this.checkResult(this.tentativeDoc, request.content, [], [], migration);
     if (!inv.ok) return reject(inv.code, inv.reason);
     // 7. Permissions, as for any commit.
     const verdict = outcomeCheck({
@@ -1578,7 +1611,7 @@ export class Room {
       origin: request.reason,
       scopes: verdict.scopes,
       revision: this.perms.revision,
-      cdm: 1,
+      cdm: migration?.cdm ?? this.cdm,
       engine: ENGINE,
       retired: inv.value.removedRegions,
       claimed: verdict.claimedSuggestionIds,
@@ -1595,6 +1628,7 @@ export class Room {
       rebased: false,
       docAfter: request.content,
       maps: [],
+      ...(migration ? { migration } : {}),
       claimedBy: verdict.claimedBy,
       index,
     });
@@ -1770,6 +1804,12 @@ export class Room {
             mapThread(t, isSnapshot(c) ? null : p.maps, before, p.docAfter, c.seq),
           );
       if (isSnapshot(c)) {
+        // A migration moves the room to the new version before the subscribers hear of it.
+        if (p.migration) {
+          this.schema = p.migration.schema;
+          this.cdm = p.migration.cdm;
+          this.definition = p.migration.def;
+        }
         // Every subscriber reloads (04 §3.2, §8): `sync.reset`, never `sync.commit`.
         const content = this.content(c.seq, p.docAfter);
         for (const ch of this.channels.values())
@@ -2192,7 +2232,7 @@ export class Room {
       origin: 'control',
       scopes: [],
       revision: this.perms.revision,
-      cdm: 1,
+      cdm: this.cdm,
       engine: ENGINE,
       retired: [],
       claimed: [],
