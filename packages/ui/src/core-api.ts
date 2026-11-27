@@ -373,6 +373,18 @@ export type CoreCommandName =
   | 'insertCaption'
   | 'insertCrossReference';
 
+/**
+ * What the author gives to repair one accessibility issue (UX-067 criterion 2): the text for alternative
+ * text or a link (`index` counts the link stretches of the paragraph, as the checker does), a heading
+ * level, a table's first row as its header row, or a `#RRGGBB` colour for the text of a paragraph.
+ */
+export type BlockFix =
+  | { readonly fix: 'alt-text'; readonly text: string }
+  | { readonly fix: 'table-header' }
+  | { readonly fix: 'link-text'; readonly text: string; readonly index: number }
+  | { readonly fix: 'heading-level'; readonly level: number }
+  | { readonly fix: 'text-colour'; readonly colour: string };
+
 /** One target the cross-reference dialog offers (FE-134 criterion 2). */
 export interface ReferenceTargetItem {
   readonly kind: 'bookmark' | 'heading' | 'numbered' | 'caption' | 'equation';
@@ -1165,6 +1177,11 @@ export interface CoreApi {
 
   /** Puts the caret at the start of a block and scrolls it into view; false when it is gone. */
   selectBlock?(id: string): boolean;
+  /**
+   * Repairs one issue of the accessibility checker in a block, through the same guards as typing
+   * (UX-067 criterion 2). False, and nothing changes, when the core cannot make the change.
+   */
+  fixBlock?(id: string, fix: BlockFix): boolean;
   /**
    * Whether a block has changed after the commit `seq` (an export job's `seq`; EXP-065
    * criterion 3): true when it has, false when it has not, null when the core cannot tell (the

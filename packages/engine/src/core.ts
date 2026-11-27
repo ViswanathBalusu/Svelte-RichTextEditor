@@ -291,6 +291,8 @@ import {
   tableStyleRefusal,
 } from './table-style-sort.ts';
 import { type AltRequest, setAltText } from './alt-text.ts';
+import { blockFix } from './block-fix.ts';
+import type { BlockFix } from './block-fix-types.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
 import { setParagraphFormat } from './paragraph-format.ts';
@@ -2189,6 +2191,23 @@ export class DocumentCore implements DocumentApi {
   setImageAlt(asset: string, alt: string): boolean {
     if (this.#locked()) return false;
     const command = setAltText(asset, alt, (pos) => this.canEdit(this.#scopeAt(pos)));
+    return command(this.#state, (tr) => this.dispatchTransaction(tr));
+  }
+
+  /**
+   * Repairs one issue of the accessibility checker in the block with this identifier (UX-067
+   * criterion 2), through the guard of the scope the block is in. False, and nothing changes, when the
+   * core is read-only, the block or the thing to fix is not there, the value is not allowed, or the
+   * user may not change that part.
+   */
+  fixBlock(id: string, fix: BlockFix): boolean {
+    if (this.#locked()) return false;
+    const command = blockFix(
+      id,
+      fix,
+      (pos) => this.canEdit(this.#scopeAt(pos)),
+      (pos) => this.#suggestionIn(this.#scopeAt(pos)).on,
+    );
     return command(this.#state, (tr) => this.dispatchTransaction(tr));
   }
 
