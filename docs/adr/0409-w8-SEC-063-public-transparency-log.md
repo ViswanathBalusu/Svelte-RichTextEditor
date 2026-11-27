@@ -1,6 +1,6 @@
 # ADR 0409: Chain heads are anchored in a public transparency log (SEC-063)
 
-Status: the decision to anchor is accepted (owner decision 143, `docs/owner-decisions-2026-11-15.md`: "Yes: chain heads are anchored in a public log"). The form of the anchor and the choice of log below are proposed, as decision 143 asks for an ADR. Lane w8, 2026-11-18.
+Status: the decision to anchor is accepted (owner decision 143, `docs/owner-decisions-2026-11-15.md`: "Yes: chain heads are anchored in a public log"). The log is accepted: owner decision 271 (`docs/owner-decisions-2026-11-26.md`) says the Sigstore Rekor public log is used. The form of the anchor, the period and the retry schedule below are not changed by it. Rekor's terms of use and rate limits have still not been checked from this machine (SEC-066 criterion 5). Lane w8, 2026-11-18, updated 2026-11-27.
 
 ## Context
 
