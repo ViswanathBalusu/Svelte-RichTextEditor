@@ -4401,11 +4401,13 @@ one or original. It is a
 
   #publishFind(): void {
     const f = this.#find;
+    const skipped = skippedPreservedAtoms(this.#state.doc, f.query);
     this.findState.set({
       query: f.query,
       count: f.matches.length,
       current: f.current === null ? null : f.current + 1,
       ...(f.matchCase ? {} : { matchCase: false }),
+      ...(skipped > 0 ? { skippedPreserved: skipped } : {}),
     });
   }
 
