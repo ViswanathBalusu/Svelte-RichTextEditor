@@ -13,7 +13,8 @@
  * Decisions, recorded in docs/adr/0120-layout-backlog-batch.md (proposed):
  * - `spaceBefore` is applied at the top of a page too; the spec does not say to suppress it.
  * - A line taller than the page body, or a box taller than it, is placed alone and reported in
- *   `overflowed`; the spec does not say what happens.
+ *   `overflowed`; the spec does not say what happens. A table taller than a page body in a
+ *   multi-column run spans pages and is reported there too (owner decision 250, FE-085).
  * - A page whose header and footer leave no room for the body is shipped empty, once, before the
  *   first body line: the body starts on the next page, as the LaTeX class does (owner decision 77,
  *   CDM-045). The line is then placed on a page with the same geometry, at the body's top.
@@ -1100,9 +1101,12 @@ function* layoutPassSteps(
     let started = false;
     // FE-085 criterion 4: in a multi-column run a table does not span pages (03 §10). When the rest
     // of this page cannot hold the whole table, and a page can, the table starts on a new page.
-    // A table taller than a page still spans pages (reported through `overflowed`, as before).
+    // A table taller than a page spans pages and is flagged in `overflowed` (owner decision 250).
+    const totalHeight = rows.reduce((sum, r) => sum + r.height, 0);
+    if (cur.geo.cols > 1 && totalHeight > cur.geo.body + EPS && !overflowed.includes(item.blockId))
+      overflowed.push(item.blockId);
     if (cur.geo.cols > 1 && !held() && !pageEmpty()) {
-      const total = rows.reduce((sum, r) => sum + r.height, 0);
+      const total = totalHeight;
       let left = 0;
       for (let c = cur.column; c < cur.geo.cols; c++)
         left += Math.max(0, colH() - (cur.colUsed[c] ?? 0));

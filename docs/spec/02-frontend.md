@@ -126,7 +126,7 @@ Immutable. Pages contain fragments; fragments contain lines or table rows; every
 
 ### 9.4 Pagination
 
-Rules implemented, in priority order: explicit page and section breaks; `pageBreakBefore`; `keepNext` chains; `keepLines`; widow and orphan control; table rows that split across pages with repeated header rows and `cantSplit`; footnotes placed by iterating until the page content is stable; columns and column balancing; page sections with their own size and orientation. Floating objects with text wrap are out of scope (03, section 13).
+Rules implemented, in priority order: explicit page and section breaks; `pageBreakBefore`; `keepNext` chains; `keepLines`; widow and orphan control; table rows that split across pages with repeated header rows and `cantSplit`; footnotes placed by iterating until the page content is stable; columns and column balancing; page sections with their own size and orientation. In a multi-column section a table that fits a page does not span pages; a table taller than a page spans pages and is flagged as overflowing (owner decision 250). Floating objects with text wrap are out of scope (03, section 13).
 
 ### 9.5 Incremental layout and virtualisation
 
