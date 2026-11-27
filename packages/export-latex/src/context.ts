@@ -15,6 +15,8 @@ import type {
   Suggestions,
 } from './bundle.ts';
 import type { CodeRange } from './fonts/coverage.ts';
+import type { FallbackFace } from './bundle.ts';
+import type { ScriptName } from './fonts/scripts.ts';
 import {
   color as colorEmitter,
   enumLookup,
@@ -99,6 +101,17 @@ export interface Ctx {
   readonly tabLists: Map<string, number>;
   /** Paragraph border lists written to styles.tex (`\DEdefborders`), by their spec (EXP-020). */
   readonly borderLists: Map<string, number>;
+  /**
+   * The faces of the fallback chain that have a coverage, for the runs of a script that needs
+   * shaping (EXP-037): a run is set in the face that has its first character, with its own script
+   * and the HarfBuzz renderer. `used` numbers the faces a document uses, in order of first use.
+   */
+  readonly scripts: {
+    readonly faces: readonly FallbackFace[];
+    readonly used: Map<string, { k: number; script: ScriptName }>;
+  };
+  /** Set when a paragraph is right to left: the document then loads the bidirectional algorithm. */
+  readonly bidi: { used: boolean };
   readonly styleRefs: Map<string, number>;
   readonly seqCursor: Map<string, number>;
   readonly assetFiles: Map<string, Uint8Array | null>;

@@ -92,6 +92,8 @@ export async function imageFonts(): Promise<FontManifest> {
   for (const f of m.families)
     for (const face of [f.regular, f.bold, f.italic, f.boldItalic]) cover(face);
   cover(m.math);
+  // The fallback chain: the glyph check needs the coverage of every face of it (EXP-026).
+  for (const f of m.fallback ?? []) cover(f);
   manifest = m;
   return m;
 }
@@ -106,12 +108,18 @@ export interface Compiled {
 
 export async function compileBundle(
   bundle: Bundle,
-  options: { maxPasses?: number; minPasses?: number } = {},
+  options: {
+    maxPasses?: number;
+    minPasses?: number;
+    /** Tests only: the limits of a long document (09 §9.3 item 4 sets 120 s for a job). */
+    limits?: { wallSeconds?: number };
+  } = {},
 ): Promise<Compiled> {
   const files: Record<string, string | Uint8Array> = { ...bundle.files, ...bundle.assets };
   const result = await compileInSandbox(files, {
     ...(options.maxPasses !== undefined ? { maxPasses: options.maxPasses } : {}),
     ...(options.minPasses !== undefined ? { minPasses: options.minPasses } : {}),
+    ...(options.limits ? { limits: options.limits } : {}),
   });
   // compileInSandbox starts a container that never reached TeX once more. Print the first failure,
   // so that the cause stays on record even when the second start worked.
@@ -149,7 +157,11 @@ export async function compileBundle(
 export async function convertAndCompile(
   envelope: CdmEnvelope,
   options: Omit<ConvertOptions, 'fonts' | 'classFiles'> = {},
-  compileOptions: { maxPasses?: number; minPasses?: number } = {},
+  compileOptions: {
+    maxPasses?: number;
+    minPasses?: number;
+    limits?: { wallSeconds?: number };
+  } = {},
 ): Promise<Compiled> {
   const bundle = await convert(envelope, {
     fonts: await imageFonts(),

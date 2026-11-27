@@ -33,12 +33,22 @@ RUN set -eu; \
     groupadd --gid 10001 tex; \
     useradd --uid 10001 --gid 10001 --no-create-home --home-dir /work --shell /usr/sbin/nologin tex
 
-# Fonts by path and hash (09 §5): copied out of the TeX tree, named by SHA-256, read-only.
+# Fonts by path and hash (09 section 5): copied out of the TeX tree, named by SHA-256, read-only. The
+# Noto faces of the fallback chain (CJK, Arabic, Hebrew, Devanagari, Thai; owner decisions 228 and
+# 241) are not in the TeX tree. fetch-noto.sh downloads them from the pinned URLs of noto-fonts.tsv
+# and stops on any file whose SHA-256 is not the pinned one; fonts.lua then copies them, with the
+# fonts of the TeX tree, into the font directory and lists them as the fallback chain of fonts.json.
+# The downloads are removed in the same step; the licence texts of the faces stay in the image.
 COPY fonts.lua /opt/docedit/fonts.lua
+COPY fetch-noto.sh noto-fonts.tsv /opt/docedit/build/
 RUN set -eu; \
-    TEXMFVAR=/usr/local/texlive/2026/texmf-var texlua /opt/docedit/fonts.lua /opt/docedit/fonts > /dev/null; \
+    sh /opt/docedit/build/fetch-noto.sh /opt/docedit/build/noto-fonts.tsv /opt/docedit/noto-src; \
+    TEXMFVAR=/usr/local/texlive/2026/texmf-var texlua /opt/docedit/fonts.lua /opt/docedit/fonts /opt/docedit/noto-src > /dev/null; \
+    mkdir -p /opt/docedit/licences; \
+    cp -r /opt/docedit/noto-src/licences /opt/docedit/licences/noto; \
+    cp /opt/docedit/build/noto-fonts.tsv /opt/docedit/licences/noto-fonts.tsv; \
+    rm -rf /opt/docedit/noto-src /opt/docedit/build; \
     chmod -R a+rX,go-w /opt/docedit
-
 # Pre-built font caches (09 §8): luaotfload writes them to TEXMFSYSVAR while building as root,
 # and jobs read them from the read-only image.
 COPY warmup.tex warmup.lua /opt/docedit/warmup/
@@ -46,7 +56,7 @@ RUN set -eu; \
     cd /opt/docedit/warmup; \
     TEXMFVAR=/usr/local/texlive/2026/texmf-var HOME=/root luaotfload-tool --update > /dev/null; \
     TEXMFVAR=/usr/local/texlive/2026/texmf-var HOME=/root lualatex --interaction=nonstopmode warmup.tex > /dev/null; \
-    grep -q 'warm-up: 11 font files' warmup.log; \
+    grep -q 'warm-up: 16 font files' warmup.log; \
     rm -f warmup.aux warmup.log warmup.pdf; \
     cp -r /usr/local/texlive/2026/texmf-var/luatex-cache/generic/names /opt/docedit/luaotfload-names; \
     chmod -R a+rX /usr/local/texlive/2026/texmf-var /opt/docedit/luaotfload-names

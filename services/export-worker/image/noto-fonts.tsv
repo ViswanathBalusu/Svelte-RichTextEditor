@@ -1,0 +1,20 @@
+# The Noto faces of the fallback chain (09 section 3.2; EXP-026, EXP-047, EXP-037; owner decisions 228
+# and 241; downloads approved on 2026-11-27 from github.com/notofonts only). fetch-noto.sh reads this
+# file while the image is built. Every download is pinned by its SHA-256, every face and licence text
+# by its own, and a mismatch stops the build. The order is the order of the fallback chain: the
+# complex scripts first, then CJK, whose face also holds punctuation and Latin forms that must not
+# shadow them. All faces are SIL Open Font License 1.1 and are used unmodified.
+#
+# Sizes (bytes): Arabic zip 18,777,381, face 271,652; Hebrew zip 3,734,185, face 66,156; Devanagari
+# zip 18,449,254, face 277,680; Thai zip 4,720,990, face 72,812; CJK JP face 16,467,736 (no zip).
+# The CJK face is the full Japanese-region OpenType file of Noto Sans CJK: it also has the
+# simplified and traditional Chinese characters and Hangul (checked with the converter's cmap reader).
+#
+# Columns, separated by tabs: name, version, url, SHA-256 of the download, member of the zip that is
+# the face (- when the download is the face), face file name, SHA-256 of the face, licence, where
+# the licence text is (a member of the zip, or a URL), SHA-256 of the licence text.
+Noto Sans Arabic	2.013	https://github.com/notofonts/arabic/releases/download/NotoSansArabic-v2.013/NotoSansArabic-v2.013.zip	1301aceaea84c501cf2e6dcfb3182e2328c8eae5725817fcb239672bda7154f1	NotoSansArabic/full/ttf/NotoSansArabic-Regular.ttf	NotoSansArabic-Regular.ttf	7ed3fe069312aceac454f17cf613a30f95271d6ed7ce58005ed4d016bd3823d7	OFL-1.1	OFL.txt	a7a5a25eb188bf1cd96982030d53e23c33485c69b1044a562254226857ee13af
+Noto Sans Hebrew	3.001	https://github.com/notofonts/hebrew/releases/download/NotoSansHebrew-v3.001/NotoSansHebrew-v3.001.zip	df0a71814b4e63644cf40fcc4529111b61266b7a2dafbe95068b29a7520cc3cb	NotoSansHebrew/full/ttf/NotoSansHebrew-Regular.ttf	NotoSansHebrew-Regular.ttf	671951828bd5c95db818e5bb12dcea2d0c0dda00311888522be061ee6835125e	OFL-1.1	OFL.txt	9b9fe028b5ba74d231659a1bbaf0ed09b11e759d1ca6a070999e16d151616b47
+Noto Sans Devanagari	2.007	https://github.com/notofonts/devanagari/releases/download/NotoSansDevanagari-v2.007/NotoSansDevanagari-v2.007.zip	820c7da45b1e63562cb41c0a8cac5d9a4202312043a3a040ed1325857ef469b1	NotoSansDevanagari/full/ttf/NotoSansDevanagari-Regular.ttf	NotoSansDevanagari-Regular.ttf	573e525d9f4923d34645fe752475419f45f8dec5a8e43f3e83c5c5f43d1f2ff9	OFL-1.1	OFL.txt	a216f6f8d85c7228093e0ee5e258d9d377e6671f68acb4db1930b29583d0f331
+Noto Sans Thai	2.002	https://github.com/notofonts/thai/releases/download/NotoSansThai-v2.002/NotoSansThai-v2.002.zip	af889cc673fc714060ce5e4e088fbad32aa4c0571a19958efeaff128a22da485	NotoSansThai/full/ttf/NotoSansThai-Regular.ttf	NotoSansThai-Regular.ttf	2101faa471942570d506a394df7da555d15246c7814c7522c63d4fa85b0d8d88	OFL-1.1	OFL.txt	2e98fd23a52d253db8612cd5942c8f2ff4111b21d2367050fdca91d8ccc374a0
+Noto Sans CJK JP	noto-cjk f8d157532fbf	https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf	68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5	-	NotoSansCJKjp-Regular.otf	68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5	OFL-1.1	https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE	6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2
