@@ -197,12 +197,12 @@ describe('03 §6 and §7 against the semantics fixtures (CDM-005; ADR 0032, acce
   });
 
   it('states the numbers the fixtures hold: a skipped level, the rounding of a line, a page with no room', () => {
-    // 7.1: level 0 followed by level 2 gives "1.0.1".
-    expect(semantics).toContain('level 0 followed by level 2 gives "1.0.1"');
+    // 7.1: level 0 followed by level 2 gives "1.1.1" (owner decision 238).
+    expect(semantics).toContain('level 0 followed by level 2 gives "1.1.1"');
     const skipped = caseOf('numbering-lists.json', 'skipped-level')['expected'] as {
       lists: Array<{ text: string }>;
     };
-    expect(skipped.lists.map((l) => l.text)).toContain('1.0.1');
+    expect(skipped.lists.map((l) => l.text)).toContain('1.1.1');
     // 7.3: 1150 thousandths of 253 twips is 290.95 and gives 291 (owner decision 78).
     const stated =
       /(\d+) thousandths of (\d+) twips is ([\d.]+) and gives (\d+) \(owner decision 78\)/.exec(

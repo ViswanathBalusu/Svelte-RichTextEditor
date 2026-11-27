@@ -142,7 +142,7 @@
   "cases": [
     {
       "id": "numbered-paragraph",
-      "description": "A ref to a numbered paragraph prints its label as it stands, punctuation included.",
+      "description": "A ref to a numbered paragraph prints its label without the closing full stop, as Word's REF does (owner decision 238).",
       "body": [
         {
           "type": "paragraph",
@@ -179,7 +179,7 @@
           ]
         }
       ],
-      "expected": { "references": [{ "target": "node:p02xxxxxxxxxxxxx", "text": "2." }] }
+      "expected": { "references": [{ "target": "node:p02xxxxxxxxxxxxx", "text": "2" }] }
     },
     {
       "id": "heading",

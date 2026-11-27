@@ -79,7 +79,7 @@ export {
   type CounterEffect,
   type DocumentLabels,
   type LabelOptions,
-  type LevelEffect,
+  type ListState,
   type ListLabel,
   type SequenceLabel,
 } from './numbering/labels.ts';

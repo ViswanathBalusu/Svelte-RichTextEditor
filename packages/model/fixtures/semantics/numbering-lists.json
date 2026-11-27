@@ -330,7 +330,7 @@
     },
     {
       "id": "skipped-level",
-      "description": "A level that was skipped shows start - 1, here 0: level 0 then level 2 gives 1.0.1.",
+      "description": "A level that was skipped is counted once, at its start, as Word does: level 0 then level 2 gives 1.1.1 (owner decision 238).",
       "body": [
         {
           "type": "paragraph",
@@ -372,15 +372,15 @@
       "expected": {
         "lists": [
           { "id": "p01xxxxxxxxxxxxx", "text": "1" },
-          { "id": "p02xxxxxxxxxxxxx", "text": "1.0.1" },
-          { "id": "p03xxxxxxxxxxxxx", "text": "1.1" },
-          { "id": "p04xxxxxxxxxxxxx", "text": "1.1.1" }
+          { "id": "p02xxxxxxxxxxxxx", "text": "1.1.1" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1.2" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "1.2.1" }
         ]
       }
     },
     {
       "id": "skipped-level-with-start",
-      "description": "A skipped level whose start is 5 shows 4; once counted it starts at 5.",
+      "description": "A skipped level whose start is 5 is counted once at 5; the next item is 6.",
       "numberings": [
         {
           "type": "numbering_def",
@@ -436,15 +436,15 @@
       "expected": {
         "lists": [
           { "id": "p01xxxxxxxxxxxxx", "text": "1" },
-          { "id": "p02xxxxxxxxxxxxx", "text": "1.4.1" },
-          { "id": "p03xxxxxxxxxxxxx", "text": "1.5" },
-          { "id": "p04xxxxxxxxxxxxx", "text": "1.6" }
+          { "id": "p02xxxxxxxxxxxxx", "text": "1.5.1" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1.6" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "1.7" }
         ]
       }
     },
     {
       "id": "skipped-level-start-zero",
-      "description": "A skipped level whose start is 0 shows 0, never -1; counted, its first value is 0.",
+      "description": "A skipped level whose start is 0 is counted once at 0; the next item is 1.",
       "numberings": [
         {
           "type": "numbering_def",
@@ -501,14 +501,14 @@
         "lists": [
           { "id": "p01xxxxxxxxxxxxx", "text": "1" },
           { "id": "p02xxxxxxxxxxxxx", "text": "1.0.1" },
-          { "id": "p03xxxxxxxxxxxxx", "text": "1.0" },
-          { "id": "p04xxxxxxxxxxxxx", "text": "1.1" }
+          { "id": "p03xxxxxxxxxxxxx", "text": "1.1" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "1.2" }
         ]
       }
     },
     {
       "id": "template-names-deeper-level",
-      "description": "A template may name a deeper level; it shows that level after the restart this item causes (start - 1).",
+      "description": "A template that names a level below its own prints no label, as in Word (owner decision 238); an item of the deeper level counts as usual.",
       "numberings": [
         {
           "type": "numbering_def",
@@ -562,16 +562,16 @@
       ],
       "expected": {
         "lists": [
-          { "id": "p01xxxxxxxxxxxxx", "text": "1-2" },
+          { "id": "p01xxxxxxxxxxxxx", "text": "" },
           { "id": "p02xxxxxxxxxxxxx", "text": "3" },
           { "id": "p03xxxxxxxxxxxxx", "text": "4" },
-          { "id": "p04xxxxxxxxxxxxx", "text": "2-2" }
+          { "id": "p04xxxxxxxxxxxxx", "text": "" }
         ]
       }
     },
     {
       "id": "template-names-missing-level",
-      "description": "A placeholder for a level the definition does not have is replaced by nothing.",
+      "description": "A template that names a level the definition does not have prints no label, as in Word (owner decision 238).",
       "numberings": [
         {
           "type": "numbering_def",
@@ -604,8 +604,8 @@
       ],
       "expected": {
         "lists": [
-          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
-          { "id": "p02xxxxxxxxxxxxx", "text": "2." }
+          { "id": "p01xxxxxxxxxxxxx", "text": "" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "" }
         ]
       }
     },
@@ -844,7 +844,7 @@
     },
     {
       "id": "restart-at-a-deeper-level",
-      "description": "A restart at level 1 changes only level 1 and below; the higher level continues.",
+      "description": "A restart at level 1 changes only level 1 and below; the higher level continues. The restart value stays the level's start, so the next restart of the level begins there too, as in Word (owner decision 238).",
       "body": [
         {
           "type": "paragraph",
@@ -933,7 +933,7 @@
           { "id": "p03xxxxxxxxxxxxx", "text": "d)" },
           { "id": "p04xxxxxxxxxxxxx", "text": "e)" },
           { "id": "p05xxxxxxxxxxxxx", "text": "2." },
-          { "id": "p06xxxxxxxxxxxxx", "text": "a)" }
+          { "id": "p06xxxxxxxxxxxxx", "text": "d)" }
         ]
       }
     },
@@ -1426,7 +1426,7 @@
     },
     {
       "id": "zero-in-every-format",
-      "description": "Letters and Roman numerals have no zero; a value of 0 is written 0.",
+      "description": "Letters and Roman numerals have no zero; a value of 0 prints nothing, as in Word (owner decision 238). A decimal list prints 0.",
       "numberings": [
         {
           "type": "numbering_def",
@@ -1493,9 +1493,9 @@
       ],
       "expected": {
         "lists": [
-          { "id": "p01xxxxxxxxxxxxx", "text": "0" },
+          { "id": "p01xxxxxxxxxxxxx", "text": "" },
           { "id": "p02xxxxxxxxxxxxx", "text": "a" },
-          { "id": "p03xxxxxxxxxxxxx", "text": "0" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "" },
           { "id": "p04xxxxxxxxxxxxx", "text": "0" }
         ]
       }
@@ -1615,7 +1615,7 @@
     },
     {
       "id": "headings-numbered-by-style",
-      "description": "Heading styles carry numbering with one listId, so headings form one list; a skipped level shows 0.",
+      "description": "Heading styles carry numbering with one listId, so headings form one list; a skipped level is counted once at its start (owner decision 238).",
       "body": [
         {
           "type": "paragraph",
@@ -1654,8 +1654,8 @@
           { "id": "p02xxxxxxxxxxxxx", "text": "1.1" },
           { "id": "p03xxxxxxxxxxxxx", "text": "1.2" },
           { "id": "p04xxxxxxxxxxxxx", "text": "2" },
-          { "id": "p05xxxxxxxxxxxxx", "text": "2.0.1" },
-          { "id": "p06xxxxxxxxxxxxx", "text": "2.1" }
+          { "id": "p05xxxxxxxxxxxxx", "text": "2.1.1" },
+          { "id": "p06xxxxxxxxxxxxx", "text": "2.2" }
         ]
       }
     },
@@ -1709,7 +1709,7 @@
     },
     {
       "id": "one-list-two-definitions",
-      "description": "A list instance is its listId: paragraphs on two definitions with one listId share counters, each in its own format.",
+      "description": "Word counts each numbering definition of a list on its own (owner decision 238): paragraphs on two definitions with one listId have separate counters, each in its own format.",
       "body": [
         {
           "type": "paragraph",
@@ -1750,8 +1750,8 @@
       "expected": {
         "lists": [
           { "id": "p01xxxxxxxxxxxxx", "text": "1." },
-          { "id": "p02xxxxxxxxxxxxx", "text": "2" },
-          { "id": "p03xxxxxxxxxxxxx", "text": "3." }
+          { "id": "p02xxxxxxxxxxxxx", "text": "1" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "2." }
         ]
       }
     },

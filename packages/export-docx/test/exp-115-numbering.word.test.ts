@@ -10,6 +10,7 @@
  * skipped without them. Cases where Word counts differently from the model are listed in
  * `WORD_DIFFERS` with the reason, so that a new difference turns the run red.
  */
+import { computeLabels } from '@docedit/model';
 import { describe, expect, it } from 'vitest';
 import {
   type DefsFile,
@@ -49,59 +50,32 @@ const FILES = [
 ] as const;
 
 /**
- * Cases whose labels differ in Word from the fixture, with the reason. Each was seen in Word 16
- * (Microsoft 365) on Windows 11 on 2026-11-18, by reading the PDF text of the case (the work
- * folder `test-results/exp-115-<fixture>-<pid>-<time>/`). A case that starts to pass turns the
- * run red, so the list cannot go stale. Not a pass: criterion 2 of EXP-115 stays open until the
- * list is empty or the owner accepts a difference (ADR 0032).
+ * Cases whose labels differ in Word from the fixture, with the reason. None now: owner decision 238
+ * (2026-11-26) made Word's labels the rule where they disagreed with the model, and the model, its
+ * fixtures and the writer were changed to match (ADR 0032; `packages/model/src/numbering/labels.ts`).
+ * A case that starts to differ is added here with its reason, and the run asserts that it still
+ * differs, so that the list cannot go stale.
  */
-const WORD_DIFFERS: Readonly<Record<string, string>> = {
-  'numbering-lists/skipped-level':
-    'A skipped level counts from its start in Word (1.1.1), from start - 1 in the model (1.0.1).',
-  'numbering-lists/skipped-level-with-start': 'As skipped-level, with a start of 5.',
-  'numbering-lists/skipped-level-start-zero':
-    'As skipped-level, for a start of 0 (1.0.1 shows 1.1.1).',
-  'numbering-lists/headings-numbered-by-style':
-    'As skipped-level, for a heading style that skips a level.',
-  'numbering-lists/template-names-deeper-level':
-    'Word prints no label at all for a template that names a level not yet counted; the model shows start - 1.',
-  'numbering-lists/template-names-missing-level':
-    'Word prints no label when the template names a level the definition lacks; the model replaces the placeholder with nothing.',
-  'numbering-lists/zero-in-every-format':
-    'Letters and Roman numerals have no zero: Word prints nothing for a value of 0 (a letter list shows `a` for 1), the model prints 0.',
-  'numbering-lists/restart-at-a-deeper-level':
-    'Word shows `d)` for the first item of level 2 after the second item of level 1, the model `a)`; the cause in the written numbering.xml is not found.',
-  'numbering-lists/one-list-two-definitions':
-    'Two definitions cannot share counters in Word (CDM-005 Notes); each counts alone.',
-  'numbering-sequences/equations-share-the-equation-sequence':
-    'Word prints the second numbered equation as (3), the model as (2).',
-  'numbering-sequences/field-inside-a-footnote':
-    'Word does not update a SEQ field in a footnote: it prints "Error! Main Document Only."',
-  'numbering-sequences/numbered-paragraph-inside-a-footnote':
-    'Word counts a numbered paragraph in a footnote on its own (1.), the model continues the body list (2.).',
-  'numbering-references/numbered-paragraph':
-    'REF \\w drops the trailing full stop of a label: Word prints `2`, the model `2.`.',
-  'numbering-references/table-caption':
-    'REF \\w on the bookmark of a SEQ caption prints 0: the writer needs a bookmark round the number and a REF without \\w.',
-  'numbering-references/figure-bookmark':
-    'The reference to a figure bookmark prints nothing in Word.',
-  'numbering-references/bookmark-in-a-footnote':
-    'The reference to a bookmark inside a footnote prints nothing in Word.',
-  'numbering-references/equation':
-    'The references to equation labels print 0 and "Error! Reference source not found." in Word.',
-  'numbering-footnotes/lower-roman':
-    'The writer does not write the footnote number format: Word prints 1, 2, 3, the model i, ii, iii.',
-  'numbering-footnotes/symbols': 'As lower-roman: Word prints 1, 2, 3, the model * and a dagger.',
-};
+const WORD_DIFFERS: Readonly<Record<string, string>> = {};
+/** The footnote of the body that holds the paragraph `id`, if any. */
+function footnoteHolding(body: readonly J[], id: string): J | undefined {
+  for (const b of body)
+    for (const n of nodesOf(b)) if (n['type'] === 'footnote' && findById([n], id)) return n;
+  return undefined;
+}
 
-function piecesOf(c: Case): string[] {
+function piecesOf(file: File, c: Case): string[] {
   const body = (c.body ?? []) as J[];
   const pieces: string[] = [];
+  const marks = computeLabels(documentOf(file, c).doc as never).footnotes;
   for (const l of c.expected.lists ?? []) {
     const p = findById(body, l.id);
     if (!p) continue;
     const text = printedText(p, () => '');
-    pieces.push(l.kind === 'none' ? text : `${l.text}${text}`);
+    // In a footnote, Word prints the footnote's mark between the list label and the text.
+    const note = footnoteHolding(body, l.id);
+    const mark = note ? (marks.get(String((note['attrs'] as J)['id'])) ?? '') : '';
+    pieces.push(l.kind === 'none' ? text : `${l.text}${mark}${text}`);
   }
   for (const s of c.expected.sequences ?? []) {
     const holder = findById(body, s.holder);
@@ -164,7 +138,7 @@ describe.skipIf(!wordAvailable())(
           it(`[${name} x DOCX] ${c.id}`, async () => {
             const out = await laidOut();
             expect(out.has(c.id), `Word exported ${c.id}`).toBe(true);
-            const pieces = piecesOf(c);
+            const pieces = piecesOf(file, c);
             expect(pieces.length).toBeGreaterThan(0);
             const text = dense(pdfTextOf(`exp-115-${name}`, c.id));
             const missing = pieces.filter((p) => !text.includes(dense(p)));

@@ -52,7 +52,7 @@ describe('EXP-019 criterion 2: a ref field prints a page reference or the litera
     ]);
     const bundle = await run(doc([target, ref], { numberings: [numbering('n')] }));
     const lines = printed(blockLines(bundle, idOf(ref)));
-    expect(lines).toMatch(/\\DEa\{\d+\}\{1\.\}%/);
+    expect(lines).toMatch(/\\DEa\{\d+\}\{1\}%/);
     expect(lines).not.toContain('\\DEpref');
   });
 
@@ -69,7 +69,7 @@ describe('EXP-019 criterion 2: a ref field prints a page reference or the litera
     const bundle = await run(doc([target, ref, pageRef], { numberings: [numbering('n')] }));
     expect(printed(blockLines(bundle, idOf(ref)))).toMatch(/\\DEr\{\d+\}\{See \}/);
     expect(printed(blockLines(bundle, idOf(ref)))).toMatch(
-      /\\DEr\{\d+\}\{See \}%\n\\DEa\{\d+\}\{1\.\}%/,
+      /\\DEr\{\d+\}\{See \}%\n\\DEa\{\d+\}\{1\}%/,
     );
     expect(printed(blockLines(bundle, idOf(pageRef)))).toMatch(/\\DEpref\{[^}]+\}/);
   });
@@ -221,7 +221,8 @@ describe('EXP-019 criterion 6: a field the converter can compute ignores its cac
       field({ kind: 'ref', target: `node:${idOf(target)}`, format: 'label', cached: 'STALE-REF' }),
     ]);
     const bundle = await run(doc([target, ref], { numberings: [numbering('n')] }));
-    expect(printed(blockLines(bundle, idOf(ref)))).toContain('1.');
+    // The label without its closing full stop, as Word's REF prints it (owner decision 238).
+    expect(printed(blockLines(bundle, idOf(ref)))).toMatch(/\\DEa\{\d+\}\{1\}/);
     expect(bundle.files[MAIN]!).not.toContain('STALE-REF');
   });
 });

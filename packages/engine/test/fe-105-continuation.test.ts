@@ -242,10 +242,12 @@ describe('a list across a region or a table (FE-105 criterion 4)', () => {
     expect(attrs['p3']).toMatchObject({ 'aria-posinset': '3', 'aria-setsize': '3' });
   });
 
-  it("counts a footnote's numbered paragraph at its place, without decorating it", () => {
+  it("counts a footnote's numbered paragraph in the footnote story, apart from the body list, without decorating it (owner decision 238)", () => {
     const state = stateOf([numbered('p1'), withFootnote('x', numbered('n1')), numbered('p2')]);
     const { attrs, labels } = readBack(state);
-    expect(labels).toMatchObject({ p1: '1.', n1: '2.', p2: '3.' });
+    expect(labels).toMatchObject({ p1: '1.', n1: '1.', p2: '2.' });
+    // The screen-reader position still counts the footnote's item in the body run: listSemantics
+    // reads the paragraphs in order and knows nothing of the footnote story (an open difference).
     expect(attrs['n1']).toBeUndefined();
     expect(attrs['p2']).toMatchObject({ 'aria-posinset': '3', 'aria-setsize': '3' });
   });

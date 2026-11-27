@@ -70,8 +70,9 @@ export function letters(value: number): string {
 }
 
 /**
- * Formats a counter value. Letters and Roman numerals have no zero, so a value below one is written
- * in decimal; a negative value (which only an uncounted level with `start` 0 could hold) shows 0.
+ * Formats a counter value. Letters and Roman numerals have no zero, so a value below one prints
+ * nothing, as Word does (owner decision 238); a negative value (which only an uncounted level with
+ * `start` 0 could hold) counts as 0.
  * `bullet` gives the bullet character and `none` the empty string.
  */
 export function formatNumber(value: number, format: string, bulletChar?: string | null): string {
@@ -82,15 +83,15 @@ export function formatNumber(value: number, format: string, bulletChar?: string 
     case 'none':
       return '';
     case 'lowerLetter':
-      return n < 1 ? String(n) : letters(n);
+      return n < 1 ? '' : letters(n);
     case 'upperLetter':
-      return n < 1 ? String(n) : letters(n).toUpperCase();
+      return n < 1 ? '' : letters(n).toUpperCase();
     case 'lowerRoman':
-      return n < 1 ? String(n) : roman(n);
+      return n < 1 ? '' : roman(n);
     case 'upperRoman':
-      return n < 1 ? String(n) : roman(n).toUpperCase();
+      return n < 1 ? '' : roman(n).toUpperCase();
     case 'lowerGreek':
-      return n < 1 ? String(n) : greekLetters(n);
+      return n < 1 ? '' : greekLetters(n);
     default:
       return String(n);
   }

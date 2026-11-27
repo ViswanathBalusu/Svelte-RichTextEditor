@@ -387,8 +387,9 @@ describe('the direct DOCX writer', () => {
     const header = headers.map(([, v]) => v).join('');
     expect(header).toContain('PAGE');
     expect(header).toContain('NUMPAGES');
-    // The equation reference resolves to a bookmark around the equation's number.
-    expect(instr.some((s) => /^REF _Ref\d+ \\w \\h$/.test(s))).toBe(true);
+    // The equation reference resolves to a bookmark around the equation's `SEQ` field, and Word
+    // reads the number from it (owner decision 238).
+    expect(instr.some((s) => /^REF _Ref\d+ \\h$/.test(s))).toBe(true);
     // The equations are Office math now (EXP-096), so no warning says they are written as source.
     expect(out.warnings.some((w) => w.includes('LaTeX source'))).toBe(false);
     expect(all(body, 'oMath').length).toBeGreaterThan(0);

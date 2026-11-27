@@ -93,7 +93,10 @@ describe('list and heading labels from the shared numbering algorithm (FE-077 cr
       const printed = new Map<string, string>();
       for (const section of flow.sections) printedLabels(section.blocks, printed);
       for (const story of flow.stories.values()) printedLabels(story, printed);
-      const expected = new Map((c.expected.lists ?? []).map((e) => [e.id, e.text]));
+      // A label that is empty (a template Word prints nothing for, decision 238) prints nothing.
+      const expected = new Map(
+        (c.expected.lists ?? []).filter((e) => e.text !== '').map((e) => [e.id, e.text]),
+      );
       expect(Object.fromEntries(printed)).toEqual(Object.fromEntries(expected));
     });
   }
