@@ -112,7 +112,7 @@ export async function compileBundle(
     maxPasses?: number;
     minPasses?: number;
     /** Tests only: the limits of a long document (09 §9.3 item 4 sets 120 s for a job). */
-    limits?: { wallSeconds?: number };
+    limits?: { wallSeconds?: number; memoryMiB?: number };
   } = {},
 ): Promise<Compiled> {
   const files: Record<string, string | Uint8Array> = { ...bundle.files, ...bundle.assets };
@@ -160,7 +160,7 @@ export async function convertAndCompile(
   compileOptions: {
     maxPasses?: number;
     minPasses?: number;
-    limits?: { wallSeconds?: number };
+    limits?: { wallSeconds?: number; memoryMiB?: number };
   } = {},
 ): Promise<Compiled> {
   const bundle = await convert(envelope, {

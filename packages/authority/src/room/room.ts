@@ -271,12 +271,9 @@ export interface RoomInit {
   /**
    * Whether a commit may add a feature to `requires` (03 §11.1; CDM-047; ADR 0050 item 5). Off by
    * default, so that a host that does not store `StoredCommit.requires` never loses a feature: a
-   * commit that needs one is then refused as before, with `invalid_op` (I1). `true` lets step commits and
-   * snapshot commits (an import, a restore, a repair) add one; `'steps'` lets step commits only, so a
-   * snapshot whose content needs a feature the document lacks is still refused (UX-107; the document
-   * service).
+   * commit that needs one is then refused as before, with `invalid_op` (I1).
    */
-  requiresGrowth?: boolean | 'steps';
+  requiresGrowth?: boolean;
 }
 
 /** The most comment threads a document may hold (07 §6), a target. */
@@ -457,7 +454,7 @@ export class Room {
   private readonly admission: Admission | null;
   private readonly ruleBudget: number;
   private readonly threadLimit: number;
-  private readonly requiresGrowth: boolean | 'steps';
+  private readonly requiresGrowth: boolean;
   /** `requires` as of the durable head, and as of the tentative head (03 §11.1). */
   private durableRequires: string[];
   private tentativeRequires: string[];
@@ -1299,11 +1296,10 @@ export class Room {
     steps: readonly Step[],
     docs: readonly Node[],
     migration?: { def?: CdmDefinition },
-    snapshot = false,
   ): Result<InvariantOutcome> & { requires?: string[] } {
     const ctx = this.invariantContext(migration);
     const inv = checkInvariants(before, after, steps, docs, ctx);
-    if (inv.ok || !this.requiresGrowth || (snapshot && this.requiresGrowth === 'steps')) return inv;
+    if (inv.ok || !this.requiresGrowth) return inv;
     const grown = [...new Set([...this.tentativeRequires, ...featuresUsed(after)])].sort();
     if (grown.length === new Set(this.tentativeRequires).size) return inv;
     const again = checkInvariants(before, after, steps, docs, { ...ctx, requires: grown });
@@ -1606,7 +1602,7 @@ export class Room {
     if (failed) return reject('conflict', `a precondition no longer holds: ${failed}`, 'drop');
     // 6. Invariants on the new content. A snapshot may change identities, but it cannot bring back
     // a retired region identifier (I3). An import may add a feature (03 §11.1).
-    const inv = this.checkResult(this.tentativeDoc, request.content, [], [], migration, true);
+    const inv = this.checkResult(this.tentativeDoc, request.content, [], [], migration);
     if (!inv.ok) return reject(inv.code, inv.reason);
     // 7. Permissions, as for any commit.
     const verdict = outcomeCheck({
