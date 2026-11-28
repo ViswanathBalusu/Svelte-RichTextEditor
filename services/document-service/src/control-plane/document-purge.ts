@@ -13,14 +13,15 @@
  * 1. deletes the objects: everything under the document's prefix (checkpoints, cold segments and
  *    set-aside checkpoints), the files of its export jobs, and the objects of its assets that no
  *    other document references and whose content no other asset shares (assets are stored by hash);
- * 2. deletes the rows keyed by the document, in one transaction (`PurgeStore.remove`): commits and
+ * 2. writes the audit event `document.purged` (the document and counts, never content);
+ * 3. deletes the rows keyed by the document, in one transaction (`PurgeStore.remove`): commits and
  *    their metadata, checkpoints, grants, versions, threads and comments, read markers, session
- *    records (HIS-003), workflow state and evidence, jobs, and the document itself;
- * 3. removes the document from the search index; and
- * 4. writes the audit event `document.purged` (the document and counts, never content).
+ *    records (HIS-003), workflow state and evidence, jobs, and the document itself; and
+ * 4. removes the document from the search index.
  *
- * The objects go first. If the row deletion then fails, the document is still soft-deleted and the
- * next run does it again; nothing is left that no row points to.
+ * The objects go first, then the audit event, then the rows. If a later step fails, the document is
+ * still soft-deleted and the next run does it again; nothing is left that no row points to, and the
+ * audit event is never lost. A failed run can leave a second event for the document.
  *
  * A sealed final PDF is stored write-once (12 §8.2; decision 84: it stays intact). A document that
  * has one whose retention (`retain_until`) has not ended is not purged yet, and the run reports it
@@ -144,12 +145,12 @@ export class DocumentPurge {
       const owned = new Set(outcome.remove.assets);
       const removing = assets.filter((a) => a.own && owned.has(a.id));
       await this.#deleteObjects(tenant, doc, removing, sealed);
-      await this.#d.store.remove(
-        tenant,
-        doc,
-        removing.map((a) => a.id),
-      );
-      await this.#d.search?.purgeDocument(tenant, doc);
+      // The audit event goes in before the rows are removed. The document row is the marker that
+      // the purge is not finished: once it is gone nothing would retry, so an event written after it
+      // is lost if the process stops in between, and a reader that sees the document gone could
+      // still find no event (PRO-047 saw this under load). The objects are already deleted, so the
+      // event is true. If the removal fails, the next run records one more event: the trail may
+      // hold two for a document, never none.
       await this.#d.audit.record([
         {
           id: uuid7(),
@@ -166,6 +167,12 @@ export class DocumentPurge {
           at: this.#d.now(),
         },
       ]);
+      await this.#d.store.remove(
+        tenant,
+        doc,
+        removing.map((a) => a.id),
+      );
+      await this.#d.search?.purgeDocument(tenant, doc);
       result.purged.push(doc);
     }
     return result;
