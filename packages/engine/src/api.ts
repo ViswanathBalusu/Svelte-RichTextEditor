@@ -235,6 +235,12 @@ export interface CommandArgs {
   charStyle?: string | null;
   /** For `applyList` (FE-130): the identifier of the numbering definition the document defines. */
   numberingId?: string;
+  /**
+   * For `applyList` instead of `numberingId`: a bulleted or a numbered list. The paragraphs join the
+   * document's first definition of that kind, and the document gets one when it has none; paragraphs
+   * already in a list of that kind leave it.
+   */
+  listKind?: 'bullet' | 'number';
   /** For `insertCitation`: the sources to cite (1 to 32) and the citation mode (`normal` by default). */
   citation?: {
     items: readonly CitationItemArgs[];
@@ -417,6 +423,8 @@ export interface SelectionSummary {
   charStyleId?: string | null;
   /** The style of the table the selection is in, or null (UX-022). */
   tableStyleId?: string | null;
+  /** The font size mark at the selection (twentieths of a point), or null when there is none or the runs differ. */
+  fontSize?: number | null;
 }
 
 /** The shape of the `de-selection` detail (05 §8.1): a DEP scope identifier and a block. */

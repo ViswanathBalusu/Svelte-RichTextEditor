@@ -1,29 +1,46 @@
 /*
- * Styles of the reference host's own pages. Deliberately plain: the product's visual design is not
- * specified yet (13 §13). Colours meet WCAG 2.1 AA contrast, focus is always visible, and nothing
- * depends on colour alone.
+ * Styles of the reference host's own pages: a familiar office word processor look, to match the
+ * editor's ribbon layout (`toolbar="ribbon"`, ADR 0490). An app bar with the product's working name,
+ * a grey canvas with white cards, and a document list like a file start screen. The host's own
+ * look is its own; nothing here is the editor's, which is themed only through its --de- properties.
+ * Colours meet WCAG 2.1 AA contrast, focus is always visible, and nothing depends on colour alone.
+ * No font file is bundled: the stack names an installed face first and falls back to the system's.
  */
 :root {
-  --host-ink: #1b1f24;
-  --host-muted: #4a5360;
+  --host-ink: #1f2328;
+  --host-muted: #57606a;
   --host-paper: #ffffff;
-  --host-wash: #f3f5f7;
-  --host-line: #c9d0d8;
-  --host-accent: #0b5cad;
+  --host-wash: #f6f8fa;
+  --host-canvas: #eef1f4;
+  --host-line: #d0d7de;
+  --host-line-strong: #8c959f;
+  --host-accent: #0969da;
+  --host-accent-strong: #0550ae;
   --host-accent-ink: #ffffff;
-  --host-warn-wash: #fff4d6;
-  --host-warn-line: #9a6b00;
+  --host-accent-wash: #ddf4ff;
+  --host-warn-wash: #fff8c5;
+  --host-warn-line: #9a6700;
   --host-danger: #a4161a;
-  --host-focus: #0b5cad;
+  --host-focus: #0969da;
+  --host-radius: 6px;
+  --host-shadow: 0 1px 3px rgb(31 35 40 / 0.12), 0 1px 2px rgb(31 35 40 / 0.08);
   color-scheme: light;
-  font-family: system-ui, sans-serif;
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
   line-height: 1.5;
   color: var(--host-ink);
-  background: var(--host-paper);
+  background: var(--host-canvas);
 }
 
 body {
   margin: 0;
+  min-height: 100vh;
+  background: var(--host-canvas);
 }
 
 .skip {
@@ -45,14 +62,68 @@ body {
   outline-offset: 2px;
 }
 
+/* The app bar: the product's working name and the places of the host. */
+.appbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 1rem;
+  background: var(--host-paper);
+  border-bottom: 1px solid var(--host-line);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--host-ink);
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--host-radius);
+  background: var(--host-accent);
+  color: var(--host-accent-ink);
+}
+
+.brand-mark svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.brand small {
+  color: var(--host-muted);
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+.appbar-space {
+  flex: 1 1 0;
+}
+
+/* The demo-only notice stays on every page (UX-091 criterion 4, UX-092 criterion 1). */
 .banner {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 1.5rem;
   align-items: baseline;
-  padding: 0.5rem 1rem;
+  padding: 0.35rem 1rem;
   background: var(--host-warn-wash);
-  border-bottom: 2px solid var(--host-warn-line);
+  border-bottom: 1px solid var(--host-warn-line);
+  font-size: 0.875rem;
 }
 
 .banner p {
@@ -66,7 +137,11 @@ body {
 main {
   max-width: 64rem;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 1.25rem 1rem 2rem;
+}
+
+main:has(> doc-editor) {
+  max-width: 90rem;
 }
 
 main:focus {
@@ -75,16 +150,22 @@ main:focus {
 
 h1 {
   font-size: 1.6rem;
-  margin: 0.5rem 0 1rem;
+  font-weight: 600;
+  margin: 0.25rem 0 1rem;
 }
 
 h2 {
-  font-size: 1.2rem;
+  font-size: 1.15rem;
+  font-weight: 600;
   margin: 1.5rem 0 0.5rem;
 }
 
 a {
   color: var(--host-accent);
+}
+
+a:hover {
+  color: var(--host-accent-strong);
 }
 
 button,
@@ -94,17 +175,28 @@ select {
 }
 
 button {
-  border: 1px solid var(--host-accent);
+  border: 1px solid var(--host-line-strong);
   background: var(--host-paper);
-  color: var(--host-accent);
+  color: var(--host-ink);
   border-radius: 4px;
-  padding: 0.3rem 0.8rem;
+  padding: 0.3rem 0.85rem;
+  min-block-size: 2rem;
   cursor: pointer;
 }
 
+button:hover {
+  background: var(--host-canvas);
+}
+
 button.primary {
+  border-color: var(--host-accent);
   background: var(--host-accent);
   color: var(--host-accent-ink);
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: var(--host-accent-strong);
 }
 
 button.danger {
@@ -115,15 +207,18 @@ button.danger {
 button[aria-disabled='true'],
 button:disabled {
   border-color: var(--host-line);
+  border-style: dashed;
   color: var(--host-muted);
   cursor: not-allowed;
 }
 
 input,
 select {
-  border: 1px solid var(--host-muted);
+  border: 1px solid var(--host-line-strong);
   border-radius: 4px;
   padding: 0.3rem 0.5rem;
+  min-block-size: 2rem;
+  box-sizing: border-box;
   background: var(--host-paper);
   color: var(--host-ink);
 }
@@ -136,6 +231,88 @@ label {
   color: var(--host-muted);
 }
 
+/* The places of the signed-in pages, with who the pages act as. */
+.subnav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.25rem;
+  padding: 0 0.75rem;
+  margin-bottom: 1rem;
+  background: var(--host-paper);
+  border: 1px solid var(--host-line);
+  border-radius: var(--host-radius);
+  box-shadow: var(--host-shadow);
+}
+
+.subnav a {
+  padding: 0.65rem 0.9rem;
+  color: var(--host-ink);
+  text-decoration: none;
+}
+
+.subnav a:hover {
+  background: var(--host-canvas);
+}
+
+.subnav a[aria-current='page'] {
+  font-weight: 600;
+  box-shadow: inset 0 -3px 0 var(--host-accent);
+}
+
+.subnav-space {
+  flex: 1 1 0;
+}
+
+.acting {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.9rem;
+  block-size: 1.9rem;
+  border-radius: 50%;
+  background: #8250df;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.avatar[data-tone='1'] {
+  background: #0a6e4f;
+}
+
+.avatar[data-tone='2'] {
+  background: #0b5cad;
+}
+
+.avatar[data-tone='3'] {
+  background: #9e2667;
+}
+
+/* White cards on the grey canvas. */
+.card,
+.panel {
+  background: var(--host-paper);
+  border: 1px solid var(--host-line);
+  border-radius: var(--host-radius);
+  box-shadow: var(--host-shadow);
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+}
+
+.card > :first-child,
+.panel > :first-child {
+  margin-top: 0.25rem;
+}
+
+/* The start screen: the people of the demo, and a new document. */
 .people {
   list-style: none;
   padding: 0;
@@ -145,26 +322,115 @@ label {
 }
 
 .people li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: var(--host-paper);
   border: 1px solid var(--host-line);
-  border-radius: 6px;
-  padding: 0.75rem;
+  border-radius: var(--host-radius);
+  box-shadow: var(--host-shadow);
+  padding: 1rem;
+}
+
+.people .person-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .people form {
   margin-top: 0.5rem;
 }
 
+.templates {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+}
+
+.templates li {
+  background: var(--host-paper);
+  border: 1px solid var(--host-line);
+  border-radius: var(--host-radius);
+  box-shadow: var(--host-shadow);
+  padding: 0 1rem 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-block: 0.5rem;
+}
+
+fieldset {
+  border: 1px solid var(--host-line);
+  border-radius: var(--host-radius);
+  margin-block: 0.75rem;
+}
+
+/* Lists of documents and people read as a table of rows, like a file list. */
 table {
   border-collapse: collapse;
   width: 100%;
+  background: var(--host-paper);
+}
+
+.card table,
+.panel table {
+  background: transparent;
 }
 
 th,
 td {
   text-align: left;
-  padding: 0.4rem 0.5rem;
+  padding: 0.5rem 0.6rem;
   border-bottom: 1px solid var(--host-line);
   vertical-align: top;
+}
+
+th {
+  color: var(--host-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+tbody tr:hover {
+  background: var(--host-wash);
+}
+
+.doc-list {
+  border: 1px solid var(--host-line);
+  border-radius: var(--host-radius);
+  box-shadow: var(--host-shadow);
+  overflow-x: auto;
+}
+
+.doc-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.doc-icon {
+  flex: 0 0 auto;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  fill: none;
+  stroke: var(--host-accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border: 1px solid var(--host-line-strong);
+  border-radius: 999px;
+  font-size: 0.8125rem;
 }
 
 .row-actions {
@@ -184,7 +450,8 @@ td {
 .notice {
   border: 1px solid var(--host-line);
   border-left: 4px solid var(--host-accent);
-  background: var(--host-wash);
+  border-radius: 4px;
+  background: var(--host-paper);
   padding: 0.5rem 0.75rem;
   margin: 0.75rem 0;
 }
@@ -193,12 +460,18 @@ td {
   border-left-color: var(--host-danger);
 }
 
+/* The editor page: a slim bar over the editor, then the editor itself. */
 .editor-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
   align-items: center;
   margin-bottom: 0.5rem;
+}
+
+.editor-bar h1 {
+  margin: 0;
+  font-size: 1.25rem;
 }
 
 .host-toolbar {
@@ -209,16 +482,32 @@ td {
 
 doc-editor {
   display: block;
-  min-height: 28rem;
+  min-height: 36rem;
   border: 1px solid var(--host-line);
-  border-radius: 6px;
+  border-radius: var(--host-radius);
+  box-shadow: var(--host-shadow);
+  overflow: hidden;
 }
 
-.panel {
+.share-dialog {
+  max-inline-size: min(42rem, 94vw);
   border: 1px solid var(--host-line);
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-  margin-top: 1rem;
+  border-radius: var(--host-radius);
+  box-shadow: 0 8px 24px rgb(31 35 40 / 0.3);
+  padding: 0.75rem 1.25rem 1.25rem;
+  color: var(--host-ink);
+  background: var(--host-paper);
+}
+
+.share-dialog::backdrop {
+  background: rgb(31 35 40 / 0.45);
+}
+
+.share-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .visually-hidden {
@@ -228,4 +517,15 @@ doc-editor {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+  button.primary,
+  .brand-mark {
+    border: 1px solid ButtonText;
+  }
+
+  .subnav a[aria-current='page'] {
+    border-block-end: 3px solid Highlight;
+  }
 }

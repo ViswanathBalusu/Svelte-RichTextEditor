@@ -491,6 +491,34 @@
       ]
     },
     {
+      "id": "format.align.center",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.align.end",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.align.justify",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.align.start",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "format.applyFormat",
       "group": "format",
       "capability": "format-painter",
@@ -516,6 +544,55 @@
       ]
     },
     {
+      "id": "format.bulletList",
+      "group": "format",
+      "capability": "lists",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.clear",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.color",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.fontSize",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.highlight",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.indentLess",
+      "group": "format",
+      "capability": "lists",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.indentMore",
+      "group": "format",
+      "capability": "lists",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "format.italic",
       "group": "format",
       "capability": "character-and-paragraph-formatting",
@@ -534,6 +611,13 @@
       "aliases": []
     },
     {
+      "id": "format.numberList",
+      "group": "format",
+      "capability": "lists",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "format.painter",
       "group": "format",
       "capability": "format-painter",
@@ -544,6 +628,20 @@
     },
     {
       "id": "format.paragraph",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.strike",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.underline",
       "group": "format",
       "capability": "character-and-paragraph-formatting",
       "keys": [],

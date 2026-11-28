@@ -474,6 +474,16 @@ export const FAKE_COMMANDS = [
   'discardRecovered',
   'finishFill',
   'showReferences',
+  // The ribbon's Home tab (ADR 0490).
+  'underline',
+  'strike',
+  'clearFormatting',
+  'fontSize',
+  'color',
+  'highlight',
+  'applyList',
+  'listLevelUp',
+  'listLevelDown',
 ];
 
 export const FAKE_QUERIES = [
@@ -1105,6 +1115,35 @@ export class FakeCore implements CoreApi {
         return true;
       }
       case 'finishFill':
+        return true;
+      // The Home tab's character commands: the marks the selection carries, and the size.
+      case 'underline':
+      case 'strike': {
+        if (!this.#canChange()) return false;
+        const marks = s.marks.includes(name)
+          ? s.marks.filter((m) => m !== name)
+          : [...s.marks, name].sort();
+        this.selection.set({ ...s, marks });
+        this.#bump();
+        return true;
+      }
+      case 'clearFormatting':
+        if (!this.#canChange() || s.marks.length === 0) return false;
+        this.selection.set({ ...s, marks: [], fontSize: null });
+        this.#bump();
+        return true;
+      case 'fontSize':
+        if (!this.#canChange()) return false;
+        this.selection.set({ ...s, fontSize: (a['fontSize'] as number | null) ?? null });
+        this.#bump();
+        return true;
+      case 'color':
+      case 'highlight':
+      case 'applyList':
+      case 'listLevelUp':
+      case 'listLevelDown':
+        if (!this.#canChange()) return false;
+        this.#bump();
         return true;
       default:
         return false;

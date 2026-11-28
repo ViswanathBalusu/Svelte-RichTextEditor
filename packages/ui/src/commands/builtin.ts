@@ -162,8 +162,11 @@ export function coreCommands(): Entry[] {
       changesContent: true,
       capability: 'styles',
       needs: 'paragraphStyle',
-      // The styles gallery and pane are its surfaces; `exec(id, { style, kind })` runs it.
+      // The styles gallery and pane are its surfaces, and the ribbon's style list; `exec(id, { style,
+      // kind })` runs it.
       toolbar: false,
+      ribbon: true,
+      picker: 'style',
       run: ({ core, args }) => {
         const a = (args ?? {}) as { style?: unknown; kind?: unknown };
         if (typeof a.style !== 'string') return false;

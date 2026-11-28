@@ -163,6 +163,13 @@ const PAIRS: Array<[string, string, string, number]> = [
   ['focus', 'surface', 'focus ring on the surface', NON_TEXT],
   ['focus', 'control-background', 'focus ring on a control', NON_TEXT],
   ['control-active-border', 'control-active', 'active control border', NON_TEXT],
+  // The ribbon layout (ADR 0490): the strip behind the tabs and the status bar, and the main action.
+  ['text', 'chrome', 'text on the ribbon strip', TEXT],
+  ['text-muted', 'chrome', 'muted text on the ribbon strip', TEXT],
+  ['focus', 'chrome', 'focus ring on the ribbon strip', NON_TEXT],
+  ['accent-text', 'accent', 'text on the accent', TEXT],
+  ['accent', 'surface', 'the accent against the surface', NON_TEXT],
+  ['role-suggester', 'chrome', 'the contextual tab name on the ribbon strip', TEXT],
 ];
 
 const THEMES: Array<[string, Record<string, string>]> = [

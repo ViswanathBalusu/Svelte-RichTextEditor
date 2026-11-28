@@ -4,6 +4,10 @@ A small host application for `<doc-editor>` (13 §11.2) and the demo stack of ph
 
 **Demo only. This is not a production deployment.** Visitors choose a person without a password, every service listens on 127.0.0.1 only, the settings in `stack/.env.example` are test values, and the keys the stack generates are for this demonstration and nothing else. Decisions: [ADR 0048](../../docs/adr/0048-reference-host-and-demo-stack.md).
 
+## The look
+
+The editor page embeds `<doc-editor toolbar="ribbon">` (the ribbon layout, [ADR 0490](../../docs/adr/0490-ribbon-toolbar-mode.md)): tabs of labelled groups, the page centred on a grey canvas, a status bar. The host's own pages (`src/app.css`) follow the same look: an app bar with the product's working name, white cards on a grey canvas, a start screen and a document list. It is a familiar office word processor's arrangement, not a copy of any product's: the icons are strokes drawn for this product and no font file is bundled (the font stack names an installed face first and falls back to the system's). Change `toolbar` to `compact` or `full` on the editor page for the other layouts.
+
 ## Start the demo
 
 From the repository root, with Node.js 22.18, pnpm and Podman (`DOCEDIT_CONTAINER_CLI` names another CLI):

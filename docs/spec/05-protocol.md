@@ -396,7 +396,7 @@ The embedding API has its own version, exposed as the static property `DocEditor
 | `view` | `print`, `web`, `read` | Page view, continuous web layout, or reading layout |
 | `locale` | BCP 47 tag | |
 | `theme` | `light`, `dark`, `auto` | |
-| `toolbar` | `full`, `compact`, `none` | With `none`, a host builds its own from `queryCommand` and `exec` |
+| `toolbar` | `full`, `compact`, `none`, `ribbon` (proposed, ADR 0490) | With `none`, a host builds its own from `queryCommand` and `exec`. `ribbon` is tabs of labelled groups |
 | `keep-alive` | boolean | Keeps a disconnected element alive (02, section 2.1) |
 
 | Property | Type | Notes |

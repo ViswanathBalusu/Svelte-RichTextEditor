@@ -45,6 +45,8 @@ export interface SelectionSummary {
   charStyleId?: string | null;
   /** The style of the table the selection is in, or null (UX-022). */
   tableStyleId?: string | null;
+  /** The font size at the selection (twentieths of a point), or null when there is none or the runs differ. */
+  fontSize?: number | null;
 }
 
 export interface PanelInfo {
@@ -341,6 +343,14 @@ export type CoreQueryName1b =
  * - `setParagraphFormat`: a patch of `indentLeft`, `indentRight`, `indentFirstLine` (twips) and
  *   `tabs` (the whole list, or null for none) for the selected paragraphs; the ruler and the
  *   paragraph dialog both run it (UX-102 criterion 2; FE-129);
+ * - `underline`, `strike`, `clearFormatting`, `listLevelUp`, `listLevelDown`: none; the ribbon's Home
+ *   tab (ADR 0490). `underline` and `strike` toggle, `clearFormatting` takes the direct character
+ *   formatting off the selection, and the list level commands move the selected list items one level;
+ * - `fontSize`, `color`, `highlight`: `{ fontSize }` in twentieths of a point, `{ color }` as
+ *   `#RRGGBB`, `{ highlight }` as one of the sixteen names of 03 §4.8; each takes `null` to remove it;
+ * - `applyList`: `{ listKind: 'bullet' | 'number' }`; puts the selected paragraphs in the document's
+ *   first list definition of that kind, adds one when there is none (which needs the right to change
+ *   the document's structure), and takes paragraphs that are in a list of that kind out of it;
  * - `setTableSize`: `{ columnWidths?, rowHeight? }` in twips for the caret's table: the width of
  *   every column and the height of the caret's row, or null for the natural height (FE-104);
  * - `moveBlockUp`, `moveBlockDown`: none; the blocks at the selection change places with the block
@@ -351,6 +361,15 @@ export type CoreQueryName1b =
  *   for a user with `manage` only (UX-038; owner decision 118).
  */
 export type CoreCommandName =
+  | 'underline'
+  | 'strike'
+  | 'clearFormatting'
+  | 'fontSize'
+  | 'color'
+  | 'highlight'
+  | 'applyList'
+  | 'listLevelUp'
+  | 'listLevelDown'
   | 'insertCitation'
   | 'setParagraphFormat'
   | 'setTableSize'

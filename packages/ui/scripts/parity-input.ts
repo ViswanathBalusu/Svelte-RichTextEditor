@@ -6,6 +6,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { builtinCommands } from '../src/commands/builtin.ts';
+import { homeCommands } from '../src/commands/home.ts';
 import { type BuildInput, parseStories } from '../src/parity/build.ts';
 import { PROFILE } from '../src/parity/profile.ts';
 
@@ -20,7 +21,10 @@ export function readParityInput(root: string): BuildInput {
     .map((name) => ({ text: readFileSync(join(storiesDir, name), 'utf8').replace(/\r\n/g, '\n') }));
   return {
     profile: PROFILE,
-    commands: builtinCommands().map((c) => ({ id: c.id, capability: c.capability })),
+    commands: [...builtinCommands(), ...homeCommands()].map((c) => ({
+      id: c.id,
+      capability: c.capability,
+    })),
     stories: parseStories(files),
     spec13: readFileSync(
       join(root, 'docs', 'spec', '13-experience-extensibility.md'),
