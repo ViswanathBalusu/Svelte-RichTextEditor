@@ -38,7 +38,8 @@ export function createWorkflowRest(host: WorkflowRestHost): Omit<WorkflowPort, '
     act: (docId, action, body) =>
       tagged('POST', path(docId, `/${action}`), body === undefined ? {} : { body }),
     participant: (docId, participantId, action, body) =>
-      plain('POST', path(docId, `/participants/${enc(participantId)}/${action}`), body),
+      // The published operations of complete, decline and the like take a JSON body, so an action without one sends {} (UX-106).
+      plain('POST', path(docId, `/participants/${enc(participantId)}/${action}`), body ?? {}),
     consent: (docId, participantId) =>
       plain('GET', path(docId, `/participants/${enc(participantId)}/consent`)),
     evidence: (docId) => plain('GET', path(docId, '/evidence')),

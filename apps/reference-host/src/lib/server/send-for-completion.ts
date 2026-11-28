@@ -67,6 +67,8 @@ export interface ParticipantBinding {
   invitation?: string;
   /** A passcode asked for through the invitation: its hash, when it lapses, how often it was tried. */
   passcode?: { hash: string; expiresAt: number; attempts: number };
+  /** How the participant's part ended, as the service reported it (UX-106); the host then mints no more tokens. */
+  finished?: 'completed' | 'declined';
 }
 
 export interface WorkflowRecord {
@@ -75,7 +77,7 @@ export interface WorkflowRecord {
   owner: string;
   sentAt: string;
   participants: ParticipantBinding[];
-  state: 'sent' | 'completed' | 'finalised';
+  state: 'sent' | 'completed' | 'finalised' | 'declined';
   /** Files fetched for the owner, named in the host's data directory. */
   results?: { sealedPdf?: string; evidence?: string; fetchedAt: string };
 }
@@ -312,6 +314,16 @@ export async function handleWorkflowEvent(d: EventDeps, event: ReceivedEvent): P
     case 'dep.workflow.reminder_due.v1':
       await notifyParticipants(d, record, event, participantId, 'reminder');
       return;
+    // A participant's part ended (UX-106): the host mints no more tokens for the link, and the owner's page says so.
+    case 'dep.workflow.participant_completed.v1':
+    case 'dep.workflow.participant_declined.v1': {
+      const p = record.participants.find((x) => x.id === participantId);
+      if (p === undefined) return;
+      p.finished = event.type.includes('declined') ? 'declined' : 'completed';
+      if (p.finished === 'declined') record.state = 'declined';
+      await d.store.save();
+      return;
+    }
     case 'dep.workflow.completed.v1':
       record.state = record.state === 'finalised' ? 'finalised' : 'completed';
       await d.store.save();
@@ -473,11 +485,25 @@ export async function verifyPasscode(
   }
   delete p.passcode;
   await d.store.save();
-  const issued = await d.host.tokens.issue({
+  const issued = await issueParticipantToken(d, record, p, Math.floor(now / 1000));
+  return { ok: true, ...issued, doc: record.doc, participant: p.id };
+}
+
+/**
+ * The participant's token: role `filler`, the opaque `sub`, `wfp` with the participant's
+ * identifier, `amr` `["otp"]` and `auth_time` as the host asserts them. `authTime` is when the
+ * passcode was accepted, not when the token is minted, so a renewal keeps what was true.
+ */
+export function issueParticipantToken(
+  d: Pick<EventDeps, 'host'>,
+  record: WorkflowRecord,
+  p: ParticipantBinding,
+  authTime: number,
+): Promise<{ token: string; expiresAt: string }> {
+  return d.host.tokens.issue({
     user: { sub: p.sub, name: p.name, groups: [], about: '' },
     doc: record.doc,
     role: 'filler',
-    participant: { id: p.id, amr: ['otp'], authTime: Math.floor(now / 1000) },
+    participant: { id: p.id, amr: ['otp'], authTime },
   });
-  return { ok: true, ...issued, doc: record.doc, participant: p.id };
 }
