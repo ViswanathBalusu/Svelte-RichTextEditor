@@ -14,6 +14,7 @@
  * Run with `DOCEDIT_UI_PORT=57040 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-064-ribbon-visual`.
  */
 import { existsSync } from 'node:fs';
+import type { ParagraphFormatView } from '../src/core-api.ts';
 import { expect, open, test } from './helpers.ts';
 
 const shots = [
@@ -21,6 +22,44 @@ const shots = [
   'ux-064-ribbon-home-dark.png',
   'ux-064-ribbon-status.png',
 ] as const;
+
+/** What the Home tab reads from the core: the alignment of the paragraph, the styles, the style at the caret. */
+const PARAGRAPH: ParagraphFormatView = {
+  count: 1,
+  indentLeft: 0,
+  indentRight: 0,
+  indentFirstLine: 0,
+  tabs: [],
+  defaultTabStop: 720,
+  page: null,
+  editable: true,
+  options: {
+    align: 'start',
+    spaceBefore: 0,
+    spaceAfter: 0,
+    lineSpacing: 1000,
+    lineRule: 'multiple',
+    keepNext: false,
+    keepLines: false,
+    pageBreakBefore: false,
+    widowControl: true,
+    contextualSpacing: false,
+    borders: {},
+    shading: null,
+    mixed: [],
+  },
+};
+const HOME: NonNullable<Parameters<typeof open>[1]> = {
+  toolbar: 'ribbon',
+  extended: true,
+  width: 1000,
+  paragraphFormat: PARAGRAPH,
+  styles: [
+    { id: 'Normal', name: 'Body text', kind: 'paragraph' },
+    { id: 'Heading1', name: 'Heading 1', kind: 'paragraph' },
+  ],
+  selection: { style: 'Body text', styleId: 'Normal', marks: ['bold'], fontSize: 240 },
+};
 
 /** See `ux-064-rtl-visual.spec.ts`: WebKit's screenshotter inserts a style the policy reports. */
 function isScreenshotterArtefact(violation: string): boolean {
@@ -54,16 +93,19 @@ test.describe('the ribbon layout has no visual regression (UX-064)', () => {
         ...(window as unknown as { harness: { violations: string[] } }).harness.violations,
       ]);
 
-    await open(page, { toolbar: 'ribbon', extended: true, width: 1000 });
+    await open(page, HOME);
     await expect(page.locator('.de-shell')).toHaveAttribute('data-toolbar', 'ribbon');
     await expect(page.getByRole('tab', { name: 'Home' })).toHaveAttribute('aria-selected', 'true');
+    // The Home commands beyond bold and italic load a moment after the editor.
+    await expect(page.locator('button[data-command-id="format.underline"]')).toBeVisible();
     expect(await harnessViolations()).toEqual([]);
     await page.mouse.move(0, 0);
     await expect(page.locator('.de-ribbon')).toHaveScreenshot(shots[0], options);
     await expect(page.locator('.de-status')).toHaveScreenshot(shots[2], options);
 
-    await open(page, { toolbar: 'ribbon', extended: true, width: 1000, theme: 'dark' });
+    await open(page, { ...HOME, theme: 'dark' });
     await expect(page.locator('.de-shell')).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('button[data-command-id="format.underline"]')).toBeVisible();
     await page.mouse.move(0, 0);
     await expect(page.locator('.de-ribbon')).toHaveScreenshot(shots[1], options);
 
