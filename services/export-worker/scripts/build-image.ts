@@ -11,13 +11,26 @@ import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { containerCli } from '../src/container.ts';
+import { buildInputsHash, INPUTS_LABEL } from '../src/image-inputs.ts';
 import { IMAGE } from '../src/sandbox.ts';
 
 const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const cli = containerCli();
+// The label lets the tests tell an image built from the current sources from an older one.
+const label = `${INPUTS_LABEL}=${buildInputsHash(root) ?? ''}`;
 const build = spawnSync(
   cli,
-  ['build', '--squash-all', '-f', join(root, 'Containerfile'), '-t', IMAGE, join(root, 'image')],
+  [
+    'build',
+    '--squash-all',
+    '--label',
+    label,
+    '-f',
+    join(root, 'Containerfile'),
+    '-t',
+    IMAGE,
+    join(root, 'image'),
+  ],
   {
     stdio: 'inherit',
   },

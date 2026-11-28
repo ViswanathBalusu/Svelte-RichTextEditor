@@ -23,6 +23,7 @@ l3packages
 # The fixed package list of the house class (tests/security/test/tex-package-list.test.ts).
 fontspec
 amsmath
+amsfonts     # the metrics of bold math (cmmib7): \boldsymbol and the like load them
 unicode-math
 xcolor
 luacolor

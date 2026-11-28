@@ -4,6 +4,15 @@ The export worker takes `export` jobs from the control plane's queue, converts t
 bundle, compiles it in a single-use Podman sandbox and stores the outputs (09 §9). The image is
 built from `Containerfile` with `scripts/build-image.ts`.
 
+The Podman tests use the tag `localhost/docedit-export-worker:s4` (or `DOCEDIT_EXPORT_IMAGE`). A
+fresh clone builds it with `node services/export-worker/scripts/build-image.ts` (it downloads the
+pinned Noto faces and TeX Live packages; allow some minutes and about 1.4 GB). Build it again after
+any change to `Containerfile` or `image/`: the script labels the image with a hash of those files,
+and under Vitest `sandboxReady()` skips the Podman tests with that reason (or fails them, with
+`DOCEDIT_REQUIRE_SANDBOX=1`) when the label is out of date. The LaTeX compile tests also copy the
+image's fonts to `out/fonts-local/` when that copy is missing or lacks a face (the copy is not
+committed).
+
 ## Previews
 
 Two rules of 06 §10 bound what previews cost (EXP-008; proposed in

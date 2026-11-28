@@ -26,6 +26,7 @@ import {
   type CompileResult,
 } from '../../../services/export-worker/src/sandbox.ts';
 import { sandboxReady } from '../../../services/export-worker/src/sandbox-ready.ts';
+import { readTar } from '../../../services/export-worker/src/tar.ts';
 import {
   validatePdf,
   type Flavour,
@@ -57,6 +58,61 @@ const localFonts = fileURLToPath(
 
 let manifest: FontManifest | undefined;
 
+/**
+ * Makes the local font copy hold every face of the image's manifest. A fresh clone has no copy, and
+ * a copy made from an older image lacks the faces added since (the Noto faces of EXP-037); without
+ * them the glyph check has no coverage and its tests fail without saying why. The files are read
+ * from the image in one run (a tar on standard output) and each is checked against its SHA-256.
+ */
+async function syncLocalFonts(m: FontManifest, manifestText: string): Promise<void> {
+  const faces = new Map<string, string>();
+  for (const f of m.families)
+    for (const face of [f.regular, f.bold, f.italic, f.boldItalic])
+      faces.set(face.file, face.sha256);
+  faces.set(m.math.file, m.math.sha256);
+  for (const f of m.fallback ?? []) faces.set(f.file, f.sha256);
+  const intact = (file: string, sha: string): boolean => {
+    const path = join(localFonts, file);
+    return (
+      existsSync(path) && createHash('sha256').update(readFileSync(path)).digest('hex') === sha
+    );
+  };
+  const missing = [...faces].filter(([file, sha]) => !intact(file, sha));
+  if (missing.length === 0) return;
+  const r = await podman(
+    [
+      'run',
+      '--rm',
+      '--network=none',
+      '--read-only',
+      '--cap-drop=ALL',
+      '--entrypoint=tar',
+      IMAGE,
+      '-c',
+      '-C',
+      '/opt/docedit/fonts',
+      ...missing.map(([file]) => file),
+    ],
+    { timeoutMs: 180_000, maxStdoutBytes: 256 * 1024 * 1024 },
+  );
+  if (r.code !== 0)
+    throw new Error(
+      `cannot copy the fonts out of ${IMAGE}: ${r.timedOut ? 'timed out' : r.stderr}`,
+    );
+  const files = readTar(r.stdout, {
+    allow: new Set(missing.map(([file]) => file)),
+    maxFileBytes: 64 * 1024 * 1024,
+  });
+  mkdirSync(localFonts, { recursive: true });
+  for (const [file, sha] of missing) {
+    const bytes = files.get(file);
+    if (!bytes || createHash('sha256').update(bytes).digest('hex') !== sha)
+      throw new Error(`the font ${file} of ${IMAGE} does not hash to its name`);
+    writeFileSync(join(localFonts, file), bytes);
+  }
+  writeFileSync(join(localFonts, 'fonts.json'), manifestText);
+}
+
 /** The image's font manifest, with the coverage of every face whose file is available locally. */
 export async function imageFonts(): Promise<FontManifest> {
   if (manifest) return manifest;
@@ -81,7 +137,9 @@ export async function imageFonts(): Promise<FontManifest> {
     throw new Error(
       `cannot read the font manifest of ${IMAGE}: ${r.timedOut ? 'timed out' : r.stderr}`,
     );
-  const m = JSON.parse(new TextDecoder().decode(r.stdout)) as FontManifest;
+  const manifestText = new TextDecoder().decode(r.stdout);
+  const m = JSON.parse(manifestText) as FontManifest;
+  await syncLocalFonts(m, manifestText);
   const cover = (face: { file: string; sha256: string; coverage?: unknown }): void => {
     const path = join(localFonts, face.file);
     if (!existsSync(path)) return;

@@ -56,18 +56,31 @@ ess_cert_id_alg = sha256
         try {
           if (req.method !== 'POST') throw new Error('POST only');
           writeFileSync(join(work, 'q.tsq'), Buffer.concat(chunks));
-          openssl(work, [
-            'ts',
-            '-reply',
-            '-config',
-            'tsa.cnf',
-            '-section',
-            'tsa_config1',
-            '-queryfile',
-            'q.tsq',
-            '-out',
-            'r.tsr',
-          ]);
+          // A start of openssl.exe can fail for a moment on a loaded Windows host (the full
+          // `pnpm check` run, FRW-059 on 2026-11-27: every time-stamp of one test file answered 400
+          // and the service reported tsa_unreachable; the file passes alone and in its package).
+          // The reply is made again, up to three times; the cause is written to stderr either way.
+          for (let attempt = 1; ; attempt++) {
+            try {
+              openssl(work, [
+                'ts',
+                '-reply',
+                '-config',
+                'tsa.cnf',
+                '-section',
+                'tsa_config1',
+                '-queryfile',
+                'q.tsq',
+                '-out',
+                'r.tsr',
+              ]);
+              break;
+            } catch (e) {
+              console.error(`test TSA: openssl ts -reply, attempt ${attempt}: ${String(e)}`);
+              if (attempt >= 3) throw e;
+              Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+            }
+          }
           answered++;
           res.writeHead(200, {
             'content-type': 'application/timestamp-reply',

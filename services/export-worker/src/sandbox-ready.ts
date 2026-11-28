@@ -9,6 +9,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { containerCli, podmanInfo, podmanMachine, type PodmanInfo } from './container.ts';
+import { staleImage } from './image-inputs.ts';
 import { IMAGE, runInSandbox } from './sandbox.ts';
 import { SECRETS_PROBE_SCRIPT, secretsVerdict } from './secrets-probe.ts';
 
@@ -102,6 +103,12 @@ export async function sandboxReady(): Promise<Readiness> {
       info,
       machine: null,
     });
+  // Tests only: an image built from older sources than the Containerfile passes the check above
+  // and then fails on its content. The worker process does not check (its sources may be absent).
+  if (process.env['VITEST']) {
+    const stale = staleImage(IMAGE);
+    if (stale) return (cached = { ok: false, reason: stale, info, machine: null });
+  }
   // The routes to try, in order. A machine named in DOCEDIT_PODMAN_MACHINE is the only route. On a
   // remote client (Windows, macOS) the machine route goes first: it passes the empty default mounts
   // file and applies the cgroup limits, which the remote client cannot, so trying it first saves a

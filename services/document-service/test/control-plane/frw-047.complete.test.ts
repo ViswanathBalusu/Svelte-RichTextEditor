@@ -132,6 +132,20 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         if (w.json.state === 'in_progress') break;
         await new Promise((r) => setTimeout(r, 50));
       }
+      // The state moves before the room writes the control commit of the transition (12 §6.2;
+      // FRW-030): wait for the commit of the current grants revision, so that a test that reads the
+      // head next does not see it move under a slow machine.
+      const ref = { tenant: h.tenant, doc };
+      for (let i = 0; i < 200; i++) {
+        const revision = (await h.parts.grants.current(ref)).revision;
+        if (
+          (await h.parts.logs.read(ref)).some(
+            (c) => c.kind === 'control' && c.revision === revision,
+          )
+        )
+          break;
+        await new Promise((r) => setTimeout(r, 25));
+      }
       return { doc, owner, ref: { tenant: h.tenant, doc } };
     }
 

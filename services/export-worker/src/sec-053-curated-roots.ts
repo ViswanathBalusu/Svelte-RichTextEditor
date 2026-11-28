@@ -5,9 +5,14 @@
  * checks that it covers these.
  */
 
-/** TeX Live package names (not the class's package names: `array` is in `tools`). */
+/**
+ * TeX Live package names (not the class's package names: `array` is in `tools`). `amsfonts` is not
+ * on the fixed list; it holds the metrics (cmmib7) that bold math needs, which the math allow-list
+ * uses (EXP-049 criterion 5). The first curated image left it out.
+ */
 export const CLASS_PACKAGES: readonly string[] = [
   'amsmath',
+  'amsfonts',
   'babel',
   'colortbl',
   'fontspec',
@@ -29,6 +34,7 @@ export const CLASS_PACKAGES: readonly string[] = [
 /** One file of each package of the fixed list, as kpathsea finds it. */
 export const FIXED_LIST_FILES: readonly string[] = [
   'amsmath.sty',
+  'cmmib7.tfm',
   'array.sty',
   'babel.sty',
   'colortbl.sty',
