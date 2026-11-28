@@ -141,7 +141,7 @@ const dirOf = (dirName: string): string => dirs.get(dirName)!;
  */
 export async function layOutInWord(
   dirName: string,
-  docs: ReadonlyMap<string, { env: JsonEnvelope; options?: WriteOptions }>,
+  docs: ReadonlyMap<string, { env: JsonEnvelope; options?: WriteOptions; assets?: AssetStore }>,
 ): Promise<Set<string>> {
   const dir = fileURLToPath(
     new URL(`../test-results/${dirName}-${process.pid}-${Date.now()}/`, import.meta.url),
@@ -158,7 +158,10 @@ export async function layOutInWord(
         // still open in Word
       }
   for (const [name, d] of docs) {
-    const out = await writeDocx(d.env, new AssetStore(), { ...WRITE_OPTIONS, ...d.options });
+    const out = await writeDocx(d.env, d.assets ?? new AssetStore(), {
+      ...WRITE_OPTIONS,
+      ...d.options,
+    });
     writeFileSync(join(dir, `${name}.docx`), out.bytes);
   }
   await run(
@@ -193,6 +196,7 @@ export interface Word {
   readonly text: string;
   readonly page: number;
   readonly xMin: number;
+  readonly xMax: number;
   readonly yMin: number;
   readonly yMax: number;
 }
@@ -205,11 +209,18 @@ export function wordsOf(dirName: string, name: string): Word[] {
   for (const line of xml.split('\n')) {
     if (line.includes('<page ')) page++;
     const m =
-      /<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="[\d.]+" yMax="([\d.]+)">([^<]*)<\/word>/.exec(
+      /<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)<\/word>/.exec(
         line,
       );
     if (m)
-      out.push({ page, xMin: Number(m[1]), yMin: Number(m[2]), yMax: Number(m[3]), text: m[4]! });
+      out.push({
+        page,
+        xMin: Number(m[1]),
+        yMin: Number(m[2]),
+        xMax: Number(m[3]),
+        yMax: Number(m[4]),
+        text: m[5]!,
+      });
   }
   return out;
 }

@@ -159,6 +159,13 @@ export interface WriteOptions {
 /** The text that stands in for an equation that fails the math gate. */
 export const MATH_PLACEHOLDER = '[equation not exported]';
 
+/**
+ * A block that is not a paragraph (a figure, an equation) has no spacing of its own (03 §7), so its
+ * paragraph in the package says so, and the style's space before and after does not add to the gap
+ * between its neighbours (EXP-115).
+ */
+const NO_BLOCK_SPACING = el('w:spacing', { 'w:before': 0, 'w:after': 0 });
+
 export interface WriteResult {
   bytes: Uint8Array;
   /** Approximations and advisories, each once, with a count when it occurred more often. */
@@ -912,7 +919,7 @@ class DirectWriter {
           return el(
             'w:p',
             {},
-            el('w:pPr', {}, el('w:jc', { 'w:val': 'center' })),
+            el('w:pPr', {}, NO_BLOCK_SPACING, el('w:jc', { 'w:val': 'center' })),
             el('w:r', {}, textElement('w:t', MATH_PLACEHOLDER)),
           );
         const label = this.labels.equations.get(id);
@@ -932,7 +939,7 @@ class DirectWriter {
         return el(
           'w:p',
           {},
-          el('w:pPr', {}, el('w:jc', { 'w:val': 'center' })),
+          el('w:pPr', {}, NO_BLOCK_SPACING, el('w:jc', { 'w:val': 'center' })),
           office ?? el('w:r', {}, textElement('w:t', xmlSafe(latex).text)),
           numberXml,
         );
@@ -1235,6 +1242,7 @@ class DirectWriter {
       'w:pPr',
       {},
       caption ? el('w:keepNext') : '',
+      NO_BLOCK_SPACING,
       jc ? el('w:jc', { 'w:val': jc }) : '',
     );
     const figure = this.bookmarked(this.nodeBookmark(id), picture);
@@ -1242,7 +1250,8 @@ class DirectWriter {
     if (caption) {
       const style = this.styles.has('Caption') ? el('w:pStyle', { 'w:val': 'Caption' }) : '';
       const inner = await this.inlineXml(caption.content ?? [], pc, { ...cx, seqBlock: id }, null);
-      out += el('w:p', {}, style ? el('w:pPr', {}, style) : '', inner);
+      // With no Caption style the caption is the figure's own text, and the figure has no spacing.
+      out += el('w:p', {}, el('w:pPr', {}, style || NO_BLOCK_SPACING), inner);
     }
     return out;
   }

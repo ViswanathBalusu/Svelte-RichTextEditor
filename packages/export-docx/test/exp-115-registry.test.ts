@@ -34,14 +34,14 @@ const REGISTRY: Readonly<Record<string, Runner>> = {
   },
   'date-fields': { files: ['exp-115-date-fields.docx.test.ts'], naming: 'x DOCX]' },
   'header-growth': {
-    files: [],
-    naming: 'json',
-    note: 'No DOCX runner: Word pushes the body down itself when a header grows, and no case has been laid out in Word yet.',
+    files: ['exp-115-header-growth.word.test.ts'],
+    naming: 'x DOCX]',
+    note: `Frames: the top of the body and the lines that fit, read from Word's PDF; the one-twip case is below Word's text grid. Slots: the header and footer printed on five pages. Word starts the body on page 1 where the fixture (decision 77) says page 2 (listed in the runner). ${NO_CI}`,
   },
   'line-spacing': {
-    files: [],
-    naming: 'json',
-    note: 'No DOCX runner of its own: the writer states `w:line` and `w:lineRule`, and cdm-041-word-cascade reads the resolved rule and value from Word. Line heights are not measured in a Word PDF yet.',
+    files: ['exp-115-line-spacing.word.test.ts'],
+    naming: 'x DOCX]',
+    note: `Line heights read from Word's PDF against the rule with Word's own natural heights, and the fixture's numbers where the rule does not depend on a natural height; the inline picture differs (listed in the runner). ${NO_CI}`,
   },
   'numbering-footnotes': {
     files: ['exp-115-numbering.word.test.ts'],
@@ -69,14 +69,14 @@ const REGISTRY: Readonly<Record<string, Runner>> = {
     note: NO_CI,
   },
   'paragraph-spacing': {
-    files: [],
-    naming: 'json',
-    note: "No DOCX runner of its own: cdm-041-word-cascade reads the spaces before and after from Word, and the larger-of rule between two paragraphs is Word's own. Gaps are not measured in a Word PDF yet.",
+    files: ['exp-115-paragraph-spacing.word.test.ts'],
+    naming: 'x DOCX]',
+    note: `The pairs and the flows' body and cell gaps, read from Word's PDF; the footnote and story containers and trailing gaps are not measured, and one pair differs (both listed in the runner). ${NO_CI}`,
   },
   tabs: {
-    files: [],
-    naming: 'json',
-    note: 'No DOCX runner of its own: cdm-041-word-cascade compares the tab stops Word resolves; the position of a tab segment is not measured in a Word PDF yet.',
+    files: ['exp-115-tabs.word.test.ts'],
+    naming: 'x DOCX]',
+    note: `Segment positions read from Word's PDF for all 17 cases, no leader dots measured; one case differs (listed in the runner). ${NO_CI}`,
   },
   whitespace: {
     files: [],

@@ -28,7 +28,11 @@ import { writeDocx, type WriteOptions } from '../src/writer.ts';
 import { corpusFiles, readFile } from './corpus.ts';
 import { writerDocs } from './writer-docs.ts';
 
-const WORK_DIR = fileURLToPath(new URL('../test-results/exp-090-cascade/', import.meta.url));
+// A folder of this run's own: a Word instance that another run left holding a file of an earlier
+// run (EBUSY on the write) cannot stop this one.
+const WORK_DIR = fileURLToPath(
+  new URL(`../test-results/exp-090-cascade-${process.pid}/`, import.meta.url),
+);
 const SCRIPT = fileURLToPath(
   new URL('../tools/word-cascade/read-word-formatting.ps1', import.meta.url),
 );
