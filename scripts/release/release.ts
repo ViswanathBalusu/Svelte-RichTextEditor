@@ -51,6 +51,7 @@ import {
   serviceSbom,
   type SbomContext,
 } from './sbom.ts';
+import { imageLicenceArtefacts } from './licence-manifest.ts';
 import { stringify } from './spdx.ts';
 import {
   compactSnapshot,
@@ -498,6 +499,15 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
     if (existsSync(join(artefactsDir, r.sbom)))
       addArtefact(r.sbom, `SPDX 2.3 bill of materials (${r.id} image)`);
     else step(`${r.id} image bill of materials`, false, [`${r.sbom} was not produced`]);
+    const licence = imageLicenceArtefacts(r, images.find((i) => i.id === r.id)?.texlive === true);
+    if (licence.problems.length)
+      step(`${r.id} image licence manifest and source offer`, false, licence.problems);
+    for (const { file, kind } of licence.files) {
+      const source = join(dirname(o.images!), file);
+      if (existsSync(source)) cpSync(source, join(artefactsDir, file));
+      if (existsSync(join(artefactsDir, file))) addArtefact(file, kind);
+      else step(`${r.id} image ${kind.split(' (')[0]}`, false, [`${file} was not produced`]);
+    }
   }
   const missingNotes = [
     ...missing,

@@ -74,6 +74,9 @@ export interface ImageRecord {
   image: string;
   digest: string;
   sbom: string;
+  /** The licence manifest and the source offer of an image that holds TeX Live (SEC-053). */
+  licenceManifest?: string;
+  sourceOffer?: string;
 }
 
 /** The lossless DOCX round trip of ADR 0017 on the SPK-028 corpus (EXP-120), as `roundtrip-report.ts` writes it. */

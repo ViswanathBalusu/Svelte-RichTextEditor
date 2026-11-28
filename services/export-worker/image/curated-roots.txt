@@ -1,0 +1,59 @@
+# curated-roots.txt: the TeX Live packages the export worker image keeps (09 section 9.3 item 5;
+# EXP-073, SEC-053). image/curate.lua adds the packages these depend on and deletes the rest.
+# A name ending in * stands for every package that starts with the text before it.
+#
+# Changing this list is a class change (EXP-078): the compile tests and the reference PDFs run again.
+
+# Engine and format. The format files are built when the base image is made; the engine reads its
+# own Lua modules and the kernel from these packages when a job runs.
+luahbtex
+luatex
+kpathsea
+latex-bin
+latex
+latexconfig
+latex-fonts
+luatexbase
+luaotfload
+lualibs
+lua-uni-algos
+l3kernel
+l3packages
+
+# The fixed package list of the house class (tests/security/test/tex-package-list.test.ts).
+fontspec
+amsmath
+unicode-math
+xcolor
+luacolor
+geometry
+lua-ul
+tools        # array, longtable and multicol
+colortbl
+graphics     # graphicx
+hyperref
+babel
+babel-*         # the .ldf files of the languages the class names (british, german-germany, ...)
+
+# Loaded by the build (warmup.tex) and by the bundle the converter writes (bibliography,
+# tagged PDF, page headers).
+fancyhdr
+biblatex
+biber
+latex-lab
+tagpdf
+colorprofiles
+pdfmanagement
+
+# Hyphenation patterns are read on demand, whichever language a document names: every package that
+# registers patterns (`execute AddHyphen` in the package database), whatever its name.
+hyph-utf8
+hyphen-*
+@AddHyphen
+
+# The package database reader and the scripts the build and the manifest use.
+texlive.infra
+texlive-scripts
+
+# Never kept, whatever loads it. The PGF back ends are loaded by an optional file of filehook only.
+!pgf

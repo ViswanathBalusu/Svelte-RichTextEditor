@@ -23,6 +23,14 @@ import type { ImageRecord } from './notes.ts';
 import { compareTexWithImage, compareWithImage, createdAt, imageSbom } from './sbom.ts';
 import { stringify, type SpdxDocument } from './spdx.ts';
 import { parseTlmgrInfo, type FontManifest, type TexPackage } from './texlive.ts';
+import {
+  licenceManifest,
+  DPKG_STATUS,
+  parseDpkg,
+  sourceOffer,
+  type BaseSystemPackage,
+  type LicenceManifestInput,
+} from './licence-manifest.ts';
 
 export const TLMGR_FIELDS = 'name,category,localrev,cat-version,cat-license';
 
@@ -32,6 +40,7 @@ export function buildArgs(
   tag: string,
   epoch: number,
   noCache: boolean,
+  squash = false,
 ): string[] {
   if (!Number.isSafeInteger(epoch) || epoch < 0)
     throw new Error(`SOURCE_DATE_EPOCH "${epoch}" is not a number of seconds`);
@@ -40,6 +49,7 @@ export function buildArgs(
     '--timestamp',
     String(epoch),
     ...(noCache ? ['--no-cache'] : []),
+    ...(squash ? ['--squash-all'] : []),
     '-f',
     containerfile,
     '-t',
@@ -62,6 +72,12 @@ export function normaliseId(id: string): string {
 /** The bill's file name: the image name and the version. */
 export const imageSbomName = (image: string, version: string) =>
   `${image}-${version}.image.spdx.json`;
+
+/** The licence manifest and the source offer of an image (SEC-053 criterion 3). */
+export const imageLicenceManifestName = (image: string, version: string) =>
+  `${image}-${version}.licence-manifest.json`;
+export const imageSourceOfferName = (image: string, version: string) =>
+  `${image}-${version}.source-offer.md`;
 
 /** The file name that the release gives a file of a distributable (release.ts `artefactName`). */
 export function releaseFile(d: { packageName: string }, version: string, suffix: string): string {
@@ -106,6 +122,19 @@ export function addNoticesLayer(o: {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * The house class's version (the last entry of the class release ledger of EXP-015) and licence
+ * (`CLASS_LICENCE` of packages/export-latex, which the release scripts do not import).
+ */
+export function houseClass(root: string): { version: string; licence: string } {
+  const ledger = JSON.parse(
+    readFileSync(join(root, 'packages/export-latex/class/releases.json'), 'utf8'),
+  ) as { releases: { version: string }[] };
+  const last = ledger.releases[ledger.releases.length - 1];
+  if (!last) throw new Error('packages/export-latex/class/releases.json lists no release');
+  return { version: last.version, licence: 'Apache-2.0' };
 }
 
 function exec(file: string, args: string[], capture = true): string {
@@ -163,10 +192,14 @@ async function main(argv: string[]): Promise<number> {
   // (scripts/release/image-notices.ts); the image of the release is then the one with the layer.
   const layer = !d.noticesInContext;
   const base = layer ? `${local}-base` : local;
-  exec(cli, buildArgs(containerfile, context, base, epoch, false), false);
+  exec(cli, buildArgs(containerfile, context, base, epoch, false, d.texlive === true), false);
   const baseId = inspect(base);
   if (!argv.includes('--once')) {
-    exec(cli, buildArgs(containerfile, context, `${local}-again`, epoch, true), false);
+    exec(
+      cli,
+      buildArgs(containerfile, context, `${local}-again`, epoch, true, d.texlive === true),
+      false,
+    );
     const again = inspect(`${local}-again`);
     console.log(`${d.image}: first build ${baseId}, second build without cache ${again}`);
     if (again !== baseId)
@@ -177,6 +210,7 @@ async function main(argv: string[]): Promise<number> {
   const declaredDir = opt('--declared-dir');
   let tex: TexPackage[] | undefined;
   let fonts: FontManifest | null = null;
+  let baseSystem: BaseSystemPackage[] = [];
   if (d.texlive) {
     const run = (...a: string[]) => exec(cli, ['run', '--rm', '--network=none', ...a]);
     tex = parseTlmgrInfo(
@@ -185,6 +219,7 @@ async function main(argv: string[]): Promise<number> {
     fonts = JSON.parse(
       run('--entrypoint', 'cat', base, '/opt/docedit/fonts/fonts.json'),
     ) as FontManifest;
+    baseSystem = parseDpkg(run('--entrypoint', 'cat', base, DPKG_STATUS));
   }
   let imageId = baseId;
   if (layer) {
@@ -255,11 +290,42 @@ async function main(argv: string[]): Promise<number> {
   if (d.stage) rmSync(context, { recursive: true, force: true });
   const sbom = imageSbomName(d.image, version);
   writeFileSync(join(out, sbom), stringify(result.doc));
+  // The licence manifest and the source offer of an image that holds TeX Live (SEC-053 criterion 3).
+  let licenceFiles: { licenceManifest: string; sourceOffer: string } | null = null;
+  if (tex) {
+    const input: LicenceManifestInput = {
+      image: `${repository}/${d.image}`,
+      imageId,
+      version,
+      base: /^FROM (S+)/m.exec(readFileSync(containerfile, 'utf8'))?.[1] ?? null,
+      tex,
+      fonts,
+      houseClass: houseClass(root),
+      baseSystem,
+    };
+    const manifest = licenceManifest(input);
+    // Listed in the manifest, not a failure: TeX Live's own infrastructure packages state no licence
+    // in the Catalogue, and the release does not guess one (ADR 0483).
+    if (manifest.tex.unknownLicence.length)
+      console.error(
+        `note: ${manifest.tex.unknownLicence.length} TeX Live packages state no licence in the Catalogue: ${manifest.tex.unknownLicence.join(', ')}`,
+      );
+    licenceFiles = {
+      licenceManifest: imageLicenceManifestName(d.image, version),
+      sourceOffer: imageSourceOfferName(d.image, version),
+    };
+    writeFileSync(
+      join(out, licenceFiles.licenceManifest),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+    writeFileSync(join(out, licenceFiles.sourceOffer), sourceOffer(input));
+  }
   const record: Partial<ImageRecord> & { imageId: string } = {
     id,
     image: `${repository}/${d.image}`,
     imageId,
     sbom,
+    ...(licenceFiles ?? {}),
     ...(digest ? { digest } : {}),
   };
   writeFileSync(join(out, 'image.json'), `${JSON.stringify(record, null, 2)}\n`);

@@ -1077,16 +1077,8 @@
       "tests": ["tex-package-list.test.ts"],
       "open": [
         {
-          "criterion": 1,
-          "what": "the worker image as a curated TeX Live pinned by digest, the build failing on a LuaTeX older than 1.17"
-        },
-        {
           "criterion": 3,
           "what": "the licence manifest and the source offer for GPL components among the release artefacts"
-        },
-        {
-          "criterion": 4,
-          "what": "a TeX Live upgrade as a class version change run against the stored reference PDFs"
         }
       ],
       "boundaries": ["service-to-workers"],
