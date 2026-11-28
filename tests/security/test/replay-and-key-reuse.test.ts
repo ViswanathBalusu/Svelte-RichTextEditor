@@ -215,6 +215,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // Every accepted export enqueues one job (a cache hit enqueues a copy), so the count of
         // enqueue calls is the count of jobs this test creates.
         const enqueue = vi.spyOn(h.parts.queue, 'enqueue');
+        // The jobs enqueued so far, named, so that a count that is off says which job was extra.
+        const jobs = () =>
+          enqueue.mock.calls.map(([tenant, job]) => `${tenant} ${job.kind} by ${job.createdBy}`);
         try {
           // Ann creates the export under the key.
           const first = await h.call('POST', route, {
@@ -224,7 +227,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           });
           expect(first.status, first.text.slice(0, 160)).toBe(202);
           const jobAnn = first.json.id as string;
-          expect(enqueue).toHaveBeenCalledTimes(1);
+          expect(jobs()).toHaveLength(1);
 
           // Ben, same route, same key, same body: his own job, never Ann's response.
           const second = await h.call('POST', route, {
@@ -244,7 +247,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           expect(svc.status, svc.text.slice(0, 160)).toBe(202);
           expect(svc.json.id).not.toBe(jobAnn);
           expect(svc.json.id).not.toBe(second.json.id);
-          expect(enqueue).toHaveBeenCalledTimes(3);
+          expect(jobs()).toHaveLength(3);
 
           // Ann, same key and same body, on another served route (an export of doc2): that route's
           // own job, never the replay of her export of doc.
@@ -258,7 +261,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           expect(elsewhere.headers.get('dep-idempotent-replayed')).toBeNull();
           expect(elsewhere.json.id).toEqual(expect.any(String));
           expect(elsewhere.json.id).not.toBe(jobAnn);
-          expect(enqueue).toHaveBeenCalledTimes(4);
+          expect(jobs()).toHaveLength(4);
 
           // Ann again with the same key and a different body: refused, and no job is created.
           const changed = await h.call('POST', route, {
@@ -269,7 +272,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           expect(changed.status).toBe(422);
           expect(changed.json?.code ?? changed.json?.error?.code).toBe('idempotency_mismatch');
           expect(changed.json?.id).toBeUndefined();
-          expect(enqueue, 'the refused request created no job').toHaveBeenCalledTimes(4);
+          expect(jobs(), 'the refused request created no job').toHaveLength(4);
 
           // Ann's own replays return her jobs, unchanged, and create nothing.
           const replay = await h.call('POST', route, {
@@ -287,7 +290,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           });
           expect(replayS.status).toBe(202);
           expect(replayS.json.id).toBe(elsewhere.json.id);
-          expect(enqueue).toHaveBeenCalledTimes(4);
+          expect(jobs()).toHaveLength(4);
         } finally {
           enqueue.mockRestore();
         }

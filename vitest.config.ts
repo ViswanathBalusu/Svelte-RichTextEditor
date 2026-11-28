@@ -36,8 +36,17 @@ const wanted = (process.env['DOCEDIT_BROWSERS'] ?? 'chromium,firefox,webkit')
 for (const b of wanted)
   if (!available[b]) throw new Error(`DOCEDIT_BROWSERS: unknown browser "${b}"`);
 
-/** Files that measure latency under load; they run in the `measure` project, not in `node`. */
-const measured = ['tests/security/test/sec-028-expensive-commits.test.ts'];
+/**
+ * Files that measure latency under load; they run in the `measure` project, not in `node`.
+ * A file belongs here when an assertion compares a measured time (acknowledgement latency or
+ * event-loop delay) with a target in milliseconds. Files that bound a time only to catch a
+ * hang (SEC-039, SEC-028 CPU budget) or count events (SEC-018 presence) stay in `node`.
+ */
+const measured = [
+  'tests/security/test/sec-018-tenant-flood.test.ts',
+  'tests/security/test/sec-028-expensive-commits.test.ts',
+  'tests/security/test/sec-028-worker-offload.test.ts',
+];
 
 export default defineConfig({
   test: {
