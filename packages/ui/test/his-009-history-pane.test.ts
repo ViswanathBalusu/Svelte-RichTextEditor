@@ -250,6 +250,9 @@ describe('the pane is offered only with the history port, and loaded on demand (
     const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8');
     expect(shell).toContain("import('../panes/HistoryPane.svelte')");
     expect(shell).not.toMatch(/^import .*HistoryPane\.svelte/m);
-    expect(index).not.toContain('HistoryPane');
+    // The component's file is not named in the entry. The names of the pane's data types
+    // (HistoryPaneItem, HistoryPaneQuery, ...) are exported for the element's history port (UX-097).
+    expect(index).not.toContain('HistoryPane.svelte');
+    expect(index).not.toMatch(/\bHistoryPane\b/);
   });
 });

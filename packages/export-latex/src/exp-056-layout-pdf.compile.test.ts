@@ -180,7 +180,9 @@ describe.skipIf(!ready)(
           suggestions: 'accept',
           layout: 'line',
         } as never,
-        { minPasses: 2 },
+        // Test only: the tagged, final-profile compile of this 24-page document passed with 4096 MiB
+        // and was stopped at the job limit of 1536 MiB (09 §9.3 item 4) in the integrator's run.
+        { minPasses: 2, limits: { memoryMiB: 4096 } },
       );
       if (!c.compile.ok || !c.compile.pdf)
         throw new Error(
