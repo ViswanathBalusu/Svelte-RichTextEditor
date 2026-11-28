@@ -95,18 +95,23 @@ export async function taggedPdf(
   name: string,
   envelope: CdmEnvelope,
   options: Record<string, unknown> = {},
+  compileOptions: { limits?: { wallSeconds?: number; memoryMiB?: number } } = {},
 ): Promise<Uint8Array> {
-  const c = await convertAndCompile(envelope, {
-    profile: 'final',
-    title: name,
-    instant: INSTANT,
-    timeZone: 'Europe/London',
-    suggestions: 'accept',
-    layout: 'block',
-    tagging: 'on',
-    pdfStandard: 'ua-2',
-    ...options,
-  } as never);
+  const c = await convertAndCompile(
+    envelope,
+    {
+      profile: 'final',
+      title: name,
+      instant: INSTANT,
+      timeZone: 'Europe/London',
+      suggestions: 'accept',
+      layout: 'block',
+      tagging: 'on',
+      pdfStandard: 'ua-2',
+      ...options,
+    } as never,
+    compileOptions,
+  );
   // DOCEDIT_KEEP=1 writes the bundle and the log of every compile to the temporary directory.
   if (process.env['DOCEDIT_KEEP'] === '1') keep(name, c);
   if (!c.compile.ok || !c.compile.pdf)

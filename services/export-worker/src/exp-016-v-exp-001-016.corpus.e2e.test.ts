@@ -44,19 +44,12 @@ const CORPUS_DOCUMENTS = ['pages-1', 'form-fields', 'pages-20'] as const;
 const DECLARED = 'ua-2+a-4f';
 
 /**
- * The violations that are known and not yet fixed, by document and flavour (EXP-016 Notes, lane w2,
- * 2026-11-27). pages-20 compiles since the image has the Noto CJK face (owner decision 228) and
- * validates against PDF/A-4f. Against PDF/UA-2 four of its tables are not regular (clause 8.2.5.26,
- * test 4: rows with different numbers of columns, taking spans into account). veraPDF names them as
- * the tables in the subsections K[12] to K[15] of the first section of the structure tree, in the second
- * half of the document. Compiled alone, each table of
- * the document is regular, and so is the table with spans after any of the three tables before it, or
- * after up to 44 paragraphs; the cause is in how the class tags those tables in the context of the
- * whole document, not in the validation, and it is not found yet. Remove the entry when it is fixed.
+ * The violations that are known and not yet fixed, by document and flavour (EXP-016 Notes). None now:
+ * pages-20 failed PDF/UA-2 clause 8.2.5.26 (regular tables) until class 0.2.23 cleared the list of
+ * cells that a row span covers where a longtable starts (EXP-111 criterion 2). Add an entry only with
+ * a note in the story that names the rule.
  */
-const KNOWN_VIOLATIONS: Record<string, string[]> = {
-  'pages-20 ua2': ['8.2.5.26 test 4 x4'],
-};
+const KNOWN_VIOLATIONS: Record<string, string[]> = {};
 
 /**
  * The memory limit (MiB) per document where it differs from the spec limit of 1.5 GiB (09 §9.3 item 4).

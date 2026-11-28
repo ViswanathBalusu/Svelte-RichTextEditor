@@ -1,7 +1,7 @@
 {
   "artifact": "export-diagnostic-codes",
   "version": 1,
-  "classVersion": "0.2.22",
+  "classVersion": "0.2.23",
   "codes": [
     {
       "code": "align_distribute",
