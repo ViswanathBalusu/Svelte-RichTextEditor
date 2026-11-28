@@ -190,7 +190,8 @@ describe.skipIf(!ready)(
           suggestions: 'accept',
           layout: 'line',
         } as never,
-        { minPasses: 2 },
+        // The whole document, with its CJK text, needs more than the default memory (EXP-114).
+        { minPasses: 2, limits: { memoryMiB: 4096 } },
       );
       if (!c.compile.ok || !c.compile.pdf)
         throw new Error(
