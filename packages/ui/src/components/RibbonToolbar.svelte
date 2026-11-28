@@ -9,19 +9,17 @@
   wraps to another row. The look and the grouping are this product's own and provisional (13 §3, §13).
 
   The ribbon, its icons and its strings load on demand, so the first interactive editor does not carry
-  them (13 §9). Its rules are in shell.css, scoped to .de-ribbon.
+  them (13 §9). Its rules are at the end of shell.css, scoped to .de-ribbon.
 -->
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { tick } from 'svelte';
   import type { CommandView } from '../commands/types.ts';
   import { useShell } from '../context.ts';
   import '../i18n/late/ribbonToolbar.ts';
   import type { StringKey } from '../i18n/en-GB.ts';
   import { RIBBON_ICONS, ribbonIconName } from '../icons/ribbon-icons.ts';
   import { live } from '../live.ts';
-  import { adoptRibbonStyles } from '../shell/ribbon-styles.ts';
-  import ribbonCss from '../styles/ribbon.css?inline';
-  import { ribbonCommands, ribbonSmall, ribbonTabs } from '../shell/ribbon-groups.ts';
+    import { ribbonCommands, ribbonSmall, ribbonTabs } from '../shell/ribbon-groups.ts';
   import { nextIndex } from '../shell/toolbar-layout.ts';
   import PickerMenu from './PickerMenu.svelte';
   import Toolbar from './Toolbar.svelte';
@@ -81,12 +79,6 @@
   const active = $derived(tabs.find((t) => t.id === chosen) ?? tabs[0] ?? null);
 
   let tablist: HTMLElement | undefined = $state();
-
-  // The toolbar's rules come with the ribbon, before it is first painted (shell/ribbon-styles.ts).
-  onMount(() => {
-    const root = tablist?.getRootNode();
-    if (root instanceof ShadowRoot || root instanceof Document) adoptRibbonStyles(root, ribbonCss);
-  });
 
   /** The name of a registry group, as the full layout names it. */
   function groupName(name: string): string {

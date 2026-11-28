@@ -893,8 +893,7 @@
 /*
  * The ribbon layout (`toolbar="ribbon"`, ADR 0490): a title bar (the header), the page centred on a
  * grey canvas, and a quiet status bar; these are drawn from the first paint, so they are here. The
- * tabs, the groups and the commands of the toolbar are in `ribbon.css`, which the ribbon adopts when
- * it loads (`shell/ribbon-styles.ts`), so the first load does not carry them (FND-008). Every rule is
+ * tabs, the groups and the commands of the toolbar are at the end of this file. Every rule is
  * scoped to `.de-ribbon` or to `[data-toolbar='ribbon']`, so the compact and the full layouts keep
  * the look they had. The look is this product's own, not a copy of any vendor's.
  */
@@ -1913,5 +1912,159 @@
 @media (forced-colors: active) {
   .de-shell[data-toolbar='ribbon'] .de-action[data-command-id='document.share'] {
     border-color: ButtonText;
+  }
+}
+
+/*
+ * The toolbar of the ribbon layout (ADR 0490): tabs, groups of commands with a caption under each, and
+ * the commands with an icon over the label. Every rule is scoped to `.de-ribbon`. The tokens it reads
+ * (`--_de-chrome`, `--_de-accent`) are in each theme above. The rules are in this sheet, not in a sheet
+ * of the ribbon's own, because the component's CSS loads with the editor (02 section 2; FE-002).
+ */
+.de-ribbon {
+  background: var(--_de-chrome);
+}
+
+.de-ribbon .de-tabs {
+  gap: 0;
+  padding-block: 0;
+  padding-inline: var(--_de-space-3);
+}
+
+.de-ribbon .de-tab {
+  min-block-size: 2.5em;
+  padding-inline: 1em;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.de-ribbon .de-tab:hover {
+  background: var(--_de-control-hover);
+}
+
+/* The selected tab joins the panel below it: the panel's surface, a bar under the name, bold. */
+.de-ribbon .de-tab[aria-selected='true'] {
+  background: var(--_de-surface);
+  font-weight: 600;
+  box-shadow: inset 0 -3px 0 var(--_de-accent);
+}
+
+/* A contextual tab: italic, in the suggester colour, with a bar over its name. */
+.de-ribbon .de-tab[data-contextual] {
+  color: var(--_de-role-suggester);
+  font-style: italic;
+  font-weight: 600;
+  border-block-start: 3px solid var(--_de-role-suggester);
+}
+
+.de-ribbon .de-tabpanel {
+  background: var(--_de-surface);
+  border-block-start: 1px solid var(--_de-border);
+}
+
+.de-ribbon .de-toolbar-panel {
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--_de-space-2) 0;
+  padding-block: var(--_de-space-2);
+  padding-inline: var(--_de-space-3);
+  background: transparent;
+  border: 0;
+}
+
+.de-ribbon-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--_de-space-1);
+  padding-inline: var(--_de-space-2);
+}
+
+.de-ribbon-group + .de-ribbon-group {
+  border-inline-start: 1px solid var(--_de-border);
+}
+
+.de-ribbon-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  max-inline-size: 30em;
+}
+
+.de-ribbon-caption {
+  color: var(--_de-text-muted);
+  font-size: 0.75em;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* A command: its icon over its label. Without an icon the label stands alone. */
+.de-ribbon .de-tool {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2em;
+  min-inline-size: 3.6em;
+  max-inline-size: 7.5em;
+  min-block-size: 3.4em;
+  padding-inline: 0.4em;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.85em;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: center;
+}
+
+.de-ribbon .de-tool[hidden] {
+  display: none;
+}
+
+.de-ribbon .de-tool:hover {
+  background: var(--_de-control-hover);
+}
+
+.de-ribbon .de-tool[aria-pressed='true'] {
+  background: var(--_de-control-active);
+  border-color: var(--_de-control-active-border);
+}
+
+.de-ribbon .de-tool[aria-disabled='true'] {
+  border-color: var(--_de-border);
+}
+
+.de-ribbon .de-tool .de-icon {
+  inline-size: 1.7em;
+  block-size: 1.7em;
+  margin: 0;
+}
+
+/* The Home tab's toggles and alignment, list and indent buttons, and its lists: small, in a row. */
+.de-ribbon .de-tool.de-tool-small {
+  min-inline-size: var(--_de-control-size);
+  min-block-size: var(--_de-control-size);
+  padding-inline: 0.3em;
+}
+
+.de-ribbon .de-tool-small .de-icon {
+  inline-size: 1.3em;
+  block-size: 1.3em;
+}
+
+/* Forced colours: the selected tab, the groups and the pressed commands keep a shape in system colours. */
+@media (forced-colors: active) {
+  .de-ribbon .de-tab[aria-selected='true'] {
+    border-block-end: 3px solid Highlight;
+  }
+
+  .de-ribbon-group + .de-ribbon-group {
+    border-inline-start-color: CanvasText;
+  }
+
+  .de-ribbon .de-tool[aria-pressed='true'] {
+    border-color: Highlight;
   }
 }

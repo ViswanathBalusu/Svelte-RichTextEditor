@@ -2,8 +2,8 @@
  * FND-008: the groups of the source string table that only code loaded on demand shows
  * (`src/i18n/late/*.ts`) are not in the first load. A group is correct when: its keys are in no other
  * part of the table; every file that names one of its keys imports it (so the strings are there
- * before the file draws them); and no key that a file builds at run time from a prefix is in a
- * group (a file cannot name the group it needs for a key it has not spelt out).
+ * before the file draws them); and a key that a file builds at run time from a prefix is in a group
+ * only when that file imports the group (it cannot spell out the key, so the import is the proof).
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -98,20 +98,30 @@ describe('the groups of the source table that load on demand (FND-008)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('hold no key that a file builds at run time from a prefix', async () => {
+  it('hold a key that a file builds at run time from a prefix only if that file imports the group', async () => {
     const dynamic = /[`'"]([a-zA-Z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*\.)(?:\$\{|['"]\s*\+)/g;
-    const prefixes = new Map<string, string>();
+    // A file that builds a key cannot spell it out, so the import of the group is the proof that the
+    // key is there before the file draws it. Every file that builds from the prefix is checked.
+    const builders = new Map<string, Array<{ path: string; text: string }>>();
     for (const file of [...walk(SRC), ...walk(ELEMENT_SRC)]) {
       const path = posix(relative(join(here, '..', '..'), file));
-      for (const m of readFileSync(file, 'utf8').matchAll(dynamic))
-        if (!prefixes.has(m[1]!)) prefixes.set(m[1]!, path);
+      const text = readFileSync(file, 'utf8');
+      for (const m of text.matchAll(dynamic)) {
+        const list = builders.get(m[1]!) ?? [];
+        if (!list.some((b) => b.path === path)) list.push({ path, text });
+        builders.set(m[1]!, list);
+      }
     }
     const inGroups: string[] = [];
     for (const [group, keys] of await groups())
       for (const key of keys)
-        for (const [prefix, file] of prefixes)
+        for (const [prefix, list] of builders)
           if (key.startsWith(prefix))
-            inGroups.push(`${key} (${group}) is built from "${prefix}" in ${file}`);
+            for (const { path, text } of list)
+              if (!new RegExp(`i18n/late/${group}\\.ts'`).test(text))
+                inGroups.push(
+                  `${key} (${group}) is built from "${prefix}" in ${path}, which does not import the group`,
+                );
     expect(inGroups).toEqual([]);
   });
 });
