@@ -12,16 +12,18 @@
   them (13 §9). Its rules are in shell.css, scoped to .de-ribbon.
 -->
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { CommandView } from '../commands/types.ts';
   import { useShell } from '../context.ts';
   import '../i18n/late/ribbonToolbar.ts';
   import type { StringKey } from '../i18n/en-GB.ts';
   import { RIBBON_ICONS, ribbonIconName } from '../icons/ribbon-icons.ts';
   import { live } from '../live.ts';
-  import { ribbonTabs } from '../shell/ribbon-groups.ts';
-  import { toolbarCommands } from '../shell/toolbar-groups.ts';
+  import { adoptRibbonStyles } from '../shell/ribbon-styles.ts';
+  import ribbonCss from '../styles/ribbon.css?inline';
+  import { ribbonCommands, ribbonSmall, ribbonTabs } from '../shell/ribbon-groups.ts';
   import { nextIndex } from '../shell/toolbar-layout.ts';
+  import PickerMenu from './PickerMenu.svelte';
   import Toolbar from './Toolbar.svelte';
 
   interface Props {
@@ -47,6 +49,7 @@
 
   const GROUP_KEYS: Readonly<Record<string, StringKey>> = {
     edit: 'ribbon.group.edit',
+    styles: 'ribbon.group.styles',
     font: 'ribbon.group.font',
     paragraph: 'ribbon.group.paragraph',
     copyFormat: 'ribbon.group.copyFormat',
@@ -70,7 +73,7 @@
   };
 
   const tabs = $derived(
-    ribbonTabs(toolbarCommands(snapshot.current.commands, selection.current.contexts)),
+    ribbonTabs(ribbonCommands(snapshot.current.commands, selection.current.contexts)),
   );
 
   let chosen = $state<string | null>(null);
@@ -78,6 +81,12 @@
   const active = $derived(tabs.find((t) => t.id === chosen) ?? tabs[0] ?? null);
 
   let tablist: HTMLElement | undefined = $state();
+
+  // The toolbar's rules come with the ribbon, before it is first painted (shell/ribbon-styles.ts).
+  onMount(() => {
+    const root = tablist?.getRootNode();
+    if (root instanceof ShadowRoot || root instanceof Document) adoptRibbonStyles(root, ribbonCss);
+  });
 
   /** The name of a registry group, as the full layout names it. */
   function groupName(name: string): string {
@@ -109,6 +118,8 @@
     groups: panelGroups,
     icon: ribbonIconName,
     drawings: RIBBON_ICONS,
+    small: ribbonSmall,
+    picker: PickerMenu,
   });
 
   function tabId(name: string): string {

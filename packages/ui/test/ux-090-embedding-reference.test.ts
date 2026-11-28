@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { builtinCommands } from '../src/commands/builtin.ts';
+import { homeCommands } from '../src/commands/home.ts';
 import {
   REFERENCE_JSON,
   REFERENCE_MARKDOWN,
@@ -24,7 +25,7 @@ const input: ReferenceInput = {
   versionSource: element('version.ts'),
   registerSource: element('register.ts'),
   configSchema: JSON.parse(element('config.schema.json')),
-  commands: builtinCommands().map((c) => ({
+  commands: [...builtinCommands(), ...homeCommands()].map((c) => ({
     id: c.id,
     group: c.group,
     capability: c.capability,
@@ -92,9 +93,7 @@ describe('the embedding reference', () => {
 
   it('lists every command identifier of the registry and every configuration key', () => {
     expect(result.reference.commands.map((c) => c.id).sort()).toEqual(
-      builtinCommands()
-        .map((c) => c.id)
-        .sort(),
+      [...builtinCommands(), ...homeCommands()].map((c) => c.id).sort(),
     );
     const keys = Object.keys(JSON.parse(element('config.schema.json')).properties);
     expect(result.reference.config.map((c) => c.name)).toEqual(keys);

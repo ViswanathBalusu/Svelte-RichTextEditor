@@ -1694,6 +1694,62 @@
     {
       "id": "view.layout.print",
       "capability": "views"
+    },
+    {
+      "id": "format.underline",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.strike",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.clear",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.fontSize",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.color",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.highlight",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.align.start",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.align.center",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.align.end",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.align.justify",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.bulletList",
+      "capability": "lists"
+    },
+    {
+      "id": "format.numberList",
+      "capability": "lists"
+    },
+    {
+      "id": "format.indentMore",
+      "capability": "lists"
+    },
+    {
+      "id": "format.indentLess",
+      "capability": "lists"
     }
   ],
   "gaps": [

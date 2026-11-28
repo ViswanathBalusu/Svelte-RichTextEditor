@@ -173,6 +173,20 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `view.layout.web` | views |
 | `view.layout.read` | views |
 | `view.layout.print` | views |
+| `format.underline` | character-and-paragraph-formatting |
+| `format.strike` | character-and-paragraph-formatting |
+| `format.clear` | character-and-paragraph-formatting |
+| `format.fontSize` | character-and-paragraph-formatting |
+| `format.color` | character-and-paragraph-formatting |
+| `format.highlight` | character-and-paragraph-formatting |
+| `format.align.start` | character-and-paragraph-formatting |
+| `format.align.center` | character-and-paragraph-formatting |
+| `format.align.end` | character-and-paragraph-formatting |
+| `format.align.justify` | character-and-paragraph-formatting |
+| `format.bulletList` | lists |
+| `format.numberList` | lists |
+| `format.indentMore` | lists |
+| `format.indentLess` | lists |
 
 ## Gaps
 

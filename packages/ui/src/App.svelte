@@ -769,6 +769,20 @@
   const shellQueries = new ShellQueries(SHELL_QUERY_NAMES);
   const removeSource = registry.addSource(shellQueries);
 
+  // The Home commands (underline, strike-through, colours, alignment, lists, indents) load after the
+  // first paint, with the ribbon's strings; the first load carries neither (FND-008; ADR 0490).
+  onMount(() => {
+    let release: (() => void) | null = null;
+    let gone = false;
+    void import('./commands/home.ts').then(({ registerHomeCommands }) => {
+      if (!gone) release = registerHomeCommands(registry, core);
+    });
+    return () => {
+      gone = true;
+      release?.();
+    };
+  });
+
   $effect(() => {
     const open = pane?.id ?? null;
     shellQueries.set('shell.outlineOpen', open === 'outline');

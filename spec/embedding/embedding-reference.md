@@ -103,13 +103,27 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `edit.redo` | edit | editing | `Mod-y`, `Shift-Mod-z` | `redo` |
 | `edit.selectAll` | edit | editing | `Mod-a` | `selectAll` |
 | `edit.undo` | edit | editing | `Mod-z` | `undo` |
+| `format.align.center` | format | character-and-paragraph-formatting |  |  |
+| `format.align.end` | format | character-and-paragraph-formatting |  |  |
+| `format.align.justify` | format | character-and-paragraph-formatting |  |  |
+| `format.align.start` | format | character-and-paragraph-formatting |  |  |
 | `format.applyFormat` | format | format-painter |  |  |
 | `format.applyStyle` | format | styles |  |  |
 | `format.bold` | format | character-and-paragraph-formatting | `Mod-b` | `bold` |
+| `format.bulletList` | format | lists |  |  |
+| `format.clear` | format | character-and-paragraph-formatting |  |  |
+| `format.color` | format | character-and-paragraph-formatting |  |  |
+| `format.fontSize` | format | character-and-paragraph-formatting |  |  |
+| `format.highlight` | format | character-and-paragraph-formatting |  |  |
+| `format.indentLess` | format | lists |  |  |
+| `format.indentMore` | format | lists |  |  |
 | `format.italic` | format | character-and-paragraph-formatting | `Mod-i` | `italic` |
 | `format.language` | review | character-and-paragraph-formatting |  |  |
+| `format.numberList` | format | lists |  |  |
 | `format.painter` | format | format-painter | `Shift-Mod-c` |  |
 | `format.paragraph` | format | character-and-paragraph-formatting |  |  |
+| `format.strike` | format | character-and-paragraph-formatting |  |  |
+| `format.underline` | format | character-and-paragraph-formatting |  |  |
 | `history.nameVersion` | review | version-history |  |  |
 | `insert.caption` | insert | editing |  |  |
 | `insert.citation` | insert | citations |  |  |

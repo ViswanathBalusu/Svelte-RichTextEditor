@@ -18,6 +18,7 @@
   import type { IconDrawing } from '../icons/icons.ts';
   import { toolbarCommands } from '../shell/toolbar-groups.ts';
   import { fittingItems, nextIndex } from '../shell/toolbar-layout.ts';
+  import type PickerMenu from './PickerMenu.svelte';
 
   interface Props {
     /** Called on Escape: focus goes back to the editing surface. */
@@ -40,6 +41,10 @@
     groups: ReadonlyArray<{ key: string; label: string; commands: readonly CommandView[] }>;
     icon: (item: CommandView) => string | undefined;
     drawings: Readonly<Record<string, IconDrawing>>;
+    /** True for a command drawn small: its icon alone, the label kept as text for assistive technology. */
+    small: (item: CommandView) => boolean;
+    /** The menu button of a command that is chosen from a list; the ribbon loads it, the first load does not carry it. */
+    picker: typeof PickerMenu;
   }
 
   let { onEscape, items: given, label, standalone = true, ribbon }: Props = $props();
@@ -289,9 +294,20 @@
 </script>
 
 {#snippet tool(item: CommandView, i: number)}
+  {#if ribbon && item.entry.picker}
+    {@const Picker = ribbon.picker}
+    <Picker
+      {item}
+      icon={ribbon.icon(item)}
+      drawings={ribbon.drawings}
+      tabindex={i === current ? 0 : -1}
+      register={remember(item)}
+    />
+  {:else}
   <button
     type="button"
     class="de-tool"
+    class:de-tool-small={ribbon?.small(item)}
     class:de-group-start={!groups && i > 0 && items[i - 1]!.entry.group !== item.entry.group}
     data-command={aliasOf(item)}
     data-command-id={item.id}
@@ -302,13 +318,19 @@
     aria-disabled={item.enabled ? undefined : 'true'}
     aria-describedby={item.enabled ? undefined : reasonId(item)}
     aria-keyshortcuts={shortcuts(item)}
-    title={item.enabled || !item.reasonKey ? undefined : tr.text(item.reasonKey)}
+    title={item.enabled || !item.reasonKey
+      ? ribbon?.small(item)
+        ? tr.text(item.entry.label)
+        : undefined
+      : tr.text(item.reasonKey)}
     onclick={() => run(item)}
     {@attach remember(item)}
     >{#if ribbon}<Icon name={ribbon.icon(item)} extra={ribbon.drawings} /><span
-        class="de-tool-label">{tr.text(item.entry.label)}</span
+        class="de-tool-label"
+        class:de-visually-hidden={ribbon.small(item)}>{tr.text(item.entry.label)}</span
       >{:else}<Icon name={item.entry.icon} />{tr.text(item.entry.label)}{/if}</button
   >
+  {/if}
 {/snippet}
 
 <div

@@ -10,9 +10,13 @@
  * - A contextual group (`table`, `picture`, `story`, `field`) is a tab of its own, after the task
  *   tabs, and is shown only while the selection is in or on that object, as in the full layout.
  * - A group a host or an extension adds has a tab of its own too, labelled like the full layout's.
+ * - Home is laid out as an office word processor's is: edit, styles, font, paragraph, copy format.
+ *   Its commands beyond bold and italic, and those that are chosen from a list (`CommandEntry.picker`,
+ *   which the ribbon shows as a menu button), are on no other toolbar (`CommandEntry.ribbon`;
+ *   `ribbonCommands`).
  */
 import type { CommandView } from '../commands/types.ts';
-import { isContextual } from './toolbar-groups.ts';
+import { isContextual, toolbarCommands } from './toolbar-groups.ts';
 
 export const RIBBON_TABS = ['home', 'insert', 'layout', 'references', 'review', 'view'] as const;
 export type RibbonTabId = (typeof RIBBON_TABS)[number];
@@ -41,7 +45,11 @@ interface Place {
 const PLACES: ReadonlyArray<readonly [RegExp, Place]> = [
   [/^edit\./, { tab: 'home', group: 'edit' }],
   [/^format\.(painter|applyFormat)$/, { tab: 'home', group: 'copyFormat' }],
-  [/^format\.(paragraph|applyStyle)$/, { tab: 'home', group: 'paragraph' }],
+  [/^format\.applyStyle$/, { tab: 'home', group: 'styles' }],
+  [
+    /^format\.(paragraph|align\..+|bulletList|numberList|indent(Less|More))$/,
+    { tab: 'home', group: 'paragraph' },
+  ],
   [/^format\.language$/, { tab: 'review', group: 'proofing' }],
   [/^format\./, { tab: 'home', group: 'font' }],
   [/^table\./, { tab: 'insert', group: 'tables' }],
@@ -62,6 +70,59 @@ const PLACES: ReadonlyArray<readonly [RegExp, Place]> = [
   [/^view\.layout\./, { tab: 'view', group: 'views' }],
   [/^view\.zoom/, { tab: 'view', group: 'zoom' }],
 ];
+
+/** The order of the groups of a tab, where it is not the order the commands come in. */
+const GROUP_ORDER: Readonly<Partial<Record<RibbonTabId, readonly string[]>>> = {
+  home: ['edit', 'styles', 'font', 'paragraph', 'copyFormat'],
+};
+
+/** The order of commands within a group, where it is not the order they are registered in. */
+const COMMAND_ORDER: readonly string[] = [
+  'format.fontSize',
+  'format.bold',
+  'format.italic',
+  'format.underline',
+  'format.strike',
+  'format.color',
+  'format.highlight',
+  'format.clear',
+  'format.align.start',
+  'format.align.center',
+  'format.align.end',
+  'format.align.justify',
+  'format.bulletList',
+  'format.numberList',
+  'format.indentLess',
+  'format.indentMore',
+  'format.paragraph',
+];
+
+const SMALL =
+  /^format\.(bold|italic|underline|strike|clear|align\..+|bulletList|numberList|indent(Less|More))$/;
+
+/**
+ * The commands drawn small: the icon alone, with the label as text for assistive technology and the
+ * tooltip. They are the toggles and the alignment, list and indent buttons of the Home tab.
+ */
+export function ribbonSmall(command: CommandView): boolean {
+  return SMALL.test(command.id);
+}
+
+/** The commands the ribbon shows: the toolbar's, and those that name the ribbon alone (`CommandEntry.ribbon`). */
+export function ribbonCommands(
+  commands: readonly CommandView[],
+  contexts: Parameters<typeof toolbarCommands>[1],
+): CommandView[] {
+  const shown = toolbarCommands(commands, contexts);
+  const have = new Set(shown.map((c) => c.id));
+  const own = commands.filter((c) => c.offered && c.entry.ribbon === true && !have.has(c.id));
+  return [...shown, ...own];
+}
+
+function rankIn(order: readonly string[], key: string): number {
+  const at = order.indexOf(key);
+  return at < 0 ? order.length : at;
+}
 
 /** The place of a command in a task group's tab when no id rule names it. */
 const BY_GROUP: Readonly<Record<string, Place>> = {
@@ -107,7 +168,21 @@ export function ribbonTabs(commands: readonly CommandView[]): RibbonTab[] {
       id,
       ownGroup: false,
       contextual: false,
-      groups: [...groups].map(([key, list]) => ({ key, commands: list })),
+      groups: [...groups]
+        .map(([key, list]) => ({
+          key,
+          commands: list
+            .map((command, at) => ({ command, at }))
+            .sort(
+              (a, b) =>
+                rankIn(COMMAND_ORDER, a.command.id) - rankIn(COMMAND_ORDER, b.command.id) ||
+                a.at - b.at,
+            )
+            .map(({ command }) => command),
+        }))
+        .sort(
+          (a, b) => rankIn(GROUP_ORDER[id] ?? [], a.key) - rankIn(GROUP_ORDER[id] ?? [], b.key),
+        ),
     });
   }
   // Contextual groups after the task tabs, then any other group, each as its own tab.

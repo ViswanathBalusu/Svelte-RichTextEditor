@@ -10,6 +10,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { builtinCommands } from '../src/commands/builtin.ts';
+import { homeCommands } from '../src/commands/home.ts';
 import { buildProfile } from '../src/parity/build.ts';
 import { buildShortcutTable } from '../src/shortcuts/build.ts';
 import { readParityInput } from './parity-input.ts';
@@ -18,11 +19,13 @@ import { buildEmbeddingReference } from './embedding-reference.ts';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const elementFile = (name: string) =>
   readFileSync(resolve(root, 'packages/element/src', name), 'utf8');
+/** The built-in commands: those of the first load, and the Home tab's, which load after it (ADR 0490). */
+const commands = [...builtinCommands(), ...homeCommands()];
 const results = [
   { name: 'parity profile', result: buildProfile(readParityInput(root)) },
   {
     name: 'shortcut table',
-    result: buildShortcutTable(builtinCommands().map((c) => ({ id: c.id, keys: c.keys ?? [] }))),
+    result: buildShortcutTable(commands.map((c) => ({ id: c.id, keys: c.keys ?? [] }))),
   },
   {
     name: 'embedding reference',
@@ -32,7 +35,7 @@ const results = [
       versionSource: elementFile('version.ts'),
       registerSource: elementFile('register.ts'),
       configSchema: JSON.parse(elementFile('config.schema.json')),
-      commands: builtinCommands().map((c) => ({
+      commands: commands.map((c) => ({
         id: c.id,
         group: c.group,
         capability: c.capability,

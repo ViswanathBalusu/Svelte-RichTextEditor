@@ -56,9 +56,23 @@ export interface CommandEntry {
    * bar, a pane, or only through `exec` and its keys). Default true.
    */
   readonly toolbar?: boolean;
+  /**
+   * True: the ribbon's toolbar shows the command although `toolbar` is false, so that the compact and
+   * the full toolbars, and their visual baselines, stay as they are (ADR 0490). Default false.
+   */
+  readonly ribbon?: boolean;
+  /**
+   * A command that is chosen from a list rather than pressed (ADR 0490): the ribbon draws a menu
+   * button for it, and `exec(id, args)` takes the choice. The compact and the full toolbars do not
+   * show it (it has `toolbar: false`); the command search and `exec` reach it with its arguments.
+   */
+  readonly picker?: PickerKind;
   /** Runs the command; false when it did not apply. */
   readonly run: (context: CommandContext) => boolean;
 }
+
+/** What a picker chooses: a paragraph style, a font size, a text colour or a highlight. */
+export type PickerKind = 'style' | 'fontSize' | 'colour' | 'highlight';
 
 /**
  * What the context menu opened on (UX-008): text, or one of the objects of 13 §3 the selection is
