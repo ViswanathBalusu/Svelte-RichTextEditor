@@ -328,6 +328,8 @@ export const WEBHOOK_PATH = '/webhooks/dep';
 export const WEBHOOK_EVENTS: readonly string[] = [
   'dep.workflow.participant_activated.v1',
   'dep.workflow.reminder_due.v1',
+  'dep.workflow.participant_completed.v1',
+  'dep.workflow.participant_declined.v1',
   'dep.workflow.completed.v1',
   'dep.workflow.finalised.v1',
   'dep.comment.mentioned.v1',
