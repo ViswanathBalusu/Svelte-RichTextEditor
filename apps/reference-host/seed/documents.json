@@ -10,6 +10,13 @@
         { "region": "rAdaSection00001", "principal": "user:u-ada", "role": "editor" },
         { "region": "rBobSection00001", "principal": "user:u-bob", "role": "editor" }
       ]
+    },
+    {
+      "key": "lease-form",
+      "title": "Lease agreement (form)",
+      "content": "lease-template.cdm.json",
+      "roles": {},
+      "grants": []
     }
   ],
   "serviceTemplates": [
@@ -26,6 +33,12 @@
       "externalId": "demo-supply-agreement",
       "template": "two-regions",
       "title": "Supply agreement (demo)",
+      "creator": "u-olivia"
+    },
+    {
+      "externalId": "demo-lease-form",
+      "template": "lease-form",
+      "title": "Lease agreement (demo form)",
       "creator": "u-olivia"
     }
   ]

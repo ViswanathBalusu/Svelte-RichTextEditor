@@ -31,11 +31,20 @@ const depBackend: EndpointBackendFactory = async (options) => {
     endpoint: options.endpoint,
     getToken: options.getToken,
     docId: options.docId,
-    // `exports`, `assets` and `leases` are asked for because the element uses the ports (`requestExport`,
-    // pasted pictures, the check-out control of the permissions pane); they are negotiated only
-    // where the server announces them (SEC-007; PRM-043).
+    // `exports`, `assets`, `leases`, `history` and `workflow` are asked for because the element uses
+    // the ports (`requestExport`, pasted pictures, the check-out control of the permissions pane, the
+    // history pane, the participant's fill mode); they are negotiated only where the server announces
+    // them (SEC-007; PRM-043; UX-097; UX-106).
     features: [
-      ...new Set([...DEFAULT_FEATURES, 'exports', 'assets', 'leases', ...capabilities().features]),
+      ...new Set([
+        ...DEFAULT_FEATURES,
+        'exports',
+        'assets',
+        'leases',
+        'history',
+        'workflow',
+        ...capabilities().features,
+      ]),
     ],
   });
 };

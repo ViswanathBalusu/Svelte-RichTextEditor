@@ -162,7 +162,7 @@ export const LIBRARY_MINIFY = {
  * `*-read` modules), which would each be a chunk of a few hundred bytes.
  */
 export const SHARED_MODULES =
-  /\/packages\/(?:ui\/src\/(?:context|shell\/(?:comment-rules|fields|fill)|icons\/icons)|engine\/src\/(?:field-lookup|field-read|proofing|regions|role-read|rule-read|read-value|meta|parts|source-read|sync\/restore)|model\/src\/(?:definition\/index|canonical\/(?:jcs|hash)|cascade\/(?:table-format|styles|resolve)|numbering\/(?:dates|format|labels)|conventions\/(?:platform|time))|protocol\/src\/ports\/(?:errors|features)|element\/src\/(?:export|errors|font-manifest|font-registration|font-family-lookup|font-loader|shortcuts|strings))\.ts$/;
+  /\/packages\/(?:ui\/src\/(?:context|live|shell\/(?:comment-rules|fields|fill)|icons\/icons)|engine\/src\/(?:field-lookup|field-read|proofing|regions|role-read|rule-read|read-value|meta|parts|source-read|sync\/restore)|model\/src\/(?:definition\/index|canonical\/(?:jcs|hash)|cascade\/(?:table-format|styles|resolve)|numbering\/(?:dates|format|labels)|conventions\/(?:platform|time))|protocol\/src\/ports\/(?:errors|features)|element\/src\/(?:export|errors|kernel-fallback|font-manifest|font-registration|font-family-lookup|font-loader|shortcuts|strings))\.ts$/;
 
 export function libraryConfig(): InlineConfig {
   const config = base(libDir);

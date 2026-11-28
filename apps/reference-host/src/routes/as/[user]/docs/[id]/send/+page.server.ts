@@ -42,6 +42,7 @@ export const load: PageServerLoad = async ({ params, parent }) => {
             roles: p.roles,
             kind: p.kind,
             order: p.order,
+            finished: p.finished ?? null,
           })),
           results: record.results !== undefined,
         }

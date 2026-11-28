@@ -30,11 +30,11 @@
   <p>State: <strong>{data.sent.state}</strong>. Sent at {data.sent.sentAt}.</p>
   <table aria-labelledby="sent-heading">
     <thead>
-      <tr><th scope="col">Person</th><th scope="col">Role</th><th scope="col">Kind</th><th scope="col">Order</th></tr>
+      <tr><th scope="col">Person</th><th scope="col">Role</th><th scope="col">Kind</th><th scope="col">Order</th><th scope="col">Part</th></tr>
     </thead>
     <tbody>
       {#each data.sent.participants as p (p.id)}
-        <tr><th scope="row">{p.name}</th><td>{p.roles.join(', ')}</td><td>{p.kind}</td><td>{p.order}</td></tr>
+        <tr data-participant={p.id}><th scope="row">{p.name}</th><td>{p.roles.join(', ')}</td><td>{p.kind}</td><td>{p.order}</td><td data-testid="part-{p.id}">{p.finished ?? 'open'}</td></tr>
       {/each}
     </tbody>
   </table>

@@ -38,3 +38,5 @@ Batch 6 added 14.8 kB to the host-backend configuration (8.6 kB below the budget
 None. The gate stays at 300,000 bytes and the build fails until the owner chooses.
 
 Update (2026-11-18, lane w2): the owner chose option 1 in decision 32 (320 kB), and the gate is 320,000 bytes. The size work that followed is in FND-008 Notes.
+
+Update of 2026-11-27 (batch 9 integration, `pnpm --filter @docedit/element build`, same machine): after lane w3 the DEP configuration measured 320,090 bytes of gzip, 90 bytes over the gate. Two small shared modules were moved into the shared chunk (`packages/element/scripts/vite-configs.ts`) and it measures 319,491 bytes. The margin is 509 bytes. The gate is not moved.

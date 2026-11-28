@@ -1,28 +1,45 @@
 /**
- * The page behind the link in an invitation (UX-099). The link names an invitation and carries no
- * token. The person asks for a one-time passcode, which the host mails to the address it holds,
- * and enters it; the host then mints the participant's token (send-for-completion.ts). The token
- * is not put on this page: the participant's editing view is not built yet (UX-099 Notes).
+ * The page behind the link in an invitation (UX-099, UX-106). The link names an invitation and
+ * carries no token. The person asks for a one-time passcode, which the host mails to the address it
+ * holds, and enters it. A right one starts the participant's session: a cookie that the page's
+ * scripts cannot read (participant-session.ts). The page then mounts the editor in fill mode. The
+ * token is never put on the page: the editor asks the host's token endpoint for it (api/token),
+ * which checks the session.
  */
 import { fail } from '@sveltejs/kit';
+import { host } from '../../../lib/server/host.ts';
+import { PARTICIPANT_COOKIE } from '../../../lib/server/participant-session.ts';
 import {
   SIGNATURE_STATEMENT,
   startPasscode,
   verifyPasscode,
 } from '../../../lib/server/send-for-completion.ts';
-import { workflowDeps } from '../../../lib/server/workflow-runtime.ts';
+import { participantSessions, workflowDeps } from '../../../lib/server/workflow-runtime.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, setHeaders }) => {
-  // The reference is a bearer reference to an invitation: keep it out of caches and referrers.
-  setHeaders({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+export const load: PageServerLoad = async ({ params, setHeaders, cookies }) => {
+  // The reference is a bearer reference to an invitation: keep it out of caches and, with
+  // `same-origin`, out of the referrer of other sites. Not `no-referrer`: a browser then sends
+  // `Origin: null` with the page's own forms and SvelteKit refuses them (hooks.server.ts).
+  setHeaders({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'same-origin' });
   const d = await workflowDeps();
+  const h = await host();
   const found = d.store.byInvitation(params.invitation);
+  const session = participantSessions.check(cookies.get(PARTICIPANT_COOKIE), params.invitation);
+  const mine = found !== null && session !== null && session.participant === found.participant.id;
+  const finished = found?.participant.finished ?? null;
   return {
     known: found !== null,
     name: found?.participant.name ?? null,
     title: found ? (d.host.catalogue.get(found.record.doc)?.title ?? 'a document') : null,
     statement: SIGNATURE_STATEMENT,
+    // The editor is mounted for a participant who passed the passcode and whose part is not over.
+    // The document's identifier is not a secret: the participant's token names it too.
+    doc: mine && finished === null ? found.record.doc : null,
+    finished,
+    endpoint: h.config.endpoint,
+    viewerUrl: h.config.viewerUrl ?? null,
+    api: `/fill/${encodeURIComponent(params.invitation)}/api`,
   };
 };
 
@@ -34,11 +51,25 @@ export const actions: Actions = {
     return { asked: true };
   },
 
-  verify: async ({ params, request }) => {
+  verify: async ({ params, request, cookies, url }) => {
     const d = await workflowDeps();
     const code = String((await request.formData()).get('passcode') ?? '');
     const result = await verifyPasscode(d, params.invitation, code);
-    if (result.ok) return { verified: true };
+    if (result.ok) {
+      // The token that was minted for the passcode is not kept: the editor asks for its own through
+      // the session, again when it runs out.
+      cookies.set(
+        PARTICIPANT_COOKIE,
+        participantSessions.start(params.invitation, result.participant),
+        {
+          path: `/fill/${encodeURIComponent(params.invitation)}`,
+          httpOnly: true,
+          sameSite: 'strict',
+          secure: url.protocol === 'https:',
+        },
+      );
+      return { verified: true };
+    }
     const messages: Record<string, string> = {
       unknown: 'This link is no longer valid.',
       none: 'Ask for a passcode first.',

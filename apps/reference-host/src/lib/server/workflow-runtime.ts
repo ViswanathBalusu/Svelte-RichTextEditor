@@ -7,6 +7,7 @@
  * Without it nothing is mailed and a line says so.
  */
 import { host } from './host.ts';
+import { ParticipantSessions } from './participant-session.ts';
 import { sendMail } from './smtp.ts';
 import { WorkflowStore, type EventDeps, type Mailer } from './send-for-completion.ts';
 
@@ -48,3 +49,6 @@ export function workflowDeps(): Promise<EventDeps> {
   })();
   return composed;
 }
+
+/** The sessions of participants who passed the passcode (UX-106); one for the process. */
+export const participantSessions = new ParticipantSessions();
