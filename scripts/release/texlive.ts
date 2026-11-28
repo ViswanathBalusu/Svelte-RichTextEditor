@@ -164,6 +164,8 @@ export interface FontManifest {
     boldItalic: FontFace;
   }>;
   math?: { name: string; file: string; sha256: string; licence: string };
+  /** The Noto faces of the fallback chain (owner decisions 228 and 241), when the image has them. */
+  fallback?: Array<{ name: string; licence: string }>;
 }
 
 /** Every distinct font file of the manifest, with the faces it serves. */

@@ -26,6 +26,11 @@ describe('release images', () => {
     expect(() => buildArgs('C', '.', 't', Number.NaN, false)).toThrow(/SOURCE_DATE_EPOCH/);
   });
 
+  it('squashes the layers of an image that is curated after the base is built (SEC-053)', () => {
+    expect(buildArgs('C', '.', 't', 0, false)).not.toContain('--squash-all');
+    expect(buildArgs('C', '.', 't', 0, false, true)).toContain('--squash-all');
+  });
+
   it('push by digest and read the digest back', () => {
     expect(pushArgs('localhost/x:1.0.0', 'ghcr.io/o/x:1.0.0', 'out/x.digest')).toEqual([
       'push',

@@ -9,7 +9,7 @@
 #   index    sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
 #   amd64    sha256:97bde4bd80e73a697bcccdd626966a484f528e3f60c773b5c74cd7b8104c42fe
 #   created  2026-11-01; LuaHBTeX 1.24.0; LaTeX 2026-11-01; tagpdf 1.0i; luaotfload 3.29
-# This is the full scheme (about 6 GB). A curated image with only the class's packages is EXP-073.
+# The base is the full scheme (about 6 GB); the image built from it is curated (see the curation step).
 FROM docker.io/texlive/texlive:latest@sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
 
 # Engine hardening (09 §9.3 item 2). LuaTeX 1.24 is past the fixes for CVE-2023-32700 and
@@ -49,6 +49,27 @@ RUN set -eu; \
     cp /opt/docedit/build/noto-fonts.tsv /opt/docedit/licences/noto-fonts.tsv; \
     rm -rf /opt/docedit/noto-src /opt/docedit/build; \
     chmod -R a+rX,go-w /opt/docedit
+# Curated TeX Live (09 section 9.3 item 5; EXP-073, SEC-053): the base is the full scheme; the image
+# keeps only the packages of curated-roots.txt and what they depend on, and deletes every other file
+# the package database lists. The fonts of the TeX tree were copied out above, so they are no
+# longer read from it. The formats of the engines the worker does not run are removed; lualatex.fmt
+# and luahbtex.fmt stay. The database is rewritten to list what is left, and the lists of kept and
+# removed packages stay in the image for the licence manifest. The file lists (ls-R) are rebuilt.
+# The image must be built with `--squash-all` (scripts/build-image.ts does), or the deleted files
+# stay in the layers below this one.
+COPY curate.lua curated-roots.txt /opt/docedit/curate/
+RUN set -eu; \
+    TL=/usr/local/texlive/2026; \
+    mkdir -p /opt/docedit/licences/tex; \
+    texlua /opt/docedit/curate/curate.lua "$TL" /opt/docedit/curate/curated-roots.txt /opt/docedit/licences/tex; \
+    cp /opt/docedit/curate/curated-roots.txt /opt/docedit/licences/tex/curated-roots.txt; \
+    find "$TL/texmf-var/web2c" -mindepth 1 -maxdepth 1 ! -name luahbtex -exec rm -rf {} +; \
+    find "$TL/texmf-var/web2c/luahbtex" -type f ! -name lualatex.fmt ! -name luahbtex.fmt -delete; \
+    rm -rf "$TL/texmf-var/luatex-cache" "$TL/texmf-var/luametatex-cache" "$TL/install-tl" "$TL/install-tl.log"; \
+    TEXMFVAR="$TL/texmf-var" mktexlsr > /dev/null 2>&1; \
+    rm -rf /opt/docedit/curate; \
+    chmod -R a+rX /opt/docedit/licences
+
 # Pre-built font caches (09 §8): luaotfload writes them to TEXMFSYSVAR while building as root,
 # and jobs read them from the read-only image.
 COPY warmup.tex warmup.lua /opt/docedit/warmup/

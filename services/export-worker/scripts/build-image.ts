@@ -17,7 +17,7 @@ const root = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const cli = containerCli();
 const build = spawnSync(
   cli,
-  ['build', '-f', join(root, 'Containerfile'), '-t', IMAGE, join(root, 'image')],
+  ['build', '--squash-all', '-f', join(root, 'Containerfile'), '-t', IMAGE, join(root, 'image')],
   {
     stdio: 'inherit',
   },
