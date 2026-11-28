@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-27 v0.2.22 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-27 v0.2.23 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -601,11 +601,21 @@
 \newcommand*\DEcline[3]{\noalign{\global\arrayrulewidth=#2\relax\gdef\CT@arc@{\color[HTML]{#3}}}\cline{#1}}
 \newcommand*\DEclinegap[1]{\noalign{\vskip\dimexpr\doublerulesep+#1\relax}}
 \newcommand*\DEclineend{\noalign{\global\arrayrulewidth=\DE@tblrule\relax\global\let\CT@arc@\DE@tblarc}}
-\newcommand*\DEtbl[6]{\par\DE@tblsetup{#1}{#2}{#3}{#4}{#5}{#6}%
+% latex-lab's table code keeps the cells that a row span covers (and so does not tag) in a global list,
+% keyed by row and column. It clears the list where a table starts in tabular and array, not in
+% longtable (checked in the 2026 release). A row span in one longtable then left those cells untagged
+% in every later longtable, which gave rows of different widths in the structure tree (EXP-111
+% criterion 2). The class clears the list where a longtable starts and where it ends.
+\ExplSyntaxOn
+\cs_new_protected:Npn \DE@clear@untagged {
+  \cs_if_exist:NT \g__tbl_untagged_cells_prop { \prop_gclear:N \g__tbl_untagged_cells_prop }
+}
+\ExplSyntaxOff
+\newcommand*\DEtbl[6]{\par\DE@clear@untagged\DE@tblsetup{#1}{#2}{#3}{#4}{#5}{#6}%
   \ifcase#3 \LTleft=0pt \LTright=\fill \or \LTleft=\fill \LTright=\fill
   \else \LTleft=\fill \LTright=0pt \fi}
 \def\DE@rows#1{1\ifnum#1>1 ,2\fi\ifnum#1>2 ,3\fi\ifnum#1>3 ,4\fi\ifnum#1>4 ,5\fi}
-\newcommand*\DEtblend{\par\DE@noattrs\global\DE@cellarea=1 }
+\newcommand*\DEtblend{\par\DE@noattrs\global\DE@cellarea=1 \DE@clear@untagged}
 % Rows of the head that longtable repeats on later pages are area 3 (tableHead in layout.json).
 \newcommand*\DErephead{\noalign{\global\DE@cellarea=3\relax}}
 \newcommand*\DEbodyrows{\noalign{\global\DE@cellarea=1\relax}}

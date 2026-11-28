@@ -26,12 +26,14 @@ const absent = !sandbox.ok
     ? `${poppler} is not installed`
     : null;
 
-// The references that compile in a few minutes. `exp-114-corpus-pages-20-*` has 22 pages and is
-// left to the manual run of `scripts/exp-114-make-references.ts`.
+// The references that are compared here: the sample, the two with options of their own, and two
+// corpus documents. `pages-20` has 22 pages and needs 2048 MiB (references.ts); it takes about a minute.
 const QUICK = [
   'exp-114-sample-ua2-a4f.pdf',
   'exp-114-suggestions-markup.pdf',
+  'exp-114-comments-margin.pdf',
   'exp-114-corpus-pages-1-ua2-a4f.pdf',
+  'exp-114-corpus-pages-20-ua2-a4f.pdf',
 ];
 
 describe.skipIf(absent !== null)(

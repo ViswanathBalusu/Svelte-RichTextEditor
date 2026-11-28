@@ -35,9 +35,12 @@ const REGISTRY: Readonly<Record<string, Runner>> = {
   },
   'date-fields': { files: ['exp-115-date-fields.compile.test.ts'], naming: 'x LaTeX]' },
   'header-growth': {
-    files: ['cdm-045-header-growth.test.ts'],
+    files: [
+      'cdm-045-header-growth.test.ts',
+      'exp-115-body-end.compile.test.ts',
+      'exp-115-header-slots.compile.test.ts',
+    ],
     naming: 'json',
-    note: 'Body start of the frames with room; not the body end, the slots, or the frame with no room (CDM-045 Notes).',
   },
   'line-spacing': { files: ['exp-115-line-spacing.compile.test.ts'], naming: 'x LaTeX]' },
   'numbering-footnotes': { files: ['exp-115-numbering.compile.test.ts'], naming: 'x LaTeX]' },

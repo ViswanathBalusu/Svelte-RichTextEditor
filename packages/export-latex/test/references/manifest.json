@@ -2,6 +2,38 @@
   "instant": "2026-11-06T10:00:00.000Z",
   "references": [
     {
+      "file": "exp-114-comments-margin.pdf",
+      "source": "inline comments sample (comments option margin, EXP-084)",
+      "title": "exp-114-comments",
+      "options": {
+        "tagging": "on",
+        "pdfStandard": "ua-2+a-4f",
+        "comments": "margin",
+        "commentThreads": [
+          {
+            "id": "tAAAAAAAAAAAAAAA",
+            "block": "pBBBBBBBBBBBBBBB",
+            "quote": "Bravo",
+            "messages": [
+              {
+                "author": "Ada Lovelace",
+                "text": "Marginnote checks this claim."
+              },
+              {
+                "author": "Grace Hopper",
+                "text": "Replynote agrees."
+              }
+            ]
+          }
+        ]
+      },
+      "flavours": [
+        "ua2",
+        "4f"
+      ],
+      "sha256": "adff9d0600b0f7e6879a3646f18b1845f5cc205de725b2db3ec3cdbe68b92219"
+    },
+    {
       "file": "exp-114-corpus-form-fields-ua2-a4f.pdf",
       "source": "shared corpus document form-fields (FND-006)",
       "title": "exp-114-form-fields",
@@ -40,14 +72,11 @@
         "pdfStandard": "ua-2+a-4f"
       },
       "flavours": [
+        "ua2",
         "4f"
       ],
       "corpus": "pages-20",
-      "without": [
-        "cjk.*"
-      ],
-      "note": "fails PDF/UA-2 (veraPDF 8.2.5.26, tables shall be regular, 4 checks) on the tables with row and column spans; only PDF/A-4f is checked",
-      "sha256": "89373350b6cfcd3135117f3074088ebc1c8b1cbd8694fb5025eea5e911ac79e5"
+      "sha256": "399a2747a62c329627a7cc409ee494c32847ef8e3202ba10d5ea90fd4fe469d0"
     },
     {
       "file": "exp-114-s4-01p-ua2-a4f.pdf",

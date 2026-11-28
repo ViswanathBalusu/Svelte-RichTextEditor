@@ -58,7 +58,7 @@ import { serverFonts } from './server-fonts.ts';
 import { styleMacro, substituteKey } from './props.ts';
 
 /** The house class version (EXP-015): raised with every change to docedit.cls or docedit.lua. */
-export const CLASS_VERSION = '0.2.22';
+export const CLASS_VERSION = '0.2.23';
 
 /** A TeX Live image digest (EXP-073): `sha256:` and 64 lowercase hex digits. */
 export const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;

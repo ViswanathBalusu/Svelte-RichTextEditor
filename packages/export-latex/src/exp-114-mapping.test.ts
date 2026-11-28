@@ -38,6 +38,7 @@ function covered(): Set<string> {
       for (const f of doc.features) if (!left(f, r.without ?? [])) out.add(f);
     }
     if (r.options['suggestions'] === 'markup') out.add('suggestions.markup');
+    if (r.options['comments'] === 'margin') out.add('comments.margin');
   }
   return out;
 }
@@ -98,22 +99,22 @@ const MAPPINGS: ReadonlyArray<{ mapping: string; features: readonly string[] }> 
   { mapping: 'comments in the margin (§10)', features: ['comments.margin'] },
 ];
 
-/** The mappings that have no reference yet, and why. */
-const GAPS: Readonly<Record<string, string>> = {
-  'fallback fonts (§3.2, missing glyphs)':
-    'the CJK fallback fonts are not in the worker image (ADR 0045, open question 7), so a final export of CJK text fails and no reference can be made',
-  'comments in the margin (§10)':
-    'the option `comments: margin` is not built (EXP-084); the criterion asks for it once phase 2 arrives',
-};
+/**
+ * The mappings that have no reference yet, and why. None now: the fallback fonts are covered by
+ * `pages-20` whole (the Noto CJK face is in the image, owner decision 228) and comments in the
+ * margin by their own reference (EXP-084 is built).
+ */
+const GAPS: Readonly<Record<string, string>> = {};
 
 describe('EXP-114 criterion 1: the stored references against the mappings of 09 §3', () => {
   const have = covered();
 
-  it('has a reference for the corpus documents and the suggestions sample', () => {
+  it('has a reference for the corpus documents, the suggestions sample and the comments sample', () => {
     const files = references.map((r) => r.file);
     for (const name of ['pages-1', 'form-fields', 'pages-20'])
       expect(files).toContain(`exp-114-corpus-${name}-ua2-a4f.pdf`);
     expect(files).toContain('exp-114-suggestions-markup.pdf');
+    expect(files).toContain('exp-114-comments-margin.pdf');
   });
 
   for (const { mapping, features } of MAPPINGS) {

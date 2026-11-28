@@ -4,7 +4,7 @@
  * (EXP-016). The structure tree is read with `test/pdf-structure.ts`.
  *
  * - Criterion 2: the corpus documents of FND-006 that are in git (`pages-1`, `form-fields`,
- *   `pages-20`) compile with tagging on and pass veraPDF as PDF/UA-2 and as PDF/A-4f.
+ *   `pages-20`, which holds Chinese, Japanese and Korean text set in the Noto CJK face of the image) compile with tagging on and pass veraPDF as PDF/UA-2 and as PDF/A-4f.
  * - Criterion 3: the catalogue's `/Lang` is the document language, and a run with a `lang` mark is
  *   a `Span` whose `/Lang` is the mark's value; no other element carries a language.
  * - Criterion 5: the header, the footer and its page number are marked `/Artifact` in the page
@@ -19,10 +19,17 @@ import { loadDocument } from '@docedit/corpus';
 import { describe, expect, it } from 'vitest';
 import { doc, nid, para, type J } from '../test/docs.ts';
 import { pdfText, sandboxReady, validatePdf } from '../test/harness.ts';
-import { contentStreams, elements, outline, structTree } from '../test/pdf-structure.ts';
-import { A4, field, story, taggedPdf } from '../test/tagged-docs.ts';
+import { byRole, contentStreams, elements, outline, structTree } from '../test/pdf-structure.ts';
+import { A4, cell, field, row, story, taggedPdf } from '../test/tagged-docs.ts';
 
 const ready = (await sandboxReady()).ok;
+
+/**
+ * The memory limit (MiB) of a document that needs more than the spec's 1.5 GiB (09 §9.3 item 4):
+ * `pages-20` with the Noto CJK face is killed at 1536 and compiles at 2048 (EXP-016 Notes, measured
+ * 2026-11-27). The gate tests the PDF, not the capacity.
+ */
+const MEMORY_MIB: Record<string, number> = { 'pages-20': 2048 };
 
 async function validateCorpusDocument(name: string): Promise<void> {
   const corpus = await loadDocument(name);
@@ -33,10 +40,12 @@ async function validateCorpusDocument(name: string): Promise<void> {
       mediaType: a.entry.mediaType,
       bytes: a.bytes,
     };
-  const pdf = await taggedPdf(`exp-111-corpus-${name}`, corpus.envelope, {
-    pdfStandard: 'ua-2+a-4f',
-    assets,
-  });
+  const pdf = await taggedPdf(
+    `exp-111-corpus-${name}`,
+    corpus.envelope,
+    { pdfStandard: 'ua-2+a-4f', assets },
+    MEMORY_MIB[name] ? { limits: { memoryMiB: MEMORY_MIB[name] } } : {},
+  );
   expect(structTree(pdf)).not.toBeNull();
   const ua2 = await validatePdf(pdf, 'ua2');
   expect(ua2.error, 'the validator output parses').toBeUndefined();
@@ -49,21 +58,47 @@ async function validateCorpusDocument(name: string): Promise<void> {
 }
 
 describe.skipIf(!ready)('EXP-111 criterion 2: the corpus passes veraPDF when tagged', () => {
-  it.each(['pages-1', 'form-fields'])(
+  it.each(['pages-1', 'form-fields', 'pages-20'])(
     'validates the corpus document %s as PDF/UA-2 and PDF/A-4f',
     validateCorpusDocument,
     900_000,
   );
+});
 
-  // `pages-20` holds Chinese, Japanese and Korean text, and the worker image has no face for it
-  // (EXP-016 Notes): a final export stops on the missing glyphs, so there is no PDF to validate.
-  // `it.fails` turns this red once a face is added to the image, which is the cue to move
-  // `pages-20` into the list above.
-  it.fails(
-    'validates the corpus document pages-20 (blocked: the image has no CJK face)',
-    () => validateCorpusDocument('pages-20'),
-    900_000,
-  );
+describe.skipIf(!ready)('EXP-111 criterion 2: a row span does not reach the next table', () => {
+  it('keeps the rows of a table regular after a table with row spans', async () => {
+    const spanned: J = {
+      type: 'table',
+      attrs: { id: nid('t'), grid: [2160, 2160, 2160], headerRows: 1 },
+      content: [
+        row(cell('Head A'), cell('Head B'), cell('Head C')),
+        row(cell('Tall', { rowspan: 3 }), cell('One'), cell('Two')),
+        row(cell('Three'), cell('Four')),
+        row(cell('Five'), cell('Six')),
+      ],
+    };
+    const plain: J = {
+      type: 'table',
+      attrs: { id: nid('t'), grid: [2160, 2160, 2160], headerRows: 1 },
+      content: [
+        row(cell('No.'), cell('Documents'), cell('Fjords')),
+        row(cell('001'), cell('narrow index'), cell('527')),
+        row(cell('002'), cell('gentle lantern'), cell('150')),
+        row(cell('003'), cell('current channel'), cell('452')),
+      ],
+    };
+    const pdf = await taggedPdf(
+      'exp-111-rowspan-then-plain',
+      doc([para('Before.'), spanned, para('Between.'), plain, para('After.')]),
+    );
+    const tables = byRole(structTree(pdf)!, 'Table');
+    expect(tables).toHaveLength(2);
+    const rows = tables[1]!.kids.filter((k) => k.role === 'TR');
+    expect(rows.map((r) => r.kids.length)).toEqual([3, 3, 3, 3]);
+    const ua2 = await validatePdf(pdf, 'ua2');
+    expect(ua2.failures, 'no PDF/UA-2 rule fails').toEqual([]);
+    expect(ua2.compliant).toBe(true);
+  }, 900_000);
 });
 
 describe.skipIf(!ready)('EXP-111 criterion 3: the language of the document and of passages', () => {
